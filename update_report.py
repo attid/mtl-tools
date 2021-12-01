@@ -50,4 +50,5 @@ for ms in MASTERASSETS:
 
 wks.update('A12',goodassets)
 
+
 logger.info(f'all done {now}')
