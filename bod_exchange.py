@@ -16,7 +16,7 @@ public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 server = Server(horizon_url="https://horizon.stellar.org")
 bod_account_exchange = server.load_account(public_bod_exchange)
 
-xlm_asset = Asset("XLM")  
+xlm_asset = Asset("XLM")
 eurmtl_asset = Asset("EURMTL", public_mtl)
 
 # get balance
@@ -36,22 +36,20 @@ else:
     offer_id = 0
     logger.info(['offer_id',offer_id]) 
 
-# if we need update offer    
+# if we need update offer
 if ((eurmtl_sum > 0) and (offer_id == 0)) or ((offer_id > 0) and (eurmtl_sum > eurmtl_sale_sum)):
     logger.info('need sale')
     rq = requests.get(f'https://openexchangerates.org/api/latest.json?app_id={openexchangerates_id}&symbols=EUR,BTC,STR&show_alternative=true').json()
     #rq = {'disclaimer': 'Usage subject to terms: https://openexchangerates.org/terms', 'license': 'https://openexchangerates.org/license', 'timestamp': 1638374400, 'base': 'USD', 'rates': {'BTC': 1.7052583e-05, 'EUR': 0.882253, 'STR': 3.0092620811}}
-    
+
     eur = float(rq["rates"]["EUR"])
     stl = float(rq["rates"]["STR"])
     cost = stl / eur
     logger.info(['cost',cost])
-    
+
     transaction = TransactionBuilder(source_account=bod_account_exchange,network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,base_fee=100)
-    transaction.append_manage_sell_offer_op(selling_code=eurmtl_asset.code, selling_issuer=eurmtl_asset.issuer,
-                                            buying_code=xlm_asset.code, buying_issuer=xlm_asset.issuer, amount=str(eurmtl_sum), 
-                                            price=Price.from_raw_price(cost),offer_id=offer_id)
-#   operation(ManageSellOffer(eurmtl_asset,xlm_asset,str(eurmtl_sum),Price.from_raw_price(cost),offer_id))
+    transaction.append_manage_sell_offer_op(selling=eurmtl_asset, buying=xlm_asset, amount=str(eurmtl_sum), 
+                                            price=Price.from_raw_price(str(round(cost,7))),offer_id=offer_id)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
     logger.info(f"xdr: {xdr}")
@@ -65,7 +63,7 @@ if ((eurmtl_sum > 0) and (offer_id == 0)) or ((offer_id > 0) and (eurmtl_sum > e
 if xlm_sum > 3.1:
     logger.info('need pay')
     transaction = TransactionBuilder(source_account=bod_account_exchange,network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,base_fee=100)
-    transaction.append_payment_op(destination=public_bod, amount=str(round(xlm_sum - 3,7)), asset_code=xlm_asset.code)
+    transaction.append_payment_op(destination=public_bod, amount=str(round(xlm_sum - 3,7)), asset=xlm_asset)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
     logger.info(f"xdr: {xdr}")
