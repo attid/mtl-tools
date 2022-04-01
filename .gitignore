@@ -133,3 +133,7 @@ settings.py
 mtl-google-doc.json
 mtl-skynet-talks.json
 members_key.json
+/polls/
+/backup/
+/.idea/
+*.sh
