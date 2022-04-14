@@ -87,7 +87,12 @@ def update_guarant_report():
     # vote
     wks = gc.open("MTL Report").worksheet("TopHolders")
 
-    vote_list = mystellar2.cmd_gen_vote_list()
+    vote_list = mystellar.cmd_gen_vote_list()
+
+    for vote in vote_list:
+        vote[0] = mystellar.resolve_account(vote[0])
+
+    vote_list.sort(key=lambda k: k[2], reverse=True)
 
     wks.update('A1', vote_list)
 

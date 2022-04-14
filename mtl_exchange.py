@@ -17,7 +17,7 @@ max_xlm = 15004.0
 
 min_xlm = 5.0
 persent_eurmtl = 1.05  # 5% наценки
-persent_mtl = 1.05  # 5% наценки
+persent_mtl = 1.03  # 5% наценки
 persent_xlm = 1.005  # 0,5% наценки
 persent_cost = 1.01  # 1% изменения цены для обновления
 

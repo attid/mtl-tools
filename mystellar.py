@@ -1,4 +1,5 @@
 import base64
+import math
 
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo
 from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions
@@ -102,7 +103,6 @@ def stellar_submite(xdr):
 
 def stellar_check_xdr(xdr):
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-    transaction.signatures.clear()
     list_op = ''
     i = 0
     for operation in transaction.transaction.operations:
@@ -138,6 +138,13 @@ def stellar_del_operation(xdr, num):
     transaction.signatures.fee -= 100
     operation = transaction.transaction.operations.pop(num)
     return [transaction.to_xdr(), transaction.transaction.sequence, len(transaction.transaction.operations), operation]
+
+
+def stellar_del_sign(xdr, num):
+    transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    operation = transaction.signatures.pop(num)
+    return [transaction.to_xdr(), transaction.transaction.sequence, len(transaction.transaction.operations),
+            operation]
 
 
 def stellar_add_xdr(xdr, xdr2):
@@ -257,39 +264,38 @@ def check_url_xdr(url):
 
 
 def get_bod_list():
-    server = Server(horizon_url="https://horizon.stellar.org")
-    tr = server.transactions().for_account(public_bod).order(desc=True).call()
-    # print(json.dumps(tr["_embedded"]["records"][1], indent=4))
-    adresses = []
-    for record in tr["_embedded"]["records"]:
-        if (record["memo_type"] == "text") and (record["memo"] == "Basic Income"):
-            # print(record["created_at"])
-            #                                                      "2021-12-17T00:00:50Z"
-            dt1 = datetime.datetime.strptime(record["created_at"], '%Y-%m-%dT%H:%M:%SZ')
-            # print(dt1.date())
-            dt2 = datetime.datetime(2021, 12, 17)  # datetime.datetime.now()
-            # print(dt2.date())
-            # if dt1.date() == dt2.date():
-            # print(record["envelope_xdr"])
-            xdr = record["envelope_xdr"]
-            transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-            for operation in transaction.transaction.operations:
-                adresses.append(operation.destination.account_id)
-                # print(operation.destination.account_id)
-            break
-            # check eurmtl
+    # ['GARNOMR62CRFSI2G2OQYA5SPGFFDBBY566AWZF4637MNF74UZMBNOZVD', True],
+    account_json = requests.get(
+        f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
+    addresses = []
+    if "data" in account_json:
+        data = account_json["data"]
+        for data_name in list(data):
+            data_value = data[data_name]
+            if data_name[:13] == 'bod_guarantor':
+                # decode_data_vlue(data_value) - address guard
+                bod_json = requests.get(f'https://horizon.stellar.org/accounts/{decode_data_value(data_value)}').json()
+                if "data" in bod_json:
+                    bod_data = bod_json["data"]
+                    for bod_data_name in list(bod_data):
+                        if data_name[:3] == 'bod':
+                            bod_data_value = decode_data_value(bod_data[bod_data_name])
+                            found = list(filter(lambda x: x == bod_data_value, addresses))
+                            if len(found) == 0:
+                                addresses.append(bod_data_value)
+    # check eurmtl
     result = []
-    for adress in adresses:
-        # print(val)
+    for address in addresses:
         # get balance
         balances = {}
-        rq = requests.get(f'https://horizon.stellar.org/accounts/{adress}').json()
+        # print(address)
+        rq = requests.get(f'https://horizon.stellar.org/accounts/{address}').json()
         # print(json.dumps(rq, indent=4))
         for balance in rq["balances"]:
             if balance["asset_type"] == 'credit_alphanum12':
                 balances[balance["asset_code"]] = balance["balance"]
-        haseur = 'EURMTL' in balances
-        result.append([adress, haseur])
+        has_eurmtl = 'EURMTL' in balances
+        result.append([address, has_eurmtl])
     return result
 
 
@@ -665,7 +671,7 @@ def cmd_gen_data_xdr(account_id: str, data: str):
     return xdr
 
 
-def decode_data_vlue(data_value: str):
+def decode_data_value(data_value: str):
     base64_message = data_value
     base64_bytes = base64_message.encode('ascii')
     message_bytes = base64.b64decode(base64_bytes)
@@ -674,24 +680,106 @@ def decode_data_vlue(data_value: str):
 
 
 def cmd_show_guards():
-    account_json = requests.get(f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
+    account_json = requests.get(
+        f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
     result = []
     if "data" in account_json:
         data = account_json["data"]
         for data_name in list(data):
             data_value = data[data_name]
             if data_name[:13] == 'bod_guarantor':
-                result.append(f'{data_name}:{decode_data_vlue(data_value)}')
-                x = cmd_show_data(decode_data_vlue(data_value))
+                result.append(f'{data_name}:{decode_data_value(data_value)}')
+                x = cmd_show_data(decode_data_value(data_value))
                 result.extend(x)
             result.append('***')
             # print(data_name, decode_data_vlue(data_value))
     return result
 
 
+def cmd_getblacklist():
+    return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
+
+
+def cmd_gen_vote_list(return_delegate_list: bool = False):
+    mtl_asset = Asset("MTL", public_mtl)
+    account_list = []
+    divider = 600
+
+    server = Server(horizon_url="https://horizon.stellar.org")
+    accounts = stellar_get_mtl_holders()
+
+    # mtl
+    for account in accounts:
+        balances = account["balances"]
+        balance_mtl = 0
+        balance_rect = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_code"] == "MTL":
+                    balance_mtl = balance["balance"]
+                    balance_mtl = int(balance_mtl[0:balance_mtl.find('.')])
+                if balance["asset_code"] == "MTLRECT":
+                    balance_rect = balance["balance"]
+                    balance_rect = int(balance_rect[0:balance_rect.find('.')])
+        lg = round(math.log2((balance_mtl + balance_rect + 0.001) / divider))
+        if account["account_id"] != public_fond:
+            account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
+    # 2
+    big_list = []
+    for arr in account_list:
+        if int(arr[1]) > 10:
+            big_list.append(arr)
+    big_list.sort(key=lambda k: k[1], reverse=True)
+
+    # delete blacklist user
+    bl = cmd_getblacklist()
+    for arr in big_list:
+        if bl.get(arr[0]):
+            arr[2] = 0
+            # vote_list.remove(arr)
+            # print(arr)
+
+    # find delegate
+    delegate_list = {}
+    for account in big_list:
+        account_json = requests.get(f'https://horizon.stellar.org/accounts/{account[0]}').json()
+        result = []
+        if "data" in account_json:
+            data = account_json["data"]
+            for data_name in list(data):
+                data_value = data[data_name]
+                if data_name == 'delegate':
+                    delegate_list[account[0]] = decode_data_value(data_value)
+
+    if return_delegate_list:
+        return delegate_list
+    # delegate_list = requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/delegated.json').json()
+
+    for arr_from in big_list:
+        if delegate_list.get(arr_from[0]):
+            for arr_for in big_list:
+                if arr_for[0] == delegate_list[arr_from[0]]:
+                    arr_for[1] += arr_from[1]
+                    arr_from[1] = 0
+                    delegate_list.pop(arr_from[0])
+                    arr_for[2] = round(math.log2((arr_for[1] + 0.001) / divider))
+                    arr_from[2] = 0
+                    break
+            # vote_list.remove(arr)
+            # print(arr,source)
+
+    big_list.sort(key=lambda k: k[1], reverse=True)
+
+    return big_list
+
+
 def cmd_show_data(account_id: str):
     result = []
-    if account_id == 'bod':
+    if account_id == 'delegate':
+        # get all delegate
+        for k, v in cmd_gen_vote_list(return_delegate_list=True).items():
+            result.append(f'{k} --> {v}')
+    elif account_id == 'bod':
         # get all guards
         result = cmd_show_guards()
     else:
@@ -701,7 +789,28 @@ def cmd_show_data(account_id: str):
             for data_name in list(data):
                 data_value = data[data_name]
                 # print(data_name, decode_data_vlue(data_value))
-                result.append(f'{data_name}:{decode_data_vlue(data_value)}')
+                result.append(f'{data_name}:{decode_data_value(data_value)}')
+    return result
+
+
+def resolve_account(account_id: str):
+    result = ''
+    try:
+        result = resolve_account_id(account_id, domain='eurmtl.me').stellar_address
+    except Exception as e:
+        pass
+    if result == '':
+        try:
+            result = resolve_account_id(account_id, domain='lobstr.co').stellar_address
+        except Exception as e:
+            pass
+    if result == '':
+        try:
+            result = resolve_account_id(account_id, domain='keybase.io').stellar_address
+        except Exception as e:
+            pass
+    if result == '':
+        result = account_id[:4] + '..' + account_id[-4:]
     return result
 
 
@@ -712,8 +821,8 @@ if __name__ == "__main__":
     # print(*result, sep='\n')
     # print(' '.join(result))
     # print(resolve_stellar_address('attid*lobstr.co'))
-    #print(resolve_stellar_address('asmin8976*lobstr.co'))
-    # print(resolve_account_id('GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI', domain='eurmtl.me'))
+    # print(resolve_stellar_address('cblp*keybase.io'))
+    # print(resolve_account_id('GCPT3X4FJBMUBR5AIB7SEUQX7HJ4XX3K4TNI2J7WIHMHMFGDMRRJJVWL', domain='keybase.io'))
 
     # s = base64.b16encode()
     # print(str(s))
@@ -721,13 +830,17 @@ if __name__ == "__main__":
     # base64_bytes = base64_message.encode('ascii')
     # message_bytes = base64.b64decode(base64_bytes)
     # message = message_bytes.decode('ascii')
-    # print(message)
+    # print(cmd_calc_divs())
+    # print(*check_url_xdr(
+    #    "https://mtl.ergvein.net/view?tid=193024acd8069bb990273e96f59e1622b065ef39ed1df8963c43073a7d66d8cb"), sep='\n')
 
     # add bod_guarantor1
-    # xdr = cmd_get_data_xdr('GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW', "bod_guarantor6:")
+    # xdr = cmd_gen_data_xdr('GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW', "bod_guarantor6:GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR")
     # xdr = stellar_sign(xdr, private_bod_eur)
     # print(stellar_submite(xdr))
 
-    #print(cmd_show_data('bod'))
-    print(cmd_show_bod())
-
+    # print(cmd_show_data('bod'))
+    # print(get_bod_list())
+    # print(cmd_show_bod())
+    # GAOAZWY4LMFKWYU42WZATLXULQAQB7CYCLAAR2YZ3ZLVKGOV7HMSED4
+    # GAZTQZRUCCHSJPJ6L3AVBSZARFY5MD7UJTSASWC62NSPBXVGMMBFQVCQ

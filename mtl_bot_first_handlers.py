@@ -261,7 +261,7 @@ async def cmd_gen_data(message: types.Message):
 
 @dp.message_handler(commands="show_data")
 async def cmd_show_data(message: types.Message):
-    if len(message.get_args()) > 10:
+    if len(message.get_args()) > 2:
         arg = message.get_args().split()
         result = mystellar.cmd_show_data(arg[0])
         await message.reply('\n'.join(result))
@@ -273,6 +273,12 @@ async def cmd_show_data(message: types.Message):
 
 if __name__ == "__main__":
     pass
-    with open("polls/votes.json", "r") as fp:
-        users = list(json.load(fp))
-    print(' '.join(users))
+    #with open("polls/votes.json", "r") as fp:
+    #    users = list(json.load(fp))
+    #print(' '.join(users))
+    #div_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('mtl div %d/%m/%Y'), 0)
+    #donate_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('donate %d/%m/%Y'), 0)
+    #print(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
+    #result = mystellar.cmd_calc_divs(div_list_id, donate_list_id, 210)
+    #print(f"Found {len(result)} adresses. Try gen xdr.")
+

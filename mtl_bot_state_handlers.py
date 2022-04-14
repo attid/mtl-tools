@@ -154,8 +154,9 @@ async def smd_dron_sign(message: types.Message, state: FSMContext):
 async def cmd_xdr_msg(message, trList):
     await message.reply(f'В работе транзакция {trList[1]} в ней {trList[2]} операции')
     await message.reply(
-        'Вы можете посмотреть /show получить /xdr \n удалить операцию по номеру "/del 0" ' +
-        'сменить номер sequence "/sequence 2525" \nсменить комиссию "/fee 100"  ' +
+        'Вы можете посмотреть /show получить /xdr \n удалить операцию по номеру "/del 0" \n' +
+        'сменить номер sequence "/sequence 2525" \nсменить комиссию "/fee 100"  \n' +
+        'удалить подпись по номеру "/delsign 0" \n'+
         'сменить memo "/memo bla bla bla" \nили приклеить транзакцию /add или выйти /start')
 
 
@@ -253,6 +254,21 @@ async def smd_editxdr6(message: types.Message, state: FSMContext):
         async with state.proxy() as data:
             xdr = data['xdr']
         trList = mystellar.stellar_del_operation(xdr, num)
+        async with state.proxy() as data:
+            data['xdr'] = trList[0]
+        await message.reply(f'Удалена {num}-я операция : {trList[3]}')
+        await cmd_xdr_msg(message, trList)
+    else:
+        await message.reply(f'Параметр не распознан. Надо передавать число')
+
+
+@dp.message_handler(state=MyStates.edit_xdr_2, commands="delsign")
+async def smd_editxdr63(message: types.Message, state: FSMContext):
+    if message.get_args().isnumeric():
+        num = int(message.get_args())
+        async with state.proxy() as data:
+            xdr = data['xdr']
+        trList = mystellar.stellar_del_sign(xdr, num)
         async with state.proxy() as data:
             data['xdr'] = trList[0]
         await message.reply(f'Удалена {num}-я операция : {trList[3]}')

@@ -17,10 +17,6 @@ public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 
 
-def cmd_getblacklist():
-    return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
-
-
 def cmd_get_new_vote_mtlcity():
     mtl_asset = Asset("MTL", public_mtl)
     city_asset = Asset("MTLCITY", public_city)
@@ -119,7 +115,7 @@ def cmd_get_new_vote_mtlcity():
             bigarr.append([s.account_id, 0, 0, s.weight])
     # 6
     # delete blecklist user
-    bl = cmd_getblacklist();
+    bl = mystellar.cmd_getblacklist()
     for arr in bigarr:
         if bl.get(arr[0]) != None:
             bigarr.remove(arr)
@@ -167,61 +163,6 @@ def cmd_get_new_vote_mtlcity():
     result.append(xdr)
     # print(f"xdr: {xdr}")
     return result
-
-
-def cmd_gen_vote_list():
-    mtl_asset = Asset("MTL", public_mtl)
-    accarr = []
-
-    server = Server(horizon_url="https://horizon.stellar.org")
-    accounts = mystellar.stellar_get_mtl_holders()
-
-    # mtl
-    for account in accounts:
-        balances = account["balances"]
-        balance_mtl = 0
-        balance_rect = 0
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
-                    balance_mtl = balance["balance"]
-                    balance_mtl = int(balance_mtl[0:balance_mtl.find('.')])
-                if balance["asset_code"] == "MTLRECT":
-                    balance_rect = balance["balance"]
-                    balance_rect = int(balance_rect[0:balance_rect.find('.')])
-        lg = round(math.log2((balance_mtl + balance_rect + 0.001) / 100))
-        if account["account_id"] != public_fond:
-            accarr.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
-    # 2
-    bigarr = []
-    for arr in accarr:
-        if int(arr[1]) > 100:
-            bigarr.append(arr)
-    bigarr.sort(key=lambda k: k[1], reverse=True)
-
-    # delete blacklist user
-    bl = cmd_getblacklist()
-    for arr in bigarr:
-        if bl.get(arr[0]):
-            arr[2] = 0
-            # vote_list.remove(arr)
-            # print(arr,source)
-
-    dl = requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/delegated.json').json()
-    for arr_from in bigarr:
-        if dl.get(arr_from[0]):
-            for arr_for in bigarr:
-                if arr_for[0] == dl[arr_from[0]]:
-                    arr_for[1] += arr_from[1]
-                    arr_from[1] = 0
-                    dl.pop(arr_from[0])
-                    arr_for[2] = round(math.log2((arr_for[1] + 0.001) / 100))
-                    arr_from[2] = 0
-                    break
-            # vote_list.remove(arr)
-            # print(arr,source)
-
-    return bigarr
 
 
 def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
@@ -289,11 +230,11 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
 
 def cmd_get_new_vote_mtl(public_key):
     if len(public_key) > 10:
-        vote_list = cmd_gen_vote_list()
+        vote_list = mystellar.cmd_gen_vote_list()
         result = []
         result.append(gen_vote_xdr(public_key, vote_list))
     else:
-        vote_list = cmd_gen_vote_list()
+        vote_list = mystellar.cmd_gen_vote_list()
         vote_list1 = copy.deepcopy(vote_list)
         vote_list2 = copy.deepcopy(vote_list)
         vote_list3 = copy.deepcopy(vote_list)
@@ -319,5 +260,5 @@ def cmd_get_new_vote_mtl(public_key):
 if __name__ == "__main__":
     pass
     # print(cmd_get_new_vote_mtlcity())
-    # print(cmd_get_new_vote_mtl(''))
-    print(cmd_gen_vote_list())
+    print(cmd_get_new_vote_mtl(''))
+    # print(*cmd_gen_vote_list(True).items(), sep='\n')

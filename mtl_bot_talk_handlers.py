@@ -6,6 +6,7 @@ import mystellar
 import re, random
 import update_report
 import update_report2
+import update_report4
 from mtl_bot_main import dp
 
 
@@ -52,7 +53,9 @@ async def cmd_last_check(message: types.Message):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
-            await message.reply(msg)
+            if len(msg) > 4096:
+                await message.answer("Слишком много операций показаны первые ")
+            await message.reply(msg[:4000])
 
         elif has_words(message.text, ['СГЕНЕРИ', 'сделай', 'подготовь']):
             if has_words(message.text, ['ДИВИДЕНДЫ', 'дивы']):
@@ -60,7 +63,7 @@ async def cmd_last_check(message: types.Message):
 
         elif has_words(message.text, ['НАПОМНИ', 'remind']):
             msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
-            msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп\Look at the pinned message'
+            msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
             await dp.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id)
         #            await message.reply(mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп')
 
@@ -71,6 +74,9 @@ async def cmd_last_check(message: types.Message):
             if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
                 await message.reply('Запустил обновление')
                 update_report.update_main_report()
+            if has_words(message.text, ['donate', 'donates', 'donated']):
+                await message.reply('Запустил обновление')
+                update_report4.update_donate_report()
 
         elif has_words(message.text, ['ВЫПЬЕМ', 'ТОСТ']):
             await message.answer(mystellar.cmd_get_info(6))

@@ -21,6 +21,7 @@ class MyButtons(Enum):
     Send = 'Send'
     SendTr = 'SendTr'
     Setting = 'Setting'
+    WalletSetting = 'WalletSetting'
     Support = 'Support'
     Return = 'Return'
     Yes = 'Yes'
@@ -77,7 +78,10 @@ kb_default = types.InlineKeyboardMarkup()
 kb_default.add(types.InlineKeyboardButton(text="Receive", callback_data=cb_default.new(answer=MyButtons.Receive.value)),
                types.InlineKeyboardButton(text="Send", callback_data=cb_default.new(answer=MyButtons.Send.value)))
 kb_default.add(
-    types.InlineKeyboardButton(text="Wallet setting", callback_data=cb_default.new(answer=MyButtons.Setting.value)))
+    types.InlineKeyboardButton(text="Change wallet", callback_data=cb_default.new(answer=MyButtons.Setting.value)))
+kb_default.add(
+    types.InlineKeyboardButton(text="Wallet setting",
+                               callback_data=cb_default.new(answer=MyButtons.WalletSetting.value)))
 kb_default.add(types.InlineKeyboardButton(text="Support", callback_data=cb_default.new(answer=MyButtons.Support.value)))
 kb_default.add(types.InlineKeyboardButton(text="Sign", callback_data=cb_default.new(answer=MyButtons.Sign.value)))
 
@@ -121,7 +125,8 @@ kb_pin.add(types.InlineKeyboardButton(text="0", callback_data=cb_pin.new(answer=
            types.InlineKeyboardButton(text="D", callback_data=cb_pin.new(answer="D")),
            types.InlineKeyboardButton(text="E", callback_data=cb_pin.new(answer="E")),
            types.InlineKeyboardButton(text="F", callback_data=cb_pin.new(answer="F")))
-kb_pin.add(types.InlineKeyboardButton(text="Enter", callback_data=cb_pin.new(answer='Enter')))
+kb_pin.add(types.InlineKeyboardButton(text="Del", callback_data=cb_pin.new(answer='Del')),
+           types.InlineKeyboardButton(text="Enter", callback_data=cb_pin.new(answer='Enter')))
 
 
 @dp.message_handler(state='*', commands="start")
@@ -190,6 +195,26 @@ async def cmd_setting(user_id: int, msg_id: int, chat_id: int, state: FSMContext
         data[MyState.wallets] = wallets
 
 
+async def cmd_wallet_setting(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+    msg = "Настройка кошелька, тут вы добавить линии доверия(asset), получить свой приватный ключ для бекапа," \
+          " удалить пин или установить новый. Для смены пина удалите старый. "
+    kb_wallet_setting = types.InlineKeyboardMarkup()
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="Add asset", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="Buy this address",
+                                   callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="Get Private Key", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="Set password", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="Remove password", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    kb_wallet_setting.add(
+        types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_wallet_setting)
+
+
 async def cmd_show_sign(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg='', use_send=False):
     msg = msg + "\nПришлите транзакцию в xdr для подписи"
 
@@ -202,6 +227,17 @@ async def cmd_show_sign(user_id: int, msg_id: int, chat_id: int, state: FSMConte
         kb = kb_return
 
     await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_show_send_tr(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        xdr = data.get(MyState.xdr)
+    try:
+        stellar_send(xdr)
+        await cmd_info_message(user_id, msg_id, chat_id, 'Успешно отправлено')
+    except Exception as ex:
+        print('send ', ex)
+        await cmd_info_message(user_id, msg_id, chat_id, 'Ошибка с отправкой =(')
 
 
 async def cmd_show_add_wallet_private(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
@@ -310,6 +346,8 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
     elif answer == MyButtons.Setting.value:
         await cmd_setting(user_id, query.message.message_id, query.message.chat.id, state)
+    elif answer == MyButtons.WalletSetting.value:
+        await cmd_wallet_setting(user_id, query.message.message_id, query.message.chat.id, state)
     elif answer == MyButtons.Support.value:
         await query.answer("Not ready!", show_alert=True)
         # №async with state.proxy() as data:
@@ -323,7 +361,7 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
     elif answer == MyButtons.Sign.value:
         await cmd_show_sign(user_id, query.message.message_id, query.message.chat.id, state)
     elif answer == MyButtons.SendTr.value:
-        await cmd_show_sendtr(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_send_tr(user_id, query.message.message_id, query.message.chat.id, state)
 
     elif answer == MyButtons.PIN.value:
         async with state.proxy() as data:
@@ -413,6 +451,12 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
             data[MyState.pin] = pin
         await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
 
+    if answer == 'Del':
+        pin = pin[:len(pin) - 1]
+        async with state.proxy() as data:
+            data[MyState.pin] = pin
+        await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
+
     if answer == 'Enter':
         if pin_state == 12:  # ask for save need pin2
             async with state.proxy() as data:
@@ -461,8 +505,9 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 xdr = stellar_user_sign(xdr, user_id, str(pin))
                 async with state.proxy() as data:
                     data[MyState.MyState] = '0'
+                    data[MyState.xdr] = xdr
                 await cmd_show_sign(user_id, query.message.message_id, query.message.chat.id, state,
-                                    f"Ваша транзакция c подписью: \n\n`{xdr}`\n\n")
+                                    f"Ваша транзакция c подписью: \n\n`{xdr}`\n\n", use_send=True)
             except Exception as ex:
                 print('pin_state == 14', ex)
                 await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,

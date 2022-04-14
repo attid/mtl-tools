@@ -11,7 +11,7 @@ import json
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 from mystellar import key_name
-from mystellar2 import cmd_gen_vote_list
+from mystellar import cmd_gen_vote_list
 
 cb_poll_click = CallbackData("join_chat", "answer")
 
