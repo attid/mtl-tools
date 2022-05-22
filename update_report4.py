@@ -6,7 +6,7 @@ import fb
 from stellar_sdk.sep.federation import resolve_account_id
 
 # https://docs.gspread.org/en/latest/
-from mystellar import resolve_account
+from mystellar import resolve_account, cmd_show_donates
 
 if 'logger' not in globals():
     logger = app_logger.get_logger("update_report")
@@ -16,7 +16,7 @@ def update_donate_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     # Open a sheet from a spreadsheet in one go
-    wks = gc.open("MTL_reestr").worksheet("Donates")
+    wks = gc.open("MTL_TopHolders").worksheet("Donates")
 
     # Update a range of cells using the top left corner address
     now = datetime.datetime.now()
@@ -58,6 +58,19 @@ def update_donate_report():
 
     # print(update_list)
     wks.update('A2', update_list)
+    wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+
+
+    # Open a sheet from a spreadsheet in one go
+    wks = gc.open("MTL_TopHolders").worksheet("DonatesNew")
+    update_list = cmd_show_donates(return_table=True)
+
+    wks.update('A2', update_list)
+    wks.update('E1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    update_list.append(['', '', ''])
+    update_list.append(['', '', ''])
+    update_list.append(['', '', ''])
+
 
     logger.info(f'all done {now}')
 

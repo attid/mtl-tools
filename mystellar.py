@@ -40,6 +40,20 @@ def stellar_add_fond_trustline(userkey, asset_code):
     return stellar_add_trustline(userkey, asset_code, public_mtl)
 
 
+def stellar_add_mtl_holders_info(accounts: dict):
+    server = Server(horizon_url="https://horizon.stellar.org")
+    source_account = server.load_account(public_fond)
+
+    sg = source_account.load_ed25519_public_key_signers()
+
+    for s in sg:
+        for arr in accounts:
+            if arr[0] == s.account_id:
+                arr[3] = s.weight
+
+    return accounts
+
+
 def stellar_get_mtl_holders(asset=mtl_asset):
     server = Server(horizon_url="https://horizon.stellar.org")
     accounts = []
@@ -278,7 +292,7 @@ def get_bod_list():
                 if "data" in bod_json:
                     bod_data = bod_json["data"]
                     for bod_data_name in list(bod_data):
-                        if data_name[:3] == 'bod':
+                        if bod_data_name[:3] == 'bod':
                             bod_data_value = decode_data_value(bod_data[bod_data_name])
                             found = list(filter(lambda x: x == bod_data_value, addresses))
                             if len(found) == 0:
@@ -384,7 +398,7 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
         # check sponsor
-        if sponsors.get(account["account_id"]) != None:
+        if sponsors.get(account["account_id"]):
             calc = round(div * float(sponsors.get(account["account_id"])) / 100, 7)
             sponsor_sum += calc
             sdiv = div - calc
@@ -682,30 +696,71 @@ def decode_data_value(data_value: str):
 def cmd_show_guards():
     account_json = requests.get(
         f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
-    result = []
+    result_data = []
     if "data" in account_json:
         data = account_json["data"]
         for data_name in list(data):
             data_value = data[data_name]
             if data_name[:13] == 'bod_guarantor':
-                result.append(f'{data_name}:{decode_data_value(data_value)}')
-                x = cmd_show_data(decode_data_value(data_value))
-                result.extend(x)
-            result.append('***')
+                result_data.append(f'{data_name} => {decode_data_value(data_value)}')
+                x = cmd_show_data(decode_data_value(data_value), 'bod')
+                result_data.extend(x)
+            result_data.append('***')
             # print(data_name, decode_data_vlue(data_value))
-    return result
+    return result_data
+
+
+def cmd_show_donates(return_json=False, return_table=False):
+    accounts = stellar_get_mtl_holders()
+    account_list = []
+
+    for account in accounts:
+        if account['data']:
+            account_list.append([account["account_id"], account['data']])
+
+    # https://github.com/montelibero-org/mtl/blob/main/json/donation.json
+    # "GBOZAJYX43ANOM66SZZFBDG7VZ2EGEOTIK5FGWRO54GLIZAKHTLSXXWM":
+    #   [ {  "recipient": "GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7",
+    #        "percent": "100" } ]
+
+    # find donate
+    donate_json = {}
+    donate_data = []
+    donate_table = []
+    for account in account_list:
+        if account[1]:
+            data = account[1]
+            recipients = []
+            for data_name in list(data):
+                data_value = data[data_name]
+                if data_name[:6] == 'donate':
+                    recipient = {"recipient": decode_data_value(data_value),
+                                 "percent": data_name[data_name.find(':') + 1:]}
+                    recipients.append(recipient)
+            if recipients:
+                donate_json[account[0]] = recipients
+                donate_data.append(f"{account[0]} ==>")
+                donate_table.append([account[0], '', ''])
+                for recipient in recipients:
+                    donate_data.append(f"          {recipient['percent']} ==> {recipient['recipient']}")
+                    donate_table.append(['', recipient['percent'], recipient['recipient']])
+                donate_data.append(f"******")
+
+    if return_json:
+        return donate_json
+    if return_table:
+        return donate_table
+    return donate_data
 
 
 def cmd_getblacklist():
     return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
 
 
-def cmd_gen_vote_list(return_delegate_list: bool = False):
-    mtl_asset = Asset("MTL", public_mtl)
+def cmd_gen_vote_list(return_delegate_list: bool = False, no_data: bool = False):
     account_list = []
     divider = 600
 
-    server = Server(horizon_url="https://horizon.stellar.org")
     accounts = stellar_get_mtl_holders()
 
     # mtl
@@ -723,7 +778,10 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
                     balance_rect = int(balance_rect[0:balance_rect.find('.')])
         lg = round(math.log2((balance_mtl + balance_rect + 0.001) / divider))
         if account["account_id"] != public_fond:
-            account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
+            if no_data:
+                account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
+            else:
+                account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data']])
     # 2
     big_list = []
     for arr in account_list:
@@ -742,10 +800,8 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
     # find delegate
     delegate_list = {}
     for account in big_list:
-        account_json = requests.get(f'https://horizon.stellar.org/accounts/{account[0]}').json()
-        result = []
-        if "data" in account_json:
-            data = account_json["data"]
+        if not no_data and account[4]:
+            data = account[4]
             for data_name in list(data):
                 data_value = data[data_name]
                 if data_name == 'delegate':
@@ -753,7 +809,6 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
 
     if return_delegate_list:
         return delegate_list
-    # delegate_list = requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/delegated.json').json()
 
     for arr_from in big_list:
         if delegate_list.get(arr_from[0]):
@@ -773,15 +828,18 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
     return big_list
 
 
-def cmd_show_data(account_id: str):
-    result = []
+def cmd_show_data(account_id: str, filter_by: str = None):
+    result_data = []
     if account_id == 'delegate':
         # get all delegate
         for k, v in cmd_gen_vote_list(return_delegate_list=True).items():
-            result.append(f'{k} --> {v}')
+            result_data.append(f'{k} => {v}')
     elif account_id == 'bod':
         # get all guards
-        result = cmd_show_guards()
+        result_data = cmd_show_guards()
+    elif account_id == 'donate':
+        # get all guards
+        result_data = cmd_show_donates()
     else:
         account_json = requests.get(f'https://horizon.stellar.org/accounts/{account_id}').json()
         if "data" in account_json:
@@ -789,8 +847,9 @@ def cmd_show_data(account_id: str):
             for data_name in list(data):
                 data_value = data[data_name]
                 # print(data_name, decode_data_vlue(data_value))
-                result.append(f'{data_name}:{decode_data_value(data_value)}')
-    return result
+                if not filter_by or data_name.find(filter_by) == 0:
+                    result_data.append(f'{data_name} => {decode_data_value(data_value)}')
+    return result_data
 
 
 def resolve_account(account_id: str):
@@ -816,31 +875,7 @@ def resolve_account(account_id: str):
 
 if __name__ == "__main__":
     pass
-    # result = cmd_check_donate_list()
-    # result = cmd_check_new_fond_transaction(ignore_operation=['CreateClaimableBalance'])
-    # print(*result, sep='\n')
-    # print(' '.join(result))
-    # print(resolve_stellar_address('attid*lobstr.co'))
-    # print(resolve_stellar_address('cblp*keybase.io'))
-    # print(resolve_account_id('GCPT3X4FJBMUBR5AIB7SEUQX7HJ4XX3K4TNI2J7WIHMHMFGDMRRJJVWL', domain='keybase.io'))
-
-    # s = base64.b16encode()
-    # print(str(s))
-    # base64_message = 'SU4gVVNFIDY1Mi40NiBNVExNaW5lcg=='
-    # base64_bytes = base64_message.encode('ascii')
-    # message_bytes = base64.b64decode(base64_bytes)
-    # message = message_bytes.decode('ascii')
-    # print(cmd_calc_divs())
-    # print(*check_url_xdr(
-    #    "https://mtl.ergvein.net/view?tid=193024acd8069bb990273e96f59e1622b065ef39ed1df8963c43073a7d66d8cb"), sep='\n')
-
-    # add bod_guarantor1
-    # xdr = cmd_gen_data_xdr('GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW', "bod_guarantor6:GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR")
-    # xdr = stellar_sign(xdr, private_bod_eur)
-    # print(stellar_submite(xdr))
-
-    # print(cmd_show_data('bod'))
-    # print(get_bod_list())
-    # print(cmd_show_bod())
-    # GAOAZWY4LMFKWYU42WZATLXULQAQB7CYCLAAR2YZ3ZLVKGOV7HMSED4
-    # GAZTQZRUCCHSJPJ6L3AVBSZARFY5MD7UJTSASWC62NSPBXVGMMBFQVCQ
+    #result = cmd_show_data('bod')
+    result = stellar_get_mtl_holders()
+    #print(result)
+    print(*result, sep='\n')

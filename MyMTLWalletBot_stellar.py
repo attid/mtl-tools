@@ -1,5 +1,8 @@
+import requests
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, Keypair
 from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions, TextMemo,
+from stellar_sdk.sep.federation import resolve_stellar_address
+
 import fb
 from MyMTLWalletBot_main import logger
 from cryptocode import encrypt, decrypt
@@ -44,10 +47,26 @@ def stellar_sign(xdr: str, private_key: str):
     return transaction.to_xdr()
 
 
+def get_url_xdr(url):
+    rq = requests.get(url).text
+    rq = rq[rq.find('<span class="tx-body">') + 22:]
+    # print(rq)
+    rq = rq[:rq.find('</span>')]
+    rq = rq.replace("&#x3D;", "=")
+    # print(rq)
+    return rq
+
+
 def stellar_check_xdr(xdr: str):
     result = None
+    "https://mtl.ergvein.net/view?tid=7ec5e397140fadf0d384860a35d19cf9f60e00a49b3b2cc250b832076fab7e7f"
     try:
-        result = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE).to_xdr()
+        if xdr.find('mtl.ergvein.net/view') > -1:
+            xdr = get_url_xdr(xdr)
+            result = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE).to_xdr()
+        else:
+            result = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE).to_xdr()
+
     except Exception as ex:
         print('stellar_check_xdr', xdr, ex)
     return result
@@ -93,9 +112,9 @@ def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
     if create == 1:
         transaction.append_create_account_op(destination=for_account, starting_balance=str(round(amount, 7)))
+        transaction.add_text_memo('New account MyMTLWalletbot')
     else:
         transaction.append_payment_op(destination=for_account, amount=str(round(amount, 7)), asset=asset)
-    transaction.add_text_memo('New account MyMTLWalletbot')
     full_transaction = transaction.build()
     logger.info(full_transaction.to_xdr())
     return full_transaction.to_xdr()
@@ -174,7 +193,14 @@ def stellar_get_pin_type(user_id: int):
     return result
 
 
-def stellar_get_balance_list(user_id: int):
+def stellar_is_free_wallet(user_id: int):
+    user_account = stellar_get_user_account(user_id)
+    free_wallet = fb.execsql1(f"select m.free_wallet from mymtlwalletbot m where m.user_id = {user_id} "
+                              f"and m.public_key = '{user_account.account.account_id}'")
+    return free_wallet
+
+
+def stellar_get_balance_list(user_id: int, asset_filter: str = None):
     user_account = stellar_get_user_account(user_id)
     free_wallet = fb.execsql1(f"select m.free_wallet from mymtlwalletbot m where m.user_id = {user_id} "
                               f"and m.public_key = '{user_account.account.account_id}'")
@@ -184,10 +210,13 @@ def stellar_get_balance_list(user_id: int):
     for balance in account['balances']:
         if (balance['asset_type'] == "native") and (free_wallet == 0):
             result.append(
-                ['XLM', balance['balance'], Asset('XLM', None)])
+                ['XLM', balance['balance'], 'XLM', None])
         elif balance['asset_type'][:15] == "credit_alphanum":
-            result.append(
-                [balance['asset_code'], balance['balance'], Asset(balance['asset_code'], balance['asset_issuer'])])
+            if asset_filter:
+                pass
+            else:
+                result.append(
+                    [balance['asset_code'], balance['balance'], balance['asset_code'], balance['asset_issuer']])
     return result
 
 
@@ -222,6 +251,8 @@ def stellar_change_password(user_id: int, public_key: str, old_password: str, ne
 
 def stellar_check_account(public_key: str) -> Account:
     try:
+        if public_key.find('*') > 0:
+            public_key = resolve_stellar_address(public_key).account_id
         return Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
     except Exception as ex:
         print("stellar_check_account", public_key, ex)
@@ -230,36 +261,23 @@ def stellar_check_account(public_key: str) -> Account:
 if __name__ == "__main__":
     pass
 
-    print(decrypt(
-        'oxb/mtZxmBrYkEECyJ3kg8NS0i+OpnCzoq56Qx+7lHzDblEdQtV7yBgb3gLmGbSeUMYIKx2TZbY=*xWePf7DfSuemS+Xztyz54A==*XgTmdN0JRfmUrmEbusHwzg==*2K4/dQQPiz+AIErDR1fTog==',
-        '466CCC'))
+    # decode
+    # print(decrypt('', '3213541654'))
+    # print(encrypt('', '32165432154'))
 
-    # stellar_delete_account(Keypair.from_secret("SAGI2JR4CFDEFCDMH5L6PWE7UQPBODN3UKEGDFLAH5K7DPHWKPZZHOVP"),
-    #                       Keypair.from_secret("SAIALXYAYAR5NP2J5MQKZMEM6DJOITGCPKGL4BMHRKWLAP6E7S2GK5FX"))
+    # gen new
+    # new_account = Keypair.random()
+    # while new_account.public_key[-3:] != 'MTL':
+    #    new_account = Keypair.random()
+    # print(new_account.public_key, new_account.secret)
 
-    # account = Server(horizon_url="https://horizon.stellar.org").load_account('attid*lobstr.co')
-    # account = stellar_get_master()
-    # account = Server(horizon_url="https://horizon.stellar.org").load_account(account3)
-    # print(type(account))
-    # print(encrypt('SAGI2JR4CFDEFCDMH5L6PWE7UQPBODN3UKEGDFLAH5K7DPHWKPZZHOVP','0'))
-    # print(encrypt('SBMF2SLBON74N6DNQLS5NHWDOTMC4CPOFOI7NVHLUQVKQ3T2NVVTZABI','84131737'))
-    # print(encrypt('SC7L3J4MO7W3GV4ODKCOZXYNF7RBKR2R5N45HT2DKOXS4X6A3KW4NI2T','84131737'))
-    # stellar_create_new(84131737, 4)
+    # delete
+    # stellar_delete_account(Keypair.from_secret("**"),
+    #                       Keypair.from_secret("**"))
 
-    # xdr = stellar_add_fond_trustline('GC5MOXE2BI6NUUHDDJRTMQYSDF4GY46G2OQDHYOWNVE4PZDJBYIAQQLY','EURMTL')
-    # print(xdr)
-    # xdr = stellar_sign(xdr, 'SAGI2JR4CFDEFCDMH5L6PWE7UQPBODN3UKEGDFLAH5K7DPHWKPZZHOVP')
-    # print(xdr)
-    # xdr = stellar_send(xdr)
-    # print(xdr)
-    # account = server.accounts().account_id(public_key).call()
-    # for balance in account['balances']:
-
-    # = "GD5WQZDL7TUYB3ZOYOVPZFDTWZUW54PIDFNTS5YYX5AXWD2ILI5EKPDX"
-    # response = requests.get(f"https://friendbot.stellar.org?addr={public_key}")
-    # if response.status_code == 200:
-    #    print(f"SUCCESS! You have a new account :)\n{response.text}")
-    # else:
-    #    print(f"ERROR! Response: \n{response.text}")
-    # print(f"Type: {balance['asset_type']}, Balance: {balance['balance']}")
-    xdr = stellar_check_xdr('AAAAAgAAAADXM/FKYDkdJMoH7qR0azpDSfND7E9VelL2D5ys9ViskAAAAGQCGVTNAAAA1wAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAQAAAACe6w4QHWQIGTfNtks96epEXipzOHDQ8p3gFQqNebrXhgAAAAJERUJURVVSAAAAAAAAAAAA1zPxSmA5HSTKB+6kdGs6Q0nzQ+xPVXpS9g+crPVYrJAAAAAKZoobgAAAAAAAAAAA')
+    #xdr = stellar_check_xdr(
+    #    "https://mtl.ergvein.net/view?tid=ba0f728a8f0c62609a34789b2283ed70e60875c5ff91827a0b375f98b4bf3c9a")
+    #print({"tx_body": xdr})
+    #rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
+    #result = rq.text[rq.text.find('<section id="main">'):rq.text.find("</section>")]
+    #print(result)

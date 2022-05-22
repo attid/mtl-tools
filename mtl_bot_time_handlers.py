@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import mystellar
 
+
 async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
     master_chat_id = -1001767165598
     # -1001767165598 тестовая группа
@@ -20,7 +21,6 @@ async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
     job.reschedule('interval', minutes=rand)
     if rand == 10:
         job.pause()
-
 
 
 async def cmd_send_message_singers(dp: Dispatcher):
@@ -87,6 +87,6 @@ async def cmd_send_message_singers(dp: Dispatcher):
 
 def scheduler_jobs(scheduler: AsyncIOScheduler, dp):
     scheduler.add_job(cmd_send_message_singers, "interval", minutes=10, jitter=120, args=(dp,))
-    #scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(dp,scheduler,), id='test')
-    #job.args = (dp, 25,)
+    # scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(dp,scheduler,), id='test')
+    # job.args = (dp, 25,)
     # await cmd_send_message_singers(dp)

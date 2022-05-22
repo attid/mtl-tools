@@ -69,13 +69,13 @@ async def cmd_last_check(message: types.Message):
 
         elif has_words(message.text, ['ОБНОВИ', 'update']):
             if has_words(message.text, ['ГАРАНТОВ']):
-                await message.reply('Запустил обновление')
+                await message.reply('Зай, я запустила обновление')
                 update_report2.update_guarant_report()
             if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
-                await message.reply('Запустил обновление')
+                await message.reply('Зай, я запустила обновление')
                 update_report.update_main_report()
             if has_words(message.text, ['donate', 'donates', 'donated']):
-                await message.reply('Запустил обновление')
+                await message.reply('Зай, я запустила обновление')
                 update_report4.update_donate_report()
 
         elif has_words(message.text, ['ВЫПЬЕМ', 'ТОСТ']):

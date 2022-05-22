@@ -33,6 +33,7 @@ def update_guarant_report():
     # gspread_formatting.batch_updater(gc)
     address_list = wks.col_values(2)
     address_list.pop(0)
+    address_list.pop(0)
     len_address_list = len(address_list)
 
     all_accounts = mystellar.stellar_get_mtl_holders(mystellar.eurdebt_asset)
@@ -46,10 +47,11 @@ def update_guarant_report():
         update_list = []
         for account in address_list:
             update_list.append([account])
-        wks.update('B2', update_list)
+        wks.update('B3', update_list)
 
     date_list = wks.col_values(4)
     date_list.pop(0)
+    #    date_list.pop(0)
 
     update_list = []
 
@@ -74,30 +76,41 @@ def update_guarant_report():
             else:
                 dt = date_list[idx] if len(date_list[idx]) > 3 else now.strftime('%d.%m.%Y')
 
-        dt_google = '' if dt == '' else (
-                datetime.datetime.strptime(dt, '%d.%m.%Y') - datetime.datetime(1899, 12, 30)).days
+        dt_google = ''  # if dt == '' else (
+        # datetime.datetime.strptime(dt, '%d.%m.%Y') - datetime.datetime(1899, 12, 30)).days
         update_list.append([dt_google, eur_sum, debt_sum])
 
-    wks.update('D2', update_list)
-    wks.format("D2:D40", {"numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}})
+    wks.update('D3', update_list)
+    wks.format("D3:D40", {"numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}})
 
     # dt1 = datetime.datetime.strptime(record["created_at"], '%Y-%m-%dT%H:%M:%SZ')
     # print(update_list)
 
-    # vote
-    wks = gc.open("MTL Report").worksheet("TopHolders")
+    logger.info(f'report Guarantors all done {now}')
 
-    vote_list = mystellar.cmd_gen_vote_list()
+
+def update_top_holders_report():
+    gc = gspread.service_account('mtl-google-doc.json')
+
+    now = datetime.datetime.now()
+
+    wks = gc.open("MTL_TopHolders").worksheet("TopHolders")
+
+    vote_list = mystellar.cmd_gen_vote_list(no_data=True)
+    vote_list = mystellar.stellar_add_mtl_holders_info(vote_list)
 
     for vote in vote_list:
         vote[0] = mystellar.resolve_account(vote[0])
 
     vote_list.sort(key=lambda k: k[2], reverse=True)
 
-    wks.update('A1', vote_list)
+    print(vote_list)
+    wks.update('B2', vote_list)
+    wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'report 2 all done {now}')
+    logger.info(f'report topholders all done {now}')
 
 
 if __name__ == "__main__":
-    update_guarant_report()
+    #update_guarant_report()
+    update_top_holders_report()

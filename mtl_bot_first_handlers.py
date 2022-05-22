@@ -1,10 +1,13 @@
-from aiogram import types
+from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ParseMode
-import datetime, json
+import json
 import mystellar
 import mystellar2
-from mtl_bot_main import dp, logger
+from datetime import datetime
+from datetime import timedelta
+from mtl_bot_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
+    welcome_message, cmd_save_welcome_message, scheduler
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -45,10 +48,16 @@ links_msg = f"""
 [Лаборатория](https://laboratory.stellar.org/#?network=public)
 Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fond}) / [Эмитент]({link_stellar}{mystellar.public_mtl}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM)
-Списки [черный]({link_json}blacklist.json) / [переводы на БОД]({link_json}bodreplenish.json) / [донаты]({link_json}donation.json)
-Боты [Обмен 1]({link_stellar}GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7) / [Обмен 2]({link_stellar}GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F) / [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / [Бод]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / [БОД младший]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW)
+Списки [черный]({link_json}blacklist.json) / [BIM]({link_json}bodreplenish.json) / [донаты]({link_json}donation.json)
+Боты [Обмен 1]({link_stellar}GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7) / \
+[Обмен 2]({link_stellar}GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F) / \
+[Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \
+[BIM-XLM]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / \
+[BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \
+[Wallet]({link_stellar}GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL) 
 Видео [Как подписывать](https://t.me/c/1239694752/20090) / [Как проверять](https://t.me/c/1239694752/26053) / [Как склеить\редактировать транзакции](https://t.me/c/1239694752/41279)
 """
+
 
 @dp.message_handler(state='*', commands="start")
 @dp.message_handler(state='*', commands="cancel")
@@ -59,6 +68,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.finish()
     # And remove keyboard (just in case)
     await message.reply(startmsg)
+
 
 # Хэндлер на команду /options
 @dp.message_handler(commands="options")
@@ -116,7 +126,7 @@ async def cmd_show_bod(message: types.Message):
 async def cmd_do_bod(message: types.Message):
     if message.from_user.username == "itolstov":
         # новая запись
-        list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('Basic Income %d/%m/%Y'),
+        list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'),
                                             1)  # ('mtl div 17/12/2021')
         await message.answer(f"Start BOD pays {list_id}")
         result = mystellar.cmd_calc_bods(list_id)
@@ -146,8 +156,8 @@ async def cmd_do_div(message: types.Message):
     if message.from_user.username == "itolstov":
         # новая запись
         # ('mtl div 17/12/2021')
-        div_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('mtl div %d/%m/%Y'), 0)
-        donate_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('donate %d/%m/%Y'), 0)
+        div_list_id = mystellar.cmd_create_list(datetime.now().strftime('mtl div %d/%m/%Y'), 0)
+        donate_list_id = mystellar.cmd_create_list(datetime.now().strftime('donate %d/%m/%Y'), 0)
         await message.answer(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
         result = mystellar.cmd_calc_divs(div_list_id, donate_list_id)
         await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
@@ -192,7 +202,7 @@ async def cmd_do_div(message: types.Message):
 async def smd_add_trastline(message: types.Message, state: FSMContext):
     try:
         args = message.get_args().split()
-        xdr = mystellar.stellar_add_fond_trustline(args[1],args[0])
+        xdr = mystellar.stellar_add_fond_trustline(args[1], args[0])
     except ValueError:
         await message.reply('This is not a valid account. Try another.')
         return
@@ -255,7 +265,7 @@ async def cmd_gen_data(message: types.Message):
             arr1 = mystellar.cmd_gen_data_xdr(arg[0], arg[1])
             await message.answer(arr1)
             return
-    #else
+    # else
     await message.reply('Wrong format. Use: /gen_data public_key data_name:data_value')
 
 
@@ -264,21 +274,94 @@ async def cmd_show_data(message: types.Message):
     if len(message.get_args()) > 2:
         arg = message.get_args().split()
         result = mystellar.cmd_show_data(arg[0])
-        await message.reply('\n'.join(result))
+        if len(result) == 0:
+            await message.reply('Data not found')
+        else:
+            await multi_reply(message, '\n'.join(result))
         return
-    #else
+    # else
     await message.reply('Wrong format. Use: /show_data public_key')
 
+
+@dp.message_handler(commands="delete_income")
+async def cmd_delete_income(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id in delete_income:
+        delete_income.remove(message.chat.id)
+        cmd_save_delete_income()
+        await message.reply('Removed')
+    else:
+        delete_income.append(message.chat.id)
+        cmd_save_delete_income()
+        await message.reply('Added')
+
+
+@dp.message_handler(commands="delete_welcome")
+async def cmd_delete_welcome(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id in welcome_message:
+        welcome_message[message.chat.id] = None
+        cmd_save_welcome_message()
+    await message.reply('Removed')
+
+
+@dp.message_handler(commands="set_welcome")
+async def cmd_set_welcome(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if len(message.get_args()) > 5:
+        welcome_message[str(message.chat.id)] = message.html_text[13:]
+        cmd_save_welcome_message()
+        await message.reply('Added')
+    else:
+        await cmd_delete_welcome(message)
+
+
+async def cmd_send_message_singers(message: types.Message):
+    await message.delete()
+
+
+@dp.message_handler(content_types=types.ContentTypes.NEW_CHAT_MEMBERS)
+async def new_chat_member(message: types.Message):
+    if str(message.chat.id) in welcome_message:
+        msg = welcome_message.get(str(message.chat.id), 'Hi new user')
+        if message.from_user.username:
+            username = f'@{message.from_user.username} {message.from_user.full_name}'
+        else:
+            username = f'<a href="tg://user?id={message.from_user.id}">{message.from_user.full_name}</a>'
+        msg = msg.replace('$$USER$$', username)
+
+        answer = await message.answer(msg, parse_mode=ParseMode.HTML)
+        current_time = datetime.now()
+        future_time = current_time + timedelta(minutes=5)
+
+        scheduler.add_job(cmd_send_message_singers, run_date=future_time, args=(answer,))
+
+    if message.chat.id in delete_income:
+        await message.delete()
+
+
+@dp.message_handler(content_types=types.ContentTypes.LEFT_CHAT_MEMBER)
+async def left_chat_member(message: types.Message):
+    if message.chat.id in delete_income:
+        await message.delete()
 
 
 if __name__ == "__main__":
     pass
-    #with open("polls/votes.json", "r") as fp:
+    # with open("polls/votes.json", "r") as fp:
     #    users = list(json.load(fp))
-    #print(' '.join(users))
-    #div_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('mtl div %d/%m/%Y'), 0)
-    #donate_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('donate %d/%m/%Y'), 0)
-    #print(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
-    #result = mystellar.cmd_calc_divs(div_list_id, donate_list_id, 210)
-    #print(f"Found {len(result)} adresses. Try gen xdr.")
-
+    # print(' '.join(users))
+    # div_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('mtl div %d/%m/%Y'), 0)
+    # donate_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('donate %d/%m/%Y'), 0)
+    # print(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
+    # result = mystellar.cmd_calc_divs(div_list_id, donate_list_id, 210)
+    # print(f"Found {len(result)} adresses. Try gen xdr.")

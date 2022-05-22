@@ -46,10 +46,13 @@ def update_airdrop():
         if len(address_list) > idx:  # if address more that federal
             if (len(address_list[idx]) < 10) and (len(fed_address_list[idx]) > 5) and (
                     fed_address_list[idx].count('*') > 0):
-                # print(address_list[idx], fed_address_list[idx])
-                address = resolve_stellar_address(fed_address_list[idx])
-                # print(address.account_id)
-                wks.update(f'D{idx + 1}', address.account_id)
+                try:
+                    #print(address_list[idx], fed_address_list[idx])
+                    address = resolve_stellar_address(fed_address_list[idx])
+                    # print(address.account_id)
+                    wks.update(f'D{idx + 1}', address.account_id)
+                except:
+                    print('Resolving error', address_list[idx], fed_address_list[idx])
         else:  # if federal more that address
             if (len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count('*') > 0):
                 # print(fed_address_list[idx], '***')
@@ -88,6 +91,7 @@ def update_airdrop():
 
     print(update_list)
     wks.update('K3', update_list)
+    wks.update('O2', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'report 3 all done {now}')
 
