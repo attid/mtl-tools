@@ -40,6 +40,7 @@ class MyButtons(Enum):
 @unique
 class MyState(Enum):
     MyState = 'MyState'
+    StateExit = 'StateExit'
     StateSendFor = 'StateSendFor'
     StateSendSum = 'StateSendSum'
     StateSendConfirm = 'StateSendConfirm'
@@ -162,6 +163,23 @@ async def cmd_start(message: types.Message, state: FSMContext):
         except Exception as ex:
             len(ex.args)
             pass
+
+
+@dp.message_handler(commands="exit")
+async def cmd_exit(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        my_state = data.get(MyState.MyState.value)
+
+    if message.from_user.username == "itolstov":
+        if my_state == MyState.StateExit.value:
+            async with state.proxy() as data:
+                data[MyState.MyState.value] = None
+            await message.reply(":[[[")
+            exit()
+        else:
+            async with state.proxy() as data:
+                data[MyState.MyState.value] = MyState.StateExit.value
+            await message.reply(":'[")
 
 
 def get_kb_default(user_id: int) -> types.InlineKeyboardMarkup:
@@ -606,7 +624,7 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 if user_id > 0:
                     xdr = stellar_sign(xdr, stellar_get_user_keypair(user_id, str(pin)).secret)
                     await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                           'Успешно подписано, пробуем отправить в блокчейн')
+                                           'Успешно подписано, пробуем отправить в блокчейн, ожидание до 5 минут')
                     stellar_send(xdr)
                     await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
                                            'Успешно отправлено')

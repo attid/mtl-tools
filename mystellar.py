@@ -347,6 +347,24 @@ def cmd_create_list(memo, paytype):
     return fb.execsql(f"insert into T_DIV_LIST (MEMO,pay_type) values ('{memo}',{paytype}) returning ID")[0][0]
 
 
+def get_donate_list(account: dict):
+    donate_list = []
+    if "data" in account:
+        data = account.get("data")
+        account_id = account.get("account_id")
+        for data_name in list(data):
+            data_value = data[data_name]
+            if data_name[:10] == 'mtl_donate':
+                if data_name.find('=') > 6:
+                    persent: str
+                    persent = data_name[data_name.find('=') + 1:]
+                    if isfloat(persent):
+                        donate_data_value = decode_data_value(data_value)
+                        # print(account_id, persent, donate_data_value)
+                        donate_list.append([account_id, donate_data_value, persent])
+    return donate_list
+
+
 def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
     server = Server(horizon_url="https://horizon.stellar.org")
 
@@ -363,10 +381,8 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
             assets[balance['asset_code']] = float(balance['balance'])
     mtl_sum = mtl_sum - assets['MTL']
 
-    sponsors = requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/bodreplenish.json').json()
-    donates = requests.get("https://raw.githubusercontent.com/montelibero-org/mtl/main/json/donation.json").json()
-
     div_accounts = []
+    donates = []
     if test_sum > 0:
         div_sum = test_sum
     else:
@@ -383,8 +399,6 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
         balances = account["balances"]
         balance_mtl = 0
         balance_rect = 0
-        div = 0
-        sdiv = 0
         eur = 0
         # check all balanse
         for balance in balances:
@@ -398,38 +412,31 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
         # check sponsor
-        if sponsors.get(account["account_id"]):
-            calc = round(div * float(sponsors.get(account["account_id"])) / 100, 7)
-            sponsor_sum += calc
-            sdiv = div - calc
-            # print(f'calc {calc} sponsor_sum {sponsor_sum} sdiv {sdiv}')
-        else:
-            sdiv = div
+        donates.extend(get_donate_list(account))
 
         if (eur > 0) and (div > 0.0001) and (account["account_id"] != public_fond) \
                 and (account["account_id"] != public_pawnshop):
-            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, sdiv, div_list_id])
+            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
 
     # calc donate # ['GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 56428.7, 120.9, 96.7, 26]
     donate_list = []
     for mtl_account in div_accounts:
-        if mtl_account[0] in donates:
-            for recipient in donates[mtl_account[0]]["recipients"]:
-                calc_sum = round(float(recipient['percent']) * float(mtl_account[2]) / 100, 7)
-                # print(f'{calc_sum=}')
-                if mtl_account[3] >= calc_sum:
-                    found = list(filter(lambda x: x[0] == recipient["recipient"], donate_list))
-                    if len(found) > 0:
-                        for donate in donate_list:
-                            if donate[0] == recipient["recipient"]:
-                                donate[3] += calc_sum
-                                break
-                    else:
-                        donate_list.append([recipient["recipient"], 0, 0, calc_sum, donate_list_id])
-                    mtl_account[3] = mtl_account[3] - calc_sum
+        found_list = list(filter(lambda x: x[0] == mtl_account[0], donates))
+        for donate_rules in found_list:  # ['GACBSNMGR32HMG2AXTE4CSJHTEZ7LUDBU3SNPCG4TBBE4XKVBQZ55I5M', 'GACNFOLV3ATA6N6AHMO3IBZCYMHUMFCT6O452DW3RTU254TZJ5CP3V3Q', '5']
+            calc_sum = round(float(donate_rules[2]) * float(mtl_account[2]) / 100, 7)
+            # print(f'{calc_sum=}')
+            if mtl_account[3] >= calc_sum:
+                found_calc = list(filter(lambda x: x[0] == donate_rules[1], donate_list))
+                if found_calc:
+                    for donate in donate_list:
+                        if donate[0] == donate_rules[1]:
+                            donate[3] += calc_sum
+                            break
+                else:
+                    donate_list.append([donate_rules[1], 0, 0, calc_sum, donate_list_id])
+                mtl_account[3] = mtl_account[3] - calc_sum
 
     div_accounts.sort(key=get_key_1, reverse=True)
-    donate_list.append([public_bod_eur, 0, 0, sponsor_sum, donate_list_id])
     div_accounts.extend(donate_list)
     fb.manyinsert("insert into T_PAYMENTS (USER_KEY, MTL_SUM, USER_CALC, USER_DIV, ID_DIV_LIST) values (?,?,?,?,?)",
                   div_accounts)
@@ -733,9 +740,9 @@ def cmd_show_donates(return_json=False, return_table=False):
             recipients = []
             for data_name in list(data):
                 data_value = data[data_name]
-                if data_name[:6] == 'donate':
+                if data_name[:10] == 'mtl_donate':
                     recipient = {"recipient": decode_data_value(data_value),
-                                 "percent": data_name[data_name.find(':') + 1:]}
+                                 "percent": data_name[data_name.find('=') + 1:]}
                     recipients.append(recipient)
             if recipients:
                 donate_json[account[0]] = recipients
@@ -757,7 +764,7 @@ def cmd_getblacklist():
     return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
 
 
-def cmd_gen_vote_list(return_delegate_list: bool = False, no_data: bool = False):
+def cmd_gen_vote_list(return_delegate_list: bool = False):
     account_list = []
     divider = 600
 
@@ -778,10 +785,7 @@ def cmd_gen_vote_list(return_delegate_list: bool = False, no_data: bool = False)
                     balance_rect = int(balance_rect[0:balance_rect.find('.')])
         lg = round(math.log2((balance_mtl + balance_rect + 0.001) / divider))
         if account["account_id"] != public_fond:
-            if no_data:
-                account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
-            else:
-                account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data']])
+            account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data']])
     # 2
     big_list = []
     for arr in account_list:
@@ -800,11 +804,11 @@ def cmd_gen_vote_list(return_delegate_list: bool = False, no_data: bool = False)
     # find delegate
     delegate_list = {}
     for account in big_list:
-        if not no_data and account[4]:
+        if account[4]:
             data = account[4]
             for data_name in list(data):
                 data_value = data[data_name]
-                if data_name == 'delegate':
+                if data_name in ('delegate', 'mtl_delegate'):
                     delegate_list[account[0]] = decode_data_value(data_value)
 
     if return_delegate_list:
@@ -873,9 +877,16 @@ def resolve_account(account_id: str):
     return result
 
 
+def isfloat(value):
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+
 if __name__ == "__main__":
     pass
-    #result = cmd_show_data('bod')
-    result = stellar_get_mtl_holders()
+    #result = cmd_calc_divs(42,43,200)
     #print(result)
-    print(*result, sep='\n')
+    # print(*result, sep='\n')

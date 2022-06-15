@@ -96,11 +96,12 @@ def update_top_holders_report():
 
     wks = gc.open("MTL_TopHolders").worksheet("TopHolders")
 
-    vote_list = mystellar.cmd_gen_vote_list(no_data=True)
+    vote_list = mystellar.cmd_gen_vote_list()
     vote_list = mystellar.stellar_add_mtl_holders_info(vote_list)
 
     for vote in vote_list:
         vote[0] = mystellar.resolve_account(vote[0])
+        vote.pop(4)
 
     vote_list.sort(key=lambda k: k[2], reverse=True)
 
@@ -112,5 +113,5 @@ def update_top_holders_report():
 
 
 if __name__ == "__main__":
-    #update_guarant_report()
+    update_guarant_report()
     update_top_holders_report()

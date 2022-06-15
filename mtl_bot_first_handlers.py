@@ -6,6 +6,8 @@ import mystellar
 import mystellar2
 from datetime import datetime
 from datetime import timedelta
+
+import update_report3
 from mtl_bot_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
     welcome_message, cmd_save_welcome_message, scheduler
 
@@ -257,6 +259,13 @@ async def cmd_delete(message: types.Message):
     await message.delete()
 
 
+@dp.message_handler(commands="update_airdrops")
+async def cmd_update_airdrops(message: types.Message):
+    await message.answer('Запускаю полное обновление')
+    update_report3.update_airdrop()
+    await message.answer('Обновление завершено')
+
+
 @dp.message_handler(commands="gen_data")
 async def cmd_gen_data(message: types.Message):
     if len(message.get_args()) > 2:
@@ -267,6 +276,16 @@ async def cmd_gen_data(message: types.Message):
             return
     # else
     await message.reply('Wrong format. Use: /gen_data public_key data_name:data_value')
+
+
+@dp.message_handler(commands="exit")
+async def cmd_exit(message: types.Message):
+    try:
+        await message.delete()
+    except:
+        pass
+    if message.from_user.username == "itolstov":
+        exit()
 
 
 @dp.message_handler(commands="show_data")
