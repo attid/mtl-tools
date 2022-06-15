@@ -6,6 +6,9 @@ from aiogram.types.base import InputFile
 from aiogram.utils.callback_data import CallbackData
 from PIL import Image
 from enum import Enum, unique
+
+from stellar_sdk.exceptions import BaseHorizonError
+
 from MyMTLWalletBot_main import dp, logger
 from MyMTLWalletBot_stellar import *
 
@@ -28,6 +31,7 @@ class MyButtons(Enum):
     Support = 'Support'
     Return = 'Return'
     ReturnNew = 'ReturnNew'
+    ReSend = 'ReSend'
     Yes = 'Yes'
     No = 'No'
     AddNew = 'AddNew'
@@ -83,6 +87,11 @@ kb_add1.add(
     types.InlineKeyboardButton(text="Создать бесплатный аккаунт",
                                callback_data=cb_add.new(answer=MyButtons.NewKey.value)))
 kb_add1.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+
+kb_resend = types.InlineKeyboardMarkup()
+kb_resend.add(types.InlineKeyboardButton(text="Попробовать отправить еще раз",
+                                         callback_data=cb_default.new(answer=MyButtons.ReSend.value)))
+kb_resend.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
 
 kb_return = types.InlineKeyboardMarkup()
 kb_return.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
@@ -226,7 +235,7 @@ async def cmd_show_create(user_id: int, msg_id: int, chat_id: int, kb_tmp):
     await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
 
 
-async def cmd_info_message(user_id: int, msg_id: int, chat_id: int, msg: str, send_file=None):
+async def cmd_info_message(user_id: int, msg_id: int, chat_id: int, msg: str, send_file=None, resend_transaction=None):
     if send_file:
         photo = types.InputFile(send_file)
         # await bot.send_photo(chat_id=message.chat.id, photo=photo)
@@ -234,6 +243,8 @@ async def cmd_info_message(user_id: int, msg_id: int, chat_id: int, msg: str, se
         await dp.bot.send_photo(chat_id, photo=photo, caption=msg, reply_markup=kb_return_new,
                                 parse_mode=ParseMode.MARKDOWN)
         await dp.bot.delete_message(chat_id, msg_id)
+    elif resend_transaction:
+        await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_resend, parse_mode=ParseMode.MARKDOWN)
     else:
         await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return, parse_mode=ParseMode.MARKDOWN)
 
@@ -315,9 +326,18 @@ async def cmd_show_send_tr(user_id: int, msg_id: int, chat_id: int, state: FSMCo
         else:
             stellar_send(xdr)
             await cmd_info_message(user_id, msg_id, chat_id, 'Успешно отправлено')
+    except BaseHorizonError as ex:
+        logger.info('send BaseHorizonError', ex)
+        msg = f"{ex.title}, error {ex.status}"
+        await cmd_info_message(user_id, msg_id, chat_id,
+                               f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
     except Exception as ex:
-        print('send ', ex)
-        await cmd_info_message(user_id, msg_id, chat_id, 'Ошибка с отправкой =(')
+        logger.info('send unknown error', ex)
+        msg = 'unknown error'
+        async with state.proxy() as data:
+            data[MyState.xdr.value] = xdr
+        await cmd_info_message(user_id, msg_id, chat_id,
+                               f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
 
 
 async def cmd_show_add_wallet_private(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
@@ -480,8 +500,28 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
         await cmd_show_send_tr(user_id, query.message.message_id, query.message.chat.id, state)
     elif answer == MyButtons.SendTools.value:
         await cmd_show_send_tr(user_id, query.message.message_id, query.message.chat.id, state, tools='tools')
-
-
+    elif answer == MyButtons.ReSend.value:
+        async with state.proxy() as data:
+            xdr = data.get(MyState.xdr.value)
+        try:
+            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                   'Пробуем повторно отправить в блокчейн, ожидание до 5 минут'
+                                   'пожалуйста не создавайте новых транзакций и дождитесь ответа')
+            stellar_send(xdr)
+            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                   'Успешно отправлено')
+        except BaseHorizonError as ex:
+            logger.info('ReSend BaseHorizonError', ex)
+            msg = f"{ex.title}, error {ex.status}"
+            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                   f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+        except Exception as ex:
+            logger.info('ReSend unknown error', ex)
+            msg = 'unknown error'
+            async with state.proxy() as data:
+                data[MyState.xdr.value] = xdr
+            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                   f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
     elif answer == MyButtons.PIN.value:
         async with state.proxy() as data:
             data[MyState.pin_type.value] = 1
@@ -623,15 +663,24 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                                   Asset(send_asset_name, send_asset_code), send_sum, create=create)
                 if user_id > 0:
                     xdr = stellar_sign(xdr, stellar_get_user_keypair(user_id, str(pin)).secret)
+                    async with state.proxy() as data:
+                        data[MyState.xdr.value] = xdr
                     await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
                                            'Успешно подписано, пробуем отправить в блокчейн, ожидание до 5 минут')
                     stellar_send(xdr)
                     await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
                                            'Успешно отправлено')
-            except Exception as ex:
-                print('pin_state == 13', ex)
+            except BaseHorizonError as ex:
+                # logger.info('pin_state == 13 BaseHorizonError', ex)
+                msg = f"{ex.title}, error {ex.status}"
+                logger.info('pin_state == 13', msg)
                 await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                       'Ошибка с отправкой =(')
+                                       f'Ошибка с отправкой =(\n' + msg, resend_transaction=True)
+            except Exception as ex:
+                logger.info('pin_state == 13 unknown error', ex)
+                msg = 'unknown error'
+                await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                       f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
         if pin_state == 14:  # sign
             async with state.proxy() as data:
                 data[MyState.pin.value] = ''
@@ -755,4 +804,16 @@ async def cmd_all(message: types.Message, state: FSMContext):
 
 
 if __name__ == "__main__":
-    pass
+    # pass
+    xdr = 'AAAAAgAAAADXM/FKYDkdJMoH7qR0azpDSfND7E9VelL2D5ys9ViskAAAAGQCGVTNAAABgQAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAB8N4lXiL0FplpVrQ5iTsTwtOxUszs3AoRe4yFqUQzrxAAAAAUFRVUEAAAAAW5QuU6wzyP0KgMx8GxqF19g4qcQZd6rRizrwV/jjPfAAAAAAAJiWgAAAAAAAAAAB9ViskAAAAEDqf8NPOVPNfBdOFfg+0U8DFVblL2jJ7Tb6PQzWNpJMOG6+IEAW0xDUGl9kGFTv6ezJ+q8Jxf1MoZ3JsxtbqCwA'
+    try:
+        stellar_send(xdr)
+    except BaseHorizonError as ex:
+        msg = f"{ex.title}, error {ex.status}, {ex.extras['result_codes']}"
+        logger.info('pin_state == 13 BaseHorizonError', msg)
+        print(msg)
+        print(2)
+    except Exception as ex:
+        # logger.info('pin_state == 13 unknown error', ex)
+        # msg = 'unknown error'
+        print(3)
