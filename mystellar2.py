@@ -11,6 +11,7 @@ public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
 public_city = "GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3"
 public_distrib = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
 public_collector = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
+public_competition = "GAIKBJYL5DZFHBL3R4HPFIA2U3ZEBTJ72RZLP444ACV24YZ2C73P6COM"
 
 public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
@@ -238,6 +239,7 @@ def cmd_get_new_vote_mtl(public_key):
         vote_list1 = copy.deepcopy(vote_list)
         vote_list2 = copy.deepcopy(vote_list)
         vote_list3 = copy.deepcopy(vote_list)
+        vote_list4 = copy.deepcopy(vote_list)
         # print(vote_list)
         result = []
         transaction = TransactionBuilder(
@@ -247,9 +249,10 @@ def cmd_get_new_vote_mtl(public_key):
         xdr = gen_vote_xdr(public_fond, vote_list, transaction)
         xdr = gen_vote_xdr(public_mtl, vote_list1, transaction, public_mtl)
         xdr = gen_vote_xdr(public_distrib, vote_list2, transaction, public_distrib)
+        xdr = gen_vote_xdr(public_distrib, vote_list3, transaction, public_competition)
         # return sequence because every build inc number
         transaction.source_account.sequence = sequence
-        xdr = gen_vote_xdr(public_collector, vote_list2, transaction, public_collector)
+        xdr = gen_vote_xdr(public_collector, vote_list4, transaction, public_collector)
         result.append(xdr)
 
     # print(gen_vote_xdr(public_new,vote_list2))
@@ -259,6 +262,3 @@ def cmd_get_new_vote_mtl(public_key):
 
 if __name__ == "__main__":
     pass
-    # print(cmd_get_new_vote_mtlcity())
-    print(cmd_get_new_vote_mtl(''))
-    # print(*cmd_gen_vote_list(True).items(), sep='\n')

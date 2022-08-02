@@ -10,7 +10,7 @@ import MyMTLWalletBot_handlers
 
 def unhit():
     pass
-    MyMTLWallet_handlers.cmd_decode()
+    MyMTLWalletBot_handlers.cmd_all()
     #mtl_bot_state_handlers.cmd_mtlcamp0()
     #mtl_bot_talk_handlers.has_words(None, None)
     #mtl_bot_poll_handlers.cmd_save()

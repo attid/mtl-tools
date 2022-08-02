@@ -23,6 +23,7 @@ public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 xlm_asset = Asset("XLM")
 mtl_asset = Asset("MTL", public_mtl)
 eurmtl_asset = Asset("EURMTL", public_mtl)
+eurdebt_asset = Asset("EURDEBT", public_mtl)
 
 
 def stellar_add_trust(user_key: str, asset: Asset, xdr: str = None):
@@ -115,6 +116,18 @@ def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float
         transaction.add_text_memo('New account MyMTLWalletbot')
     else:
         transaction.append_payment_op(destination=for_account, amount=str(round(amount, 7)), asset=asset)
+    full_transaction = transaction.build()
+    logger.info(full_transaction.to_xdr())
+    return full_transaction.to_xdr()
+
+
+def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, recieive_asset: Asset,
+                 receive_amount: str):
+    source_account = Server(horizon_url="https://horizon.stellar.org").load_account(from_account)
+    transaction = TransactionBuilder(source_account=source_account,
+                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
+    transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, recieive_asset,
+                                                   receive_amount, [])
     full_transaction = transaction.build()
     logger.info(full_transaction.to_xdr())
     return full_transaction.to_xdr()
@@ -258,26 +271,26 @@ def stellar_check_account(public_key: str) -> Account:
         print("stellar_check_account", public_key, ex)
 
 
+def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: Asset) -> str:
+    try:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        call_result = server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
+
+        # c = {'_embedded': {'records': [{'source_asset_type': 'credit_alphanum12', 'source_asset_code': 'EURMTL',
+        #                    'source_asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+        #                                'source_amount': '10.0000000', 'destination_asset_type': 'credit_alphanum4',
+        #                                'destination_asset_code': 'MTL',
+        #                    'destination_asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+        #                                'destination_amount': '5.0000000', 'path': []}]}}
+        if len(call_result['_embedded']['records']) > 0:
+            return call_result['_embedded']['records'][0]['destination_amount']
+        else:
+            return '0'
+    except Exception as ex:
+        print("stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + receive_asset.code, ex)
+        return '0'
+
+
 if __name__ == "__main__":
+    print(stellar_check_receive_sum(mtl_asset, '10', eurmtl_asset))
     pass
-
-    # decode
-    # print(decrypt('', '3213541654'))
-    # print(encrypt('', '32165432154'))
-
-    # gen new
-    # new_account = Keypair.random()
-    # while new_account.public_key[-3:] != 'MTL':
-    #    new_account = Keypair.random()
-    # print(new_account.public_key, new_account.secret)
-
-    # delete
-    # stellar_delete_account(Keypair.from_secret("**"),
-    #                       Keypair.from_secret("**"))
-
-    #xdr = stellar_check_xdr(
-    #    "https://mtl.ergvein.net/view?tid=ba0f728a8f0c62609a34789b2283ed70e60875c5ff91827a0b375f98b4bf3c9a")
-    #print({"tx_body": xdr})
-    #rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
-    #result = rq.text[rq.text.find('<section id="main">'):rq.text.find("</section>")]
-    #print(result)

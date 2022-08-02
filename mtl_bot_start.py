@@ -67,7 +67,11 @@ info_cmd = {
     "/delete_income": "Разрешить боту удалять сообщения о входе и выходе участников чата",
     "/delete_welcome": "Отключить сообщения приветсвия",
     "/set_welcome": "Установить сообщение приветсвия при входе. Шаблон на имя $$USER$$",
-    "/update_airdrops":"Обновить файл airdrops"
+    "/show_key_rate": "Показать сколько начислено мулек по ключевой ставке на всех",
+    "/show_key_rate key": "Показать сколько начислено мулек по ключевой ставке на указанный адрес",
+    "/balance": "Показать сколько денег или мулек(EURMTL) в кубышке",
+    "Скайнет сколько в кубышке": "Показать сколько денег или мулек(EURMTL) в кубышке",
+    "/update_airdrops": "Обновить файл airdrops"
 }
 
 
@@ -76,7 +80,7 @@ async def inline_handler(query: types.InlineQuery):
     switch_text = "По Вашему запросу найдено :"
     answers = []
     for key, value in info_cmd.items():
-        if (key.find(query.query) > -1) or (value.find(query.query) > -1):
+        if (key.upper().find(query.query.upper()) > -1) or (value.upper().find(query.query.upper()) > -1):
             answers.append(types.InlineQueryResultArticle(
                 id=str(len(answers)),
                 title=key,

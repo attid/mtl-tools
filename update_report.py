@@ -70,6 +70,17 @@ def update_main_report():
     json_miner = requests.get(
         'https://api.stellar.expert/explorer/public/asset/MTLMiner-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/holders?limit=200').json()
 
+    # competition
+    # FOND
+    rq = requests.get('https://horizon.stellar.org/accounts/GAIKBJYL5DZFHBL3R4HPFIA2U3ZEBTJ72RZLP444ACV24YZ2C73P6COM')
+    competition_assets = {}
+
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            competition_assets['XLM'] = float(balance['balance'])
+        else:
+            competition_assets[balance['asset_code']] = float(balance['balance'])
+
     # aum
     s = requests.get(
         f'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
@@ -142,6 +153,8 @@ def update_main_report():
     wks.update('B11', donates_count)
     wks.update('C11', float(donates_sum))
     wks.update('D11', int(recipients_count))
+    wks.update('C18', competition_assets.get('EURMTL'))
+
 
     wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 

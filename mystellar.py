@@ -1,7 +1,7 @@
 import base64
 import math
 
-from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo
+from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair
 from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions
 import json, requests, datetime
 
@@ -885,8 +885,36 @@ def isfloat(value):
         return False
 
 
+def gen_new(last_name):
+    new_account = Keypair.random()
+    i = 0
+    while new_account.public_key[-len(last_name):] != last_name:
+        new_account = Keypair.random()
+        i += 1
+    print(i, new_account.public_key, new_account.secret)
+    return [i, new_account.public_key, new_account.secret]
+
+
+def get_balance():
+    # FOND
+    rq = requests.get('https://horizon.stellar.org/accounts/GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
+    assets = {}
+
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            assets['XLM'] = float(balance['balance'])
+        else:
+            assets[balance['asset_code']] = float(balance['balance'])
+
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+
+    return f"Сейчас в кубышке {diff} наличных и {int(assets['EURMTL'])} EURMTL"
+
+
 if __name__ == "__main__":
+    # print(gen_new('RATE'))
+    print(get_balance())
     pass
-    #result = cmd_calc_divs(42,43,200)
-    #print(result)
+    # result = cmd_calc_divs(42,43,200)
+    # print(result)
     # print(*result, sep='\n')

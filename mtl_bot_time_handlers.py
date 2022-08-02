@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # from apscheduler.job import Job
 
 import mystellar
+from mtl_bot_main import logger
 
 
 async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
@@ -24,6 +25,7 @@ async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
 
 
 async def cmd_send_message_singers(dp: Dispatcher):
+    logger.info(f'cmd_send_message_singers')
     result = mystellar.cmd_check_new_fond_transaction(ignore_operation=['CreateClaimableBalance'])
     master_chat_id = -1001239694752
     # -1001767165598 тестовая группа
@@ -83,6 +85,7 @@ async def cmd_send_message_singers(dp: Dispatcher):
                 await dp.bot.send_message(master_chat_id, "Слишком много операций показаны первые ")
             await dp.bot.send_message(master_chat_id, msg[0:4000], disable_notification=True,
                                       disable_web_page_preview=True)
+    logger.info(f'end cmd_send_message_singers')
 
 
 def scheduler_jobs(scheduler: AsyncIOScheduler, dp):

@@ -37,7 +37,7 @@ booms = ["AgACAgIAAxkBAAIINGIWWwHuiOBgxuBQ9CBnfL7-VPXVAALuuzEbbLOxSFW75wtHIJnnAQ
          "AgACAgIAAxkBAAIIN2IWW1Pq8xtfB-wHiMVVzNVCRk5iAALyuzEbbLOxSJ7cQZ9NcU-HAQADAgADbQADIwQ", ]
 
 
-#@dp.message_handler(state='*')  # chat_type=[ChatType.PRIVATE, ChatType.SUPERGROUP]
+# @dp.message_handler(state='*')  # chat_type=[ChatType.PRIVATE, ChatType.SUPERGROUP]
 async def cmd_last_check(message: types.Message):
     if message.text.find('mtl.ergvein.net/view') > -1:
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
@@ -98,6 +98,9 @@ async def cmd_last_check(message: types.Message):
 
         elif has_words(message.text, ['покажи']) and has_words(message.text, ['сиськи']):
             await message.reply_photo(random.choice(booms))
+
+        elif has_words(message.text, ['сколько']) and has_words(message.text, ['кубышк']):
+            await message.reply(mystellar.get_balance())
 
         elif has_words(message.text, ['хочется', 'нет', 'дай']) and has_words(message.text,
                                                                               ['стабильности', 'стабильность']):

@@ -15,6 +15,7 @@ from mtl_bot_main import dp, logger, multi_reply, multi_answer, delete_income, c
 
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
+from update_eurmtl_log import show_key_rate
 
 startmsg = """
 Я молодой бот
@@ -122,6 +123,20 @@ async def cmd_decode(message: types.Message):
 @dp.message_handler(commands="show_bod")
 async def cmd_show_bod(message: types.Message):
     await message.answer(mystellar.cmd_show_bod())
+
+
+@dp.message_handler(commands="balance")
+async def cmd_show_bod(message: types.Message):
+    await message.answer(mystellar.get_balance())
+
+
+@dp.message_handler(commands="show_key_rate")
+async def cmd_show_key_rate(message: types.Message):
+    key = 'key'
+    if len(message.get_args()) > 2:
+        arg = message.get_args().split()
+        key = arg[0]
+    await message.answer(show_key_rate(key))
 
 
 @dp.message_handler(commands="do_bod")
@@ -372,6 +387,24 @@ async def new_chat_member(message: types.Message):
 async def left_chat_member(message: types.Message):
     if message.chat.id in delete_income:
         await message.delete()
+
+
+@dp.message_handler(commands="exit")
+@dp.message_handler(commands="restart")
+async def cmd_exit(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        my_state = data.get('MyState')
+
+    if message.from_user.username == "itolstov":
+        if my_state == 'StateExit':
+            async with state.proxy() as data:
+                data['MyState'] = None
+            await message.reply(":[[[")
+            exit()
+        else:
+            async with state.proxy() as data:
+                data['MyState'] = 'StateExit'
+            await message.reply(":'[")
 
 
 if __name__ == "__main__":
