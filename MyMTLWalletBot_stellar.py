@@ -4,12 +4,12 @@ from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions,
 from stellar_sdk.sep.federation import resolve_stellar_address
 
 import fb
-from MyMTLWalletBot_main import logger
 from cryptocode import encrypt, decrypt
 
 # from settings import private_div, private_bod_eur
 
 # https://stellar-sdk.readthedocs.io/en/latest/
+from MyMTLWalletBot_main import add_info_log
 
 public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
@@ -38,7 +38,7 @@ def stellar_add_trust(user_key: str, asset: Asset, xdr: str = None):
     transaction = transaction.build()
 
     xdr = transaction.to_xdr()
-    # print(f"xdr: {xdr}")
+    # add_info_log(f"xdr: {xdr}")
     return xdr
 
 
@@ -51,10 +51,10 @@ def stellar_sign(xdr: str, private_key: str):
 def get_url_xdr(url):
     rq = requests.get(url).text
     rq = rq[rq.find('<span class="tx-body">') + 22:]
-    # print(rq)
+    # add_info_log(rq)
     rq = rq[:rq.find('</span>')]
     rq = rq.replace("&#x3D;", "=")
-    # print(rq)
+    # add_info_log(rq)
     return rq
 
 
@@ -69,7 +69,7 @@ def stellar_check_xdr(xdr: str):
             result = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE).to_xdr()
 
     except Exception as ex:
-        print('stellar_check_xdr', xdr, ex)
+        add_info_log('stellar_check_xdr', xdr, ex)
     return result
 
 
@@ -117,7 +117,7 @@ def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float
     else:
         transaction.append_payment_op(destination=for_account, amount=str(round(amount, 7)), asset=asset)
     full_transaction = transaction.build()
-    logger.info(full_transaction.to_xdr())
+    add_info_log(full_transaction.to_xdr())
     return full_transaction.to_xdr()
 
 
@@ -129,7 +129,7 @@ def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, recieiv
     transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, recieive_asset,
                                                    receive_amount, [])
     full_transaction = transaction.build()
-    logger.info(full_transaction.to_xdr())
+    add_info_log(full_transaction.to_xdr())
     return full_transaction.to_xdr()
 
 
@@ -163,7 +163,7 @@ def stellar_can_new(user_id: int):
 
 
 def stellar_delete_account(master_account: Keypair, delete_account: Keypair):
-    print('delete_account', delete_account.public_key)
+    add_info_log('delete_account', delete_account.public_key)
     source_account = Server(horizon_url="https://horizon.stellar.org").load_account(master_account)
     transaction = TransactionBuilder(source_account=source_account,
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
@@ -268,7 +268,7 @@ def stellar_check_account(public_key: str) -> Account:
             public_key = resolve_stellar_address(public_key).account_id
         return Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
     except Exception as ex:
-        print("stellar_check_account", public_key, ex)
+        add_info_log("stellar_check_account", public_key, ex)
 
 
 def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: Asset) -> str:
@@ -287,10 +287,19 @@ def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: A
         else:
             return '0'
     except Exception as ex:
-        print("stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + receive_asset.code, ex)
+        add_info_log("stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + receive_asset.code, ex)
         return '0'
 
 
+def get_last_message_id(user_id: int):
+    return fb.execsql1(f"select first 1 m.message_id from mymtlwalletbot m where m.user_id = ?", (user_id,))
+
+
+def set_last_message_id(user_id: int, message_id: int):
+    if get_last_message_id(user_id) != message_id:
+        fb.execsql(f"update mymtlwalletbot set message_id = ? where user_id = ?", (message_id, user_id))
+
+
 if __name__ == "__main__":
-    print(stellar_check_receive_sum(mtl_asset, '10', eurmtl_asset))
+    add_info_log(stellar_check_receive_sum(mtl_asset, '10', eurmtl_asset))
     pass

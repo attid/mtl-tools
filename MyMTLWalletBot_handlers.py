@@ -9,7 +9,7 @@ from enum import Enum, unique
 
 from stellar_sdk.exceptions import BaseHorizonError
 
-from MyMTLWalletBot_main import dp, logger
+from MyMTLWalletBot_main import dp, logger, add_info_log
 from MyMTLWalletBot_stellar import *
 
 
@@ -54,6 +54,7 @@ class MyState(Enum):
     StateAddWalletPrivate = 'StateAddWalletPrivate'
     StateAddWalletPIN = 'StateAddWalletPIN'
     StatePIN = 'StatePIN'
+    StatePassword = 'StatePassword'
     StateSendSumSwap = 'StateSendSumSwap'
     StateSwapConfirm = 'StateSwapConfirm'
     # send_account = 'send_account'
@@ -68,7 +69,6 @@ class MyState(Enum):
     receive_asset_min_sum = 'receive_asset_min_sum'
     send_sum = 'send_sum'
     public_key = 'public_key'
-    message_id = 'message_id'
     wallets = 'wallets'
     pin_type = 'pin_type'
     pin = 'pin'
@@ -162,21 +162,41 @@ kb_nopassword.add(
     types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
 
 
+async def send_message(user_id: int, msg: str, reply_markup=None, need_new=None, parse_mode=None):
+    msg_id = get_last_message_id(user_id)
+    if need_new:
+        new_msg = await dp.bot.send_message(user_id, msg, reply_markup=reply_markup, parse_mode=parse_mode)
+        if msg_id > 0:
+            try:
+                await dp.bot.delete_message(user_id, msg_id)
+            except Exception as ex:
+                add_info_log('await send_message, del', user_id, ex)
+        set_last_message_id(user_id, new_msg.message_id)
+    else:
+        try:
+            await dp.bot.edit_message_text(msg, user_id, msg_id, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception as ex:
+            new_msg = await dp.bot.send_message(user_id, msg, reply_markup=reply_markup, parse_mode=parse_mode)
+            set_last_message_id(user_id, new_msg.message_id)
+
+
 @dp.message_handler(state='*', commands="start")
 async def cmd_start(message: types.Message, state: FSMContext):
-    logger.info(message.from_user.id, 'cmd_start')
+    add_info_log(message.from_user.id, ' cmd_start')
     await state.finish()
     # check address
-    msg = await message.answer('Loading')
+    set_last_message_id(message.from_user.id, 0)
+    await send_message(message.from_user.id, 'Loading')
+
     if fb.execsql1(f"select count(*) from MyMTLWalletBot where user_id = {message.from_user.id}") > 0:
-        await cmd_show_start(message.from_user.id, msg.message_id, message.chat.id, state)
+        await cmd_show_start(message.chat.id, state)
     else:
-        await cmd_show_create(message.from_user.id, msg.message_id, message.chat.id, kb_add0)
+        await cmd_show_create(message.chat.id, kb_add0)
     # first_id = message.message_id - 10 if message.message_id > 100 else 1
     # for idx in reversed(range(first_id, message.message_id + 1)):
     #    try:
     #        await dp.bot.delete_message(message.chat.id, idx)
-    #        print(idx)
+    #        add_info_log(idx)
     #    except Exception as ex:
     #        len(ex.args)
     #        pass
@@ -200,6 +220,18 @@ async def cmd_exit(message: types.Message, state: FSMContext):
             await message.reply(":'[")
 
 
+@dp.message_handler(commands="log")
+async def cmd_log(message: types.Message):
+    if message.from_user.username == "itolstov":
+        await dp.bot.send_document(message.chat.id, open('MyMTLWallet_bot.log', 'rb'))
+
+
+@dp.message_handler(commands="err")
+async def cmd_log(message: types.Message):
+    if message.from_user.username == "itolstov":
+        await dp.bot.send_document(message.chat.id, open('MyMTLWallet_bot.err', 'rb'))
+
+
 def get_kb_default(user_id: int) -> types.InlineKeyboardMarkup:
     kb_default = types.InlineKeyboardMarkup()
     kb_default.add(
@@ -220,47 +252,44 @@ def get_kb_default(user_id: int) -> types.InlineKeyboardMarkup:
     return kb_default
 
 
-async def cmd_show_start(user_id: int, msg_id: int, chat_id: int, state: FSMContext, NeedNew=None):
+async def cmd_show_start(chat_id: int, state: FSMContext, need_new=None):
     try:
         async with state.proxy() as data:
-            data[MyState.pin_type.value] = stellar_get_pin_type(user_id)
+            data[MyState.pin_type.value] = stellar_get_pin_type(chat_id)
 
-        msg = "Ваш баланс \n" + stellar_get_balance(user_id)
-        if NeedNew:
-            await dp.bot.send_message(chat_id, msg, reply_markup=get_kb_default(user_id))
-            await dp.bot.delete_message(chat_id, msg_id)
-        else:
-            await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=get_kb_default(user_id))
+        msg = "Ваш баланс \n" + stellar_get_balance(chat_id)
+        await send_message(chat_id, msg, reply_markup=get_kb_default(chat_id), need_new=need_new)
     except Exception as ex:
-        print('cmd_show_start', user_id, ex)
-        await cmd_setting(user_id, msg_id, chat_id, state)
+        add_info_log('cmd_show_start ', chat_id, ex)
+        await cmd_setting(chat_id, state)
 
 
-async def cmd_show_create(user_id: int, msg_id: int, chat_id: int, kb_tmp):
+async def cmd_show_create(chat_id: int, kb_tmp):
     msg = "Если у вас есть кошелек вы можете ввести приватный ключ и использовать свой кошелек в этом боте." \
           "Так же вы можете указать пинкод и ключ будет хранится в шифрованом виде. " \
           "В случае потери пинкода вы не сможете использовать свой кошелек.\n\n" \
           "Вы так же можете создать бесплатный кошелек, но в нем будут доступны только токены MTL и EURMTL" \
           "В случае неипользования бесплатного кошелька более полугода," \
           " администрация оставляет за собой право удаления вашего аккаунта."
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
 
 
-async def cmd_info_message(user_id: int, msg_id: int, chat_id: int, msg: str, send_file=None, resend_transaction=None):
+async def cmd_info_message(chat_id: int, msg: str, send_file=None, resend_transaction=None):
     if send_file:
         photo = types.InputFile(send_file)
-        # await bot.send_photo(chat_id=message.chat.id, photo=photo)
-        # file = InputMedia(media=types.InputFile(send_file))
+        ## await bot.send_photo(chat_id=message.chat.id, photo=photo)
+        ## file = InputMedia(media=types.InputFile(send_file))
         await dp.bot.send_photo(chat_id, photo=photo, caption=msg, reply_markup=kb_return_new,
                                 parse_mode=ParseMode.MARKDOWN)
-        await dp.bot.delete_message(chat_id, msg_id)
+        await dp.bot.delete_message(chat_id, get_last_message_id(chat_id))
+        set_last_message_id(chat_id, 0)
     elif resend_transaction:
-        await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_resend, parse_mode=ParseMode.MARKDOWN)
+        await send_message(chat_id, msg, reply_markup=kb_resend, parse_mode=ParseMode.MARKDOWN)
     else:
-        await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return, parse_mode=ParseMode.MARKDOWN)
+        await send_message(chat_id, msg, reply_markup=kb_return, parse_mode=ParseMode.MARKDOWN)
 
 
-async def cmd_setting(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_setting(user_id: int, state: FSMContext):
     msg = "Настройка кошельков, тут вы можете выбрать дефолтный кошелк, добавить новый," \
           " сменить пин или удалить кошелек"
     kb_tmp = types.InlineKeyboardMarkup()
@@ -276,12 +305,12 @@ async def cmd_setting(user_id: int, msg_id: int, chat_id: int, state: FSMContext
                    )
     kb_tmp.add(types.InlineKeyboardButton(text="Add New", callback_data=cb_default.new(answer=MyButtons.AddNew.value)))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
+    await send_message(user_id, msg, reply_markup=kb_tmp)
     async with state.proxy() as data:
         data[MyState.wallets.value] = wallets
 
 
-async def cmd_wallet_setting(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_wallet_setting(chat_id: int, state: FSMContext):
     msg = "Настройка кошелька, тут вы добавить линии доверия(asset), получить свой приватный ключ для бекапа," \
           " удалить пин или установить новый. Для смены пина удалите старый. "
     kb_wallet_setting = types.InlineKeyboardMarkup()
@@ -298,111 +327,103 @@ async def cmd_wallet_setting(user_id: int, msg_id: int, chat_id: int, state: FSM
         types.InlineKeyboardButton(text="Remove password", callback_data=cb_default.new(answer=MyButtons.Return.value)))
     kb_wallet_setting.add(
         types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_wallet_setting)
+    await send_message(chat_id, msg, reply_markup=kb_wallet_setting)
 
 
-async def cmd_show_sign(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg='', use_send=False):
+async def cmd_show_sign(chat_id: int, state: FSMContext, msg='', use_send=False):
     msg = msg + "\nПришлите транзакцию в xdr для подписи"
-
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSign.value
-        data[MyState.message_id.value] = msg_id
         tools = data.get(MyState.tools.value)
     if use_send:
         kb = kb_send
         if tools:
             kb = kb_send_tools
             kb["inline_keyboard"][1][0]["text"] = f'Send to {tools}'
-
     else:
         kb = kb_return
 
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    await send_message(chat_id, msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
 
-async def cmd_show_send_tr(user_id: int, msg_id: int, chat_id: int, state: FSMContext, tools=None):
+async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
     async with state.proxy() as data:
         xdr = data.get(MyState.xdr.value)
     try:
         if tools:
             try:
-                # print({"tx_body": xdr})
+                # add_info_log({"tx_body": xdr})
                 rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
                 result = rq.text[rq.text.find('<section id="main">'):rq.text.find("</section>")]
-                await cmd_info_message(user_id, msg_id, chat_id, result[:4000])
+                await cmd_info_message(chat_id, result[:4000])
             except Exception as ex:
-                print('cmd_show_send_tr', user_id, ex)
-                await cmd_info_message(user_id, msg_id, chat_id, 'Ошибка с отправкой =(')
+                add_info_log('cmd_show_send_tr', chat_id, ex)
+                await cmd_info_message(chat_id, 'Ошибка с отправкой =(')
 
         else:
             stellar_send(xdr)
-            await cmd_info_message(user_id, msg_id, chat_id, 'Успешно отправлено')
+            await cmd_info_message(chat_id, 'Успешно отправлено')
     except BaseHorizonError as ex:
-        logger.info('send BaseHorizonError', ex)
+        add_info_log('send BaseHorizonError', ex)
         msg = f"{ex.title}, error {ex.status}"
-        await cmd_info_message(user_id, msg_id, chat_id,
-                               f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
     except Exception as ex:
-        logger.info('send unknown error', ex)
+        add_info_log('send unknown error', ex)
         msg = 'unknown error'
         async with state.proxy() as data:
             data[MyState.xdr.value] = xdr
-        await cmd_info_message(user_id, msg_id, chat_id,
-                               f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
 
 
-async def cmd_show_add_wallet_private(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_show_add_wallet_private(chat_id: int, state: FSMContext, msg=''):
     msg = msg + "\nПришлите ваш приватный ключ"
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateAddWalletPrivate.value
-        data[MyState.message_id.value] = msg_id
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return, parse_mode=ParseMode.MARKDOWN)
+    await send_message(chat_id, msg, reply_markup=kb_return, parse_mode=ParseMode.MARKDOWN)
 
 
-async def cmd_show_add_wallet_choose_pin(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_show_add_wallet_choose_pin(chat_id: int, state: FSMContext, msg=''):
     msg = msg + "Выберите варианты защиты ключа\n\n" \
                 "PIN будет показана цифровая клавиатура при каждой операции(рекомендуется)\n\n" \
                 "Пароль. Нужно будет присылать пароль из любых букв и цифр (В разработке)\n\n" \
                 "Без пароля. Не нужно будет указывать пароль.\n\n"
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_choose_pin, parse_mode=ParseMode.MARKDOWN)
+    await send_message(chat_id, msg, reply_markup=kb_choose_pin, parse_mode=ParseMode.MARKDOWN)
 
 
-async def cmd_send_01(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_send_01(chat_id: int, state: FSMContext, msg=''):
     msg = msg + "\nПришлите адрес получателя \nможно федеральный или полный адрес \n" \
                 "также можно прислать QRcode с адресом"
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendFor.value
-        data[MyState.message_id.value] = msg_id
-        data[MyState.Free_Wallet.value] = stellar_is_free_wallet(user_id)
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return)
+        data[MyState.Free_Wallet.value] = stellar_is_free_wallet(chat_id)
+    await send_message(chat_id, msg, reply_markup=kb_return)
 
 
-async def cmd_send_02(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_send_02(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         address = data.get(MyState.send_address.value)
 
     msg = f"Выберите токен для отправки на адрес \n{address}"
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(user_id)
+    asset_list = stellar_get_balance_list(chat_id)
     for token in asset_list:
         kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
                                               callback_data=cb_send_1.new(answer=token[0])))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
     async with state.proxy() as data:
         data[MyState.assets.value] = asset_list
 
 
-async def cmd_send_03(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_send_03(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSum.value
-        data[MyState.message_id.value] = msg_id
         msg = msg + f"\nПришлите сумму в {data.get(MyState.send_asset_name.value)}\nДоступно\n" \
                     f"{data.get(MyState.send_asset_max_sum.value, 0.0)}"
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return)
+    await send_message(chat_id, msg, reply_markup=kb_return)
 
 
-async def cmd_send_04(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_send_04(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = data.get(MyState.send_sum.value)
         send_asset = data.get(MyState.send_asset_name.value)
@@ -411,14 +432,13 @@ async def cmd_send_04(user_id: int, msg_id: int, chat_id: int, state: FSMContext
         msg = f"\nВы хотите отправить {send_sum} {send_asset}\n" \
               f"На адрес\n{send_address}"
         data[MyState.MyState.value] = MyState.StateSendConfirm.value
-        data[MyState.message_id.value] = msg_id
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_yesno_send)
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
 
 
-async def cmd_send_11(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_send_11(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = 3
-        asset_list = stellar_get_balance_list(user_id, 'XLM')
+        asset_list = stellar_get_balance_list(chat_id, 'XLM')
         send_asset_name = asset_list[0][2]
         send_asset_code = asset_list[0][3]
         send_address = data.get(MyState.send_address.value, 'None 0_0')
@@ -429,51 +449,48 @@ async def cmd_send_11(user_id: int, msg_id: int, chat_id: int, state: FSMContext
         data[MyState.send_asset_code.value] = send_asset_code
         data[MyState.send_sum.value] = send_sum
         data[MyState.MyState.value] = MyState.StateActivateConfirm.value
-        data[MyState.message_id.value] = msg_id
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_yesno_send)
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
 
 
-async def cmd_swap_01(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_swap_01(chat_id: int, state: FSMContext, msg=''):
     msg = f"Выберите токен для обмена"
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(user_id)
+    asset_list = stellar_get_balance_list(chat_id)
     for token in asset_list:
         kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
                                               callback_data=cb_swap_1.new(answer=token[0])))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
     async with state.proxy() as data:
         data[MyState.assets.value] = asset_list
 
 
-async def cmd_swap_02(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_swap_02(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSum.value
-        data[MyState.message_id.value] = msg_id
         msg = f"Выберите токен, на который вы хотите обменять свои {data.get(MyState.send_asset_name.value)}"
 
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(user_id)
+    asset_list = stellar_get_balance_list(chat_id)
     for token in asset_list:
         kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
                                               callback_data=cb_swap_2.new(answer=token[0])))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_tmp)
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
     async with state.proxy() as data:
         data[MyState.assets.value] = asset_list
 
 
-async def cmd_swap_03(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg=''):
+async def cmd_swap_03(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSumSwap.value
-        data[MyState.message_id.value] = msg_id
         msg = msg + f"\nПришлите сумму в {data.get(MyState.send_asset_name.value)}\nДоступно\n" \
                     f"{data.get(MyState.send_asset_max_sum.value, 0.0)} \n" \
                     f"которая будет обменена на {data.get(MyState.receive_asset_name.value)}"
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_return)
+    await send_message(chat_id, msg, reply_markup=kb_return)
 
 
-async def cmd_swap_04(user_id: int, msg_id: int, chat_id: int, state: FSMContext):
+async def cmd_swap_04(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = data.get(MyState.send_sum.value)
         send_asset = data.get(MyState.send_asset_name.value)
@@ -481,11 +498,10 @@ async def cmd_swap_04(user_id: int, msg_id: int, chat_id: int, state: FSMContext
         receive_asset = data.get(MyState.receive_asset_name.value)
         receive_asset_code = data.get(MyState.receive_asset_code.value)
         data[MyState.MyState.value] = MyState.StateSwapConfirm.value
-        data[MyState.message_id.value] = msg_id
 
     receive_sum = stellar_check_receive_sum(Asset(send_asset, send_asset_code), str(send_sum),
                                             Asset(receive_asset, receive_asset_code))
-    xdr = stellar_swap(stellar_get_user_account(user_id).account.account_id, Asset(send_asset, send_asset_code),
+    xdr = stellar_swap(stellar_get_user_account(chat_id).account.account_id, Asset(send_asset, send_asset_code),
                        str(send_sum), Asset(receive_asset, receive_asset_code), str(receive_sum))
 
     msg = f"\nВы хотите обменять ваши {send_sum} {send_asset}\n" \
@@ -493,10 +509,10 @@ async def cmd_swap_04(user_id: int, msg_id: int, chat_id: int, state: FSMContext
     async with state.proxy() as data:
         data[MyState.xdr.value] = xdr
 
-    await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_yesno_send)
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
 
 
-async def cmd_ask_pin(user_id: int, msg_id: int, chat_id: int, state: FSMContext, msg='Введите пароль\n'):
+async def cmd_ask_pin(chat_id: int, state: FSMContext, msg='Введите пароль\n'):
     async with state.proxy() as data:
         pin_type = data.get(MyState.pin_type.value)
         pin = data.get(MyState.pin.value, '')
@@ -505,23 +521,25 @@ async def cmd_ask_pin(user_id: int, msg_id: int, chat_id: int, state: FSMContext
 
     if pin_type == 1:  # pin
         msg = msg + "\n" + ''.ljust(len(pin), '*')
-        await dp.bot.edit_message_text(msg, chat_id, msg_id, reply_markup=kb_pin)
+        await send_message(chat_id, msg, reply_markup=kb_pin)
 
     if pin_type == 2:  # password
-        pass
+        msg = "Пришлите ваш пароль"
+        await send_message(chat_id, msg, reply_markup=kb_return)
+        async with state.proxy() as data:
+            data[MyState.MyState.value] = MyState.StatePassword.value
 
     if pin_type == 0:  # password
         async with state.proxy() as data:
-            data[MyState.pin.value] = user_id
-        await dp.bot.edit_message_text('Подтвердите отправку', chat_id, msg_id, reply_markup=kb_nopassword)
+            data[MyState.pin.value] = chat_id
+        await send_message(chat_id, 'Подтвердите отправку', reply_markup=kb_nopassword)
 
 
 @dp.message_handler(content_types=['photo'], state='*')
 async def handle_docs_photo(message: types.Message, state: FSMContext):
-    logger.info(f'{message.from_user.id}')
+    add_info_log(f'{message.from_user.id}')
     async with state.proxy() as data:
         my_state = data.get(MyState.MyState.value)
-        master_msg_id = data.get(MyState.message_id.value)
     if my_state == MyState.StateSendFor.value:
         if message.photo:
             await message.photo[-1].download(destination_file=f'qr/{message.from_user.id}.jpg')
@@ -529,7 +547,7 @@ async def handle_docs_photo(message: types.Message, state: FSMContext):
             from pyzbar.pyzbar import decode
             data = decode(Image.open(f"qr/{message.from_user.id}.jpg"))
             if data:
-                print(data[0].data)
+                add_info_log(data[0].data)
                 message.text = data[0].data.decode()
                 await cmd_all(message, state)
                 return
@@ -538,22 +556,23 @@ async def handle_docs_photo(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state='*')
 async def cmd_all(message: types.Message, state: FSMContext):
+    need_delete = True
     async with state.proxy() as data:
         my_state = data.get(MyState.MyState.value)
-        master_msg_id = data.get(MyState.message_id.value)
 
     if my_state == MyState.StateAddWalletPrivate.value:
-        logger.info(f"{message.from_user.id}, '****'")
+        add_info_log(f"{message.from_user.id}, '****'")
     else:
-        logger.info(f"{message.from_user.id}, {message.text[:10]}")
+        add_info_log(f"{message.from_user.id}, {message.text[:10]}")
 
     if my_state == MyState.StateSendFor.value:
+        need_delete = False
         account = stellar_check_account(message.text)
         if account:
             async with state.proxy() as data:
                 data[MyState.send_address.value] = account.account.account_id
                 data[MyState.MyState.value] = '0'
-            await cmd_send_02(message.from_user.id, master_msg_id, message.chat.id, state)
+            await cmd_send_02(message.chat.id, state)
         else:
             async with state.proxy() as data:
                 free_wallet = data.get(MyState.Free_Wallet.value, 1)
@@ -562,15 +581,14 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 try:
                     address = resolve_stellar_address(address).account_id
                 except Exception as ex:
-                    print("StateSendFor", address, ex)
+                    add_info_log("StateSendFor", address, ex)
             if (free_wallet == 0) and (len(address) == 56) and (address[0] == 'G'):  # need activate
                 async with state.proxy() as data:
                     data[MyState.send_address.value] = address
                     data[MyState.MyState.value] = '0'
-                await cmd_send_11(message.from_user.id, master_msg_id, message.chat.id, state)
+                await cmd_send_11(message.chat.id, state)
             else:
-                await cmd_swap_01(message.from_user.id, master_msg_id, message.chat.id, state,
-                                  "Не удалось найти кошелек или он не активирован")
+                await cmd_swap_01(message.chat.id, state, "Не удалось найти кошелек или он не активирован")
     elif my_state == MyState.StateSendSum.value:
         try:
             send_sum = float(message.text)
@@ -582,10 +600,9 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 data[MyState.send_sum.value] = send_sum
                 data[MyState.MyState.value] = '0'
 
-            await cmd_send_04(message.from_user.id, master_msg_id, message.chat.id, state)
+            await cmd_send_04(message.chat.id, state)
         else:
-            await cmd_send_03(message.from_user.id, master_msg_id, message.chat.id, state,
-                              "Не удалось распознать сумму")
+            await cmd_send_03(message.chat.id, state, "Не удалось распознать сумму")
     elif my_state == MyState.StateSign.value:
         try:
             xdr = stellar_check_xdr(message.text)
@@ -595,25 +612,32 @@ async def cmd_all(message: types.Message, state: FSMContext):
                     data[MyState.xdr.value] = xdr
                     if message.text.find('mtl.ergvein.net/view') > -1:
                         data[MyState.tools.value] = 'mtl.ergvein.net'
-                await cmd_ask_pin(message.from_user.id, master_msg_id, message.chat.id, state)
+                await cmd_ask_pin(message.chat.id, state)
             else:
                 raise Exception('Bad xdr')
         except Exception as ex:
-            print('my_state == MyState.StateSign', ex)
-            await cmd_show_sign(message.from_user.id, master_msg_id, message.chat.id, state,
-                                f"Не удалось загрузить транзакцию\n\n{message.text}\n")
+            add_info_log('my_state == MyState.StateSign', ex)
+            await cmd_show_sign(message.chat.id, state, f"Не удалось загрузить транзакцию\n\n{message.text}\n")
     elif my_state == MyState.StateAddWalletPrivate.value:
         try:
             public_key = stellar_save_new(message.from_user.id, message.text, False)
             async with state.proxy() as data:
                 data[MyState.MyState.value] = '0'
                 data[MyState.public_key.value] = public_key
-            await cmd_show_add_wallet_choose_pin(message.from_user.id, master_msg_id, message.chat.id, state,
-                                                 f"Для кошелька {public_key}\n")
+            await cmd_show_add_wallet_choose_pin(message.chat.id, state, f"Для кошелька {public_key}\n")
         except Exception as ex:
-            print(ex)
-            await cmd_show_add_wallet_private(message.from_user.id, master_msg_id, message.chat.id, state,
-                                              "Не удалось прочесть ключ\n\n")
+            add_info_log(ex)
+            await cmd_show_add_wallet_private(message.chat.id, state, "Не удалось прочесть ключ\n\n")
+    elif my_state == MyState.StatePassword.value:
+        try:
+            public_key = stellar_save_new(message.from_user.id, message.text, False)
+            async with state.proxy() as data:
+                data[MyState.MyState.value] = '0'
+                data[MyState.public_key.value] = public_key
+            await cmd_show_add_wallet_choose_pin(message.chat.id, state, f"Для кошелька {public_key}\n")
+        except Exception as ex:
+            add_info_log(ex)
+            await cmd_show_add_wallet_private(message.chat.id, state, "Не удалось прочесть ключ\n\n")
     elif my_state == MyState.StateSendSumSwap.value:
         try:
             send_sum = float(message.text)
@@ -625,12 +649,11 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 data[MyState.send_sum.value] = send_sum
                 data[MyState.MyState.value] = '0'
 
-            await cmd_swap_04(message.from_user.id, master_msg_id, message.chat.id, state)
+            await cmd_swap_04(message.chat.id, state)
         else:
-            await cmd_swap_03(message.from_user.id, master_msg_id, message.chat.id, state,
-                              "Не удалось распознать сумму")
-
-    await message.delete()
+            await cmd_swap_03(message.chat.id, state, "Не удалось распознать сумму")
+    if need_delete:
+        await message.delete()
 
 
 if __name__ == "__main__":
@@ -639,11 +662,14 @@ if __name__ == "__main__":
     try:
         stellar_send(xdr)
     except BaseHorizonError as ex:
-        msg = f"{ex.title}, error {ex.status}, {ex.extras['result_codes']}"
-        logger.info('pin_state == 13 BaseHorizonError', msg)
-        print(msg)
-        print(2)
+        print(ex.title)
+        print(ex.status)
+        print(ex.extras['result_codes'])
+        msg = f"{ex.title}, error {str(ex.status)}, {ex.extras['result_codes']}"
+        add_info_log('pin_state == 13 BaseHorizonError' + msg + xdr)
+        add_info_log(msg)
+        add_info_log(2)
     except Exception as ex:
-        # logger.info('pin_state == 13 unknown error', ex)
+        add_info_log('pin_state == 13 unknown error', ex)
         # msg = 'unknown error'
-        print(3)
+        add_info_log(3)

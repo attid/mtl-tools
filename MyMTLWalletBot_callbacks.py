@@ -1,18 +1,28 @@
 from MyMTLWalletBot_handlers import *
 
 
+def good_id(user_id, msg_id):
+    if msg_id == get_last_message_id(user_id):
+        return True
+    else:
+        return False
+
+
 @dp.callback_query_handler(cb_add.filter())
 async def cq_add(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
 
     answer = callback_data["answer"]
     user_id = query.from_user.id
     if answer == MyButtons.HaveKey.value:  # have key
-        await cmd_show_add_wallet_private(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_add_wallet_private(query.message.chat.id, state)
     elif answer == MyButtons.NewKey.value:  # new
         if stellar_can_new(user_id):
             stellar_create_new(query.from_user.id)
-            await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state)
+            await cmd_show_start(query.message.chat.id, state)
         else:
             await query.answer("Sorry you can't create more accounts!", show_alert=True)
     else:
@@ -22,7 +32,11 @@ async def cq_add(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
 @dp.callback_query_handler(cb_default.filter())
 async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(query.from_user.id, callback_data)
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
     user_id = query.from_user.id
 
@@ -32,33 +46,27 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
         qr = pyqrcode.create(stellar_get_user_account(user_id).account.account_id)
         qr.png(send_file, scale=6)
 
-        await cmd_info_message(user_id, query.message.message_id, query.message.chat.id, msg, send_file)
+        await cmd_info_message(query.message.chat.id, msg, send_file)
         # await query.message.edit_text(msg, reply_markup=1)
     elif answer == MyButtons.Send.value:  # Send
-        await cmd_swap_01(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_send_01(query.message.chat.id, state)
 
     elif answer == MyButtons.Setting.value:
-        await cmd_setting(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_setting(query.message.chat.id, state)
     elif answer == MyButtons.WalletSetting.value:
-        await cmd_wallet_setting(user_id, query.message.message_id, query.message.chat.id, state)
-    elif answer == MyButtons.Support.value:
-        await query.answer("Not ready!", show_alert=True)
-        # №async with state.proxy() as data:
-        # №    data[MyState.pin_type.value] = 1
-        # №await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
-
+        await cmd_wallet_setting(query.message.chat.id, state)
     elif answer == MyButtons.AddNew.value:
-        await cmd_show_create(user_id, query.message.message_id, query.message.chat.id, kb_add1)
+        await cmd_show_create(query.message.chat.id, kb_add1)
     elif answer == MyButtons.Return.value:
-        await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_start(query.message.chat.id, state)
     elif answer == MyButtons.ReturnNew.value:
-        await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state, NeedNew=True)
+        await cmd_show_start(query.message.chat.id, state, need_new=True)
     elif answer == MyButtons.Sign.value:
-        await cmd_show_sign(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_sign(query.message.chat.id, state)
     elif answer == MyButtons.SendTr.value:
-        await cmd_show_send_tr(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_send_tr(query.message.chat.id, state)
     elif answer == MyButtons.SendTools.value:
-        await cmd_show_send_tr(user_id, query.message.message_id, query.message.chat.id, state, tools='tools')
+        await cmd_show_send_tr(query.message.chat.id, state, tools='tools')
     elif answer == MyButtons.ReSend.value:
         async with state.proxy() as data:
             xdr = data.get(MyState.xdr.value)
@@ -70,22 +78,20 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
             await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
                                    'Успешно отправлено')
         except BaseHorizonError as ex:
-            logger.info('ReSend BaseHorizonError', ex)
+            add_info_log('ReSend BaseHorizonError', ex)
             msg = f"{ex.title}, error {ex.status}"
-            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                   f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+            await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
         except Exception as ex:
-            logger.info('ReSend unknown error', ex)
+            add_info_log('ReSend unknown error', ex)
             msg = 'unknown error'
             async with state.proxy() as data:
                 data[MyState.xdr.value] = xdr
-            await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                   f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+            await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
     elif answer == MyButtons.PIN.value:
         async with state.proxy() as data:
             data[MyState.pin_type.value] = 1
             data[MyState.StatePIN.value] = 12
-        await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_ask_pin(query.message.chat.id, state)
     elif answer == MyButtons.Password.value:
         await query.answer("Not ready!", show_alert=True)
         # async with state.proxy() as data:
@@ -94,9 +100,11 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
     elif answer == MyButtons.NoPassword.value:
         async with state.proxy() as data:
             data[MyState.pin_type.value] = 0
-        await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_start(query.message.chat.id, state)
     elif answer == MyButtons.Swap.value:
-        await cmd_swap_01(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_swap_01(query.message.chat.id, state)
+    elif answer == MyButtons.Support.value:
+        await cmd_info_message(query.message.chat.id, 'Бот поддержки @MyMTLWalletSupportBot')
     else:
         await query.answer("Bad answer!", show_alert=True)
     return True
@@ -104,9 +112,12 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
 @dp.callback_query_handler(cb_send_1.filter())
 async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
-    user_id = query.from_user.id
     async with state.proxy() as data:
         asset_list = data[MyState.assets.value]
     for asset in asset_list:
@@ -118,16 +129,19 @@ async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
                     data[MyState.send_asset_name.value] = asset[2]
                     data[MyState.send_asset_code.value] = asset[3]
                     data[MyState.send_asset_max_sum.value] = asset[1]
-                await cmd_send_03(user_id, query.message.message_id, query.message.chat.id, state)
+                await cmd_send_03(query.message.chat.id, state)
 
     return True
 
 
 @dp.callback_query_handler(cb_swap_1.filter())
 async def cq_swap1(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
-    user_id = query.from_user.id
     async with state.proxy() as data:
         asset_list = data[MyState.assets.value]
     for asset in asset_list:
@@ -139,16 +153,19 @@ async def cq_swap1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
                     data[MyState.send_asset_name.value] = asset[2]
                     data[MyState.send_asset_code.value] = asset[3]
                     data[MyState.send_asset_max_sum.value] = asset[1]
-                await cmd_swap_02(user_id, query.message.message_id, query.message.chat.id, state)
+                await cmd_swap_02(query.message.chat.id, state)
 
     return True
 
 
 @dp.callback_query_handler(cb_swap_2.filter())
 async def cq_swap2(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
-    user_id = query.from_user.id
     async with state.proxy() as data:
         asset_list = data[MyState.assets.value]
     for asset in asset_list:
@@ -157,25 +174,28 @@ async def cq_swap2(query: types.CallbackQuery, callback_data: dict, state: FSMCo
                 data[MyState.receive_asset_name.value] = asset[2]
                 data[MyState.receive_asset_code.value] = asset[3]
                 data[MyState.receive_asset_min_sum.value] = asset[1]
-            await cmd_swap_03(user_id, query.message.message_id, query.message.chat.id, state)
+            await cmd_swap_03(query.message.chat.id, state)
 
     return True
 
 
 @dp.callback_query_handler(cb_send_4.filter())
 async def cq_send4(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
-    user_id = query.from_user.id
     if answer == MyButtons.Yes.value:
         async with state.proxy() as data:
             if data.get(MyState.MyState.value) == MyState.StateSwapConfirm.value:
-                data[MyState.StatePIN.value] = 14
+                data[MyState.StatePIN.value] = 15
             else:
                 data[MyState.StatePIN.value] = 13
-        await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_ask_pin(query.message.chat.id, state)
     elif answer == MyButtons.Return.value:  #
-        await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_show_start(query.message.chat.id, state)
     else:
         await query.answer("Bad answer!", show_alert=True)
     return True
@@ -183,7 +203,11 @@ async def cq_send4(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
 @dp.callback_query_handler(cb_setting.filter())
 async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, {callback_data}')
+    add_info_log(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
     idx = int(callback_data["id"])
     user_id = query.from_user.id
@@ -192,10 +216,10 @@ async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSM
     if idx < len(wallets):
         if answer == 'DELETE':
             stellar_delete_wallets(user_id, wallets[idx][0])
-            await cmd_setting(user_id, query.message.message_id, query.message.chat.id, state)
+            await cmd_setting(query.message.chat.id, state)
         if answer == 'DEFAULT':
             stellar_set_default_wallets(user_id, wallets[idx][0])
-            await cmd_setting(user_id, query.message.message_id, query.message.chat.id, state)
+            await cmd_setting(query.message.chat.id, state)
         if answer == 'NAME':
             msg = f"{wallets[idx][0]}\nБаланс \n" + stellar_get_balance(user_id, wallets[idx][0])
             await query.answer(msg[:200], show_alert=True)
@@ -204,26 +228,30 @@ async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSM
 
 @dp.callback_query_handler(cb_pin.filter())
 async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    logger.info(f'{query.from_user.id}, *')
+    add_info_log(f'{query.from_user.id}, *')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
     answer = callback_data["answer"]
     user_id = query.from_user.id
     async with state.proxy() as data:
         pin = data.get(MyState.pin.value, '')
         pin_state = data.get(MyState.StatePIN.value, 1)
-    logger.info(f'{query.from_user.id}, 1')
+    add_info_log(f'{query.from_user.id}, 1')
     if answer in '1234567890ABCDEF':
         pin += answer
         async with state.proxy() as data:
             data[MyState.pin.value] = pin
-        logger.info(f'{query.from_user.id}, 2')
-        await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
-    logger.info(f'{query.from_user.id}, 3')
+        add_info_log(f'{query.from_user.id}, 2')
+        await cmd_ask_pin(query.message.chat.id, state)
+    add_info_log(f'{query.from_user.id}, 3')
 
     if answer == 'Del':
         pin = pin[:len(pin) - 1]
         async with state.proxy() as data:
             data[MyState.pin.value] = pin
-        await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state)
+        await cmd_ask_pin(query.message.chat.id, state)
 
     if answer == 'Enter':
         if pin_state == 12:  # ask for save need pin2
@@ -231,7 +259,7 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 data[MyState.pin2.value] = pin
                 data[MyState.pin.value] = ''
                 data[MyState.StatePIN.value] = 11
-            await cmd_ask_pin(user_id, query.message.message_id, query.message.chat.id, state, 'Повторите пароль\n')
+            await cmd_ask_pin(query.message.chat.id, state, 'Повторите пароль\n')
         if pin_state == 11:  # ask pin2 for save
             async with state.proxy() as data:
                 pin2 = data.get(MyState.pin2.value, '')
@@ -240,7 +268,7 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 pin_type = data.get(MyState.pin_type.value, '')
             if pin == pin2:
                 stellar_change_password(user_id, public_key, str(user_id), pin, pin_type)
-                await cmd_show_start(user_id, query.message.message_id, query.message.chat.id, state)
+                await cmd_show_start(query.message.chat.id, state)
                 await state.finish()
             else:
                 async with state.proxy() as data:
@@ -276,16 +304,14 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                                            'Успешно отправлено')
                     await state.finish()
             except BaseHorizonError as ex:
-                # logger.info('pin_state == 13 BaseHorizonError', ex)
+                # add_info_log('pin_state == 13 BaseHorizonError', ex)
                 msg = f"{ex.title}, error {ex.status}"
-                logger.info('pin_state == 13', msg)
-                await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                       f'Ошибка с отправкой =(\n' + msg, resend_transaction=True)
+                add_info_log('pin_state == 13', msg)
+                await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n' + msg, resend_transaction=True)
             except Exception as ex:
-                logger.info('pin_state == 13 unknown error', ex)
+                add_info_log('pin_state == 13 unknown error', ex)
                 msg = 'unknown error'
-                await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
-                                       f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+                await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
         if pin_state == 14:  # sign
             async with state.proxy() as data:
                 data[MyState.pin.value] = ''
@@ -297,10 +323,31 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                     async with state.proxy() as data:
                         data[MyState.MyState.value] = '0'
                         data[MyState.xdr.value] = xdr
-                    await cmd_show_sign(user_id, query.message.message_id, query.message.chat.id, state,
-                                        f"Ваша транзакция c подписью: \n\n`{xdr}`\n\n", use_send=True)
+                    await cmd_show_sign(query.message.chat.id, state, f"Ваша транзакция c подписью: \n\n`{xdr}`\n\n",
+                                        use_send=True)
             except Exception as ex:
-                print('pin_state == 14', ex)
+                add_info_log('pin_state == 14', ex)
+                await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                       'Ошибка при подписании, вероятно не правильный пароль. =(')
+        if pin_state == 15:  # sign
+            async with state.proxy() as data:
+                data[MyState.pin.value] = ''
+                data[MyState.StatePIN.value] = 0
+                xdr = data.get(MyState.xdr.value)
+            try:
+                if user_id > 0:
+                    xdr = stellar_user_sign(xdr, user_id, str(pin))
+                    async with state.proxy() as data:
+                        data[MyState.MyState.value] = '0'
+                        data[MyState.xdr.value] = xdr
+                    await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                           'Успешно подписано, пробуем отправить в блокчейн, ожидание до 5 минут')
+                    stellar_send(xdr)
+                    await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
+                                           'Успешно отправлено')
+                    await state.finish()
+            except Exception as ex:
+                add_info_log('pin_state == 15', ex)
                 await cmd_info_message(user_id, query.message.message_id, query.message.chat.id,
                                        'Ошибка при подписании, вероятно не правильный пароль. =(')
         return True

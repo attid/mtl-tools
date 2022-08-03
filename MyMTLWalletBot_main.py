@@ -24,3 +24,10 @@ scheduler = AsyncIOScheduler()
 
 # Включаем логирование, чтобы не пропустить важные сообщения
 logger = app_logger.get_logger("MyMTLWallet_bot")
+
+
+def add_info_log(*args):
+    msg = ''
+    for s in args:
+        msg += str(s) + ' '
+    logger.info(msg)
