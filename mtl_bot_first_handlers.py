@@ -1,3 +1,5 @@
+from os.path import isfile
+
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ParseMode
@@ -49,7 +51,7 @@ links_msg = f"""
 [Отчет по фонду](https://docs.google.com/spreadsheets/d/1fTOWq7JqX24YEqhCZTQ-z8IICPpgBHXcj91moxkT6R4/edit#gid=1372993507)
 Тулзы [для подписания](mtl.ergvein.net/) / [расчет голосов и дивов](https://ncrashed.github.io/dividend-tools/votes/)
 [Лаборатория](https://laboratory.stellar.org/#?network=public)
-Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fond}) / [Эмитент]({link_stellar}{mystellar.public_mtl}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
+Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fond}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM)
 Списки [черный]({link_json}blacklist.json) / [BIM]({link_json}bodreplenish.json) / [донаты]({link_json}donation.json)
 Боты [Обмен 1]({link_stellar}GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7) / \
@@ -168,6 +170,34 @@ async def cmd_do_bod(message: types.Message):
         await message.answer("Не положено, хозяин не разрешил.")
 
 
+@dp.message_handler(commands="do_key_rate")
+async def cmd_do_key_rate(message: types.Message):
+    if message.from_user.username == "itolstov":
+        # новая запись
+        list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
+        await message.answer(f"Start KEY pays {list_id}")
+
+        await message.answer(show_key_rate('key'))
+
+        i = 1
+        while i > 0:
+            i = mystellar.cmd_gen_key_rate_xdr(list_id)
+            await message.answer(f"Part done. Need {i} more.")
+
+        await message.answer(f"Try send transactions")
+        i = 1
+        while i > 0:
+            try:
+                i = mystellar.cmd_send(list_id)
+                await message.answer(f"Part done. Need {i} more.")
+            except Exception as e:
+                print(e)
+                await message.answer(f"Got error. New attempt")
+        await message.answer(f"All work done.")
+    else:
+        await message.answer("Не положено, хозяин не разрешил.")
+
+
 @dp.message_handler(commands="do_div")
 async def cmd_do_div(message: types.Message):
     if message.from_user.username == "itolstov":
@@ -233,7 +263,7 @@ async def smd_add_trastline(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands="all")
-async def smd_add_trastline(message: types.Message, state: FSMContext):
+async def smd_all(message: types.Message, state: FSMContext):
     # -1001767165598 тестовая группа
     # -1001239694752 подписанты
     # -1001169382324 garanteers EURMTL
@@ -242,14 +272,58 @@ async def smd_add_trastline(message: types.Message, state: FSMContext):
         with open("polls/votes.json", "r") as fp:
             members = list(json.load(fp))
         await message.reply(' '.join(members))
-    elif message.chat.id == -1001767165598:
-        await message.reply('@SomeoneAny @itolstov')
+    # elif message.chat.id == -1001767165598:
+    #    await message.reply('@SomeoneAny @itolstov')
     elif message.chat.id == -1001798357244:
         result = mystellar.cmd_check_donate_list()
         await message.reply(' '.join(result))
     else:
-        print(message.chat)
-        await message.reply('Кто тут ? 0_0')
+        all_file = f'polls/all{message.chat.id}'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+            await message.reply(' '.join(members))
+        else:
+            await message.reply('/all не настроен, используйте /add_all и /del_all')
+
+
+@dp.message_handler(commands="add_all")
+async def smd_add_all(message: types.Message, state: FSMContext):
+    if len(message.get_args()) > 2:
+        all_file = f'polls/all{message.chat.id}'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+        else:
+            members = []
+        arg = message.get_args().split()
+        members.extend(arg)
+        with open(all_file, "w") as fp:
+            json.dump(members, fp)
+
+        await message.reply('Done')
+    else:
+        await message.reply('не указаны параметры кого добавить')
+
+
+@dp.message_handler(commands="del_all")
+async def smd_del_all(message: types.Message, state: FSMContext):
+    if len(message.get_args()) > 2:
+        all_file = f'polls/all{message.chat.id}'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+            arg = message.get_args().split()
+            for member in arg:
+                if member in members:
+                    members.remove(member)
+            with open(all_file, "w") as fp:
+                json.dump(members, fp)
+            await message.reply('Done')
+        else:
+            await message.reply('Настройки не найдены =(')
+    else:
+        await message.reply('не указаны параметры кого добавить')
 
 
 @dp.message_handler(commands="getvotexdr")
@@ -408,12 +482,23 @@ async def cmd_exit(message: types.Message, state: FSMContext):
 
 
 if __name__ == "__main__":
-    pass
-    # with open("polls/votes.json", "r") as fp:
-    #    users = list(json.load(fp))
-    # print(' '.join(users))
-    # div_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('mtl div %d/%m/%Y'), 0)
-    # donate_list_id = mystellar.cmd_create_list(datetime.datetime.now().strftime('donate %d/%m/%Y'), 0)
-    # print(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
-    # result = mystellar.cmd_calc_divs(div_list_id, donate_list_id, 210)
-    # print(f"Found {len(result)} adresses. Try gen xdr.")
+    list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
+    print(f"Start KEY pays {list_id}")
+
+    print(show_key_rate('key'))
+
+    i = 1
+    while i > 0:
+        i = mystellar.cmd_gen_key_rate_xdr(list_id)
+        print(f"Part done. Need {i} more.")
+
+    print(f"Try send transactions")
+    i = 1
+    while i > 0:
+        try:
+            i = mystellar.cmd_send(list_id)
+            print(f"Part done. Need {i} more.")
+        except Exception as e:
+            print(e)
+            print(f"Got error. New attempt")
+    print(f"All work done.")

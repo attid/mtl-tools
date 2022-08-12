@@ -5,14 +5,15 @@ from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, Tex
 from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions
 import json, requests, datetime
 
+from stellar_sdk.exceptions import BaseHorizonError
 from stellar_sdk.sep.federation import resolve_stellar_address, resolve_account_id
 
 import fb, re, enum
-from settings import private_div, private_bod_eur
+from settings import private_div, private_bod_eur, private_key_rate
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
-public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
+public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
 public_pawnshop = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
 public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
@@ -20,10 +21,13 @@ public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
 public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
+public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
 
-mtl_asset = Asset("MTL", public_mtl)
-eurmtl_asset = Asset("EURMTL", public_mtl)
-eurdebt_asset = Asset("EURDEBT", public_mtl)
+mtl_asset = Asset("MTL", public_issuer)
+eurmtl_asset = Asset("EURMTL", public_issuer)
+eurdebt_asset = Asset("EURDEBT", public_issuer)
+
+pack_count = 70  # for select first pack_count - to pack to xdr
 
 
 class BotValueTypes(enum.IntEnum):
@@ -37,7 +41,7 @@ class BotValueTypes(enum.IntEnum):
 
 
 def stellar_add_fond_trustline(userkey, asset_code):
-    return stellar_add_trustline(userkey, asset_code, public_mtl)
+    return stellar_add_trustline(userkey, asset_code, public_issuer)
 
 
 def stellar_add_mtl_holders_info(accounts: dict):
@@ -343,8 +347,8 @@ def get_key_1(key):
     return key[1]
 
 
-def cmd_create_list(memo, paytype):
-    return fb.execsql(f"insert into T_DIV_LIST (MEMO,pay_type) values ('{memo}',{paytype}) returning ID")[0][0]
+def cmd_create_list(memo, pay_type):
+    return fb.execsql(f"insert into T_DIV_LIST (MEMO,pay_type) values ('{memo}',{pay_type}) returning ID")[0][0]
 
 
 def get_donate_list(account: dict):
@@ -369,7 +373,7 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
     server = Server(horizon_url="https://horizon.stellar.org")
 
     # MTL
-    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={public_mtl}')
+    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={public_issuer}')
     mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
     # FOND
     rq = requests.get('https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS')
@@ -449,7 +453,7 @@ def cmd_gen_xdr(list_id):
     memo = fb.execsql(f'select dl.memo from t_div_list dl where dl.id = {list_id}')[0][0]
     pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
     records = fb.execsql(
-        f"select first 30 ID, USER_KEY, USER_DIV from T_PAYMENTS where WAS_PACKED = 0 and ID_DIV_LIST = {list_id}")
+        f"select first {pack_count} ID, USER_KEY, USER_DIV from T_PAYMENTS where WAS_PACKED = 0 and ID_DIV_LIST = {list_id}")
 
     # print(memo)
     # print(*rq)
@@ -479,18 +483,71 @@ def cmd_gen_xdr(list_id):
     return need
 
 
+def cmd_gen_key_rate_xdr(list_id):
+    memo = fb.execsql(f'select dl.memo from t_div_list dl where dl.id = {list_id}')[0][0]
+    pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
+    records = fb.execsql(f"select first {pack_count} e.asset, e.user_key, sum(e.amount) amount from t_eurmtl_calc e "
+                         f"where e.was_packed = 0 group by e.user_key, e.asset")
+
+    accounts_list = []
+    accounts = stellar_get_mtl_holders()
+    for account in accounts:
+        accounts_list.append(f"{account['account_id']}-EURMTL")
+    accounts = stellar_get_mtl_holders(eurdebt_asset)
+    for account in accounts:
+        accounts_list.append(f"{account['account_id']}-EURDEBT")
+
+    server = Server(horizon_url="https://horizon.stellar.org")
+    if pay_type == 3:
+        div_account = server.load_account(public_key_rate)
+
+    transaction = TransactionBuilder(source_account=div_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=100)
+
+    for record in records:
+        if f"{record[1]}-{record[0]}" in accounts_list:
+            if round(record[2], 7) > 0:
+                transaction.append_payment_op(destination=record[1], amount=str(round(record[2], 7)),
+                                              asset=Asset(record[0], public_issuer))
+                fb.execsql('update t_eurmtl_calc set was_packed = ? where asset = ? and user_key = ?',
+                           [list_id, record[0], record[1]])
+        else:
+            fb.execsql('update t_eurmtl_calc set was_packed = ? where asset = ? and user_key = ?',
+                       [-1, record[0], record[1]])
+
+    transaction.add_text_memo(memo)
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+    # print(f"xdr: {xdr}")
+
+    fb.execsql("insert into T_TRANSACTION (ID_DIV_LIST, XDR_ID, XDR) values (?,?,?)", [list_id, 0, xdr])
+    need = fb.execsql('select count(*) from t_eurmtl_calc where was_packed = 0 and amount > 0.0001', [list_id])[0][0]
+    # print(f'need {need} more')
+    return need
+
+
 def cmd_send(list_id):
     records = fb.execsql(f"select first 3 t.id, t.xdr from t_transaction t where t.was_send = 0 and t.id_div_list = ?",
                          [list_id])
-    paytype = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
+    pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
+
+    if pay_type == 0:
+        public_sender = public_div
+        private_sender = private_div
+    if pay_type == 1:
+        public_sender = public_bod_eur
+        private_sender = private_bod_eur
+    if pay_type == 3:
+        public_sender = public_key_rate
+        private_sender = private_key_rate
 
     for record in records:
         transaction = TransactionEnvelope.from_xdr(record[1], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         server = Server(horizon_url="https://horizon.stellar.org")
-        div_account = server.load_account(public_div) if paytype == 0 else server.load_account(public_bod_eur)
+        div_account = server.load_account(public_sender)
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence
-        n = transaction.sign(private_div) if paytype == 0 else transaction.sign(private_bod_eur)
+        n = transaction.sign(private_sender)
         transaction_resp = server.submit_transaction(transaction)
         fb.execsql('update t_transaction set was_send = 1, xdr_id = ? where id = ?', [sequence, record[0]])
 
@@ -896,25 +953,54 @@ def gen_new(last_name):
 
 
 def get_balance():
-    # FOND
     rq = requests.get('https://horizon.stellar.org/accounts/GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
     assets = {}
+    total_cash = 0
+    total_eurmtl = 0
 
     for balance in rq.json()['balances']:
         if balance['asset_type'] == "native":
             assets['XLM'] = float(balance['balance'])
         else:
             assets[balance['asset_code']] = float(balance['balance'])
-
     diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
 
-    return f"Сейчас в кубышке {diff} наличных и {int(assets['EURMTL'])} EURMTL"
+    result = f"Сейчас в кубышке И {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    rq = requests.get('https://horizon.stellar.org/accounts/GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
+    assets = {}
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            assets['XLM'] = float(balance['balance'])
+        else:
+            assets[balance['asset_code']] = float(balance['balance'])
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+
+    result += f"Сейчас в кубышке C {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    rq = requests.get('https://horizon.stellar.org/accounts/GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
+    assets = {}
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            assets['XLM'] = float(balance['balance'])
+        else:
+            assets[balance['asset_code']] = float(balance['balance'])
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+
+    result += f"Сейчас в кубышке Г {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    result += f"\n"
+    result += f"Итого в кубышках {total_cash} наличных и {total_eurmtl} EURMTL \n"
+
+    return result
 
 
 if __name__ == "__main__":
-    # print(gen_new('RATE'))
     print(get_balance())
     pass
-    # result = cmd_calc_divs(42,43,200)
-    # print(result)
-    # print(*result, sep='\n')

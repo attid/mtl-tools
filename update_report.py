@@ -26,7 +26,6 @@ def update_main_report():
     now = datetime.datetime.now()
     # print(now.strftime('%d.%m.%Y %H:%M:%S'))
 
-
     # usd
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={currencylayer_id}&format=1&currencies=EUR')
     wks.update('B4', float(rq.json()['quotes']['USDEUR']))
@@ -80,6 +79,26 @@ def update_main_report():
             competition_assets['XLM'] = float(balance['balance'])
         else:
             competition_assets[balance['asset_code']] = float(balance['balance'])
+    # FOND safe desk
+    safe_desk_assets = {}
+    rq = requests.get('https://horizon.stellar.org/accounts/GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            safe_desk_assets['XLM'] = float(balance['balance'])
+        else:
+            safe_desk_assets[balance['asset_code']] = float(balance['balance'])
+    rq = requests.get('https://horizon.stellar.org/accounts/GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            safe_desk_assets['XLM'] = float(balance['balance'])
+        else:
+            safe_desk_assets[balance['asset_code']] += float(balance['balance'])
+    rq = requests.get('https://horizon.stellar.org/accounts/GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            safe_desk_assets['XLM'] = float(balance['balance'])
+        else:
+            safe_desk_assets[balance['asset_code']] += float(balance['balance'])
 
     # aum
     s = requests.get(
@@ -154,7 +173,8 @@ def update_main_report():
     wks.update('C11', float(donates_sum))
     wks.update('D11', int(recipients_count))
     wks.update('C18', competition_assets.get('EURMTL'))
-
+    wks.update('D18', safe_desk_assets.get('EURMTL'))
+    wks.update('D17', safe_desk_assets.get('EURDEBT'))
 
     wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 

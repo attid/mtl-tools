@@ -18,7 +18,7 @@ def save_asset(asset: str):
         json.dump(accounts, fp, indent=2)
 
 
-save_account(public_mtl)
+save_account(public_issuer)
 save_account(public_pawnshop)
 save_account(public_distributor)
 save_account(public_fond)

@@ -1,6 +1,7 @@
 import requests
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, Keypair
 from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions, TextMemo,
+from stellar_sdk.exceptions import BadRequestError
 from stellar_sdk.sep.federation import resolve_stellar_address
 
 import fb
@@ -11,7 +12,7 @@ from cryptocode import encrypt, decrypt
 # https://stellar-sdk.readthedocs.io/en/latest/
 from MyMTLWalletBot_main import add_info_log
 
-public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
+public_isuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
 public_pawnshop = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
 public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
@@ -21,12 +22,27 @@ public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 
 xlm_asset = Asset("XLM")
-mtl_asset = Asset("MTL", public_mtl)
-eurmtl_asset = Asset("EURMTL", public_mtl)
-eurdebt_asset = Asset("EURDEBT", public_mtl)
+mtl_asset = Asset("MTL", public_isuer)
+eurmtl_asset = Asset("EURMTL", public_isuer)
+eurdebt_asset = Asset("EURDEBT", public_isuer)
 
 
-def stellar_add_trust(user_key: str, asset: Asset, xdr: str = None):
+def get_good_asset_dict():
+    return {'AUMTL': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'EURMTL': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'BTCMTL': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'EURDEBT': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'MTL': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'MTLand': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'MTLCITY': 'GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3',
+            'MTLDVL': 'GAMU3C7Q7CUUC77BAN5JLZWE7VUEI4VZF3KMCMM3YCXLZPBYK5Q2IXTA',
+            'MTLGoldriver': 'GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3',
+            'MTLMiner': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
+            'MTLRoads': 'GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3'
+            }
+
+
+def stellar_add_trust(user_key: str, asset: Asset, xdr: str = None, delete: bool = False):
     if xdr:
         transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     else:
@@ -34,7 +50,10 @@ def stellar_add_trust(user_key: str, asset: Asset, xdr: str = None):
         source_account = server.load_account(user_key)
         transaction = TransactionBuilder(source_account=source_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
-    transaction.append_change_trust_op(asset)
+    if delete:
+        transaction.append_change_trust_op(asset, '0')
+    else:
+        transaction.append_change_trust_op(asset)
     transaction = transaction.build()
 
     xdr = transaction.to_xdr()
@@ -99,7 +118,7 @@ def stellar_create_new(user_id: int):
     stellar_save_new(user_id, new_account.secret, True)
 
     master = stellar_get_master()
-    xdr = stellar_pay(master.public_key, new_account.public_key, xlm_asset, 3, create=1)
+    xdr = stellar_pay(master.public_key, new_account.public_key, xlm_asset, 3, create=True)
     stellar_send(stellar_sign(xdr, master.secret))
 
     xdr = stellar_add_trust(new_account.public_key, mtl_asset)
@@ -107,11 +126,11 @@ def stellar_create_new(user_id: int):
     stellar_send(stellar_sign(xdr, new_account.secret))
 
 
-def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float, create: int = 0):
+def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float, create: bool = False):
     source_account = Server(horizon_url="https://horizon.stellar.org").load_account(from_account)
     transaction = TransactionBuilder(source_account=source_account,
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
-    if create == 1:
+    if create:
         transaction.append_create_account_op(destination=for_account, starting_balance=str(round(amount, 7)))
         transaction.add_text_memo('New account MyMTLWalletbot')
     else:
@@ -121,13 +140,14 @@ def stellar_pay(from_account: str, for_account: str, asset: Asset, amount: float
     return full_transaction.to_xdr()
 
 
-def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, recieive_asset: Asset,
+def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive_asset: Asset,
                  receive_amount: str):
     source_account = Server(horizon_url="https://horizon.stellar.org").load_account(from_account)
     transaction = TransactionBuilder(source_account=source_account,
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
-    transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, recieive_asset,
-                                                   receive_amount, [])
+    transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, receive_asset,
+                                                   receive_amount,
+                                                   stellar_get_receive_path(send_asset, send_amount, receive_asset))
     full_transaction = transaction.build()
     add_info_log(full_transaction.to_xdr())
     return full_transaction.to_xdr()
@@ -210,13 +230,13 @@ def stellar_is_free_wallet(user_id: int):
     user_account = stellar_get_user_account(user_id)
     free_wallet = fb.execsql1(f"select m.free_wallet from mymtlwalletbot m where m.user_id = {user_id} "
                               f"and m.public_key = '{user_account.account.account_id}'")
-    return free_wallet
+    return free_wallet == 1
 
 
-def stellar_get_balance_list(user_id: int, asset_filter: str = None):
-    user_account = stellar_get_user_account(user_id)
-    free_wallet = fb.execsql1(f"select m.free_wallet from mymtlwalletbot m where m.user_id = {user_id} "
-                              f"and m.public_key = '{user_account.account.account_id}'")
+def stellar_get_balance_list(user_id: int, public_key=None, asset_filter: str = None):
+    user_account = stellar_get_user_account(user_id, public_key)
+    free_wallet = fb.execsql1(f"select m.free_wallet from mymtlwalletbot m where m.user_id = ? "
+                              f"and m.public_key = ?", (user_id, user_account.account.account_id), 0)
     account = Server(horizon_url="https://horizon.stellar.org").accounts().account_id(
         user_account.account.account_id).call()
     result = []
@@ -275,13 +295,6 @@ def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: A
     try:
         server = Server(horizon_url="https://horizon.stellar.org")
         call_result = server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
-
-        # c = {'_embedded': {'records': [{'source_asset_type': 'credit_alphanum12', 'source_asset_code': 'EURMTL',
-        #                    'source_asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
-        #                                'source_amount': '10.0000000', 'destination_asset_type': 'credit_alphanum4',
-        #                                'destination_asset_code': 'MTL',
-        #                    'destination_asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V',
-        #                                'destination_amount': '5.0000000', 'path': []}]}}
         if len(call_result['_embedded']['records']) > 0:
             return call_result['_embedded']['records'][0]['destination_amount']
         else:
@@ -291,8 +304,54 @@ def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: A
         return '0'
 
 
+def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
+    try:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        call_result = server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
+        if len(call_result['_embedded']['records']) > 0:
+            # [{'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL',
+            #  'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'}]
+            if len(call_result['_embedded']['records'][0]['path']) == 0:
+                return []
+            else:
+                if call_result['_embedded']['records'][0]['path'][0]['asset_type'] == 'native':
+                    return [xlm_asset]
+                else:
+                    return [Asset(call_result['_embedded']['records'][0]['path'][0]['asset_code'],
+                                  call_result['_embedded']['records'][0]['path'][0]['asset_issuer'])]
+        else:
+            return []
+    except Exception as ex:
+        add_info_log("stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + receive_asset.code, ex)
+        return []
+
+
+def stellar_check_receive_asset(send_asset: Asset, send_sum: str, receive_assets: list) -> list:
+    try:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        call_result = server.strict_send_paths(send_asset, send_sum, receive_assets).call()
+        result = []
+        for record in call_result['_embedded']['records']:
+            asset_code = ''
+            if record['destination_asset_type'] == "native":
+                asset_code = "XLM"
+            elif record['destination_asset_type'][:15] == "credit_alphanum":
+                asset_code = record['destination_asset_code']
+
+            if (len(asset_code) > 0) and not (asset_code in result):
+                result.append(asset_code)
+
+        return result
+    except Exception as ex:
+        add_info_log("stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + str(receive_assets), ex)
+        return []
+
+
 def get_last_message_id(user_id: int):
-    return fb.execsql1(f"select first 1 m.message_id from mymtlwalletbot m where m.user_id = ?", (user_id,))
+    try:
+        return fb.execsql1(f"select first 1 m.message_id from mymtlwalletbot m where m.user_id = ?", (user_id,))
+    except Exception as ex:
+        return 0
 
 
 def set_last_message_id(user_id: int, message_id: int):
@@ -301,5 +360,4 @@ def set_last_message_id(user_id: int, message_id: int):
 
 
 if __name__ == "__main__":
-    add_info_log(stellar_check_receive_sum(mtl_asset, '10', eurmtl_asset))
-    pass
+    print(stellar_get_receive_path(mtl_asset, '0.1', xlm_asset))

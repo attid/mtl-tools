@@ -1,16 +1,12 @@
-import pyqrcode
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.types import ParseMode, InputMedia, InputMediaPhoto
-from aiogram.types.base import InputFile
+from aiogram.types import ParseMode
 from aiogram.utils.callback_data import CallbackData
-from PIL import Image
 from enum import Enum, unique
-
 from stellar_sdk.exceptions import BaseHorizonError
-
-from MyMTLWalletBot_main import dp, logger, add_info_log
+from MyMTLWalletBot_main import dp
 from MyMTLWalletBot_stellar import *
+import pyqrcode
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -40,6 +36,9 @@ class MyButtons(Enum):
     PIN = 'PIN'
     Password = 'Password'
     NoPassword = 'NoPassword'
+    AddAsset = 'AddAsset'
+    DeleteAsset = 'DeleteAsset'
+    AddAssetExpert = 'AddAssetExpert'
 
 
 @unique
@@ -57,6 +56,8 @@ class MyState(Enum):
     StatePassword = 'StatePassword'
     StateSendSumSwap = 'StateSendSumSwap'
     StateSwapConfirm = 'StateSwapConfirm'
+    StateAddExpert1 = 'StateAddExpert1'
+    StateAddExpert2 = 'StateAddExpert2'
     # send_account = 'send_account'
     send_address = 'send_address'
     Free_Wallet = 'Free_Wallet'
@@ -118,13 +119,17 @@ kb_send_tools.add(
     types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
 
 cb_send_1 = CallbackData("kb_send_1", "answer")
-cb_send_4 = CallbackData("kb_send_4", "answer")
+cb_send_xdr = CallbackData("kb_send_xdr", "answer")
 cb_swap_1 = CallbackData("kb_swap_1", "answer")
 cb_swap_2 = CallbackData("kb_swap_2", "answer")
-kb_yesno_send = types.InlineKeyboardMarkup()
-kb_yesno_send.add(types.InlineKeyboardButton(text="Yes", callback_data=cb_send_4.new(answer=MyButtons.Yes.value)),
-                  types.InlineKeyboardButton(text="No", callback_data=cb_send_4.new(answer=MyButtons.Return.value)))
-kb_yesno_send.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_send_4.new(answer=MyButtons.Return.value)))
+cb_add_asset = CallbackData("kb_add_asset", "answer")
+cb_del_asset = CallbackData("kb_del_asset", "answer")
+kb_yesno_send_xdr = types.InlineKeyboardMarkup()
+kb_yesno_send_xdr.add(types.InlineKeyboardButton(text="Yes", callback_data=cb_send_xdr.new(answer=MyButtons.Yes.value)),
+                      types.InlineKeyboardButton(text="No",
+                                                 callback_data=cb_send_xdr.new(answer=MyButtons.Return.value)))
+kb_yesno_send_xdr.add(
+    types.InlineKeyboardButton(text="<-Back", callback_data=cb_send_xdr.new(answer=MyButtons.Return.value)))
 cb_setting = CallbackData("kb_setting", "answer", "id")
 
 kb_choose_pin = types.InlineKeyboardMarkup()
@@ -159,6 +164,17 @@ kb_pin.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.ne
 kb_nopassword = types.InlineKeyboardMarkup()
 kb_nopassword.add(types.InlineKeyboardButton(text="Yes, do it.", callback_data=cb_pin.new(answer='Enter')))
 kb_nopassword.add(
+    types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+
+cb_assets = CallbackData("kb_assets", "answer")
+kb_assets = types.InlineKeyboardMarkup()
+kb_assets.add(
+    types.InlineKeyboardButton(text="Delete one", callback_data=cb_assets.new(answer=MyButtons.DeleteAsset.value)))
+kb_assets.add(
+    types.InlineKeyboardButton(text="Add from list", callback_data=cb_assets.new(answer=MyButtons.AddAsset.value)))
+kb_assets.add(types.InlineKeyboardButton(text="Add - Expert mod",
+                                         callback_data=cb_assets.new(answer=MyButtons.AddAssetExpert.value)))
+kb_assets.add(
     types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
 
 
@@ -237,23 +253,23 @@ def get_kb_default(user_id: int) -> types.InlineKeyboardMarkup:
     kb_default.add(
         types.InlineKeyboardButton(text="Receive", callback_data=cb_default.new(answer=MyButtons.Receive.value)),
         types.InlineKeyboardButton(text="Send", callback_data=cb_default.new(answer=MyButtons.Send.value)))
-    kb_default.add(
-        types.InlineKeyboardButton(text="Swap Assets", callback_data=cb_default.new(answer=MyButtons.Swap.value)))
-    kb_default.add(
-        types.InlineKeyboardButton(text="Change wallet", callback_data=cb_default.new(answer=MyButtons.Setting.value)))
-    kb_default.add(
-        types.InlineKeyboardButton(text="Wallet setting",
-                                   callback_data=cb_default.new(answer=MyButtons.WalletSetting.value)))
-    kb_default.add(
-        types.InlineKeyboardButton(text="Support", callback_data=cb_default.new(answer=MyButtons.Support.value)))
-    if stellar_is_free_wallet(user_id) == 0:
-        kb_default.add(
-            types.InlineKeyboardButton(text="Sign", callback_data=cb_default.new(answer=MyButtons.Sign.value)))
+    kb_default.add(types.InlineKeyboardButton(text="Swap Assets",
+                                              callback_data=cb_default.new(answer=MyButtons.Swap.value)))
+    kb_default.add(types.InlineKeyboardButton(text="Wallet setting",
+                                              callback_data=cb_default.new(answer=MyButtons.WalletSetting.value)))
+    kb_default.add(types.InlineKeyboardButton(text="Change wallet",
+                                              callback_data=cb_default.new(answer=MyButtons.Setting.value)))
+    kb_default.add(types.InlineKeyboardButton(text="Support",
+                                              callback_data=cb_default.new(answer=MyButtons.Support.value)))
+    if not stellar_is_free_wallet(user_id):
+        kb_default.add(types.InlineKeyboardButton(text="Sign",
+                                                  callback_data=cb_default.new(answer=MyButtons.Sign.value)))
     return kb_default
 
 
 async def cmd_show_start(chat_id: int, state: FSMContext, need_new=None):
     try:
+        await state.finish()
         async with state.proxy() as data:
             data[MyState.pin_type.value] = stellar_get_pin_type(chat_id)
 
@@ -274,15 +290,14 @@ async def cmd_show_create(chat_id: int, kb_tmp):
     await send_message(chat_id, msg, reply_markup=kb_tmp)
 
 
-async def cmd_info_message(chat_id: int, msg: str, send_file=None, resend_transaction=None):
+async def cmd_info_message(chat_id: int, msg: str, state: FSMContext, send_file=None, resend_transaction=None):
     if send_file:
         photo = types.InputFile(send_file)
-        ## await bot.send_photo(chat_id=message.chat.id, photo=photo)
-        ## file = InputMedia(media=types.InputFile(send_file))
-        await dp.bot.send_photo(chat_id, photo=photo, caption=msg, reply_markup=kb_return_new,
-                                parse_mode=ParseMode.MARKDOWN)
+        # await bot.send_photo(chat_id=message.chat.id, photo=photo)
+        # file = InputMedia(media=types.InputFile(send_file))
+        await dp.bot.send_photo(chat_id, photo=photo, caption=msg, parse_mode=ParseMode.MARKDOWN)
         await dp.bot.delete_message(chat_id, get_last_message_id(chat_id))
-        set_last_message_id(chat_id, 0)
+        await cmd_show_start(chat_id, state, need_new=True)
     elif resend_transaction:
         await send_message(chat_id, msg, reply_markup=kb_resend, parse_mode=ParseMode.MARKDOWN)
     else:
@@ -315,7 +330,7 @@ async def cmd_wallet_setting(chat_id: int, state: FSMContext):
           " удалить пин или установить новый. Для смены пина удалите старый. "
     kb_wallet_setting = types.InlineKeyboardMarkup()
     kb_wallet_setting.add(
-        types.InlineKeyboardButton(text="Add asset", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+        types.InlineKeyboardButton(text="Add asset", callback_data=cb_default.new(answer=MyButtons.AddAsset.value)))
     kb_wallet_setting.add(
         types.InlineKeyboardButton(text="Buy this address",
                                    callback_data=cb_default.new(answer=MyButtons.Return.value)))
@@ -355,24 +370,24 @@ async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
                 # add_info_log({"tx_body": xdr})
                 rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
                 result = rq.text[rq.text.find('<section id="main">'):rq.text.find("</section>")]
-                await cmd_info_message(chat_id, result[:4000])
+                await cmd_info_message(chat_id, result[:4000], state)
             except Exception as ex:
                 add_info_log('cmd_show_send_tr', chat_id, ex)
-                await cmd_info_message(chat_id, 'Ошибка с отправкой =(')
+                await cmd_info_message(chat_id, 'Ошибка с отправкой =(', state)
 
         else:
             stellar_send(xdr)
-            await cmd_info_message(chat_id, 'Успешно отправлено')
+            await cmd_info_message(chat_id, 'Успешно отправлено', state)
     except BaseHorizonError as ex:
         add_info_log('send BaseHorizonError', ex)
         msg = f"{ex.title}, error {ex.status}"
-        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', state, resend_transaction=True)
     except Exception as ex:
         add_info_log('send unknown error', ex)
         msg = 'unknown error'
         async with state.proxy() as data:
             data[MyState.xdr.value] = xdr
-        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', resend_transaction=True)
+        await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', state, resend_transaction=True)
 
 
 async def cmd_show_add_wallet_private(chat_id: int, state: FSMContext, msg=''):
@@ -406,11 +421,14 @@ async def cmd_send_02(chat_id: int, state: FSMContext):
     msg = f"Выберите токен для отправки на адрес \n{address}"
     kb_tmp = types.InlineKeyboardMarkup()
     asset_list = stellar_get_balance_list(chat_id)
+    sender_asset_list = stellar_get_balance_list(chat_id, address)
     for token in asset_list:
-        kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
-                                              callback_data=cb_send_1.new(answer=token[0])))
+        for sender_token in sender_asset_list:
+            if token[0] == sender_token[0]:
+                kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
+                                                      callback_data=cb_send_1.new(answer=token[0])))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
-    await send_message(chat_id, msg, reply_markup=kb_tmp)
+    await send_message(chat_id, msg, reply_markup=kb_tmp, need_new=True)
     async with state.proxy() as data:
         data[MyState.assets.value] = asset_list
 
@@ -432,7 +450,17 @@ async def cmd_send_04(chat_id: int, state: FSMContext):
         msg = f"\nВы хотите отправить {send_sum} {send_asset}\n" \
               f"На адрес\n{send_address}"
         data[MyState.MyState.value] = MyState.StateSendConfirm.value
-    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
+        send_asset_name = data[MyState.send_asset_name.value]
+        send_asset_code = data[MyState.send_asset_code.value]
+
+    xdr = stellar_pay(stellar_get_user_account(chat_id).account.account_id,
+                      send_address,
+                      Asset(send_asset_name, send_asset_code), send_sum)
+
+    async with state.proxy() as data:
+        data[MyState.xdr.value] = xdr
+
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send_xdr)
 
 
 async def cmd_send_11(chat_id: int, state: FSMContext):
@@ -449,7 +477,15 @@ async def cmd_send_11(chat_id: int, state: FSMContext):
         data[MyState.send_asset_code.value] = send_asset_code
         data[MyState.send_sum.value] = send_sum
         data[MyState.MyState.value] = MyState.StateActivateConfirm.value
-    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
+
+    xdr = stellar_pay(stellar_get_user_account(chat_id).account.account_id,
+                      send_address,
+                      Asset(send_asset_name, send_asset_code), send_sum, create=True)
+
+    async with state.proxy() as data:
+        data[MyState.xdr.value] = xdr
+
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send_xdr)
 
 
 async def cmd_swap_01(chat_id: int, state: FSMContext, msg=''):
@@ -468,17 +504,25 @@ async def cmd_swap_01(chat_id: int, state: FSMContext, msg=''):
 async def cmd_swap_02(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSum.value
-        msg = f"Выберите токен, на который вы хотите обменять свои {data.get(MyState.send_asset_name.value)}"
+        send_asset = data.get(MyState.send_asset_name.value)
+        send_asset_code = data.get(MyState.send_asset_code.value)
+
+        msg = f"Выберите токен, на который вы хотите обменять свои {send_asset}"
 
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(chat_id)
-    for token in asset_list:
-        kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
-                                              callback_data=cb_swap_2.new(answer=token[0])))
+    asset_list = []
+    for token in stellar_get_balance_list(chat_id):
+        asset_list.append(Asset(token[2], token[3]))
+
+    receive_asset = stellar_check_receive_asset(Asset(send_asset, send_asset_code), '0.1', asset_list)
+
+    for asset in receive_asset:
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{asset}",
+                                              callback_data=cb_swap_2.new(answer=asset)))
     kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
     await send_message(chat_id, msg, reply_markup=kb_tmp)
-    async with state.proxy() as data:
-        data[MyState.assets.value] = asset_list
+    # async with state.proxy() as data:
+    #    data[MyState.assets.value] = asset_list
 
 
 async def cmd_swap_03(chat_id: int, state: FSMContext, msg=''):
@@ -509,7 +553,98 @@ async def cmd_swap_04(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         data[MyState.xdr.value] = xdr
 
-    await send_message(chat_id, msg, reply_markup=kb_yesno_send)
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send_xdr)
+
+
+async def cmd_add_asset(chat_id: int, state: FSMContext):
+    msg = f"Выберите режим для добавления/удаления токена"
+    await send_message(chat_id, msg, reply_markup=kb_assets)
+
+
+async def cmd_add_asset_del(chat_id: int, state: FSMContext):
+    my_asset = {}
+    kb_tmp = types.InlineKeyboardMarkup()
+    for item in stellar_get_balance_list(chat_id):
+        my_asset[item[0]] = item[3]
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{item[0]} ({item[1]})",
+                                              callback_data=cb_del_asset.new(answer=item[0])))
+
+    msg = f"Выберите линию доверия для удаления. Весь баланс этого токена будет уничтожен !"
+
+    kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
+    async with state.proxy() as data:
+        data[MyState.assets.value] = my_asset
+
+
+async def cmd_add_asset_add(chat_id: int, state: FSMContext, msg=''):
+    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balance_list(chat_id)) > 2):
+        await send_message(chat_id, 'В бесплатном аккаунте возможно только 3 линии доверия', reply_markup=kb_return)
+        return False
+
+    good_asset = get_good_asset_dict()
+    for item in stellar_get_balance_list(chat_id):
+        if good_asset.get(item[0]):
+            good_asset.pop(item[0])
+
+    if len(good_asset) == 0:
+        await send_message(chat_id, 'У вас уже открыты все одобренные линии доверия ', reply_markup=kb_return)
+        return False
+
+    kb_tmp = types.InlineKeyboardMarkup()
+    for key in good_asset:
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{key}",
+                                              callback_data=cb_add_asset.new(answer=key)))
+    kb_tmp.add(types.InlineKeyboardButton(text="<-Back", callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await send_message(chat_id, "Выберите линию доверия для открытия", reply_markup=kb_tmp)
+    async with state.proxy() as data:
+        data[MyState.assets.value] = good_asset
+
+
+async def cmd_add_asset_expert(chat_id: int, state: FSMContext):
+    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balance_list(chat_id)) > 2):
+        await send_message(chat_id, 'В бесплатном аккаунте возможно только 3 линии доверия', reply_markup=kb_return)
+        return False
+
+    async with state.proxy() as data:
+        data[MyState.MyState.value] = MyState.StateAddExpert1.value
+    msg = f"Пришлите код нового ассета, например MTL"
+    await send_message(chat_id, msg, reply_markup=kb_return)
+
+
+async def cmd_add_asset_expert2(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        data[MyState.MyState.value] = MyState.StateAddExpert2.value
+    msg = f"Пришлите адрес эмитента, например {public_isuer}"
+    await send_message(chat_id, msg, reply_markup=kb_return)
+
+
+async def cmd_add_asset_end(chat_id: int, state: FSMContext, key: str):
+    async with state.proxy() as data:
+        my_asset: dict = data.get(MyState.assets.value, {})
+
+    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(key, my_asset[key]))
+
+    msg = f"\nВы открыть линию доверия к {key} {my_asset[key]} ?"
+    async with state.proxy() as data:
+        data[MyState.xdr.value] = xdr
+
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send_xdr)
+
+
+async def cmd_del_asset_end(chat_id: int, state: FSMContext, key: str):
+    async with state.proxy() as data:
+        my_asset: dict = data.get(MyState.assets.value, {})
+
+    # todo send last coins
+    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(key, my_asset[key]),
+                            delete=True)
+
+    msg = f"\nВы хотите закрыть линию доверия к {key} {my_asset[key]} ?"
+    async with state.proxy() as data:
+        data[MyState.xdr.value] = xdr
+
+    await send_message(chat_id, msg, reply_markup=kb_yesno_send_xdr)
 
 
 async def cmd_ask_pin(chat_id: int, state: FSMContext, msg='Введите пароль\n'):
@@ -566,13 +701,13 @@ async def cmd_all(message: types.Message, state: FSMContext):
         add_info_log(f"{message.from_user.id}, {message.text[:10]}")
 
     if my_state == MyState.StateSendFor.value:
-        need_delete = False
         account = stellar_check_account(message.text)
         if account:
             async with state.proxy() as data:
                 data[MyState.send_address.value] = account.account.account_id
                 data[MyState.MyState.value] = '0'
             await cmd_send_02(message.chat.id, state)
+            need_delete = False
         else:
             async with state.proxy() as data:
                 free_wallet = data.get(MyState.Free_Wallet.value, 1)
@@ -582,7 +717,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                     address = resolve_stellar_address(address).account_id
                 except Exception as ex:
                     add_info_log("StateSendFor", address, ex)
-            if (free_wallet == 0) and (len(address) == 56) and (address[0] == 'G'):  # need activate
+            if (not free_wallet) and (len(address) == 56) and (address[0] == 'G'):  # need activate
                 async with state.proxy() as data:
                     data[MyState.send_address.value] = address
                     data[MyState.MyState.value] = '0'
@@ -652,24 +787,26 @@ async def cmd_all(message: types.Message, state: FSMContext):
             await cmd_swap_04(message.chat.id, state)
         else:
             await cmd_swap_03(message.chat.id, state, "Не удалось распознать сумму")
+    elif my_state == MyState.StateAddExpert1.value:
+        asset_code = message.text
+        my_asset = {asset_code: 'MyMTLWallet'}
+        async with state.proxy() as data:
+            data[MyState.assets.value] = my_asset
+        await cmd_add_asset_expert2(message.chat.id, state)
+    elif my_state == MyState.StateAddExpert2.value:
+        async with state.proxy() as data:
+            my_asset: dict = data.get(MyState.assets.value, {})
+        my_key = ''
+        for key in my_asset:
+            my_asset[key] = message.text
+            my_key = key
+        async with state.proxy() as data:
+            data[MyState.assets.value] = my_asset
+        await cmd_add_asset_end(message.chat.id, state, my_key)
+
     if need_delete:
         await message.delete()
 
 
 if __name__ == "__main__":
-    # pass
-    xdr = 'AAAAAgAAAADXM/FKYDkdJMoH7qR0azpDSfND7E9VelL2D5ys9ViskAAAAGQCGVTNAAABgQAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAB8N4lXiL0FplpVrQ5iTsTwtOxUszs3AoRe4yFqUQzrxAAAAAUFRVUEAAAAAW5QuU6wzyP0KgMx8GxqF19g4qcQZd6rRizrwV/jjPfAAAAAAAJiWgAAAAAAAAAAB9ViskAAAAEDqf8NPOVPNfBdOFfg+0U8DFVblL2jJ7Tb6PQzWNpJMOG6+IEAW0xDUGl9kGFTv6ezJ+q8Jxf1MoZ3JsxtbqCwA'
-    try:
-        stellar_send(xdr)
-    except BaseHorizonError as ex:
-        print(ex.title)
-        print(ex.status)
-        print(ex.extras['result_codes'])
-        msg = f"{ex.title}, error {str(ex.status)}, {ex.extras['result_codes']}"
-        add_info_log('pin_state == 13 BaseHorizonError' + msg + xdr)
-        add_info_log(msg)
-        add_info_log(2)
-    except Exception as ex:
-        add_info_log('pin_state == 13 unknown error', ex)
-        # msg = 'unknown error'
-        add_info_log(3)
+    pass

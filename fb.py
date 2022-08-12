@@ -32,9 +32,12 @@ def execsql(sql, param=None):
     return result
 
 
-def execsql1(sql, param=None):
+def execsql1(sql, param=None, default=''):
     result = execsql(sql, param)
-    return result[0][0]
+    if len(result) > 0:
+        return result[0][0]
+    else:
+        return default
 
 
 def manyinsert(sql, param):

@@ -1,9 +1,10 @@
+import sys
 from aiogram import Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from settings import MyMTLWallet_key
+from settings import MyMTLWallet_key, MyMTLWalletTest_key
 import app_logger
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -13,7 +14,12 @@ import app_logger
 
 # Объект бота
 
-bot = Bot(token=MyMTLWallet_key)
+if 'test' in sys.argv:
+    bot = Bot(token=MyMTLWalletTest_key)
+    print('start test')
+else:
+    bot = Bot(token=MyMTLWallet_key)
+
 # Диспетчер для бота
 
 storage = RedisStorage2('localhost', 6379, db=5, pool_size=10, prefix='my_fsm_key')
