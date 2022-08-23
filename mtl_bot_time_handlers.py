@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import mystellar
 from mtl_bot_main import logger
+from update_eurmtl_log import show_key_rate
 
 
 async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
@@ -88,8 +89,22 @@ async def cmd_send_message_singers(dp: Dispatcher):
     logger.info(f'end cmd_send_message_singers')
 
 
+async def cmd_send_message_key_rate(dp: Dispatcher):
+    logger.info(f'cmd_send_message_singers')
+    # -1001239694752 подписанты
+    await dp.bot.send_message(-1001239694752, show_key_rate(''))
+
+
+async def cmd_send_message_coochitse(dp: Dispatcher):
+    logger.info(f'cmd_send_message_singers')
+    # -1001239694752 подписанты
+    await dp.bot.send_message(-1001239694752, 'Не пора ли с кучицы денег стрясти ? /all')
+
+
 def scheduler_jobs(scheduler: AsyncIOScheduler, dp):
     scheduler.add_job(cmd_send_message_singers, "interval", minutes=10, jitter=120, args=(dp,))
+    scheduler.add_job(cmd_send_message_key_rate, "cron", day_of_week='fri', hour=8, minute=10, args=(dp,))
+    scheduler.add_job(cmd_send_message_coochitse, "cron", day=1, hour=8, minute=10, args=(dp,))
     # scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(dp,scheduler,), id='test')
     # job.args = (dp, 25,)
     # await cmd_send_message_singers(dp)

@@ -63,6 +63,17 @@ def show_key_rate(key):
                              'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURDEBT',))[0]
         result = f'на сейчас начислено и не выплачено {eurmtl[0]} EURMTL {eurdebt[0]} EURDEBT, ' \
                  f'кол-во адресов {eurmtl[1]} EURMTL {eurdebt[1]} EURDEBT'
+
+        rq = requests.get(
+            'https://horizon.stellar.org/accounts/GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE')
+        assets = {}
+        for balance in rq.json()['balances']:
+            if balance['asset_type'] == "native":
+                assets['XLM'] = float(balance['balance'])
+            else:
+                assets[balance['asset_code']] = float(balance['balance'])
+
+        result += f"\n\n На балансе сейчас {assets['EURDEBT']} EURDEBT и {assets['EURMTL']} EURMTL"
     else:
         eurmtl = fb.execsql('select sum(ec.amount) from t_eurmtl_calc ec where ec.was_packed = 0 '
                             'and ec.asset = ? and ec.user_key = ?', ('EURMTL', key))[0][0]
@@ -75,4 +86,4 @@ def show_key_rate(key):
 
 if __name__ == "__main__":
     update_eurmtl_log()
-    #print(show_key_rate(''))
+    # print(show_key_rate(''))

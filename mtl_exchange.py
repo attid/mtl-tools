@@ -9,7 +9,7 @@ if 'logger' not in globals():
     logger = app_logger.get_logger("mtl_exchange")
 
 min_price = 3.0  # min max price in xlm
-max_price = 10.2
+max_price = 15.2
 
 max_eurmtl = 10000.0  # max offer
 max_btcmtl = 0.1  # max offer

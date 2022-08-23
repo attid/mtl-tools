@@ -3,6 +3,7 @@ from MyMTLWalletBot_handlers import *
 
 def good_id(user_id, msg_id):
     last_message_id = get_last_message_id(user_id)
+    add_info_log('good_id', last_message_id)
     if msg_id == last_message_id:
         return True
     elif last_message_id == 0:

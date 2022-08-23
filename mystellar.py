@@ -26,6 +26,7 @@ public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
 eurdebt_asset = Asset("EURDEBT", public_issuer)
+mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
 
 pack_count = 70  # for select first pack_count - to pack to xdr
 
@@ -1001,6 +1002,39 @@ def get_balance():
     return result
 
 
+def get_mrxpinvest_xdr(div_sum: float):
+    accounts = stellar_get_mtl_holders(mrxpinvest_asset)
+    accounts_list = []
+    total_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_code"] == mrxpinvest_asset.code:
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        if account["account_id"] != 'GDIWYLCDWPXEXFWUI7PGO64UFYWYDIVCXQWD2IKHM3WYFEXA2E4ZOC4Z':
+            accounts_list.append([account["account_id"], token_balance, 0])
+            total_sum += token_balance
+
+    persent = div_sum / total_sum
+
+    for account in accounts_list:
+        account[2] = account[1] * persent
+
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(mrxpinvest_asset.issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=100)
+    for account in accounts_list:
+        transaction.append_payment_op(destination=account[0], asset=mrxpinvest_asset, amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
 if __name__ == "__main__":
-    print(get_balance())
+    print(get_mrxpinvest_xdr(1000))
     pass

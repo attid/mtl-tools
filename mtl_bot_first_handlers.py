@@ -27,7 +27,8 @@ startmsg = """
 /dron2 открыть линию доверия дрону2
 /mtlcamp открыть линию доверия mtlcamp
 /blacklist операции с блеклистом
-/getvotexdr сделать транзакцию на обновление голосов
+/get_vote_fund_xdr сделать транзакцию на обновление голосов фонда
+/get_vote_city_xdr сделать транзакцию на обновление голосов сити
 /editxdr редактировать транзакцию
 /show_bod показать инфо по БОД
 
@@ -326,21 +327,35 @@ async def smd_del_all(message: types.Message, state: FSMContext):
         await message.reply('не указаны параметры кого добавить')
 
 
-@dp.message_handler(commands="getvotexdr")
-async def cmd_getvotexdr(message: types.Message):
+@dp.message_handler(commands="get_vote_fund_xdr")
+async def cmd_get_vote_fund_xdr(message: types.Message):
+    if len(message.get_args()) > 10:
+        arr2 = mystellar2.cmd_get_new_vote_mtl(message.get_args())
+        await message.answer(arr2[0])
+    else:
+        await message.answer('Делаю транзакции подождите несколько секунд')
+        arr2 = mystellar2.cmd_get_new_vote_mtl('')
+        await message.answer('for FUND')
+        await multi_answer(message, arr2[0])
+
+
+@dp.message_handler(commands="get_vote_city_xdr")
+async def cmd_get_vote_city_xdr(message: types.Message):
     if len(message.get_args()) > 10:
         arr2 = mystellar2.cmd_get_new_vote_mtl(message.get_args())
         await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
         arr1 = mystellar2.cmd_get_new_vote_mtlcity()
-        arr2 = mystellar2.cmd_get_new_vote_mtl('')
         await message.answer('for MTLCITY')
-        await message.answer(arr1[0])
-        await message.answer('for FOND')
-        await message.answer(arr2[0])
-        # await message.answer(arr2[1])
-        # await message.answer(arr2[2])
+        await multi_answer(message, arr1[0])
+
+
+@dp.message_handler(commands="get_mrxpinvest_xdr")
+async def cmd_get_mrxpinvest_xdr(message: types.Message):
+    if len(message.get_args()) > 1:
+        xdr = mystellar.get_mrxpinvest_xdr(float(message.get_args()))
+        await multi_answer(message, xdr)
 
 
 @dp.message_handler(commands="delete")
@@ -479,6 +494,12 @@ async def cmd_exit(message: types.Message, state: FSMContext):
             async with state.proxy() as data:
                 data['MyState'] = 'StateExit'
             await message.reply(":'[")
+
+
+@dp.message_handler(commands="err")
+async def cmd_log(message: types.Message):
+    if message.from_user.username == "itolstov":
+        await dp.bot.send_document(message.chat.id, open('mtl_bot.err', 'rb'))
 
 
 if __name__ == "__main__":

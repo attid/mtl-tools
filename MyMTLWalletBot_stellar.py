@@ -79,7 +79,7 @@ def get_url_xdr(url):
 
 def stellar_check_xdr(xdr: str):
     result = None
-    "https://mtl.ergvein.net/view?tid=7ec5e397140fadf0d384860a35d19cf9f60e00a49b3b2cc250b832076fab7e7f"
+    # "https://mtl.ergvein.net/view?tid=7ec5e397140fadf0d384860a35d19cf9f60e00a49b3b2cc250b832076fab7e7f"
     try:
         if xdr.find('mtl.ergvein.net/view') > -1:
             xdr = get_url_xdr(xdr)
@@ -289,6 +289,7 @@ def stellar_check_account(public_key: str) -> Account:
         return Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
     except Exception as ex:
         add_info_log("stellar_check_account", public_key, ex)
+        return None
 
 
 def stellar_check_receive_sum(send_asset: Asset, send_sum: str, receive_asset: Asset) -> str:
@@ -349,7 +350,7 @@ def stellar_check_receive_asset(send_asset: Asset, send_sum: str, receive_assets
 
 def get_last_message_id(user_id: int):
     try:
-        return fb.execsql1(f"select first 1 m.message_id from mymtlwalletbot m where m.user_id = ?", (user_id,))
+        return fb.execsql1(f"select first 1 m.message_id from mymtlwalletbot m where m.user_id = ?", (user_id,),0)
     except Exception as ex:
         return 0
 

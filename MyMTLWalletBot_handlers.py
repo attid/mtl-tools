@@ -364,13 +364,18 @@ async def cmd_show_sign(chat_id: int, state: FSMContext, msg='', use_send=False)
 async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
     async with state.proxy() as data:
         xdr = data.get(MyState.xdr.value)
+        tools_url = data.get(MyState.tools.value, 'bad url')
     try:
         if tools:
             try:
                 # add_info_log({"tx_body": xdr})
                 rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
-                result = rq.text[rq.text.find('<section id="main">'):rq.text.find("</section>")]
-                await cmd_info_message(chat_id, result[:4000], state)
+                parse_text = rq.text
+                if parse_text.find('Transaction history') > 0:
+                    await cmd_info_message(chat_id, f'Вроде все успешно проверить тут - {tools_url}', state)
+                else:
+                    parse_text = parse_text[parse_text.find('<section id="main">'):parse_text.find("</section>")]
+                    await cmd_info_message(chat_id, parse_text[:4000], state)
             except Exception as ex:
                 add_info_log('cmd_show_send_tr', chat_id, ex)
                 await cmd_info_message(chat_id, 'Ошибка с отправкой =(', state)
@@ -466,7 +471,7 @@ async def cmd_send_04(chat_id: int, state: FSMContext):
 async def cmd_send_11(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = 3
-        asset_list = stellar_get_balance_list(chat_id, 'XLM')
+        asset_list = stellar_get_balance_list(chat_id, asset_filter='XLM')
         send_asset_name = asset_list[0][2]
         send_asset_code = asset_list[0][3]
         send_address = data.get(MyState.send_address.value, 'None 0_0')
@@ -723,7 +728,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                     data[MyState.MyState.value] = '0'
                 await cmd_send_11(message.chat.id, state)
             else:
-                await cmd_swap_01(message.chat.id, state, "Не удалось найти кошелек или он не активирован")
+                await cmd_send_01(message.chat.id, state, "Не удалось найти кошелек или он не активирован")
     elif my_state == MyState.StateSendSum.value:
         try:
             send_sum = float(message.text)
@@ -746,7 +751,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                     data[MyState.StatePIN.value] = 14
                     data[MyState.xdr.value] = xdr
                     if message.text.find('mtl.ergvein.net/view') > -1:
-                        data[MyState.tools.value] = 'mtl.ergvein.net'
+                        data[MyState.tools.value] = message.text
                 await cmd_ask_pin(message.chat.id, state)
             else:
                 raise Exception('Bad xdr')
