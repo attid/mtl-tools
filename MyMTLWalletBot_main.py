@@ -1,6 +1,6 @@
 import sys
 from aiogram import Bot, Dispatcher
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+# from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -30,10 +30,3 @@ scheduler = AsyncIOScheduler()
 
 # Включаем логирование, чтобы не пропустить важные сообщения
 logger = app_logger.get_logger("MyMTLWallet_bot")
-
-
-def add_info_log(*args):
-    msg = ''
-    for s in args:
-        msg += str(s) + ' '
-    logger.info(msg)

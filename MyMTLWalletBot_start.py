@@ -1,5 +1,5 @@
 import aiogram
-from MyMTLWalletBot_main import dp, scheduler
+from MyMTLWalletBot_main import dp
 import MyMTLWalletBot_handlers
 import MyMTLWalletBot_callbacks
 
@@ -16,6 +16,6 @@ def un_hit():
 
 if __name__ == "__main__":
     # Запуск бота
-    #scheduler.start()
-    #mtl_bot_time_handlers.scheduler_jobs(scheduler, dp)
+    # scheduler.start()
+    # mtl_bot_time_handlers.scheduler_jobs(scheduler, dp)
     aiogram.executor.start_polling(dp, skip_updates=True)

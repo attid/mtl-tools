@@ -1,6 +1,6 @@
 from os.path import isfile
 
-from aiogram import types, Dispatcher
+from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ParseMode
 import json
@@ -10,14 +10,14 @@ from datetime import datetime
 from datetime import timedelta
 
 import update_report3
-from mtl_bot_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
-    welcome_message, cmd_save_welcome_message, scheduler
+from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
+    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
-from update_eurmtl_log import show_key_rate
+from keyrate import show_key_rate
 
 startmsg = """
 Я молодой бот
@@ -61,7 +61,7 @@ links_msg = f"""
 [BIM-XLM]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / \
 [BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \
 [Wallet]({link_stellar}GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL) 
-Видео [Как подписывать](https://t.me/c/1239694752/20090) / [Как проверять](https://t.me/c/1239694752/26053) / [Как склеить\редактировать транзакции](https://t.me/c/1239694752/41279)
+Видео [Как подписывать](https://t.me/MTL_production/26) / [Как проверять](https://t.me/MTL_production/27) / [Как склеить\редактировать транзакции](https://t.me/MTL_production/28)
 """
 
 
@@ -91,7 +91,7 @@ async def cmd_answer(message: types.Message):
 async def cmd_save(message: types.Message):
     print(message)
     logger.info(f'save {message.text}')
-    if message.from_user.username == "itolstov2":
+    if message.from_user.username == "itolstov":
         await message.answer("Готово")
     else:
         await message.answer('Saved')
@@ -130,7 +130,7 @@ async def cmd_show_bod(message: types.Message):
 
 @dp.message_handler(commands="balance")
 async def cmd_show_bod(message: types.Message):
-    await message.answer(mystellar.get_balance())
+    await message.answer(mystellar.get_safe_balance())
 
 
 @dp.message_handler(commands="show_key_rate")
@@ -144,106 +144,108 @@ async def cmd_show_key_rate(message: types.Message):
 
 @dp.message_handler(commands="do_bod")
 async def cmd_do_bod(message: types.Message):
-    if message.from_user.username == "itolstov":
-        # новая запись
-        list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'),
-                                            1)  # ('mtl div 17/12/2021')
-        await message.answer(f"Start BOD pays {list_id}")
-        result = mystellar.cmd_calc_bods(list_id)
-        await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
 
-        i = 1
-        while i > 0:
-            i = mystellar.cmd_gen_xdr(list_id)
+    # новая запись
+    list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'),
+                                        1)  # ('mtl div 17/12/2021')
+    await message.answer(f"Start BOD pays {list_id}")
+    result = mystellar.cmd_calc_bods(list_id)
+    await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
+
+    i = 1
+    while i > 0:
+        i = mystellar.cmd_gen_xdr(list_id)
+        await message.answer(f"Part done. Need {i} more.")
+
+    await message.answer(f"Try send transactions")
+    i = 1
+    while i > 0:
+        try:
+            i = mystellar.cmd_send(list_id)
             await message.answer(f"Part done. Need {i} more.")
-
-        await message.answer(f"Try send transactions")
-        i = 1
-        while i > 0:
-            try:
-                i = mystellar.cmd_send(list_id)
-                await message.answer(f"Part done. Need {i} more.")
-            except Exception as e:
-                print(e)
-                await message.answer(f"Got error. New attempt")
-        await message.answer(f"All work done.")
-    else:
-        await message.answer("Не положено, хозяин не разрешил.")
+        except Exception as e:
+            print(e)
+            await message.answer(f"Got error. New attempt")
+    await message.answer(f"All work done.")
 
 
 @dp.message_handler(commands="do_key_rate")
 async def cmd_do_key_rate(message: types.Message):
-    if message.from_user.username == "itolstov":
-        # новая запись
-        list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
-        await message.answer(f"Start KEY pays {list_id}")
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
 
-        await message.answer(show_key_rate('key'))
+    # новая запись
+    list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
+    await message.answer(f"Start KEY pays {list_id}")
 
-        i = 1
-        while i > 0:
-            i = mystellar.cmd_gen_key_rate_xdr(list_id)
+    await message.answer(show_key_rate('key'))
+
+    i = 1
+    while i > 0:
+        i = mystellar.cmd_gen_key_rate_xdr(list_id)
+        await message.answer(f"Part done. Need {i} more.")
+
+    await message.answer(f"Try send transactions")
+    i = 1
+    while i > 0:
+        try:
+            i = mystellar.cmd_send(list_id)
             await message.answer(f"Part done. Need {i} more.")
-
-        await message.answer(f"Try send transactions")
-        i = 1
-        while i > 0:
-            try:
-                i = mystellar.cmd_send(list_id)
-                await message.answer(f"Part done. Need {i} more.")
-            except Exception as e:
-                print(e)
-                await message.answer(f"Got error. New attempt")
-        await message.answer(f"All work done.")
-    else:
-        await message.answer("Не положено, хозяин не разрешил.")
+        except Exception as e:
+            print(e)
+            await message.answer(f"Got error. New attempt")
+    await message.answer(f"All work done.")
 
 
 @dp.message_handler(commands="do_div")
 async def cmd_do_div(message: types.Message):
-    if message.from_user.username == "itolstov":
-        # новая запись
-        # ('mtl div 17/12/2021')
-        div_list_id = mystellar.cmd_create_list(datetime.now().strftime('mtl div %d/%m/%Y'), 0)
-        donate_list_id = mystellar.cmd_create_list(datetime.now().strftime('donate %d/%m/%Y'), 0)
-        await message.answer(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
-        result = mystellar.cmd_calc_divs(div_list_id, donate_list_id)
-        await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
 
-        i = 1
-        while i > 0:
-            i = mystellar.cmd_gen_xdr(div_list_id)
-            # await message.answer(f"Div part done. Need {i} more.")
+    # новая запись
+    # ('mtl div 17/12/2021')
+    div_list_id = mystellar.cmd_create_list(datetime.now().strftime('mtl div %d/%m/%Y'), 0)
+    donate_list_id = mystellar.cmd_create_list(datetime.now().strftime('donate %d/%m/%Y'), 0)
+    await message.answer(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
+    result = mystellar.cmd_calc_divs(div_list_id, donate_list_id)
+    await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
 
-        i = 1
-        while i > 0:
-            i = mystellar.cmd_gen_xdr(donate_list_id)
-            # await message.answer(f"Donate part done. Need {i} more.")
+    i = 1
+    while i > 0:
+        i = mystellar.cmd_gen_xdr(div_list_id)
+        # await message.answer(f"Div part done. Need {i} more.")
 
-        await message.answer(f"Try send div transactions")
-        i = 1
-        while i > 0:
-            try:
-                i = mystellar.cmd_send(div_list_id)
-                await message.answer(f"Part done. Need {i} more.")
-            except Exception as e:
-                print(e)
-                await message.answer(f"Got error. New attempt")
-        await message.answer(f"All work done.")
+    i = 1
+    while i > 0:
+        i = mystellar.cmd_gen_xdr(donate_list_id)
+        # await message.answer(f"Donate part done. Need {i} more.")
 
-        await message.answer(f"Try send donate transactions")
-        i = 1
-        while i > 0:
-            try:
-                i = mystellar.cmd_send(donate_list_id)
-                await message.answer(f"Part done. Need {i} more.")
-            except Exception as e:
-                print(e)
-                await message.answer(f"Got error. New attempt")
-        await message.answer(f"All work done.")
+    await message.answer(f"Try send div transactions")
+    i = 1
+    while i > 0:
+        try:
+            i = mystellar.cmd_send(div_list_id)
+            await message.answer(f"Part done. Need {i} more.")
+        except Exception as e:
+            print(e)
+            await message.answer(f"Got error. New attempt")
+    await message.answer(f"All work done.")
 
-    else:
-        await message.answer("Не положено, хозяин не разрешил.")
+    await message.answer(f"Try send donate transactions")
+    i = 1
+    while i > 0:
+        try:
+            i = mystellar.cmd_send(donate_list_id)
+            await message.answer(f"Part done. Need {i} more.")
+        except Exception as e:
+            print(e)
+            await message.answer(f"Got error. New attempt")
+    await message.answer(f"All work done.")
 
 
 @dp.message_handler(commands="open")
@@ -272,6 +274,7 @@ async def smd_all(message: types.Message, state: FSMContext):
     if message.chat.id == -1001239694752:
         with open("polls/votes.json", "r") as fp:
             members = list(json.load(fp))
+        members.remove("NEED")
         await message.reply(' '.join(members))
     # elif message.chat.id == -1001767165598:
     #    await message.reply('@SomeoneAny @itolstov')
@@ -290,6 +293,10 @@ async def smd_all(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands="add_all")
 async def smd_add_all(message: types.Message, state: FSMContext):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
     if len(message.get_args()) > 2:
         all_file = f'polls/all{message.chat.id}'
         if isfile(all_file):
@@ -309,6 +316,10 @@ async def smd_add_all(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands="del_all")
 async def smd_del_all(message: types.Message, state: FSMContext):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
     if len(message.get_args()) > 2:
         all_file = f'polls/all{message.chat.id}'
         if isfile(all_file):
@@ -365,6 +376,10 @@ async def cmd_delete(message: types.Message):
 
 @dp.message_handler(commands="update_airdrops")
 async def cmd_update_airdrops(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
     await message.answer('Запускаю полное обновление')
     update_report3.update_airdrop()
     await message.answer('Обновление завершено')
@@ -380,16 +395,6 @@ async def cmd_gen_data(message: types.Message):
             return
     # else
     await message.reply('Wrong format. Use: /gen_data public_key data_name:data_value')
-
-
-@dp.message_handler(commands="exit")
-async def cmd_exit(message: types.Message):
-    try:
-        await message.delete()
-    except:
-        pass
-    if message.from_user.username == "itolstov":
-        exit()
 
 
 @dp.message_handler(commands="show_data")
@@ -448,7 +453,7 @@ async def cmd_set_welcome(message: types.Message):
         await cmd_delete_welcome(message)
 
 
-async def cmd_send_message_singers(message: types.Message):
+async def cmd_delete_by_scheduler(message: types.Message):
     await message.delete()
 
 
@@ -462,11 +467,11 @@ async def new_chat_member(message: types.Message):
             username = f'<a href="tg://user?id={message.from_user.id}">{message.from_user.full_name}</a>'
         msg = msg.replace('$$USER$$', username)
 
-        answer = await message.answer(msg, parse_mode=ParseMode.HTML)
+        answer = await message.answer(msg, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         current_time = datetime.now()
         future_time = current_time + timedelta(minutes=5)
 
-        scheduler.add_job(cmd_send_message_singers, run_date=future_time, args=(answer,))
+        scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(answer,))
 
     if message.chat.id in delete_income:
         await message.delete()
@@ -481,45 +486,94 @@ async def left_chat_member(message: types.Message):
 @dp.message_handler(commands="exit")
 @dp.message_handler(commands="restart")
 async def cmd_exit(message: types.Message, state: FSMContext):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
     async with state.proxy() as data:
         my_state = data.get('MyState')
 
-    if message.from_user.username == "itolstov":
         if my_state == 'StateExit':
             async with state.proxy() as data:
                 data['MyState'] = None
-            await message.reply(":[[[")
+            await message.reply(":[[[ ушла в закат =(")
             exit()
         else:
             async with state.proxy() as data:
                 data['MyState'] = 'StateExit'
-            await message.reply(":'[")
+            await message.reply(":'[ боюсь")
 
 
 @dp.message_handler(commands="err")
 async def cmd_log(message: types.Message):
-    if message.from_user.username == "itolstov":
-        await dp.bot.send_document(message.chat.id, open('mtl_bot.err', 'rb'))
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    await dp.bot.send_document(message.chat.id, open('skynet.err', 'rb'))
+
+
+@dp.message_handler(commands="add_skynet_admin")
+async def smd_add_skynet_admin(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if len(message.get_args()) > 2:
+        all_file = f'polls/skynet_admins'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+        else:
+            members = []
+        arg = message.get_args().split()
+        members.extend(arg)
+        with open(all_file, "w") as fp:
+            json.dump(members, fp)
+
+        await message.reply('Done')
+    else:
+        await message.reply('не указаны параметры кого добавить')
+
+
+@dp.message_handler(commands="del_skynet_admin")
+async def smd_del_skynet_admin(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if len(message.get_args()) > 2:
+        all_file = f'polls/skynet_admins'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+            arg = message.get_args().split()
+            for member in arg:
+                if member in members:
+                    members.remove(member)
+            with open(all_file, "w") as fp:
+                json.dump(members, fp)
+            await message.reply('Done')
+        else:
+            await message.reply('Настройки не найдены =(')
+    else:
+        await message.reply('не указаны параметры кого добавить')
+
+
+@dp.message_handler(commands="show_skynet_admin")
+async def smd_show_skynet_admin(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    all_file = f'polls/skynet_admins'
+    if isfile(all_file):
+        with open(all_file, "r") as fp:
+            members = list(json.load(fp))
+        await message.reply(' '.join(members))
+    else:
+        await message.reply('не настроено =( ')
 
 
 if __name__ == "__main__":
-    list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
-    print(f"Start KEY pays {list_id}")
-
-    print(show_key_rate('key'))
-
-    i = 1
-    while i > 0:
-        i = mystellar.cmd_gen_key_rate_xdr(list_id)
-        print(f"Part done. Need {i} more.")
-
-    print(f"Try send transactions")
-    i = 1
-    while i > 0:
-        try:
-            i = mystellar.cmd_send(list_id)
-            print(f"Part done. Need {i} more.")
-        except Exception as e:
-            print(e)
-            print(f"Got error. New attempt")
-    print(f"All work done.")
+    pass

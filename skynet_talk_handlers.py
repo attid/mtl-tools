@@ -1,13 +1,13 @@
 from aiogram import types
 from aiogram.types import ChatType
 import dialog
-import mtl_bot_poll_handlers
+import skynet_poll_handlers
 import mystellar
 import re, random
 import update_report
 import update_report2
 import update_report4
-from mtl_bot_main import dp
+from skynet_main import dp, is_skynet_admin
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -68,15 +68,21 @@ async def cmd_last_check(message: types.Message):
         #            await message.reply(mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп')
 
         elif has_words(message.text, ['ОБНОВИ', 'update']):
+            if not await is_skynet_admin(message):
+                await message.reply('You are not my admin.')
+                return False
             if has_words(message.text, ['ГАРАНТОВ']):
-                await message.reply('Зай, я запустила обновление')
+                msg = await message.reply('Зай, я запустила обновление')
                 update_report2.update_guarant_report()
+                await msg.reply('Обновление завершено')
             if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
-                await message.reply('Зай, я запустила обновление')
+                msg = await message.reply('Зай, я запустила обновление')
                 update_report.update_main_report()
+                await msg.reply('Обновление завершено')
             if has_words(message.text, ['donate', 'donates', 'donated']):
-                await message.reply('Зай, я запустила обновление')
+                msg = await message.reply('Зай, я запустила обновление')
                 update_report4.update_donate_report()
+                await msg.reply('Обновление завершено')
 
         elif has_words(message.text, ['ВЫПЬЕМ', 'ТОСТ']):
             await message.answer(mystellar.cmd_get_info(6))
@@ -94,13 +100,13 @@ async def cmd_last_check(message: types.Message):
             await message.reply(f'{message.text.split()[2]} Молодец !')
 
         elif has_words(message.text, ['кто молчит', 'найди молчунов', 'найди безбилетника']):
-            await mtl_bot_poll_handlers.cmd_poll_check(message)
+            await skynet_poll_handlers.cmd_poll_check(message)
 
         elif has_words(message.text, ['покажи']) and has_words(message.text, ['сиськи']):
             await message.reply_photo(random.choice(booms))
 
         elif has_words(message.text, ['сколько']) and has_words(message.text, ['кубышк']):
-            await message.reply(mystellar.get_balance())
+            await message.reply(mystellar.get_safe_balance())
 
         elif has_words(message.text, ['хочется', 'нет', 'дай']) and has_words(message.text,
                                                                               ['стабильности', 'стабильность']):

@@ -1,12 +1,12 @@
 from aiogram import types
-from mtl_bot_main import dp, scheduler
+from skynet_main import dp, scheduler
 import importlib
 import aiogram
-import mtl_bot_first_handlers
-import mtl_bot_time_handlers
-import mtl_bot_poll_handlers
-import mtl_bot_state_handlers
-import mtl_bot_talk_handlers
+import skynet_first_handlers
+import skynet_time_handlers
+import skynet_poll_handlers
+import skynet_state_handlers
+import skynet_talk_handlers
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -14,18 +14,11 @@ import mtl_bot_talk_handlers
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 
-def unhit():
-    mtl_bot_first_handlers.cmd_decode()
-    mtl_bot_state_handlers.cmd_mtlcamp0()
-    mtl_bot_talk_handlers.has_words(None, None)
-    mtl_bot_poll_handlers.cmd_save()
-
-
 @dp.message_handler(commands="poll_reload_vote")
 async def cmd_poll_check(message: types.Message):
     if message.from_user.username == "itolstov":
-        print(mtl_bot_poll_handlers.cmd_save_votes())
-        importlib.reload(mtl_bot_poll_handlers)
+        print(skynet_poll_handlers.cmd_save_votes())
+        importlib.reload(skynet_poll_handlers)
         await message.reply('reload complete')
     else:
         await message.answer("Не положено, хозяин не разрешил.")
@@ -71,13 +64,16 @@ info_cmd = {
     "/set_welcome": "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$",
     "/set_check_welcome": "Установить отслеживания с добавлением в /all",
     "/add_all": "Добавить пользователей в /all. запуск с параметрами /add_all @user1 @user2 итд",
-    "/del_all": "Убрать пользователей в /all. запуск с параметрами /add_all @user1 @user2 итд",
+    "/del_all": "Убрать пользователей в /all. запуск с параметрами /del_all @user1 @user2 итд",
     "/show_key_rate": "Показать сколько начислено мулек по ключевой ставке на всех",
     "/show_key_rate key": "Показать сколько начислено мулек по ключевой ставке на указанный адрес",
     "/balance": "Показать сколько денег или мулек(EURMTL) в кубышке",
     "Скайнет сколько в кубышке": "Показать сколько денег или мулек(EURMTL) в кубышке",
     "/update_airdrops": "Обновить файл airdrops",
-    "/do_key_rate": "Запустить выплату по ключевой ставке"
+    "/do_key_rate": "Запустить выплату по ключевой ставке",
+    "/add_skynet_admin": "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд",
+    "/del_skynet_admin": "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд",
+    "/show_skynet_admin": "Показать админов скайнета"
 }
 
 
@@ -99,6 +95,6 @@ async def inline_handler(query: types.InlineQuery):
 if __name__ == "__main__":
     # Запуск бота
     scheduler.start()
-    mtl_bot_time_handlers.scheduler_jobs(scheduler, dp)
-    dp.register_message_handler(mtl_bot_talk_handlers.cmd_last_check, state='*')
+    skynet_time_handlers.scheduler_jobs(scheduler, dp)
+    dp.register_message_handler(skynet_talk_handlers.cmd_last_check, state='*')
     aiogram.executor.start_polling(dp, skip_updates=True)

@@ -3,7 +3,7 @@ import copy
 import requests
 from aiogram import types
 from aiogram.utils.callback_data import CallbackData
-from mtl_bot_main import dp
+from skynet_main import dp
 import json
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -103,6 +103,7 @@ async def cmd_poll_check(message: types.Message):
             for vote in button[2]:
                 if vote in votes_check:
                     votes_check.pop(vote)
+        votes_check.pop("NEED")
         keys = votes_check.keys()
         await dp.bot.send_message(message.chat.id, ' '.join(keys) + '\nСмотрите закреп \ Look at the pinned message',
                                   reply_to_message_id=message.reply_to_message)
@@ -135,7 +136,7 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
                 msg += f"{button[0][:3]} ({button[1]}) : {' '.join(button[2])}\n"
                 buttons.append(types.InlineKeyboardButton(button[0] + f"({button[1]})",
                                                           callback_data=cb_poll_click.new(answer=len(buttons))))
-            msg += f'Need {votes["NEED"]} votes'
+            msg += f'Need {votes["NEED"]["50"]}({votes["NEED"]["75"]}) votes from {votes["NEED"]["100"]}'
 
             await query.message.edit_text(msg, reply_markup=types.InlineKeyboardMarkup(row_width=1).add(*buttons))
             with open(f"polls/{query.message.message_id}{query.message.chat.id}.json", "w") as fp:
@@ -148,6 +149,7 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
 
 
 def cmd_save_votes():
+    total = 0
     vote_list = cmd_gen_vote_list()
     for vote in vote_list:
         if vote[2] == 0:
@@ -157,7 +159,8 @@ def cmd_save_votes():
     votes_list = {}
     for vote in vote_list:
         votes_list[key_name(vote[0])] = vote[2]
-    votes_list['NEED'] = cmd_get_needed_votes()
+        total += vote[2]
+    votes_list['NEED'] = {'50': cmd_get_needed_votes(), '75': total // 3 * 2 + 1, '100': total}
     # print(votes)
     with open("polls/votes.json", "w") as fp:
         json.dump(votes_list, fp)

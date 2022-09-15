@@ -105,13 +105,35 @@ def update_top_holders_report():
 
     vote_list.sort(key=lambda k: k[2], reverse=True)
 
-    print(vote_list)
+    # print(vote_list)
     wks.update('B2', vote_list)
     wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'report topholders all done {now}')
 
 
+def update_bdm_report():
+    gc = gspread.service_account('mtl-google-doc.json')
+
+    now = datetime.datetime.now()
+
+    wks = gc.open("MTL_TopHolders").worksheet("BDM")
+
+    bdm_list = mystellar.cmd_show_guards_list()
+
+    for bdm in bdm_list:
+        if len(bdm[0]) == 56:
+            bdm.append(mystellar.resolve_account(bdm[0]))
+        if len(bdm[2]) == 56:
+            bdm.append(mystellar.resolve_account(bdm[2]))
+
+    wks.update('A2', bdm_list)
+    wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+
+    logger.info(f'update bdm_report all done {now}')
+
+
 if __name__ == "__main__":
     update_guarant_report()
     update_top_holders_report()
+    update_bdm_report()

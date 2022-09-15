@@ -1,11 +1,6 @@
-import datetime
-import gspread
-import json
 import requests
-import app_logger
 import fb
 from mystellar import stellar_get_mtl_holders, eurmtl_asset, eurdebt_asset
-from settings import currencylayer_id, coinlayer_id
 
 key_rate = 1.6
 
@@ -52,14 +47,14 @@ def update_eurmtl_log():
         persent = eurdebt_dic[key] * (key_rate / 100) / 365
         insert_list.append([key, 'EURDEBT', persent])
 
-    fb.manyinsert("insert into t_eurmtl_calc (user_key, asset, amount) values (?,?,?)", insert_list)
+    fb.manyinsert("insert into t_keyrate (user_key, asset, amount) values (?,?,?)", insert_list)
 
 
 def show_key_rate(key):
     if len(key) < 10:
-        eurmtl = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_eurmtl_calc ec '
+        eurmtl = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_keyrate ec '
                             'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURMTL',))[0]
-        eurdebt = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_eurmtl_calc ec '
+        eurdebt = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_keyrate ec '
                              'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURDEBT',))[0]
         result = f'на сейчас начислено и не выплачено {eurmtl[0]} EURMTL {eurdebt[0]} EURDEBT, ' \
                  f'кол-во адресов {eurmtl[1]} EURMTL {eurdebt[1]} EURDEBT'
@@ -75,9 +70,9 @@ def show_key_rate(key):
 
         result += f"\n\n На балансе сейчас {assets['EURDEBT']} EURDEBT и {assets['EURMTL']} EURMTL"
     else:
-        eurmtl = fb.execsql('select sum(ec.amount) from t_eurmtl_calc ec where ec.was_packed = 0 '
+        eurmtl = fb.execsql('select sum(ec.amount) from t_keyrate ec where ec.was_packed = 0 '
                             'and ec.asset = ? and ec.user_key = ?', ('EURMTL', key))[0][0]
-        eurdebt = fb.execsql('select sum(ec.amount) from t_eurmtl_calc ec where ec.was_packed = 0 '
+        eurdebt = fb.execsql('select sum(ec.amount) from t_keyrate ec where ec.was_packed = 0 '
                              'and ec.asset = ? and ec.user_key = ?', ('EURDEBT', key))[0][0]
         result = f'для адреса {key} на сейчас начислено и не выплачено {eurmtl} EURMTL {eurdebt} EURDEBT'
 

@@ -11,9 +11,9 @@ from settings import currencylayer_id, coinlayer_id
 if 'logger' not in globals():
     logger = app_logger.get_logger("update_report")
 
-MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade',
-                'MonteAqua', 'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY',
-                'OSW', 'XLM', 'MTLand', 'AUMTL', 'MTLMiner', 'MTLDVL', 'GPACAR']
+MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade', 'MonteAqua',
+                'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'OSW', 'XLM', 'MTLand', 'AUMTL',
+                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest']
 
 
 def update_main_report():

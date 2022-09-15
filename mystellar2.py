@@ -2,7 +2,9 @@ import copy
 
 from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, Asset, Account, SignerKey, \
     TransactionEnvelope
-import json, math, requests, mystellar
+import json, math, mystellar
+
+from settings import base_fee
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
@@ -146,7 +148,7 @@ def cmd_get_new_vote_mtlcity():
     # 7
     root_account = Account(public_city, sequence=mtlcitysequence)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                     base_fee=100)
+                                     base_fee=base_fee)
     ithreshold = 0
 
     for arr in bigarr:
@@ -154,7 +156,7 @@ def cmd_get_new_vote_mtlcity():
             transaction.append_ed25519_public_key_signer(arr[0], int(arr[2]))
         ithreshold += int(arr[2])
 
-    ithreshold = ithreshold // 2
+    ithreshold = ithreshold // 2 + 1
 
     transaction.append_set_options_op(low_threshold=ithreshold, med_threshold=ithreshold, high_threshold=ithreshold)
 
@@ -209,7 +211,7 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
     root_account = Account(public_key, sequence=source_account.sequence)
     if transaction is None:
         transaction = TransactionBuilder(source_account=root_account,
-                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
+                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
     threshold = 0
 
     for arr in vote_list:
@@ -217,7 +219,7 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
             transaction.append_ed25519_public_key_signer(arr[0], int(arr[2]), source=source)
         threshold += int(arr[2])
 
-    threshold = threshold // 2
+    threshold = threshold // 2 + 1
 
     transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
                                       source=source)
@@ -244,7 +246,7 @@ def cmd_get_new_vote_mtl(public_key):
         result = []
         transaction = TransactionBuilder(
             source_account=Server(horizon_url="https://horizon.stellar.org").load_account(public_fond),
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
+            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
         xdr = gen_vote_xdr(public_fond, vote_list, transaction)
         xdr = gen_vote_xdr(public_mtl, vote_list1, transaction, public_mtl)

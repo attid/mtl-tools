@@ -1,9 +1,11 @@
+from stellar_sdk.exceptions import BadRequestError
+
 from MyMTLWalletBot_handlers import *
 
 
 def good_id(user_id, msg_id):
     last_message_id = get_last_message_id(user_id)
-    add_info_log('good_id', last_message_id)
+    logger.info(['good_id', last_message_id])
     if msg_id == last_message_id:
         return True
     elif last_message_id == 0:
@@ -14,7 +16,7 @@ def good_id(user_id, msg_id):
 
 @dp.callback_query_handler(cb_add.filter())
 async def cq_add(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -36,7 +38,7 @@ async def cq_add(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
 @dp.callback_query_handler(cb_default.filter())
 async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(query.from_user.id, callback_data)
+    logger.info([query.from_user.id, callback_data])
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -82,12 +84,12 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
             await cmd_info_message(query.message.chat.id,
                                    'Успешно отправлено', state)
         except BaseHorizonError as ex:
-            add_info_log('ReSend BaseHorizonError', ex)
+            logger.info(['ReSend BaseHorizonError', ex])
             msg = f"{ex.title}, error {ex.status}"
             await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n{msg}', state,
                                    resend_transaction=True)
         except Exception as ex:
-            add_info_log('ReSend unknown error', ex)
+            logger.info(['ReSend unknown error', ex])
             msg = 'unknown error'
             async with state.proxy() as data:
                 data[MyState.xdr.value] = xdr
@@ -120,7 +122,7 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
 @dp.callback_query_handler(cb_send_1.filter())
 async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -144,7 +146,7 @@ async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
 @dp.callback_query_handler(cb_send_xdr.filter())
 async def cq_send4(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -163,7 +165,7 @@ async def cq_send4(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
 @dp.callback_query_handler(cb_swap_1.filter())
 async def cq_swap1(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -187,7 +189,7 @@ async def cq_swap1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
 @dp.callback_query_handler(cb_swap_2.filter())
 async def cq_swap2(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -208,7 +210,7 @@ async def cq_swap2(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
 @dp.callback_query_handler(cb_setting.filter())
 async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -233,7 +235,7 @@ async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSM
 
 @dp.callback_query_handler(cb_pin.filter())
 async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, *')
+    logger.info(f'{query.from_user.id}, *')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -243,14 +245,14 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
     async with state.proxy() as data:
         pin = data.get(MyState.pin.value, '')
         pin_state = data.get(MyState.StatePIN.value, 1)
-    add_info_log(f'{query.from_user.id}, 1')
+    logger.info(f'{query.from_user.id}, 1')
     if answer in '1234567890ABCDEF':
         pin += answer
         async with state.proxy() as data:
             data[MyState.pin.value] = pin
-        add_info_log(f'{query.from_user.id}, 2')
+        logger.info(f'{query.from_user.id}, 2')
         await cmd_ask_pin(query.message.chat.id, state)
-    add_info_log(f'{query.from_user.id}, 3')
+    logger.info(f'{query.from_user.id}, 3')
 
     if answer == 'Del':
         pin = pin[:len(pin) - 1]
@@ -287,10 +289,10 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 data[MyState.StatePIN.value] = 0
                 if data.get(MyState.MyState.value) == MyState.StateActivateConfirm.value:
                     send_address = data.get(MyState.send_address.value)
-                    create = 1
+                    create = True
                 if data.get(MyState.MyState.value) == MyState.StateSendConfirm.value:
                     send_address = data.get(MyState.send_address.value)
-                    create = 0
+                    create = False
                 send_asset_name = data.get(MyState.send_asset_name.value)
                 send_asset_code = data.get(MyState.send_asset_code.value)
                 send_sum = data.get(MyState.send_sum.value)
@@ -310,13 +312,13 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                                            'Успешно отправлено', state)
                     await state.finish()
             except BaseHorizonError as ex:
-                # add_info_log('pin_state == 13 BaseHorizonError', ex)
+                # logger.info('pin_state == 13 BaseHorizonError', ex)
                 msg = f"{ex.title}, error {ex.status}"
-                add_info_log('pin_state == 13', msg)
+                logger.info(['pin_state == 13', msg])
                 await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n' + msg, state,
                                        resend_transaction=True)
             except Exception as ex:
-                add_info_log('pin_state == 13 unknown error', ex)
+                logger.info(['pin_state == 13 unknown error', ex])
                 msg = 'unknown error'
                 await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n{msg}', state,
                                        resend_transaction=True)
@@ -334,12 +336,12 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                     await cmd_show_sign(query.message.chat.id, state, f"Ваша транзакция c подписью: \n\n`{xdr}`\n\n",
                                         use_send=True)
             except BaseHorizonError as ex:
-                # add_info_log('pin_state == 13 BaseHorizonError', ex)
+                # logger.info(['pin_state == 13 BaseHorizonError', ex])
                 msg = f"{ex.title}, error {ex.status}"
-                add_info_log('pin_state == 14', msg)
+                logger.info(['pin_state == 14', msg])
                 await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n' + msg, state)
             except Exception as ex:
-                add_info_log('pin_state == 14', ex)
+                logger.info(['pin_state == 14', ex])
                 await cmd_info_message(query.message.chat.id,
                                        'Ошибка при подписании, вероятно не правильный пароль. =(', state)
         if pin_state == 15:  # sign and send
@@ -361,15 +363,15 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                     await state.finish()
             except BadRequestError as ex:
                 # print(ex.extras.get("result_codes", '=( eror not found'))
-                msg = f"{ex.title}, error {ex.status}, {ex.extras['result_codes']}"
-                add_info_log('pin_state == 15, first', msg)
+                msg = f"{ex.title}, error {ex.status}, {ex.extras.get('result_codes','no extras')}"
+                logger.info(['pin_state == 15, first', msg])
                 await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n' + msg, state)
             except BaseHorizonError as ex:
-                msg = f"{ex.title}, error {ex.status}, {ex.extras['result_codes']}"
-                add_info_log('pin_state == 15', msg)
+                msg = f"{ex.title}, error {ex.status}, {ex.extras.get('result_codes','no extras')}"
+                logger.info(['pin_state == 15', msg])
                 await cmd_info_message(query.message.chat.id, f'Ошибка с отправкой =(\n' + msg, state)
             except Exception as ex:
-                add_info_log('pin_state == 15', ex)
+                logger.info(['pin_state == 15', ex])
                 await cmd_info_message(query.message.chat.id,
                                        'Ошибка при подписании, вероятно не правильный пароль. =(', state)
         return True
@@ -377,7 +379,7 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
 
 @dp.callback_query_handler(cb_assets.filter())
 async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -397,7 +399,7 @@ async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSM
 
 @dp.callback_query_handler(cb_add_asset.filter())
 async def cq_add_asset(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -410,14 +412,14 @@ async def cq_add_asset(query: types.CallbackQuery, callback_data: dict, state: F
         await cmd_add_asset_end(query.message.chat.id, state, answer)
     else:
         await query.answer("Фигня какая-то =(", show_alert=True)
-        add_info_log(f'error add asset {query.from_user.id} {answer}')
+        logger.info(f'error add asset {query.from_user.id} {answer}')
 
     return True
 
 
 @dp.callback_query_handler(cb_del_asset.filter())
 async def cq_del_asset(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
-    add_info_log(f'{query.from_user.id}, {callback_data}')
+    logger.info(f'{query.from_user.id}, {callback_data}')
     if not good_id(query.from_user.id, query.message.message_id):
         await query.answer("Old button =(", show_alert=True)
         return True
@@ -430,6 +432,6 @@ async def cq_del_asset(query: types.CallbackQuery, callback_data: dict, state: F
         await cmd_del_asset_end(query.message.chat.id, state, answer)
     else:
         await query.answer("Фигня какая-то =(", show_alert=True)
-        add_info_log(f'error add asset {query.from_user.id} {answer}')
+        logger.info(f'error add asset {query.from_user.id} {answer}')
 
     return True

@@ -186,7 +186,7 @@ async def send_message(user_id: int, msg: str, reply_markup=None, need_new=None,
             try:
                 await dp.bot.delete_message(user_id, msg_id)
             except Exception as ex:
-                add_info_log('await send_message, del', user_id, ex)
+                logger.info(['await send_message, del', user_id, ex])
         set_last_message_id(user_id, new_msg.message_id)
     else:
         try:
@@ -198,7 +198,7 @@ async def send_message(user_id: int, msg: str, reply_markup=None, need_new=None,
 
 @dp.message_handler(state='*', commands="start")
 async def cmd_start(message: types.Message, state: FSMContext):
-    add_info_log(message.from_user.id, ' cmd_start')
+    logger.info([message.from_user.id, ' cmd_start'])
     await state.finish()
     # check address
     set_last_message_id(message.from_user.id, 0)
@@ -212,7 +212,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     # for idx in reversed(range(first_id, message.message_id + 1)):
     #    try:
     #        await dp.bot.delete_message(message.chat.id, idx)
-    #        add_info_log(idx)
+    #        logger.info(idx)
     #    except Exception as ex:
     #        len(ex.args)
     #        pass
@@ -276,7 +276,7 @@ async def cmd_show_start(chat_id: int, state: FSMContext, need_new=None):
         msg = "Ваш баланс \n" + stellar_get_balance(chat_id)
         await send_message(chat_id, msg, reply_markup=get_kb_default(chat_id), need_new=need_new)
     except Exception as ex:
-        add_info_log('cmd_show_start ', chat_id, ex)
+        logger.info(['cmd_show_start ', chat_id, ex])
         await cmd_setting(chat_id, state)
 
 
@@ -358,7 +358,11 @@ async def cmd_show_sign(chat_id: int, state: FSMContext, msg='', use_send=False)
     else:
         kb = kb_return
 
-    await send_message(chat_id, msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    if len(msg) > 4000:
+        await send_message(chat_id, 'xdr не помещается в сообщение можно только отправить', reply_markup=kb,
+                           parse_mode=ParseMode.MARKDOWN)
+    else:
+        await send_message(chat_id, msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
@@ -368,7 +372,7 @@ async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
     try:
         if tools:
             try:
-                # add_info_log({"tx_body": xdr})
+                # logger.info({"tx_body": xdr})
                 rq = requests.post("https://mtl.ergvein.net/update", data={"tx_body": xdr})
                 parse_text = rq.text
                 if parse_text.find('Transaction history') > 0:
@@ -377,18 +381,18 @@ async def cmd_show_send_tr(chat_id: int, state: FSMContext, tools=None):
                     parse_text = parse_text[parse_text.find('<section id="main">'):parse_text.find("</section>")]
                     await cmd_info_message(chat_id, parse_text[:4000], state)
             except Exception as ex:
-                add_info_log('cmd_show_send_tr', chat_id, ex)
+                logger.info(['cmd_show_send_tr', chat_id, ex])
                 await cmd_info_message(chat_id, 'Ошибка с отправкой =(', state)
 
         else:
             stellar_send(xdr)
             await cmd_info_message(chat_id, 'Успешно отправлено', state)
     except BaseHorizonError as ex:
-        add_info_log('send BaseHorizonError', ex)
+        logger.info(['send BaseHorizonError', ex])
         msg = f"{ex.title}, error {ex.status}"
         await cmd_info_message(chat_id, f'Ошибка с отправкой =(\n{msg}', state, resend_transaction=True)
     except Exception as ex:
-        add_info_log('send unknown error', ex)
+        logger.info(['send unknown error', ex])
         msg = 'unknown error'
         async with state.proxy() as data:
             data[MyState.xdr.value] = xdr
@@ -677,7 +681,7 @@ async def cmd_ask_pin(chat_id: int, state: FSMContext, msg='Введите па�
 
 @dp.message_handler(content_types=['photo'], state='*')
 async def handle_docs_photo(message: types.Message, state: FSMContext):
-    add_info_log(f'{message.from_user.id}')
+    logger.info(f'{message.from_user.id}')
     async with state.proxy() as data:
         my_state = data.get(MyState.MyState.value)
     if my_state == MyState.StateSendFor.value:
@@ -687,7 +691,7 @@ async def handle_docs_photo(message: types.Message, state: FSMContext):
             from pyzbar.pyzbar import decode
             data = decode(Image.open(f"qr/{message.from_user.id}.jpg"))
             if data:
-                add_info_log(data[0].data)
+                logger.info(str(data[0].data))
                 message.text = data[0].data.decode()
                 await cmd_all(message, state)
                 return
@@ -701,9 +705,9 @@ async def cmd_all(message: types.Message, state: FSMContext):
         my_state = data.get(MyState.MyState.value)
 
     if my_state == MyState.StateAddWalletPrivate.value:
-        add_info_log(f"{message.from_user.id}, '****'")
+        logger.info(f"{message.from_user.id}, '****'")
     else:
-        add_info_log(f"{message.from_user.id}, {message.text[:10]}")
+        logger.info(f"{message.from_user.id}, {message.text[:10]}")
 
     if my_state == MyState.StateSendFor.value:
         account = stellar_check_account(message.text)
@@ -721,7 +725,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 try:
                     address = resolve_stellar_address(address).account_id
                 except Exception as ex:
-                    add_info_log("StateSendFor", address, ex)
+                    logger.info(["StateSendFor", address, ex])
             if (not free_wallet) and (len(address) == 56) and (address[0] == 'G'):  # need activate
                 async with state.proxy() as data:
                     data[MyState.send_address.value] = address
@@ -756,7 +760,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
             else:
                 raise Exception('Bad xdr')
         except Exception as ex:
-            add_info_log('my_state == MyState.StateSign', ex)
+            logger.info(['my_state == MyState.StateSign', ex])
             await cmd_show_sign(message.chat.id, state, f"Не удалось загрузить транзакцию\n\n{message.text}\n")
     elif my_state == MyState.StateAddWalletPrivate.value:
         try:
@@ -766,7 +770,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 data[MyState.public_key.value] = public_key
             await cmd_show_add_wallet_choose_pin(message.chat.id, state, f"Для кошелька {public_key}\n")
         except Exception as ex:
-            add_info_log(ex)
+            logger.info(ex)
             await cmd_show_add_wallet_private(message.chat.id, state, "Не удалось прочесть ключ\n\n")
     elif my_state == MyState.StatePassword.value:
         try:
@@ -776,7 +780,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                 data[MyState.public_key.value] = public_key
             await cmd_show_add_wallet_choose_pin(message.chat.id, state, f"Для кошелька {public_key}\n")
         except Exception as ex:
-            add_info_log(ex)
+            logger.info(ex)
             await cmd_show_add_wallet_private(message.chat.id, state, "Не удалось прочесть ключ\n\n")
     elif my_state == MyState.StateSendSumSwap.value:
         try:

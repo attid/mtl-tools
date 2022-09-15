@@ -1,5 +1,7 @@
 from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, Asset, Account, SignerKey, Price
 import json, requests, math
+
+from mystellar import xlm_asset, usdc_asset, stellar_check_receive_sum
 from settings import private_exchange2, openexchangerates_id
 import app_logger
 
@@ -8,15 +10,15 @@ import app_logger
 if 'logger' not in globals():
     logger = app_logger.get_logger("mtl_exchange")
 
-min_price = 2.0  # min max price in xlm
-max_price = 10.4
+min_price = 6.0  # min max price in xlm
+max_price = 13.4
 
-max_eurmtl = 202.0  # max offer
-max_xlm = 104.0
+max_eurmtl = 300.0  # max offer 202
+max_xlm = 3000.0
 
 min_xlm = 5.0
-persent_eurmtl = 1.025  # 0% наценки
-persent_xlm = 1.0  # 2% наценки
+persent_eurmtl = 1.04  # 3% наценки
+persent_xlm = 1.01  # 1% наценки
 persent_cost = 1.01  # 1% изменения цены для обновления
 
 public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
@@ -69,13 +71,9 @@ else:
     offer_xlm_id = 0
     logger.info(['offer_xlm_id', offer_xlm_id])
 
-rq = requests.get(
-    'https://horizon.stellar.org/offers?selling_asset_type=credit_alphanum4&selling_asset_issuer=GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S&selling_asset_code=EURT&limit=2&buying_asset_type=native&order=desc').json()
-# print(json.dumps(rq["_embedded"]["records"], indent=4))
-cost_eur = float(rq["_embedded"]["records"][0]["price"])
-rq = requests.get(
-    'https://horizon.stellar.org/offers?buying_asset_type=credit_alphanum4&buying_asset_issuer=GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S&buying_asset_code=EURT&limit=2&selling_asset_type=native&order=desc').json()
-cost_xlm = float(rq["_embedded"]["records"][0]["price"])
+cost_eur = float(stellar_check_receive_sum(usdc_asset, '1', xlm_asset))
+cost_xlm = float(stellar_check_receive_sum(xlm_asset, '1', usdc_asset))
+
 logger.info(['cost_eur', cost_eur, 'cost_xlm', cost_xlm])
 
 sum_eurmtl = sum_eurmtl if sum_eurmtl < max_eurmtl else max_eurmtl
@@ -121,4 +119,4 @@ if (((offer_xlm_id == 0) and (sum_xlm > 0)) or (cost_xlm * persent_xlm > xlm_sal
     logger.info(f"xdr: {xdr}")
 
     transaction_resp = server.submit_transaction(transaction)
-# logger.info(transaction_resp)
+    # logger.info(transaction_resp)

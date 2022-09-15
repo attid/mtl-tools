@@ -22,7 +22,7 @@ dp.middleware.setup(LoggingMiddleware())
 scheduler = AsyncIOScheduler()
 
 # Включаем логирование, чтобы не пропустить важные сообщения
-logger = app_logger.get_logger("mtl_bot")
+logger = app_logger.get_logger("skynet")
 
 
 async def multi_reply(message: types.Message, text: str):
@@ -70,4 +70,16 @@ async def is_admin(message: types.Message):
     except StopIteration:
         return False
     return True
+
+
+async def is_skynet_admin(message: types.Message):
+    all_file = f'polls/skynet_admins'
+    from os.path import isfile
+    if isfile(all_file):
+        with open(all_file, "r") as fp:
+            members = list(json.load(fp))
+        return f'@{message.from_user.username}' in members
+    else:
+        return False
+
 
