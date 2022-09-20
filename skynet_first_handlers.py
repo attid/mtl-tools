@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import update_report3
 from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
-    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin
+    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -50,6 +50,7 @@ links_msg = f"""
 Полезные ссылки
 
 [Отчет по фонду](https://docs.google.com/spreadsheets/d/1fTOWq7JqX24YEqhCZTQ-z8IICPpgBHXcj91moxkT6R4/edit#gid=1372993507)
+[Список всех документов](https://docs.google.com/spreadsheets/d/1x3E1ai_kPVMQ85nuGwuTq1bXD051fnVlf0Dz9NaFoq0)
 Тулзы [для подписания](mtl.ergvein.net/) / [расчет голосов и дивов](https://ncrashed.github.io/dividend-tools/votes/)
 [Лаборатория](https://laboratory.stellar.org/#?network=public)
 Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fond}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
@@ -89,8 +90,8 @@ async def cmd_answer(message: types.Message):
 
 @dp.message_handler(commands="save")
 async def cmd_save(message: types.Message):
-    print(message)
     logger.info(f'save {message.text}')
+    logger.info(f'{message}')
     if message.from_user.username == "itolstov":
         await message.answer("Готово")
     else:
@@ -267,18 +268,14 @@ async def smd_add_trastline(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands="all")
 async def smd_all(message: types.Message, state: FSMContext):
-    # -1001767165598 тестовая группа
-    # -1001239694752 подписанты
-    # -1001169382324 garanteers EURMTL
-    # -1001798357244 distributed government
-    if message.chat.id == -1001239694752:
+    if message.chat.id == MTLChats.SignGroup:
         with open("polls/votes.json", "r") as fp:
             members = list(json.load(fp))
         members.remove("NEED")
         await message.reply(' '.join(members))
-    # elif message.chat.id == -1001767165598:
+    # elif message.chat.id == MTLChats.Test:
     #    await message.reply('@SomeoneAny @itolstov')
-    elif message.chat.id == -1001798357244:
+    elif message.chat.id == MTLChats.DistributedGroup:
         result = mystellar.cmd_check_donate_list()
         await message.reply(' '.join(result))
     else:

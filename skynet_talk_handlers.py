@@ -7,7 +7,7 @@ import re, random
 import update_report
 import update_report2
 import update_report4
-from skynet_main import dp, is_skynet_admin
+from skynet_main import dp, is_skynet_admin, MTLChats
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -40,10 +40,24 @@ booms = ["AgACAgIAAxkBAAIINGIWWwHuiOBgxuBQ9CBnfL7-VPXVAALuuzEbbLOxSFW75wtHIJnnAQ
 # @dp.message_handler(state='*')  # chat_type=[ChatType.PRIVATE, ChatType.SUPERGROUP]
 async def cmd_last_check(message: types.Message):
     if message.text.find('mtl.ergvein.net/view') > -1:
+        msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
+        try:
+            await dp.bot.unpin_chat_message(message.chat.id, msg_id)
+        except:
+            pass
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
-        # print(message)
-        # print(message.chat)
         await message.pin()
+        if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup):
+            msg = mystellar.check_url_xdr(
+                mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
+            msg = f'\n'.join(msg)
+            if len(msg) > 4096:
+                await message.answer("Слишком много операций показаны первые ")
+            await message.reply(msg[:4000])
+
+        if message.chat.id in (MTLChats.SignGroup,):
+            msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
+            await message.reply(msg)
 
     if has_words(message.text, ['Кузя', 'Скайнет', 'prst', 'skynet']):  # message.text.upper().find('СКАЙНЕТ') > -1
         if has_words(message.text, ['УБИТЬ', 'убей', 'kill']):
@@ -65,7 +79,6 @@ async def cmd_last_check(message: types.Message):
             msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
             msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
             await dp.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id)
-        #            await message.reply(mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп')
 
         elif has_words(message.text, ['ОБНОВИ', 'update']):
             if not await is_skynet_admin(message):

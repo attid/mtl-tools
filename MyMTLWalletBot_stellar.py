@@ -15,7 +15,7 @@ from settings import base_fee
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
-public_isuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
+public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
 public_pawnshop = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
 public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
@@ -25,9 +25,9 @@ public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 
 xlm_asset = Asset("XLM")
-mtl_asset = Asset("MTL", public_isuer)
-eurmtl_asset = Asset("EURMTL", public_isuer)
-eurdebt_asset = Asset("EURDEBT", public_isuer)
+mtl_asset = Asset("MTL", public_issuer)
+eurmtl_asset = Asset("EURMTL", public_issuer)
+eurdebt_asset = Asset("EURDEBT", public_issuer)
 
 
 def get_good_asset_dict():

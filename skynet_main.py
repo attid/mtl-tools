@@ -1,4 +1,5 @@
 import json
+from enum import IntEnum
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -24,6 +25,14 @@ scheduler = AsyncIOScheduler()
 # Включаем логирование, чтобы не пропустить важные сообщения
 logger = app_logger.get_logger("skynet")
 
+
+class MTLChats(IntEnum):
+    TestGroup = -1001767165598  # тестовая группа
+    SignGroup = -1001239694752  # подписанты
+    GuarantorGroup = -1001169382324  # Guarantors EURMTL
+    DistributedGroup = -1001798357244  # distributed government
+    ShareholderGroup = -1001269297637
+    
 
 async def multi_reply(message: types.Message, text: str):
     while len(text) > 0:
@@ -81,5 +90,3 @@ async def is_skynet_admin(message: types.Message):
         return f'@{message.from_user.username}' in members
     else:
         return False
-
-

@@ -877,7 +877,7 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
     # 2
     big_list = []
     for arr in account_list:
-        if int(arr[1]) > 10:
+        if int(arr[1]) >= 1:
             big_list.append(arr)
     big_list.sort(key=lambda k: k[1], reverse=True)
 
@@ -1101,7 +1101,6 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
 
 
 if __name__ == "__main__":
-    print(cmd_show_guards_list())
     # print(Server(horizon_url="https://horizon.stellar.org").fee_stats().call())
     # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
     pass
