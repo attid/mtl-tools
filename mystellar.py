@@ -926,7 +926,7 @@ def cmd_show_data(account_id: str, filter_by: str = None):
         # get all delegate
         for k, v in cmd_gen_vote_list(return_delegate_list=True).items():
             result_data.append(f'{k} => {v}')
-    elif account_id == 'bod':
+    elif account_id == 'bdm':
         # get all guards
         result_data = cmd_show_guards()
     elif account_id == 'donate':

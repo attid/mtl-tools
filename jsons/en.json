@@ -74,5 +74,14 @@
   "wallet_setting_msg": "Wallet setup, here you can add a trust line (asset), get your private key for backup, delete the pin or install a new one. To change the pin, delete the old one. ",
   "your_balance": "Your balance \n",
   "your_xdr": "Your transaction with signature: \n\n`{}`\n\n",
-  "zero_sum": "Amount 0 =(\n will not be enough"
+  "zero_sum": "Amount 0 =(\n will not be enough",
+  "kb_market": "Trade",
+  "kb_new_order": "Create new offer",
+  "kb_show_order": "Show my offers",
+  "choose_token_sale": "Choose token for sale",
+  "confirm_sale": "\nDo ypu want sale {} {}\n for {} {} ?",
+  "send_cost_sale": "\nSend sum in {}\n to change for {} {}",
+  "kb_edit_sum": "Edit sum",
+  "kb_edit_price": "Edit cost",
+  "kb_delete": "Delete"
 }

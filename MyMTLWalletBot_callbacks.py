@@ -1,7 +1,6 @@
-from stellar_sdk.exceptions import BadRequestError
-
 from MyMTLWalletBot_handlers import *
 from MyMTLWalletBot_main import change_user_lang
+from stellar_sdk.exceptions import BadRequestError
 
 
 def good_id(user_id, msg_id):
@@ -120,6 +119,19 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
     elif answer == MyButtons.ChangeLang.value:
         change_user_lang(query.message.chat.id)
         await cmd_wallet_setting(query.message.chat.id, state)
+    elif answer == MyButtons.Market.value:
+        await send_message(query.message.chat.id, my_gettext(query.message.chat.id, 'kb_market'),
+                           reply_markup=get_kb_market(query.message.chat.id))
+    elif answer == MyButtons.NewOrder.value:
+        await cmd_sale_01(query.message.chat.id, state)
+    elif answer == MyButtons.ShowOrders.value:
+        await cmd_show_orders(query.message.chat.id, state)
+    elif answer == MyButtons.EditOrderCost.value:
+        await cmd_edit_order_price(query.message.chat.id, state)
+    elif answer == MyButtons.EditOrderAmount.value:
+        await cmd_edit_order_amount(query.message.chat.id, state)
+    elif answer == MyButtons.DeleteOrder.value:
+        await cmd_delete_order(query.message.chat.id, state)
     elif answer == MyButtons.NotImplemented.value:
         await query.answer(my_gettext(query.message.chat.id, "not_implemented"), show_alert=True)
     else:
@@ -136,16 +148,16 @@ async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
-        asset_list = data[MyState.assets.value]
+        asset_list: List[Balance] = data[MyState.assets.value]
     for asset in asset_list:
-        if asset[0] == answer:
-            if float(asset[1]) == 0.0:
+        if asset.asset_code == answer:
+            if float(asset.balance) == 0.0:
                 await query.answer(my_gettext(query.message.chat.id, "zero_sum"), show_alert=True)
             else:
                 async with state.proxy() as data:
-                    data[MyState.send_asset_name.value] = asset[2]
-                    data[MyState.send_asset_code.value] = asset[3]
-                    data[MyState.send_asset_max_sum.value] = asset[1]
+                    data[MyState.send_asset_code.value] = asset.asset_code
+                    data[MyState.send_asset_issuer.value] = asset.asset_issuer
+                    data[MyState.send_asset_max_sum.value] = asset.balance
                 await cmd_send_03(query.message.chat.id, state)
 
     return True
@@ -179,16 +191,16 @@ async def cq_swap1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
-        asset_list = data[MyState.assets.value]
+        asset_list: List[Balance] = data[MyState.assets.value]
     for asset in asset_list:
-        if asset[0] == answer:
-            if float(asset[1]) == 0.0:
+        if asset.asset_code == answer:
+            if float(asset.balance) == 0.0:
                 await query.answer(my_gettext(query.message.chat.id, "zero_sum"), show_alert=True)
             else:
                 async with state.proxy() as data:
-                    data[MyState.send_asset_name.value] = asset[2]
-                    data[MyState.send_asset_code.value] = asset[3]
-                    data[MyState.send_asset_max_sum.value] = asset[1]
+                    data[MyState.send_asset_code.value] = asset.asset_code
+                    data[MyState.send_asset_issuer.value] = asset.asset_issuer
+                    data[MyState.send_asset_max_sum.value] = asset.balance
                 await cmd_swap_02(query.message.chat.id, state)
 
     return True
@@ -203,14 +215,59 @@ async def cq_swap2(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
-        asset_list = data[MyState.assets.value]
+        asset_list: List[Balance] = data[MyState.assets.value]
     for asset in asset_list:
-        if asset[0] == answer:
+        if asset.asset_code == answer:
             async with state.proxy() as data:
-                data[MyState.receive_asset_name.value] = asset[2]
-                data[MyState.receive_asset_code.value] = asset[3]
-                data[MyState.receive_asset_min_sum.value] = asset[1]
+                data[MyState.receive_asset_code.value] = asset.asset_code
+                data[MyState.receive_asset_issuer.value] = asset.asset_issuer
+                data[MyState.receive_asset_min_sum.value] = asset.balance
             await cmd_swap_03(query.message.chat.id, state)
+
+    return True
+
+
+@dp.callback_query_handler(cb_sale_1.filter())
+async def cq_sale1(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
+    logger.info(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
+    answer = callback_data["answer"]
+    async with state.proxy() as data:
+        asset_list: List[Balance] = data[MyState.assets.value]
+    for asset in asset_list:
+        if asset.asset_code == answer:
+            if float(asset.balance) == 0.0:
+                await query.answer(my_gettext(query.message.chat.id, "zero_sum"), show_alert=True)
+            else:
+                async with state.proxy() as data:
+                    data[MyState.send_asset_code.value] = asset.asset_code
+                    data[MyState.send_asset_issuer.value] = asset.asset_issuer
+                    data[MyState.send_asset_max_sum.value] = asset.balance
+                await cmd_sale_02(query.message.chat.id, state)
+
+    return True
+
+
+@dp.callback_query_handler(cb_sale_2.filter())
+async def cq_sale2(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
+    logger.info(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
+    answer = callback_data["answer"]
+    async with state.proxy() as data:
+        asset_list: List[Balance] = data[MyState.assets.value]
+    for asset in asset_list:
+        if asset.asset_code == answer:
+            async with state.proxy() as data:
+                data[MyState.receive_asset_code.value] = asset.asset_code
+                data[MyState.receive_asset_issuer.value] = asset.asset_issuer
+                data[MyState.receive_asset_min_sum.value] = asset.balance
+            await cmd_sale_03(query.message.chat.id, state)
 
     return True
 
@@ -235,7 +292,7 @@ async def cq_setting(query: types.CallbackQuery, callback_data: dict, state: FSM
             stellar_set_default_wallets(user_id, wallets[idx][0])
             await cmd_setting(query.message.chat.id, state)
         if answer == 'NAME':
-            msg = f"{wallets[idx][0]}\n" + my_gettext(query.message.chat.id, 'your_balance') + stellar_get_balance(
+            msg = f"{wallets[idx][0]}\n" + my_gettext(query.message.chat.id, 'your_balance') + stellar_get_balance_str(
                 user_id, wallets[idx][0])
             await query.answer(msg[:200], show_alert=True)
     return True
@@ -301,13 +358,13 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                 if data.get(MyState.MyState.value) == MyState.StateSendConfirm.value:
                     send_address = data.get(MyState.send_address.value)
                     create = False
-                send_asset_name = data.get(MyState.send_asset_name.value)
                 send_asset_code = data.get(MyState.send_asset_code.value)
+                send_asset_issuer = data.get(MyState.send_asset_issuer.value)
                 send_sum = data.get(MyState.send_sum.value)
             try:
                 xdr = stellar_pay(stellar_get_user_account(user_id).account.account_id,
                                   send_address,
-                                  Asset(send_asset_name, send_asset_code), send_sum, create=create)
+                                  Asset(send_asset_code, send_asset_issuer), send_sum, create=create)
                 if user_id > 0:
                     xdr = stellar_sign(xdr, stellar_get_user_keypair(user_id, str(pin)).secret)
                     async with state.proxy() as data:
@@ -419,10 +476,14 @@ async def cq_add_asset(query: types.CallbackQuery, callback_data: dict, state: F
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
-        asset_list = data[MyState.assets.value]
+        asset_list: List[Balance] = data[MyState.assets.value]
 
-    if answer in asset_list:
-        await cmd_add_asset_end(query.message.chat.id, state, answer)
+    asset = list(filter(lambda x: x.asset_code == answer, asset_list))
+    if asset:
+        async with state.proxy() as data:
+            data[MyState.send_asset_code.value] = asset[0].asset_code
+            data[MyState.send_asset_issuer.value] = asset[0].asset_issuer
+        await cmd_add_asset_end(query.message.chat.id, state)
     else:
         await query.answer(my_gettext(query.message.chat.id, "bad_data"), show_alert=True)
         logger.info(f'error add asset {query.from_user.id} {answer}')
@@ -439,12 +500,33 @@ async def cq_del_asset(query: types.CallbackQuery, callback_data: dict, state: F
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
-        asset_list = data[MyState.assets.value]
+        asset_list: List[Balance] = data[MyState.assets.value]
 
-    if answer in asset_list:
-        await cmd_del_asset_end(query.message.chat.id, state, answer)
+    asset = list(filter(lambda x: x.asset_code == answer, asset_list))
+    if asset:
+        async with state.proxy() as data:
+            data[MyState.send_asset_code.value] = asset[0].asset_code
+            data[MyState.send_asset_issuer.value] = asset[0].asset_issuer
+        await cmd_del_asset_end(query.message.chat.id, state)
     else:
         await query.answer(my_gettext(query.message.chat.id, "bad_data"), show_alert=True)
         logger.info(f'error add asset {query.from_user.id} {answer}')
+
+    return True
+
+
+@dp.callback_query_handler(cb_edit_order.filter())
+async def cq_edit_order(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
+    logger.info(f'{query.from_user.id}, {callback_data}')
+    if not good_id(query.from_user.id, query.message.message_id):
+        await query.answer("Old button =(", show_alert=True)
+        return True
+
+    answer = callback_data["answer"]
+    async with state.proxy() as data:
+        data[MyState.edit_offer_id.value] = answer
+        # asset_list: List[MyOffer] = data[MyState.offers.value]
+
+    await cmd_edit_order(query.message.chat.id, state)
 
     return True

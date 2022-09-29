@@ -24,6 +24,12 @@ class MyButtons(Enum):
     SendTools = 'SendTools'
     Setting = 'Setting'
     Swap = 'Swap'
+    Market = 'Market'
+    NewOrder = 'NewOrder'
+    ShowOrders = 'ShowOrders'
+    EditOrderAmount = 'EditOrderAmount'
+    EditOrderCost = 'EditOrderCost'
+    DeleteOrder = 'DeleteOrders'
     WalletSetting = 'WalletSetting'
     Support = 'Support'
     Return = 'Return'
@@ -58,19 +64,25 @@ class MyState(Enum):
     StatePassword = 'StatePassword'
     StateSendSumSwap = 'StateSendSumSwap'
     StateSwapConfirm = 'StateSwapConfirm'
+    StateSendSumSale = 'StateSendSumSale'
+    StateSendCostSale = 'StateSendCostSale'
+    StateEditSumSale = 'StateEditSumSale'
+    StateEditCostSale = 'StateEditCostSale'
+    StateSaleConfirm = 'StateSaleConfirm'
     StateAddExpert1 = 'StateAddExpert1'
     StateAddExpert2 = 'StateAddExpert2'
     # send_account = 'send_account'
     send_address = 'send_address'
     Free_Wallet = 'Free_Wallet'
     assets = 'assets'
-    send_asset_name = 'send_asset_name'
     send_asset_code = 'send_asset_code'
+    send_asset_issuer = 'send_asset_issuer'
     send_asset_max_sum = 'send_asset_max_sum'
-    receive_asset_name = 'receive_asset_name'
     receive_asset_code = 'receive_asset_code'
+    receive_asset_issuer = 'receive_asset_issuer'
     receive_asset_min_sum = 'receive_asset_min_sum'
     send_sum = 'send_sum'
+    receive_sum = 'receive_sum'
     public_key = 'public_key'
     wallets = 'wallets'
     pin_type = 'pin_type'
@@ -78,6 +90,8 @@ class MyState(Enum):
     pin2 = 'pin2'
     xdr = 'xdr'
     tools = 'tools'
+    offers = 'offers'
+    edit_offer_id = 'edit_offer_id'
 
 
 cb_add = CallbackData("kb_add", "answer")
@@ -91,6 +105,9 @@ cb_del_asset = CallbackData("kb_del_asset", "answer")
 cb_setting = CallbackData("kb_setting", "answer", "id")
 cb_pin = CallbackData("pin", "answer")
 cb_assets = CallbackData("kb_assets", "answer")
+cb_sale_1 = CallbackData("kb_sale_1", "answer")
+cb_sale_2 = CallbackData("kb_sale_2", "answer")
+cb_edit_order = CallbackData("cb_edit_order", "answer")
 
 
 def get_kb_add0(chat_id: int) -> types.InlineKeyboardMarkup:
@@ -144,10 +161,37 @@ def get_kb_return_new(chat_id: int) -> types.InlineKeyboardMarkup:
     return kb_return_new
 
 
+def get_kb_market(chat_id: int) -> types.InlineKeyboardMarkup:
+    kb_market = types.InlineKeyboardMarkup()
+    kb_market.add(
+        types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_new_order'),
+                                   callback_data=cb_default.new(answer=MyButtons.NewOrder.value)))
+    kb_market.add(
+        types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_show_order'),
+                                   callback_data=cb_default.new(answer=MyButtons.ShowOrders.value)))
+    kb_market.add(
+        types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
+                                   callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    return kb_market
+
+
 def get_kb_send(chat_id: int) -> types.InlineKeyboardMarkup:
     kb_send = types.InlineKeyboardMarkup()
     kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_send'),
                                            callback_data=cb_default.new(answer=MyButtons.SendTr.value)))
+    kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
+                                           callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    return kb_send
+
+
+def get_kb_edir_order(chat_id: int) -> types.InlineKeyboardMarkup:
+    kb_send = types.InlineKeyboardMarkup()
+    kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_edit_sum'),
+                                           callback_data=cb_default.new(answer=MyButtons.EditOrderAmount.value)))
+    kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_edit_price'),
+                                           callback_data=cb_default.new(answer=MyButtons.EditOrderCost.value)))
+    kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_delete'),
+                                           callback_data=cb_default.new(answer=MyButtons.DeleteOrder.value)))
     kb_send.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
                                            callback_data=cb_default.new(answer=MyButtons.Return.value)))
     return kb_send
@@ -323,6 +367,8 @@ def get_kb_default(chat_id: int) -> types.InlineKeyboardMarkup:
                                    callback_data=cb_default.new(answer=MyButtons.Send.value)))
     kb_default.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_swap'),
                                               callback_data=cb_default.new(answer=MyButtons.Swap.value)))
+    kb_default.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_market'),
+                                              callback_data=cb_default.new(answer=MyButtons.Market.value)))
     kb_default.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_setting'),
                                               callback_data=cb_default.new(answer=MyButtons.WalletSetting.value)))
     kb_default.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_change_wallet'),
@@ -341,7 +387,7 @@ async def cmd_show_start(chat_id: int, state: FSMContext, need_new=None):
         async with state.proxy() as data:
             data[MyState.pin_type.value] = stellar_get_pin_type(chat_id)
 
-        msg = my_gettext(chat_id, 'your_balance') + stellar_get_balance(chat_id)
+        msg = my_gettext(chat_id, 'your_balance') + stellar_get_balance_str(chat_id)
         await send_message(chat_id, msg, reply_markup=get_kb_default(chat_id), need_new=need_new)
     except Exception as ex:
         logger.info(['cmd_show_start ', chat_id, ex])
@@ -496,13 +542,13 @@ async def cmd_send_02(chat_id: int, state: FSMContext):
 
     msg = my_gettext(chat_id, 'choose_token').format(address)
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(chat_id)
-    sender_asset_list = stellar_get_balance_list(chat_id, address)
+    asset_list = stellar_get_balances(chat_id)
+    sender_asset_list = stellar_get_balances(chat_id, address)
     for token in asset_list:
         for sender_token in sender_asset_list:
-            if token[0] == sender_token[0]:
-                kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
-                                                      callback_data=cb_send_1.new(answer=token[0])))
+            if token.asset_code == sender_token.asset_code:
+                kb_tmp.add(types.InlineKeyboardButton(text=f"{token.asset_code} ({token.balance})",
+                                                      callback_data=cb_send_1.new(answer=token.asset_code)))
     kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
                                           callback_data=cb_default.new(answer=MyButtons.Return.value)))
     await send_message(chat_id, msg, reply_markup=kb_tmp, need_new=True)
@@ -513,7 +559,7 @@ async def cmd_send_02(chat_id: int, state: FSMContext):
 async def cmd_send_03(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSum.value
-        msg = msg + my_gettext(chat_id, 'send_sum').format(data.get(MyState.send_asset_name.value),
+        msg = msg + my_gettext(chat_id, 'send_sum').format(data.get(MyState.send_asset_code.value),
                                                            data.get(MyState.send_asset_max_sum.value, 0.0))
     await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
 
@@ -521,13 +567,13 @@ async def cmd_send_03(chat_id: int, state: FSMContext, msg=''):
 async def cmd_send_04(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = data.get(MyState.send_sum.value)
-        send_asset = data.get(MyState.send_asset_name.value)
+        send_asset = data.get(MyState.send_asset_code.value)
         send_address = data.get(MyState.send_address.value)
 
         msg = my_gettext(chat_id, 'confirm_send').format(send_sum, send_asset, send_address)
         data[MyState.MyState.value] = MyState.StateSendConfirm.value
-        send_asset_name = data[MyState.send_asset_name.value]
-        send_asset_code = data[MyState.send_asset_code.value]
+        send_asset_name = data[MyState.send_asset_code.value]
+        send_asset_code = data[MyState.send_asset_issuer.value]
 
     xdr = stellar_pay(stellar_get_user_account(chat_id).account.account_id,
                       send_address,
@@ -542,20 +588,20 @@ async def cmd_send_04(chat_id: int, state: FSMContext):
 async def cmd_send_11(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = 3
-        asset_list = stellar_get_balance_list(chat_id, asset_filter='XLM')
-        send_asset_name = asset_list[0][2]
-        send_asset_code = asset_list[0][3]
+        asset_list = stellar_get_balances(chat_id, asset_filter='XLM')
+        send_asset_code = asset_list[0].asset_code
+        send_asset_issuer = asset_list[0].asset_issuer
         send_address = data.get(MyState.send_address.value, 'None 0_0')
         msg = my_gettext(chat_id, 'confirm_activate').format(send_address, send_sum)
 
-        data[MyState.send_asset_name.value] = send_asset_name
         data[MyState.send_asset_code.value] = send_asset_code
+        data[MyState.send_asset_issuer.value] = send_asset_issuer
         data[MyState.send_sum.value] = send_sum
         data[MyState.MyState.value] = MyState.StateActivateConfirm.value
 
     xdr = stellar_pay(stellar_get_user_account(chat_id).account.account_id,
                       send_address,
-                      Asset(send_asset_name, send_asset_code), send_sum, create=True)
+                      Asset(send_asset_code, send_asset_issuer), send_sum, create=True)
 
     async with state.proxy() as data:
         data[MyState.xdr.value] = xdr
@@ -566,10 +612,10 @@ async def cmd_send_11(chat_id: int, state: FSMContext):
 async def cmd_swap_01(chat_id: int, state: FSMContext, msg=''):
     msg = my_gettext(chat_id, 'choose_token_swap')
     kb_tmp = types.InlineKeyboardMarkup()
-    asset_list = stellar_get_balance_list(chat_id)
+    asset_list = stellar_get_balances(chat_id)
     for token in asset_list:
-        kb_tmp.add(types.InlineKeyboardButton(text=f"{token[0]} ({token[1]})",
-                                              callback_data=cb_swap_1.new(answer=token[0])))
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{token.asset_code} ({token.balance})",
+                                              callback_data=cb_swap_1.new(answer=token.asset_code)))
     kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
                                           callback_data=cb_default.new(answer=MyButtons.Return.value)))
     await send_message(chat_id, msg, reply_markup=kb_tmp)
@@ -580,15 +626,15 @@ async def cmd_swap_01(chat_id: int, state: FSMContext, msg=''):
 async def cmd_swap_02(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSum.value
-        send_asset = data.get(MyState.send_asset_name.value)
-        send_asset_code = data.get(MyState.send_asset_code.value)
+        send_asset = data.get(MyState.send_asset_code.value)
+        send_asset_code = data.get(MyState.send_asset_issuer.value)
 
         msg = my_gettext(chat_id, 'choose_token_swap2').format(send_asset)
 
     kb_tmp = types.InlineKeyboardMarkup()
     asset_list = []
-    for token in stellar_get_balance_list(chat_id):
-        asset_list.append(Asset(token[2], token[3]))
+    for token in stellar_get_balances(chat_id):
+        asset_list.append(Asset(token.asset_code, token.asset_issuer))
 
     receive_asset = stellar_check_receive_asset(Asset(send_asset, send_asset_code), '0.1', asset_list)
 
@@ -598,26 +644,24 @@ async def cmd_swap_02(chat_id: int, state: FSMContext, msg=''):
     kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
                                           callback_data=cb_default.new(answer=MyButtons.Return.value)))
     await send_message(chat_id, msg, reply_markup=kb_tmp)
-    # async with state.proxy() as data:
-    #    data[MyState.assets.value] = asset_list
 
 
 async def cmd_swap_03(chat_id: int, state: FSMContext, msg=''):
     async with state.proxy() as data:
         data[MyState.MyState.value] = MyState.StateSendSumSwap.value
-        msg = msg + my_gettext(chat_id, 'send_sum_swap').format(data.get(MyState.send_asset_name.value),
+        msg = msg + my_gettext(chat_id, 'send_sum_swap').format(data.get(MyState.send_asset_code.value),
                                                                 data.get(MyState.send_asset_max_sum.value, 0.0),
-                                                                data.get(MyState.receive_asset_name.value))
+                                                                data.get(MyState.receive_asset_code.value))
     await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
 
 
 async def cmd_swap_04(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
         send_sum = data.get(MyState.send_sum.value)
-        send_asset = data.get(MyState.send_asset_name.value)
-        send_asset_code = data.get(MyState.send_asset_code.value)
-        receive_asset = data.get(MyState.receive_asset_name.value)
-        receive_asset_code = data.get(MyState.receive_asset_code.value)
+        send_asset = data.get(MyState.send_asset_code.value)
+        send_asset_code = data.get(MyState.send_asset_issuer.value)
+        receive_asset = data.get(MyState.receive_asset_code.value)
+        receive_asset_code = data.get(MyState.receive_asset_issuer.value)
         data[MyState.MyState.value] = MyState.StateSwapConfirm.value
 
     receive_sum = stellar_check_receive_sum(Asset(send_asset, send_asset_code), str(send_sum),
@@ -638,12 +682,11 @@ async def cmd_add_asset(chat_id: int, state: FSMContext):
 
 
 async def cmd_add_asset_del(chat_id: int, state: FSMContext):
-    my_asset = {}
+    my_asset = stellar_get_balances(chat_id)
     kb_tmp = types.InlineKeyboardMarkup()
-    for item in stellar_get_balance_list(chat_id):
-        my_asset[item[0]] = item[3]
-        kb_tmp.add(types.InlineKeyboardButton(text=f"{item[0]} ({item[1]})",
-                                              callback_data=cb_del_asset.new(answer=item[0])))
+    for item in my_asset:
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{item.asset_code} ({item.balance})",
+                                              callback_data=cb_del_asset.new(answer=item.asset_code)))
 
     msg = my_gettext(chat_id, 'delete_asset2')
 
@@ -655,14 +698,15 @@ async def cmd_add_asset_del(chat_id: int, state: FSMContext):
 
 
 async def cmd_add_asset_add(chat_id: int, state: FSMContext, msg=''):
-    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balance_list(chat_id)) > 2):
+    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balances(chat_id)) > 2):
         await send_message(chat_id, my_gettext(chat_id, 'only_3'), reply_markup=get_kb_return(chat_id))
         return False
 
-    good_asset = get_good_asset_dict()
-    for item in stellar_get_balance_list(chat_id):
-        if good_asset.get(item[0]):
-            good_asset.pop(item[0])
+    good_asset = get_good_asset_list()
+    for item in stellar_get_balances(chat_id):
+        found = list(filter(lambda x: x.asset_code == item.asset_code, good_asset))
+        if len(found) > 0:
+            good_asset.remove(found[0])
 
     if len(good_asset) == 0:
         await send_message(chat_id, my_gettext(chat_id, 'have_all'), reply_markup=get_kb_return(chat_id))
@@ -670,8 +714,8 @@ async def cmd_add_asset_add(chat_id: int, state: FSMContext, msg=''):
 
     kb_tmp = types.InlineKeyboardMarkup()
     for key in good_asset:
-        kb_tmp.add(types.InlineKeyboardButton(text=f"{key}",
-                                              callback_data=cb_add_asset.new(answer=key)))
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{key.asset_code}",
+                                              callback_data=cb_add_asset.new(answer=key.asset_code)))
     kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
                                           callback_data=cb_default.new(answer=MyButtons.Return.value)))
     await send_message(chat_id, my_gettext(chat_id, 'open_asset'), reply_markup=kb_tmp)
@@ -680,7 +724,7 @@ async def cmd_add_asset_add(chat_id: int, state: FSMContext, msg=''):
 
 
 async def cmd_add_asset_expert(chat_id: int, state: FSMContext):
-    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balance_list(chat_id)) > 2):
+    if stellar_is_free_wallet(chat_id) and (len(stellar_get_balances(chat_id)) > 2):
         await send_message(chat_id, my_gettext(chat_id, 'only_3'), reply_markup=get_kb_return(chat_id))
         return False
 
@@ -697,13 +741,14 @@ async def cmd_add_asset_expert2(chat_id: int, state: FSMContext):
     await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
 
 
-async def cmd_add_asset_end(chat_id: int, state: FSMContext, key: str):
+async def cmd_add_asset_end(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
-        my_asset: dict = data.get(MyState.assets.value, {})
+        asset_code = data.get(MyState.send_asset_code.value, 'XLM')
+        asset_issuer = data.get(MyState.send_asset_issuer.value, '')
 
-    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(key, my_asset[key]))
+    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(asset_code, asset_issuer))
 
-    msg = my_gettext(chat_id, 'confirm_asset').format(key, my_asset[key])
+    msg = my_gettext(chat_id, 'confirm_asset').format(asset_code, asset_issuer)
 
     async with state.proxy() as data:
         data[MyState.xdr.value] = xdr
@@ -711,15 +756,16 @@ async def cmd_add_asset_end(chat_id: int, state: FSMContext, key: str):
     await send_message(chat_id, msg, reply_markup=get_kb_yesno_send_xdr(chat_id))
 
 
-async def cmd_del_asset_end(chat_id: int, state: FSMContext, key: str):
+async def cmd_del_asset_end(chat_id: int, state: FSMContext):
     async with state.proxy() as data:
-        my_asset: dict = data.get(MyState.assets.value, {})
+        asset_code = data.get(MyState.send_asset_code.value, 'XLM')
+        asset_issuer = data.get(MyState.send_asset_issuer.value, '')
 
     # todo send last coins
-    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(key, my_asset[key]),
+    xdr = stellar_add_trust(stellar_get_user_account(chat_id).account.account_id, Asset(asset_code, asset_issuer),
                             delete=True)
 
-    msg = my_gettext(chat_id, 'confirm_close_asset').format(key, my_asset[key])
+    msg = my_gettext(chat_id, 'confirm_close_asset').format(asset_code, asset_issuer)
     async with state.proxy() as data:
         data[MyState.xdr.value] = xdr
 
@@ -748,6 +794,186 @@ async def cmd_ask_pin(chat_id: int, state: FSMContext, msg='Введите па�
         async with state.proxy() as data:
             data[MyState.pin.value] = chat_id
         await send_message(chat_id, my_gettext(chat_id, 'confirm_send2'), reply_markup=get_kb_nopassword(chat_id))
+
+
+async def cmd_sale_01(chat_id: int, state: FSMContext):
+    msg = my_gettext(chat_id, 'choose_token_sale')
+    kb_tmp = types.InlineKeyboardMarkup()
+    asset_list = stellar_get_balances(chat_id)
+    for token in asset_list:
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{token.asset_code} ({token.balance})",
+                                              callback_data=cb_sale_1.new(answer=token.asset_code)))
+    kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
+                                          callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
+    async with state.proxy() as data:
+        data[MyState.assets.value] = asset_list
+
+
+async def cmd_sale_02(chat_id: int, state: FSMContext, msg=''):
+    async with state.proxy() as data:
+        send_asset = data.get(MyState.send_asset_code.value)
+        send_asset_code = data.get(MyState.send_asset_issuer.value)
+        asset_list: List[Balance] = data.get(MyState.assets.value)
+
+        msg = my_gettext(chat_id, 'choose_token_swap2').format(send_asset)
+
+    kb_tmp = types.InlineKeyboardMarkup()
+
+    for token in asset_list:
+        kb_tmp.add(types.InlineKeyboardButton(text=f"{token.asset_code} ({token.balance})",
+                                              callback_data=cb_sale_2.new(answer=token.asset_code)))
+    kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
+                                          callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await send_message(chat_id, msg, reply_markup=kb_tmp)
+
+
+async def cmd_sale_03(chat_id: int, state: FSMContext, msg=''):
+    async with state.proxy() as data:
+        data[MyState.MyState.value] = MyState.StateSendSumSale.value
+        msg = msg + my_gettext(chat_id, 'send_sum_swap').format(data.get(MyState.send_asset_code.value),
+                                                                data.get(MyState.send_asset_max_sum.value, 0.0),
+                                                                data.get(MyState.receive_asset_code.value))
+    await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
+
+
+async def cmd_sale_04(chat_id: int, state: FSMContext, msg=''):
+    async with state.proxy() as data:
+        data[MyState.MyState.value] = MyState.StateSendCostSale.value
+        msg = msg + my_gettext(chat_id, 'send_cost_sale').format(data.get(MyState.receive_asset_code.value),
+                                                                 data.get(MyState.send_sum.value),
+                                                                 data.get(MyState.send_asset_code.value))
+    await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
+
+
+async def cmd_sale_05(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        send_sum = data.get(MyState.send_sum.value)
+        receive_sum = data.get(MyState.receive_sum.value)
+        send_asset = data.get(MyState.send_asset_code.value)
+        send_asset_code = data.get(MyState.send_asset_issuer.value)
+        receive_asset = data.get(MyState.receive_asset_code.value)
+        receive_asset_code = data.get(MyState.receive_asset_issuer.value)
+        offer_id = int(data.get(MyState.edit_offer_id.value, 0))
+        data[MyState.MyState.value] = MyState.StateSaleConfirm.value
+
+    xdr = stellar_sale(stellar_get_user_account(chat_id).account.account_id, Asset(send_asset, send_asset_code),
+                       str(send_sum), Asset(receive_asset, receive_asset_code), str(receive_sum), offer_id)
+
+    msg = my_gettext(chat_id, 'confirm_sale').format(send_sum, send_asset, receive_sum, receive_asset)
+    async with state.proxy() as data:
+        data[MyState.xdr.value] = xdr
+
+    await send_message(chat_id, msg, reply_markup=get_kb_yesno_send_xdr(chat_id))
+
+
+async def cmd_show_orders(chat_id: int, state: FSMContext):
+    offers = stellar_get_offers(chat_id)
+    async with state.proxy() as data:
+        data[MyState.offers.value] = offers
+
+    kb_tmp = types.InlineKeyboardMarkup()
+
+    for offer in offers:
+        kb_tmp.add(types.InlineKeyboardButton(
+            text=f"{float(offer.amount)} {offer.selling.asset_code} -> ({float(offer.price)}) "
+                 f"-> {float(offer.amount) * float(offer.price)} {offer.buying.asset_code}",
+            callback_data=cb_edit_order.new(answer=offer.id)))
+    kb_tmp.add(types.InlineKeyboardButton(text=my_gettext(chat_id, 'kb_back'),
+                                          callback_data=cb_default.new(answer=MyButtons.Return.value)))
+    await send_message(chat_id, 'link', reply_markup=kb_tmp)
+
+
+async def cmd_edit_order(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        offers = data.get(MyState.offers.value)
+        offer_id = int(data.get(MyState.edit_offer_id.value, 0))
+
+    offer = list(filter(lambda x: x.id == offer_id, offers))
+    if offer:
+        offer = offer[0]
+        msg = f"{float(offer.amount)} {offer.selling.asset_code} -> ({float(offer.price)}) " \
+              f"-> {float(offer.amount) * float(offer.price)} {offer.buying.asset_code}"
+
+        await send_message(chat_id, msg, reply_markup=get_kb_edir_order(chat_id))
+
+
+async def cmd_edit_order_amount(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        offers = data.get(MyState.offers.value)
+        offer_id = int(data.get(MyState.edit_offer_id.value, 0))
+
+    tmp = list(filter(lambda x: x.id == offer_id, offers))
+    if tmp:
+        offer: MyOffer = tmp[0]
+        msg = f"{float(offer.amount)} {offer.selling.asset_code} -> ({float(offer.price)}) " \
+              f"-> {float(offer.amount) * float(offer.price)} {offer.buying.asset_code}\n"
+
+        async with state.proxy() as data:
+            data[MyState.MyState.value] = MyState.StateEditSumSale.value
+
+            data[MyState.send_sum.value] = offer.amount
+            data[MyState.receive_sum.value] = float(offer.amount) * float(offer.price)
+            data[MyState.send_asset_code.value] = offer.selling.asset_code
+            data[MyState.send_asset_issuer.value] = offer.selling.asset_issuer
+            data[MyState.receive_asset_code.value] = offer.buying.asset_code
+            data[MyState.receive_asset_issuer.value] = offer.buying.asset_issuer
+
+            msg = msg + my_gettext(chat_id, 'send_sum_swap').format(data.get(MyState.send_asset_code.value),
+                                                                    data.get(MyState.send_asset_max_sum.value, 0.0),
+                                                                    data.get(MyState.receive_asset_code.value))
+        await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
+
+
+async def cmd_edit_order_price(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        offers = data.get(MyState.offers.value)
+        offer_id = int(data.get(MyState.edit_offer_id.value, 0))
+
+    tmp = list(filter(lambda x: x.id == offer_id, offers))
+    if tmp:
+        offer: MyOffer = tmp[0]
+        msg = f"{float(offer.amount)} {offer.selling.asset_code} -> ({float(offer.price)}) " \
+              f"-> {float(offer.amount) * float(offer.price)} {offer.buying.asset_code}\n"
+
+        async with state.proxy() as data:
+            data[MyState.MyState.value] = MyState.StateEditCostSale.value
+
+            data[MyState.send_sum.value] = offer.amount
+            data[MyState.receive_sum.value] = float(offer.amount) * float(offer.price)
+            data[MyState.send_asset_code.value] = offer.selling.asset_code
+            data[MyState.send_asset_issuer.value] = offer.selling.asset_issuer
+            data[MyState.receive_asset_code.value] = offer.buying.asset_code
+            data[MyState.receive_asset_issuer.value] = offer.buying.asset_issuer
+
+            msg = msg + my_gettext(chat_id, 'send_cost_sale').format(data.get(MyState.receive_asset_code.value),
+                                                                     data.get(MyState.send_sum.value),
+                                                                     data.get(MyState.send_asset_code.value))
+        await send_message(chat_id, msg, reply_markup=get_kb_return(chat_id))
+
+
+async def cmd_delete_order(chat_id: int, state: FSMContext):
+    async with state.proxy() as data:
+        offers = data.get(MyState.offers.value)
+        offer_id = int(data.get(MyState.edit_offer_id.value, 0))
+
+    tmp = list(filter(lambda x: x.id == offer_id, offers))
+    if tmp:
+        offer: MyOffer = tmp[0]
+        msg = f"{float(offer.amount)} {offer.selling.asset_code} -> ({float(offer.price)}) "
+        f"-> {float(offer.amount) * float(offer.price)} {offer.buying.asset_code}\n"
+
+        async with state.proxy() as data:
+            data[MyState.MyState.value] = MyState.StateEditSumSale.value
+
+            data[MyState.send_sum.value] = 0
+            data[MyState.receive_sum.value] = 0
+            data[MyState.send_asset_code.value] = offer.selling.asset_code
+            data[MyState.send_asset_issuer.value] = offer.selling.asset_issuer
+            data[MyState.receive_asset_code.value] = offer.buying.asset_code
+            data[MyState.receive_asset_issuer.value] = offer.buying.asset_issuer
+
+        await cmd_sale_05(chat_id, state)
 
 
 @dp.message_handler(content_types=['photo'], state='*')
@@ -872,22 +1098,74 @@ async def cmd_all(message: types.Message, state: FSMContext):
             await cmd_swap_04(message.chat.id, state)
         else:
             await cmd_swap_03(message.chat.id, state, my_gettext(chat_id, 'bad_sum'))
+    elif my_state == MyState.StateSendSumSale.value:
+        try:
+            send_sum = float(message.text)
+        except:
+            send_sum = 0.0
+
+        if send_sum > 0.0:
+            async with state.proxy() as data:
+                data[MyState.send_sum.value] = send_sum
+                data[MyState.MyState.value] = '0'
+
+            await cmd_sale_04(message.chat.id, state)
+        else:
+            await cmd_sale_03(message.chat.id, state, my_gettext(chat_id, 'bad_sum'))
+    elif my_state == MyState.StateSendCostSale.value:
+        try:
+            receive_sum = float(message.text)
+        except:
+            receive_sum = 0.0
+
+        if receive_sum > 0.0:
+            async with state.proxy() as data:
+                data[MyState.receive_sum.value] = receive_sum
+                data[MyState.MyState.value] = '0'
+
+            await cmd_sale_05(message.chat.id, state)
+        else:
+            await cmd_sale_04(message.chat.id, state, my_gettext(chat_id, 'bad_sum'))
+    elif my_state == MyState.StateEditSumSale.value:
+        try:
+            send_sum = float(message.text)
+        except:
+            send_sum = 0.0
+
+        if send_sum > 0.0:
+            async with state.proxy() as data:
+                receive_sum = data.get(MyState.receive_sum.value, 1)
+                old_sum = data.get(MyState.send_sum.value, 1)
+                data[MyState.send_sum.value] = send_sum
+                data[MyState.receive_sum.value] = float(receive_sum) * float(send_sum) / float(old_sum)
+                data[MyState.MyState.value] = '0'
+
+            await cmd_sale_05(message.chat.id, state)
+        else:
+            pass
+    elif my_state == MyState.StateEditCostSale.value:
+        try:
+            receive_sum = float(message.text)
+        except:
+            receive_sum = 0.0
+
+        if receive_sum > 0.0:
+            async with state.proxy() as data:
+                data[MyState.receive_sum.value] = receive_sum
+                data[MyState.MyState.value] = '0'
+
+            await cmd_sale_05(message.chat.id, state)
+        else:
+            pass
     elif my_state == MyState.StateAddExpert1.value:
         asset_code = message.text
-        my_asset = {asset_code: 'MyMTLWallet'}
         async with state.proxy() as data:
-            data[MyState.assets.value] = my_asset
+            data[MyState.send_asset_code.value] = asset_code
         await cmd_add_asset_expert2(message.chat.id, state)
     elif my_state == MyState.StateAddExpert2.value:
         async with state.proxy() as data:
-            my_asset: dict = data.get(MyState.assets.value, {})
-        my_key = ''
-        for key in my_asset:
-            my_asset[key] = message.text
-            my_key = key
-        async with state.proxy() as data:
-            data[MyState.assets.value] = my_asset
-        await cmd_add_asset_end(message.chat.id, state, my_key)
+            data[MyState.send_asset_issuer.value] = message.text
+        await cmd_add_asset_end(message.chat.id, state)
 
     if need_delete:
         await message.delete()

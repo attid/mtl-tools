@@ -4,6 +4,7 @@ from enum import IntEnum
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.utils.callback_data import CallbackData
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from settings import bot_key
 import app_logger
@@ -32,7 +33,11 @@ class MTLChats(IntEnum):
     GuarantorGroup = -1001169382324  # Guarantors EURMTL
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
-    
+    GroupAnonymousBot = 1087968824
+
+
+cb_captcha = CallbackData("cb_captcha", "answer")
+
 
 async def multi_reply(message: types.Message, text: str):
     while len(text) > 0:
@@ -63,6 +68,10 @@ welcome_message = {}
 try:
     with open("polls/welcome_message.json", "r") as fp:
         welcome_message = json.load(fp)
+    if 'captcha' in welcome_message:
+        pass
+    else:
+        welcome_message['captcha'] = []
 except Exception as ex:
     logger.info(ex)
 
@@ -74,6 +83,8 @@ def cmd_save_welcome_message():
 
 async def is_admin(message: types.Message):
     members = await message.chat.get_administrators()
+    if message.from_user.id == MTLChats.GroupAnonymousBot:
+        return True
     try:
         chat_member = next(filter(lambda member: member.user.id == message.from_user.id, members))
     except StopIteration:
@@ -90,3 +101,10 @@ async def is_skynet_admin(message: types.Message):
         return f'@{message.from_user.username}' in members
     else:
         return False
+
+
+def add_text(lines, num_line, text):
+    if len(lines) > num_line - 1:
+        lines.pop(num_line - 1)
+    lines.append(text)
+    return "\n".join(lines)

@@ -47,7 +47,7 @@ async def cmd_last_check(message: types.Message):
             pass
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
-        if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup):
+        if message.chat.id in (MTLChats.SignGroup.value, MTLChats.TestGroup.value, MTLChats.ShareholderGroup.value):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
@@ -55,7 +55,7 @@ async def cmd_last_check(message: types.Message):
                 await message.answer("Слишком много операций показаны первые ")
             await message.reply(msg[:4000])
 
-        if message.chat.id in (MTLChats.SignGroup,):
+        if message.chat.id in (MTLChats.SignGroup.value,):
             msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
             await message.reply(msg)
 

@@ -13,7 +13,7 @@ from keyrate import show_key_rate
 
 
 async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
-    master_chat_id = MTLChats.TestGroup
+    master_chat_id = MTLChats.TestGroup.value
     # FOND
     time = datetime.now().time()
     rand = random.randint(2, 10)
@@ -26,12 +26,12 @@ async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
 
 async def cmd_send_message_key_rate(dp: Dispatcher):
     logger.info(f'cmd_send_message_singers')
-    await dp.bot.send_message(MTLChats.SignGroup, show_key_rate(''))
+    await dp.bot.send_message(MTLChats.SignGroup.value, show_key_rate(''))
 
 
 async def cmd_send_message_coochitse(dp: Dispatcher):
     logger.info(f'cmd_send_message_singers')
-    await dp.bot.send_message(MTLChats.SignGroup, 'Не пора ли с кучицы денег стрясти ? /all')
+    await dp.bot.send_message(MTLChats.SignGroup.value, 'Не пора ли с кучицы денег стрясти ? /all')
 
 
 async def cmd_send_message_1m(dp: Dispatcher):

@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import update_report3
 from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
-    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats
+    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -30,7 +30,7 @@ startmsg = """
 /get_vote_fund_xdr сделать транзакцию на обновление голосов фонда
 /get_vote_city_xdr сделать транзакцию на обновление голосов сити
 /editxdr редактировать транзакцию
-/show_bod показать инфо по БОД
+/show_bdm показать инфо по БОД
 
 """
 
@@ -124,8 +124,8 @@ async def cmd_decode(message: types.Message):
         await message.reply(f'Параметр не распознан. Надо ссылку на тулзу')
 
 
-@dp.message_handler(commands="show_bod")
-async def cmd_show_bod(message: types.Message):
+@dp.message_handler(commands="show_bdm")
+async def cmd_show_bdm(message: types.Message):
     await message.answer(mystellar.cmd_show_bod())
 
 
@@ -143,34 +143,35 @@ async def cmd_show_key_rate(message: types.Message):
     await message.answer(show_key_rate(key))
 
 
-@dp.message_handler(commands="do_bod")
-async def cmd_do_bod(message: types.Message):
+@dp.message_handler(commands="do_bdm")
+async def cmd_do_bdm(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
 
     # новая запись
-    list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'),
-                                        1)  # ('mtl div 17/12/2021')
-    await message.answer(f"Start BOD pays {list_id}")
+    list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'), 1)  # ('mtl div 17/12/2021')
+    lines = []
+    msg = await message.answer(add_text(lines, 1, f"Start BDM pays. PayID №{list_id}. Step (1/7)"))
     result = mystellar.cmd_calc_bods(list_id)
-    await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
+    await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/7)"))
 
     i = 1
     while i > 0:
         i = mystellar.cmd_gen_xdr(list_id)
-        await message.answer(f"Part done. Need {i} more.")
+        await msg.edit_text(add_text(lines, 3, f"Part done. Need {i} more. Step (3/7)"))
 
-    await message.answer(f"Try send transactions")
+    await msg.edit_text(add_text(lines, 4, f"Try send transactions. Step (4/7)"))
     i = 1
+    e = 1
     while i > 0:
         try:
             i = mystellar.cmd_send(list_id)
-            await message.answer(f"Part done. Need {i} more.")
-        except Exception as e:
-            print(e)
-            await message.answer(f"Got error. New attempt")
-    await message.answer(f"All work done.")
+            await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/7)"))
+        except Exception as err:
+            await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/7)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 7, f"BDM. Work done. Step (7/7)"))
 
 
 @dp.message_handler(commands="do_key_rate")
@@ -179,27 +180,41 @@ async def cmd_do_key_rate(message: types.Message):
         await message.reply('You are not my admin.')
         return False
 
+    await message.answer(show_key_rate('key'))
+
     # новая запись
     list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
-    await message.answer(f"Start KEY pays {list_id}")
-
-    await message.answer(show_key_rate('key'))
+    lines = []
+    msg = await message.answer(add_text(lines, 1, f"Start key rate pays. PayID №{list_id}. Step (1/6)"))
 
     i = 1
     while i > 0:
         i = mystellar.cmd_gen_key_rate_xdr(list_id)
-        await message.answer(f"Part done. Need {i} more.")
 
-    await message.answer(f"Try send transactions")
+        await msg.edit_text(add_text(lines, 2, f"Part done. Need {i} more. Step (2/6)"))
+
+    await msg.edit_text(add_text(lines, 3, f"Try send transactions. Step (3/6)"))
     i = 1
+    e = 1
     while i > 0:
         try:
             i = mystellar.cmd_send(list_id)
-            await message.answer(f"Part done. Need {i} more.")
-        except Exception as e:
-            print(e)
-            await message.answer(f"Got error. New attempt")
-    await message.answer(f"All work done.")
+            await msg.edit_text(add_text(lines, 4, f"Part done. Need {i} more. Step (4/6)"))
+        except Exception as err:
+            await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (5/6)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 6, f"Key rate. Work done. Step (6/6)"))
+
+
+@dp.message_handler(commands="do_all")
+async def cmd_do_all(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    await cmd_do_div(message)
+    await cmd_do_bdm(message)
+    await cmd_do_key_rate(message)
 
 
 @dp.message_handler(commands="do_div")
@@ -212,45 +227,49 @@ async def cmd_do_div(message: types.Message):
     # ('mtl div 17/12/2021')
     div_list_id = mystellar.cmd_create_list(datetime.now().strftime('mtl div %d/%m/%Y'), 0)
     donate_list_id = mystellar.cmd_create_list(datetime.now().strftime('donate %d/%m/%Y'), 0)
-    await message.answer(f"Start div pays {div_list_id} donate pays {donate_list_id} ")
+    lines = []
+    msg = await message.answer(
+        add_text(lines, 1, f"Start div pays №{div_list_id} donate pays №{donate_list_id}. Step (1/12)"))
     result = mystellar.cmd_calc_divs(div_list_id, donate_list_id)
-    await message.answer(f"Found {len(result)} adresses. Try gen xdr.")
+    await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
 
     i = 1
     while i > 0:
         i = mystellar.cmd_gen_xdr(div_list_id)
-        # await message.answer(f"Div part done. Need {i} more.")
+        await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
 
     i = 1
     while i > 0:
         i = mystellar.cmd_gen_xdr(donate_list_id)
-        # await message.answer(f"Donate part done. Need {i} more.")
+        await msg.edit_text(add_text(lines, 4, f"Donate part done. Need {i} more. Step (4/12)"))
 
-    await message.answer(f"Try send div transactions")
+    await msg.edit_text(add_text(lines, 5, f"Try send div transactions. Step (5/12)"))
     i = 1
+    e = 1
     while i > 0:
         try:
             i = mystellar.cmd_send(div_list_id)
-            await message.answer(f"Part done. Need {i} more.")
-        except Exception as e:
-            print(e)
-            await message.answer(f"Got error. New attempt")
-    await message.answer(f"All work done.")
+            await msg.edit_text(add_text(lines, 6, f"Part done. Need {i} more. Step (6/12)"))
+        except Exception as err:
+            await msg.edit_text(add_text(lines, 7, f"Got error. New attempt {e}. Step (7/12)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 8, f"All work done. Step (8/12)"))
 
-    await message.answer(f"Try send donate transactions")
+    await msg.edit_text(add_text(lines, 9, f"Try send donate transactions. Step (9/12)"))
     i = 1
+    e = 1
     while i > 0:
         try:
             i = mystellar.cmd_send(donate_list_id)
-            await message.answer(f"Part done. Need {i} more.")
-        except Exception as e:
-            print(e)
-            await message.answer(f"Got error. New attempt")
-    await message.answer(f"All work done.")
+            await msg.edit_text(add_text(lines, 10, f"Part done. Need {i} more. Step (10/12)"))
+        except Exception as err:
+            await msg.edit_text(add_text(lines, 11, f"Got error. New attempt {e}. Step (11/12)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 12, f"All work done. Step (12/12)"))
 
 
 @dp.message_handler(commands="open")
-async def smd_add_trastline(message: types.Message, state: FSMContext):
+async def smd_add_trust_line(message: types.Message, state: FSMContext):
     try:
         args = message.get_args().split()
         xdr = mystellar.stellar_add_fond_trustline(args[1], args[0])
@@ -268,14 +287,14 @@ async def smd_add_trastline(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands="all")
 async def smd_all(message: types.Message, state: FSMContext):
-    if message.chat.id == MTLChats.SignGroup:
+    if message.chat.id == MTLChats.SignGroup.value:
         with open("polls/votes.json", "r") as fp:
             members = list(json.load(fp))
         members.remove("NEED")
         await message.reply(' '.join(members))
-    # elif message.chat.id == MTLChats.Test:
+    # elif message.chat.id == MTLChats.Test.value:
     #    await message.reply('@SomeoneAny @itolstov')
-    elif message.chat.id == MTLChats.DistributedGroup:
+    elif message.chat.id == MTLChats.DistributedGroup.value:
         result = mystellar.cmd_check_donate_list()
         await message.reply(' '.join(result))
     else:
@@ -433,7 +452,9 @@ async def cmd_delete_welcome(message: types.Message):
     if message.chat.id in welcome_message:
         welcome_message[message.chat.id] = None
         cmd_save_welcome_message()
-    await message.reply('Removed')
+    msg = await message.reply('Removed')
+    cmd_delete_later(msg, 1)
+    cmd_delete_later(message, 1)
 
 
 @dp.message_handler(commands="set_welcome")
@@ -445,39 +466,117 @@ async def cmd_set_welcome(message: types.Message):
     if len(message.get_args()) > 5:
         welcome_message[str(message.chat.id)] = message.html_text[13:]
         cmd_save_welcome_message()
-        await message.reply('Added')
+        msg = await message.reply('Added')
+        cmd_delete_later(msg, 1)
     else:
         await cmd_delete_welcome(message)
 
+    cmd_delete_later(message, 1)
+
+
+@dp.message_handler(commands="set_welcome_button")
+async def cmd_set_welcome(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if len(message.get_args()) > 5:
+        welcome_message[str(message.chat.id) + 'button'] = message.html_text[19:]
+        cmd_save_welcome_message()
+        msg = await message.reply('Added')
+        cmd_delete_later(msg, 1)
+    else:
+        msg = await message.reply('need more words')
+        cmd_delete_later(msg, 1)
+
+    cmd_delete_later(message, 1)
+
+
+@dp.message_handler(commands="set_captcha")
+async def cmd_set_captcha(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.get_args() == 'on':
+        welcome_message['captcha'].append(message.chat.id)
+        cmd_save_welcome_message()
+        msg = await message.reply('captcha on')
+        cmd_delete_later(msg, 1)
+    elif message.get_args() == 'off':
+        welcome_message['captcha'].remove(message.chat.id)
+        cmd_save_welcome_message()
+        msg = await message.reply('captcha off')
+        cmd_delete_later(msg, 1)
+    cmd_delete_later(message, 1)
+
 
 async def cmd_delete_by_scheduler(message: types.Message):
-    await message.delete()
+    try:
+        await message.delete()
+    except:
+        pass
+
+
+def cmd_delete_later(message: types.Message, minutes=5):
+    current_time = datetime.now()
+    future_time = current_time + timedelta(minutes=minutes)
+    scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(message,))
 
 
 @dp.message_handler(content_types=types.ContentTypes.NEW_CHAT_MEMBERS)
 async def new_chat_member(message: types.Message):
     if str(message.chat.id) in welcome_message:
-        msg = welcome_message.get(str(message.chat.id), 'Hi new user')
-        if message.from_user.username:
-            username = f'@{message.from_user.username} {message.from_user.full_name}'
-        else:
-            username = f'<a href="tg://user?id={message.from_user.id}">{message.from_user.full_name}</a>'
-        msg = msg.replace('$$USER$$', username)
+        if message.from_user in message.new_chat_members:
+            msg = welcome_message.get(str(message.chat.id), 'Hi new user')
+            if message.from_user.username:
+                username = f'@{message.from_user.username} {message.from_user.full_name}'
+            else:
+                username = f'<a href="tg://user?id={message.from_user.id}">{message.from_user.full_name}</a>'
+            msg = msg.replace('$$USER$$', username)
 
-        answer = await message.answer(msg, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        current_time = datetime.now()
-        future_time = current_time + timedelta(minutes=5)
+            kb_captcha = None
+            if message.chat.id in welcome_message['captcha']:
+                btn_msg = welcome_message.get(str(message.chat.id) + 'button', "I'm not bot")
+                kb_captcha = types.InlineKeyboardMarkup()
+                kb_captcha.add(
+                    types.InlineKeyboardButton(text=btn_msg,
+                                               callback_data=cb_captcha.new(answer=message.from_user.id)))
+                await message.chat.restrict(message.from_user.id, can_send_messages=False,
+                                            can_send_media_messages=False, can_send_other_messages=False)
 
-        scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(answer,))
+            answer = await message.answer(msg, parse_mode=ParseMode.HTML, disable_web_page_preview=True,
+                                          reply_markup=kb_captcha)
+
+            cmd_delete_later(answer)
 
     if message.chat.id in delete_income:
         await message.delete()
+
+    # if message.chat.id == MTLChats.TestGroup.value:
+    #    await message.answer(message.from_user.username)
+    #    await message.answer(str(message.new_chat_members))
 
 
 @dp.message_handler(content_types=types.ContentTypes.LEFT_CHAT_MEMBER)
 async def left_chat_member(message: types.Message):
     if message.chat.id in delete_income:
         await message.delete()
+
+
+@dp.callback_query_handler(cb_captcha.filter())
+async def cq_captcha(query: types.CallbackQuery, callback_data: dict):
+    # logger.info(f'{query.from_user.id}, {callback_data}')
+
+    answer = callback_data["answer"]
+    if str(query.from_user.id) == answer:
+        await query.answer("Thanks !", show_alert=True)
+        await query.message.chat.restrict(query.from_user.id, can_send_messages=True, can_send_media_messages=True,
+                                          can_send_other_messages=True)
+    else:
+        await query.answer("For other user", show_alert=True)
+
+    return True
 
 
 @dp.message_handler(commands="exit")
