@@ -27,7 +27,7 @@ async def cq_add(query: types.CallbackQuery, callback_data: dict, state: FSMCont
         await cmd_show_add_wallet_private(query.message.chat.id, state)
     elif answer == MyButtons.NewKey.value:  # new
         if stellar_can_new(user_id):
-            stellar_create_new(query.from_user.id)
+            stellar_create_new(query.from_user.id, query.from_user.username)
             await cmd_show_start(query.message.chat.id, state)
         else:
             await query.answer(my_gettext(query.message.chat.id, "max_wallets"), show_alert=True)
@@ -81,7 +81,7 @@ async def cq_def(query: types.CallbackQuery, callback_data: dict, state: FSMCont
             await cmd_info_message(query.message.chat.id, my_gettext(query.message.chat.id, "resend"), state)
             stellar_send(xdr)
             await cmd_info_message(query.message.chat.id,
-                                   'Успешно отправлено', state)
+                                   my_gettext(query.message.chat.id, "send_good"), state)
         except BaseHorizonError as ex:
             logger.info(['ReSend BaseHorizonError', ex])
             msg = f"{ex.title}, error {ex.status}"
@@ -148,6 +148,7 @@ async def cq_send1(query: types.CallbackQuery, callback_data: dict, state: FSMCo
 
     answer = callback_data["answer"]
     async with state.proxy() as data:
+        logger.info(f'**** call , {data}')
         asset_list: List[Balance] = data[MyState.assets.value]
     for asset in asset_list:
         if asset.asset_code == answer:
@@ -428,7 +429,7 @@ async def cq_pin(query: types.CallbackQuery, callback_data: dict, state: FSMCont
                                            my_gettext(query.message.chat.id, "try_send"),
                                            state)
                     stellar_send(xdr)
-                    await cmd_info_message(query.message.chat.id, 'Успешно отправлено', state)
+                    await cmd_info_message(query.message.chat.id, my_gettext(query.message.chat.id, "send_good"), state)
                     await state.finish()
             except BadRequestError as ex:
                 # print(ex.extras.get("result_codes", '=( eror not found'))

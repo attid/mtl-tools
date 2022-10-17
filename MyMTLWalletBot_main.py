@@ -27,7 +27,8 @@ else:
     bot = Bot(token=MyMTLWallet_key)
     # Диспетчер для бота
     storage = RedisStorage2('localhost', 6379, db=5, pool_size=10, prefix='my_fsm_key')
-    dp = Dispatcher(bot, storage=storage)
+    #dp = Dispatcher(bot, storage=storage)
+    dp = Dispatcher(bot, storage=MemoryStorage())
 
 dp.middleware.setup(LoggingMiddleware())
 

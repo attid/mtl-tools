@@ -31,7 +31,7 @@ async def cmd_send_message_key_rate(dp: Dispatcher):
 
 async def cmd_send_message_coochitse(dp: Dispatcher):
     logger.info(f'cmd_send_message_singers')
-    await dp.bot.send_message(MTLChats.SignGroup.value, 'Не пора ли с кучицы денег стрясти ? /all')
+    await dp.bot.send_message(MTLChats.SignGroup.value, 'Не пора ли с кучицы и GPA денег стрясти ? /all')
 
 
 async def cmd_send_message_1m(dp: Dispatcher):

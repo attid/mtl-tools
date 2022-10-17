@@ -3,6 +3,8 @@ from aiogram.dispatcher import FSMContext
 from aiogram.types import ParseMode
 from aiogram.utils.callback_data import CallbackData
 from enum import Enum, unique
+
+from aiogram.utils.exceptions import ChatNotFound
 from stellar_sdk.exceptions import BaseHorizonError
 from MyMTLWalletBot_main import dp, my_gettext
 from MyMTLWalletBot_stellar import *
@@ -358,6 +360,20 @@ async def cmd_log(message: types.Message):
         await dp.bot.send_document(message.chat.id, open('MyMTLWallet_bot.err', 'rb'))
 
 
+@dp.message_handler(commands="update")
+async def cmd_update(message: types.Message):
+    if message.from_user.username == "itolstov":
+        for rec in fb.execsql('select distinct m.user_id from mymtlwalletbot m where m.user_id > 0'):
+            try:
+                username = await dp.bot.get_chat(rec[0])
+                fb.execsql('update mymtlwalletbot m set m.user_name = ? where m.user_id = ?',
+                           (username.username, username.id))
+                await message.answer(username.username)
+            except ChatNotFound:
+                pass
+        await message.answer('done')
+
+
 def get_kb_default(chat_id: int) -> types.InlineKeyboardMarkup:
     kb_default = types.InlineKeyboardMarkup()
     kb_default.add(
@@ -554,6 +570,7 @@ async def cmd_send_02(chat_id: int, state: FSMContext):
     await send_message(chat_id, msg, reply_markup=kb_tmp, need_new=True)
     async with state.proxy() as data:
         data[MyState.assets.value] = asset_list
+        logger.info(f'**** {asset_list}, {data}')
 
 
 async def cmd_send_03(chat_id: int, state: FSMContext, msg=''):
@@ -1008,7 +1025,13 @@ async def cmd_all(message: types.Message, state: FSMContext):
         logger.info(f"{message.from_user.id}, {message.text[:10]}")
 
     if my_state == MyState.StateSendFor.value:
-        account = stellar_check_account(message.text)
+        if '@' == message.text[0]:
+            public_key = fb.execsql1(
+                f"select public_key from MyMTLWalletBot where user_name = ? and default_wallet = 1",
+                (message.from_user.username,))
+        else:
+            public_key = message.text
+        account = stellar_check_account(public_key)
         if account:
             async with state.proxy() as data:
                 data[MyState.send_address.value] = account.account.account_id
@@ -1062,7 +1085,12 @@ async def cmd_all(message: types.Message, state: FSMContext):
             await cmd_show_sign(message.chat.id, state, my_gettext(chat_id, 'bad_xdr').format(message.text))
     elif my_state == MyState.StateAddWalletPrivate.value:
         try:
-            public_key = stellar_save_new(message.from_user.id, message.text, False)
+            arg = message.text.split()
+            print(arg)
+            if len(arg) == 2:
+                public_key = stellar_save_new(message.from_user.id, message.from_user.username, arg[0], False, arg[1])
+            else:
+                public_key = stellar_save_new(message.from_user.id, message.from_user.username, arg[0], False)
             async with state.proxy() as data:
                 data[MyState.MyState.value] = '0'
                 data[MyState.public_key.value] = public_key
@@ -1074,7 +1102,7 @@ async def cmd_all(message: types.Message, state: FSMContext):
                                               my_gettext(chat_id, 'bad_key'))
     elif my_state == MyState.StatePassword.value:
         try:
-            public_key = stellar_save_new(message.from_user.id, message.text, False)
+            public_key = stellar_save_new(message.from_user.id, message.from_user.username, message.text, False)
             async with state.proxy() as data:
                 data[MyState.MyState.value] = '0'
                 data[MyState.public_key.value] = public_key

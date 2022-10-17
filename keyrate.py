@@ -56,8 +56,13 @@ def show_key_rate(key):
                             'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURMTL',))[0]
         eurdebt = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_keyrate ec '
                              'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURDEBT',))[0]
-        result = f'на сейчас начислено и не выплачено {eurmtl[0]} EURMTL {eurdebt[0]} EURDEBT, ' \
-                 f'кол-во адресов {eurmtl[1]} EURMTL {eurdebt[1]} EURDEBT'
+
+        result = 'К выплате:'
+
+        if eurmtl[0]:
+            result += f'\n> {round(eurmtl[0], 7)} EURMTL на {eurmtl[1]} адресов'
+        if eurdebt[0]:
+            result += f'\n> {round(eurdebt[0], 7)} EURDEBT на {eurdebt[1]} адресов'
 
         rq = requests.get(
             'https://horizon.stellar.org/accounts/GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE')
@@ -68,17 +73,21 @@ def show_key_rate(key):
             else:
                 assets[balance['asset_code']] = float(balance['balance'])
 
-        result += f"\n\n На балансе сейчас {assets['EURDEBT']} EURDEBT и {assets['EURMTL']} EURMTL"
+        result += f"\n\nТекущий баланс бота:\n> {assets['EURMTL']} EURMTL \n> {assets['EURDEBT']} EURDEBT"
     else:
         eurmtl = fb.execsql('select sum(ec.amount) from t_keyrate ec where ec.was_packed = 0 '
                             'and ec.asset = ? and ec.user_key = ?', ('EURMTL', key))[0][0]
         eurdebt = fb.execsql('select sum(ec.amount) from t_keyrate ec where ec.was_packed = 0 '
                              'and ec.asset = ? and ec.user_key = ?', ('EURDEBT', key))[0][0]
-        result = f'для адреса {key} на сейчас начислено и не выплачено {eurmtl} EURMTL {eurdebt} EURDEBT'
+        result = f'Для адреса {key[:4]}..{key[-4:]} на текущий момент начислено'
+        if eurmtl:
+            result += '\n> {: .7f} EURMTL '.format(round(eurmtl, 7))
+        if eurdebt:
+            result += '\n> {: .7f} EURDEBT '.format(round(eurdebt, 7))
 
     return result
 
 
 if __name__ == "__main__":
     update_eurmtl_log()
-    # print(show_key_rate(''))
+    #print(show_key_rate('GAHSPXXXAEIGIHQR3Z3KNINXANPUAYGNQTYB5WAHWJXBAKUQ7VKTZVXT'))

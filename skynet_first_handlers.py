@@ -2,7 +2,7 @@ from os.path import isfile
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.types import ParseMode
+from aiogram.types import ParseMode, ChatPermissions
 import json
 import mystellar
 import mystellar2
@@ -126,11 +126,11 @@ async def cmd_decode(message: types.Message):
 
 @dp.message_handler(commands="show_bdm")
 async def cmd_show_bdm(message: types.Message):
-    await message.answer(mystellar.cmd_show_bod())
+    await message.answer(mystellar.cmd_show_bdm())
 
 
 @dp.message_handler(commands="balance")
-async def cmd_show_bod(message: types.Message):
+async def cmd_show_balance(message: types.Message):
     await message.answer(mystellar.get_safe_balance())
 
 
@@ -213,6 +213,7 @@ async def cmd_do_all(message: types.Message):
         return False
 
     await cmd_do_div(message)
+    await cmd_show_bdm(message)
     await cmd_do_bdm(message)
     await cmd_do_key_rate(message)
 
@@ -554,7 +555,7 @@ async def new_chat_member(message: types.Message):
         await message.delete()
 
     # if message.chat.id == MTLChats.TestGroup.value:
-    #    await message.answer(message.from_user.username)
+    #    await message.answer(message.from_user.user_name)
     #    await message.answer(str(message.new_chat_members))
 
 
@@ -570,9 +571,16 @@ async def cq_captcha(query: types.CallbackQuery, callback_data: dict):
 
     answer = callback_data["answer"]
     if str(query.from_user.id) == answer:
+
         await query.answer("Thanks !", show_alert=True)
-        await query.message.chat.restrict(query.from_user.id, can_send_messages=True, can_send_media_messages=True,
-                                          can_send_other_messages=True)
+        chat = await dp.bot.get_chat(query.message.chat.id)
+        # logger.info(f'{query.from_user.id}, {chat.permissions}')
+        await query.message.chat.restrict(query.from_user.id, permissions=chat.permissions)
+        # --//                                  ChatPermissions(can_send_messages=True, can_invite_users=True,
+        #                                                  can_send_media_messages=True,
+        #                                                  can_send_other_messages=True, can_send_polls=True,
+        #                                                  can_add_web_page_previews=True))
+
     else:
         await query.answer("For other user", show_alert=True)
 
@@ -589,15 +597,15 @@ async def cmd_exit(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         my_state = data.get('MyState')
 
-        if my_state == 'StateExit':
-            async with state.proxy() as data:
-                data['MyState'] = None
-            await message.reply(":[[[ ушла в закат =(")
-            exit()
-        else:
-            async with state.proxy() as data:
-                data['MyState'] = 'StateExit'
-            await message.reply(":'[ боюсь")
+    if my_state == 'StateExit':
+        async with state.proxy() as data:
+            data['MyState'] = None
+        await message.reply(":[[[ ушла в закат =(")
+        exit()
+    else:
+        async with state.proxy() as data:
+            data['MyState'] = 'StateExit'
+        await message.reply(":'[ боюсь")
 
 
 @dp.message_handler(commands="err")

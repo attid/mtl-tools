@@ -1,3 +1,4 @@
+import json
 from typing import List
 
 import requests
@@ -121,18 +122,23 @@ def stellar_send(xdr: str):
     return transaction_resp
 
 
-def stellar_save_new(user_id: int, secret_key: str, free_wallet: bool):
-    new_account = Keypair.from_secret(secret_key)
+def stellar_save_new(user_id: int, user_name: str, secret_key: str, free_wallet: bool, address: str = None):
+    if address:
+        new_account = Keypair.from_secret(secret_key)
+        public_key = address
+    else:
+        new_account = Keypair.from_secret(secret_key)
+        public_key = new_account.public_key
     i_free_wallet = 1 if free_wallet else 0
-    fb.execsql(f"insert into mymtlwalletbot (user_id, public_key, secret_key, credit, default_wallet, free_wallet) "
-               f"values ({user_id},'{new_account.public_key}','{encrypt(new_account.secret, str(user_id))}',"
-               f"{3},{1},{i_free_wallet})")
-    return new_account.public_key
+    fb.execsql(f"insert into mymtlwalletbot (user_id, public_key, secret_key, credit, default_wallet, " +
+               f"free_wallet, user_name) values (?,?,?,?,?,?,?)",
+               (user_id, public_key, encrypt(new_account.secret, str(user_id)), 3, 1, i_free_wallet, user_name))
+    return public_key
 
 
-def stellar_create_new(user_id: int):
+def stellar_create_new(user_id: int, username: str):
     new_account = Keypair.random()
-    stellar_save_new(user_id, new_account.secret, True)
+    stellar_save_new(user_id, username, new_account.secret, True)
 
     master = stellar_get_master()
     xdr = stellar_pay(master.public_key, new_account.public_key, xlm_asset, 3, create=True)
@@ -406,9 +412,13 @@ def set_last_message_id(user_id: int, message_id: int):
 
 
 if __name__ == "__main__":
-    xdr = stellar_sale('GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI', eurmtl_asset, '10', mtl_asset, '20')
-    print(xdr)
-    # print(stellar_get_balance_str(0, 'GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI'))
+    print("Encode into JSON formatted Data")
+    my_data = stellar_get_balances(0, 'GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI')
+    employeeJSONData = json.dumps(my_data, indent=4)
+    print(employeeJSONData)
+    # xdr = stellar_sale('GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI', eurmtl_asset, '10', mtl_asset, '20')
+    # print(xdr)
+
     # print(get_good_asset_list())
     # account = MyAccount.from_dict(my_server.accounts().account_id(
     #    'GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI').call())

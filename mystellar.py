@@ -24,6 +24,7 @@ public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
+public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
 
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
@@ -326,7 +327,7 @@ def get_bod_list():
     return result
 
 
-def cmd_show_bod():
+def cmd_show_bdm():
     result = ''
     bod_list = get_bod_list()
     good = list(filter(lambda x: x[1], bod_list))
@@ -348,7 +349,7 @@ def cmd_show_bod():
             balances[balance["asset_code"]] = balance["balance"]
 
     result += f'\n\nСейчас к распределению {balances["EURMTL"]} EURMTL или по {int(float(balances["EURMTL"]) / len(good) * 100) / 100} на участника'
-    result += f'\nНачать выплаты /do_bod'
+    # result += f'\nНачать выплаты /do_bod'
     return result
 
 
@@ -1103,4 +1104,5 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
 if __name__ == "__main__":
     # print(Server(horizon_url="https://horizon.stellar.org").fee_stats().call())
     # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
+    gen_new('SIGN')
     pass
