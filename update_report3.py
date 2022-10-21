@@ -26,7 +26,7 @@ def update_airdrop():
     gc = gspread.service_account('mtl-google-doc.json')
 
     # Open a sheet from a spreadsheet in one go
-    wks = gc.open("MTL_reestr").worksheet("EUR_EXTR")
+    wks = gc.open("MTL_reestr").worksheet("EUR_GNRL")
 
     # Update a range of cells using the top left corner address
     now = datetime.datetime.now()

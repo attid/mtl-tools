@@ -363,12 +363,14 @@ async def cmd_log(message: types.Message):
 @dp.message_handler(commands="update")
 async def cmd_update(message: types.Message):
     if message.from_user.username == "itolstov":
-        for rec in fb.execsql('select distinct m.user_id from mymtlwalletbot m where m.user_id > 0'):
+        for rec in fb.execsql('select distinct m.user_id, m.user_name from mymtlwalletbot m where m.user_id > 0'):
             try:
                 username = await dp.bot.get_chat(rec[0])
-                fb.execsql('update mymtlwalletbot m set m.user_name = ? where m.user_id = ?',
-                           (username.username, username.id))
-                await message.answer(username.username)
+                if username.username:
+                    if username.username.lower() != rec[1]:
+                        fb.execsql('update mymtlwalletbot m set m.user_name = ? where m.user_id = ?',
+                                   (username.username.lower(), username.id))
+                        await message.answer(f'username {username.username}')
             except ChatNotFound:
                 pass
         await message.answer('done')
@@ -1028,7 +1030,8 @@ async def cmd_all(message: types.Message, state: FSMContext):
         if '@' == message.text[0]:
             public_key = fb.execsql1(
                 f"select public_key from MyMTLWalletBot where user_name = ? and default_wallet = 1",
-                (message.from_user.username,))
+                (message.text.lower()[1:],))
+            logger.info(f"{message.from_user.id}, {message.text}, {message.text[1:]}, {public_key}")
         else:
             public_key = message.text
         account = stellar_check_account(public_key)

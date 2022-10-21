@@ -123,6 +123,9 @@ def stellar_send(xdr: str):
 
 
 def stellar_save_new(user_id: int, user_name: str, secret_key: str, free_wallet: bool, address: str = None):
+    if user_name:
+        user_name = user_name.lower()
+
     if address:
         new_account = Keypair.from_secret(secret_key)
         public_key = address
