@@ -4,6 +4,7 @@ import json
 import requests
 import app_logger
 import fb
+from mtl_exchange import check_fire
 from settings import currencylayer_id, coinlayer_id
 
 # https://docs.gspread.org/en/latest/
@@ -147,6 +148,16 @@ def update_main_report():
     wks.update('H11', float(balances['EURMTL']))
     wks.update('H12', float(balances['EURDEBT']))
 
+    # fire
+    public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
+    balances = {}
+    rq = requests.get(f'https://horizon.stellar.org/accounts/{public_fire}').json()
+    # print(json.dumps(rq, indent=4))
+    for balance in rq["balances"]:
+        name = 'XLM' if balance["asset_type"] == 'native' else balance["asset_code"]
+        balances[name] = balance["balance"]
+    wks.update('E18', float(balances['EURMTL']))
+
     # divs
     j = requests.get(
         f'https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS/operations?order=desc&limit=50').text
@@ -181,5 +192,14 @@ def update_main_report():
     logger.info(f'all done {now}')
 
 
+def update_fire():
+    gc = gspread.service_account('mtl-google-doc.json')
+    wks = gc.open("MTL Report").worksheet("AutoData")
+    cost_fire = wks.cell(29, 4).value
+    cost_fire = float(cost_fire.replace(',', '.')) * 0.9
+    check_fire(cost_fire)
+
+
 if __name__ == "__main__":
     update_main_report()
+    update_fire()

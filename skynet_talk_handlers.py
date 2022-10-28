@@ -91,6 +91,7 @@ async def cmd_last_check(message: types.Message):
             if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
                 msg = await message.reply('Зай, я запустила обновление')
                 update_report.update_main_report()
+                update_report.update_fire()
                 await msg.reply('Обновление завершено')
             if has_words(message.text, ['donate', 'donates', 'donated']):
                 msg = await message.reply('Зай, я запустила обновление')

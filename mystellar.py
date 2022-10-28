@@ -10,7 +10,7 @@ from stellar_sdk.exceptions import BaseHorizonError
 from stellar_sdk.sep.federation import resolve_stellar_address, resolve_account_id
 
 import fb, re, enum
-from settings import private_div, private_bod_eur, private_key_rate, base_fee
+from settings import private_div, private_bod_eur, private_key_rate, base_fee, private_sign
 from datetime import datetime
 
 # https://stellar-sdk.readthedocs.io/en/latest/
@@ -24,7 +24,10 @@ public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
+public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
 public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
+public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
+public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
 
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
@@ -1104,5 +1107,7 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
 if __name__ == "__main__":
     # print(Server(horizon_url="https://horizon.stellar.org").fee_stats().call())
     # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
-    gen_new('SIGN')
+    # stellar_submite(stellar_sign(stellar_add_trustline(public_fire, eurmtl_asset.code, mtl_asset.issuer), private_sign))
+
+    # gen_new('FIRE')
     pass
