@@ -85,6 +85,8 @@ if (cost_eur < min_price) or (cost_eur > max_price):
     sum_eurmtl = 0
     sum_xlm = 0
 
+
+
 if (((offer_eurmtl_id == 0) and (sum_eurmtl > 0)) or (cost_eur * persent_eurmtl > eurmtl_sale_price * persent_cost) or (
         cost_eur * persent_eurmtl * persent_cost < eurmtl_sale_price) or (sum_eurmtl != eurmtl_sale_sum)):
     logger.info('need sale eurmtl')

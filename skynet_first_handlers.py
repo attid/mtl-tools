@@ -18,6 +18,7 @@ from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cm
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 from keyrate import show_key_rate
+from skynet_start import global_dict
 
 startmsg = """
 Я молодой бот
@@ -104,6 +105,17 @@ async def cmd_links(message: types.Message):
     await message.answer(links_msg, parse_mode=ParseMode.MARKDOWN)
 
 
+@dp.message_handler(commands="fee")
+async def cmd_fee(message: types.Message):
+    await message.answer("Комиссия (мин и мах) " + mystellar.cmd_check_fee())
+
+
+@dp.message_handler(commands="show_id")
+async def cmd_show_id(message: types.Message):
+    await message.answer(f"chat_id = {message.chat.id} message_thread_id = {message.message_thread_id} " +
+                         f"is_topic_message  = {message.is_topic_message}")
+
+
 @dp.message_handler(commands="drink")
 async def cmd_drink(message: types.Message):
     # await message.answer(drink_msg)
@@ -113,6 +125,7 @@ async def cmd_drink(message: types.Message):
 @dp.message_handler(commands="decode")
 async def cmd_decode(message: types.Message):
     try:
+        logger.info(f'decode {message}')
         if message.text.find('mtl.ergvein.net/view') > -1:
             msg = mystellar.check_url_xdr(message.get_args())
         else:
@@ -120,8 +133,6 @@ async def cmd_decode(message: types.Message):
         msg = f'\n'.join(msg)
         await message.reply(msg)
     except Exception as e:
-        print(message.get_args())
-        print(e)
         await message.reply(f'Параметр не распознан. Надо ссылку на тулзу')
 
 
@@ -205,6 +216,30 @@ async def cmd_do_key_rate(message: types.Message):
             await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (5/6)"))
             e += 1
     await msg.edit_text(add_text(lines, 6, f"Key rate. Work done. Step (6/6)"))
+
+
+@dp.message_handler(commands="do_resend")
+async def cmd_do_key_rate(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if len(message.get_args()) > 1:
+        list_id = int(message.get_args())
+        lines = []
+        msg = await message.answer(add_text(lines, 1, f"Start resend. PayID №{list_id}. Step (1/6)"))
+
+        await msg.edit_text(add_text(lines, 3, f"Try send transactions. Step (2/6)"))
+        i = 1
+        e = 1
+        while i > 0:
+            try:
+                i = mystellar.cmd_send(list_id)
+                await msg.edit_text(add_text(lines, 4, f"Part done. Need {i} more. Step (3/6)"))
+            except Exception as err:
+                await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (4/6)"))
+                e += 1
+        await msg.edit_text(add_text(lines, 6, f"Resend. Work done. Step (5/6)"))
 
 
 @dp.message_handler(commands="do_all")
@@ -555,6 +590,13 @@ async def new_chat_member(message: types.Message):
     if message.chat.id in delete_income:
         await message.delete()
 
+    if message.chat.id in global_dict.get('save_income_id', []):
+        users_id = global_dict.get(message.chat.id, [])
+        users_id.append(message.from_user.id)
+        global_dict[message.chat.id] = users_id
+        await message.delete()
+        # await message.answer(f' new user {message.from_user.id}')
+
     # if message.chat.id == MTLChats.TestGroup.value:
     #    await message.answer(message.from_user.user_name)
     #    await message.answer(str(message.new_chat_members))
@@ -679,6 +721,55 @@ async def smd_show_skynet_admin(message: types.Message):
     else:
         await message.reply('не настроено =( ')
 
+
+@dp.message_handler(commands="save_income_id")
+async def smd_save_income_id(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    save_income_id_list = global_dict.get('save_income_id', [])
+    if message.chat.id in save_income_id_list:
+        save_income_id_list.remove(message.chat.id)
+        global_dict['save_income_id'] = save_income_id_list
+        global_dict[message.chat.id] = []
+        await message.reply('Removed')
+    else:
+        save_income_id_list.append(message.chat.id)
+        global_dict['save_income_id'] = save_income_id_list
+        await message.reply('Added')
+
+
+@dp.message_handler(commands="show_income_id")
+async def smd_show_income_id(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    users_id = global_dict.get(message.chat.id, [])
+    await message.reply(str(users_id))
+
+
+@dp.message_handler(commands="delete_income_id")
+async def smd_delete_income_id(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    users_id = global_dict.get(message.chat.id, [])
+    for user in users_id:
+        await message.chat.kick(user)
+    await message.reply(str(users_id))
+
+
+@dp.message_handler(commands="me")
+async def smd_me(message: types.Message):
+    msg = message.get_args()
+    await message.answer(f'<i><b>{message.from_user.username}</b> {msg}</i>', parse_mode=ParseMode.HTML)
+    try:
+        await message.delete()
+    except:
+        pass
 
 if __name__ == "__main__":
     pass

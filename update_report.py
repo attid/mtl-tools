@@ -14,7 +14,7 @@ if 'logger' not in globals():
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade', 'MonteAqua',
                 'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'OSW', 'XLM', 'MTLand', 'AUMTL',
-                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest']
+                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi']
 
 
 def update_main_report():
@@ -195,8 +195,8 @@ def update_main_report():
 def update_fire():
     gc = gspread.service_account('mtl-google-doc.json')
     wks = gc.open("MTL Report").worksheet("AutoData")
-    cost_fire = wks.cell(29, 4).value
-    cost_fire = float(cost_fire.replace(',', '.')) * 0.9
+    cost_fire = wks.cell(33, 4).value
+    cost_fire = float(cost_fire.replace(',', '.')) * 0.8
     check_fire(cost_fire)
 
 

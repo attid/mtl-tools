@@ -34,6 +34,7 @@ class MTLChats(IntEnum):
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
     GroupAnonymousBot = 1087968824
+    SafeGroup = -1001876391583
 
 
 cb_captcha = CallbackData("cb_captcha", "answer")

@@ -4,7 +4,7 @@ from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, As
     TransactionEnvelope
 import json, math, mystellar
 
-from settings import base_fee
+from settings import base_fee, private_sign
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
@@ -21,28 +21,11 @@ public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 
 
 def cmd_get_new_vote_mtlcity():
-    mtl_asset = Asset("MTL", public_mtl)
+    divider = 1000
     city_asset = Asset("MTLCITY", public_city)
 
-    mtlarr = []
     cityarr = []
-    accounts = mystellar.stellar_get_mtl_holders()
-
-    for account in accounts:
-        balances = account["balances"]
-        balance_mtl = 0
-        balance_rect = 0
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
-                    balance_mtl = balance["balance"]
-                    balance_mtl = int(balance_mtl[0:balance_mtl.find('.')])
-                if balance["asset_code"] == "MTLRECT":
-                    balance_rect = balance["balance"]
-                    balance_rect = int(balance_rect[0:balance_rect.find('.')])
-        lg = round(math.log2((balance_mtl + balance_rect + 0.001) / 100))
-        if account["account_id"] != public_fond:
-            mtlarr.append([account["account_id"], balance_mtl + balance_rect, lg, 0])
+    mtl_vote = mystellar.cmd_gen_vote_list()
 
     #################
     server = Server(horizon_url="https://horizon.stellar.org")
@@ -66,7 +49,7 @@ def cmd_get_new_vote_mtlcity():
                 if balance["asset_code"] == "MTLCITY":
                     bls = balance["balance"]
                     bli = int(bls[0:bls.find('.')])
-                    lg = round(math.log2((bli + 0.001) / 100))
+                    lg = round(math.log2((bli + 0.001) / divider)) + 1
                     if account["account_id"] == public_fond:
                         cityinfond = bli
                     else:  # fond dont have voce
@@ -76,7 +59,7 @@ def cmd_get_new_vote_mtlcity():
     # 2
     bigarr = []
 
-    for arr in mtlarr:
+    for arr in mtl_vote:
         if int(arr[1]) > 100:
             bigarr.append(arr)
     bigarr.sort(key=lambda k: k[1], reverse=True)
@@ -98,7 +81,7 @@ def cmd_get_new_vote_mtlcity():
 
     for arr in cityarr:
         if int(arr[1]) > 100:
-            bigarr.append([arr[0], int(arr[1]), round(math.log2(int(arr[1]) / 100)), 0])
+            bigarr.append([arr[0], int(arr[1]), round(math.log2(int(arr[1]) / divider)) + 1, 0])
     bigarr.sort(key=lambda k: k[1], reverse=True)
     # 5
     # узнать кто в подписантах
@@ -145,6 +128,7 @@ def cmd_get_new_vote_mtlcity():
             delcount += 1
             bigarr2.insert(0, [arr[0], 0, 0, arr[3]])
     bigarr = bigarr2
+
     # 7
     root_account = Account(public_city, sequence=mtlcitysequence)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -262,5 +246,54 @@ def cmd_get_new_vote_mtl(public_key):
     return result
 
 
+def update_multi_sign(account):
+    from stellar_sdk import TransactionEnvelope
+    server = Server(horizon_url="https://horizon.stellar.org")
+    account_exchange = server.load_account(mystellar.public_exchange)
+
+    threshold = 0
+    xdr = cmd_get_new_vote_mtl(account)
+    transaction = TransactionEnvelope.from_xdr(xdr[0], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+
+    for operation in transaction.transaction.operations:
+        if operation.high_threshold:
+            threshold = operation.high_threshold
+        if operation.signer and operation.signer.signer_key.encoded_signer_key in (
+                mystellar.public_itolstov, mystellar.public_sign):
+            transaction.transaction.operations.remove(operation)
+    for operation in transaction.transaction.operations:
+        if operation.high_threshold:
+            threshold = operation.high_threshold
+        if operation.signer and operation.signer.signer_key.encoded_signer_key in (
+                mystellar.public_itolstov, mystellar.public_sign):
+            transaction.transaction.operations.remove(operation)
+
+    if threshold > 0 and len(transaction.transaction.operations) > 2:
+        transaction2 = TransactionBuilder(source_account=account_exchange,
+                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                          base_fee=base_fee)
+        transaction2.append_ed25519_public_key_signer(account_id=mystellar.public_sign, weight=threshold * 2)
+
+        transaction.transaction.operations.insert(0, transaction2.operations[0])
+
+        transaction.sign(private_sign)
+
+        xdr = transaction.to_xdr()
+        # print(f"xdr: {xdr}")
+
+        server.submit_transaction(transaction)
+
+
+def update_multi_sign_all():
+    update_multi_sign(mystellar.public_exchange)
+    update_multi_sign(mystellar.public_fire)
+    update_multi_sign(mystellar.public_bod_eur)
+    update_multi_sign(mystellar.public_div)
+
+
 if __name__ == "__main__":
     pass
+    # print(mystellar.cmd_gen_vote_list())
+    update_multi_sign_all()
+    # update_multi_sign(mystellar.public_bod_eur)
+    # print(cmd_get_new_vote_mtlcity())

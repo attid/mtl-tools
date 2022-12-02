@@ -26,18 +26,24 @@ async def cmd_send_message_test(dp: Dispatcher, scheduler: AsyncIOScheduler):
 
 async def cmd_send_message_key_rate(dp: Dispatcher):
     logger.info(f'cmd_send_message_singers')
-    await dp.bot.send_message(MTLChats.SignGroup.value, show_key_rate(''))
+    await dp.bot.send_message(MTLChats.SignGroup.value, show_key_rate(''), message_thread_id=59558)
 
 
 async def cmd_send_message_coochitse(dp: Dispatcher):
     logger.info(f'cmd_send_message_singers')
-    await dp.bot.send_message(MTLChats.SignGroup.value, 'Не пора ли с кучицы и GPA денег стрясти ? /all')
+    await dp.bot.send_message(MTLChats.SignGroup.value, 'Не пора ли с кучицы и GPA денег стрясти ? /all',
+                              message_thread_id=59558)
 
 
 async def cmd_send_message_1m(dp: Dispatcher):
     for record in fb.execsql('select m.id, m.user_id, m.text, m.use_alarm from t_message m where m.was_send = 0'):
-        await dp.bot.send_message(record[1], record[2], disable_notification=record[3] == 0,
-                                  disable_web_page_preview=True)
+        if record[1] == MTLChats.SignGroup.value:
+            await dp.bot.send_message(record[1], record[2], disable_notification=record[3] == 0,
+                                      message_thread_id=59558, disable_web_page_preview=True)
+        else:
+            await dp.bot.send_message(record[1], record[2], disable_notification=record[3] == 0,
+                                      disable_web_page_preview=True)
+
         fb.execsql('update t_message m set m.was_send = 1 where m.id = ?', (record[0],))
 
 

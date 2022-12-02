@@ -1,5 +1,5 @@
 from aiogram import types
-from aiogram.types import ChatType
+from aiogram.types import ChatType, ParseMode
 import dialog
 import skynet_poll_handlers
 import mystellar
@@ -47,7 +47,8 @@ async def cmd_last_check(message: types.Message):
             pass
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
-        if message.chat.id in (MTLChats.SignGroup.value, MTLChats.TestGroup.value, MTLChats.ShareholderGroup.value):
+        if message.chat.id in (MTLChats.SignGroup.value, MTLChats.TestGroup.value, MTLChats.ShareholderGroup.value,
+                               MTLChats.SafeGroup.value):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
@@ -103,6 +104,9 @@ async def cmd_last_check(message: types.Message):
 
         elif has_words(message.text, ['АНЕКДОТ']):
             await message.answer(mystellar.cmd_get_info(1))
+
+        elif has_words(message.text, ['гороскоп']):
+            await message.answer('\n'.join(dialog.get_horoscope()), parse_mode=ParseMode.MARKDOWN)
 
         elif has_words(message.text, ['ХОРОШИЙ', 'МОЛОДЕЦ', 'УМНИЦА']):
             await message.reply('Спасибо ^_^')

@@ -3,8 +3,8 @@ from datetime import datetime
 
 import app_logger
 import fb
-from mystellar import cmd_check_new_fond_transaction, cmd_check_new_asset_transaction, BotValueTypes, \
-    cmd_check_last_operation, get_balances
+from mystellar import cmd_check_new_transaction, cmd_check_new_asset_transaction, BotValueTypes, \
+    cmd_check_last_operation, get_balances, public_fond, public_defi
 
 if 'logger' not in globals():
     logger = app_logger.get_logger("check_stellar")
@@ -12,16 +12,18 @@ if 'logger' not in globals():
 chat_id_test = -1001767165598
 chat_id_signs = -1001239694752
 chat_id_guarantors = -1001169382324
+chat_id_defi = -1001876391583
 
 
 def cmd_add_message(user_id, text, use_alarm=0):
     fb.execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (user_id, text, use_alarm))
 
 
-def cmd_check_new_transaction():
-    # logger.info(f'cmd_check_new_transaction')
-    result = cmd_check_new_fond_transaction(ignore_operation=['CreateClaimableBalance'])
+def cmd_check_cron_transaction():
+    # logger.info('cmd_check_new_transaction')
     # FUND
+    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_fond,
+                                       address_id=BotValueTypes.LastFondTransaction)
     if len(result) > 0:
         cmd_add_message(chat_id_signs, "Получены новые транзакции")
         for transaction in result:
@@ -29,6 +31,17 @@ def cmd_check_new_transaction():
             if len(msg) > 4096:
                 cmd_add_message(chat_id_signs, "Слишком много операций показаны первые ")
             cmd_add_message(chat_id_signs, msg[0:4000])
+    # DEFI
+    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_defi,
+                                       address_id=BotValueTypes.LastDefiTransaction)
+    if len(result) > 0:
+        cmd_add_message(chat_id_defi, "Получены новые транзакции")
+        for transaction in result:
+            msg = f'\n'.join(transaction)
+            if len(msg) > 4096:
+                cmd_add_message(chat_id_defi, "Слишком много операций показаны первые ")
+            cmd_add_message(chat_id_defi, msg[0:4000])
+
     # EURDEBT
     result = cmd_check_new_asset_transaction('EURDEBT', BotValueTypes.LastDebtTransaction)
     if len(result) > 0:
@@ -110,7 +123,7 @@ def cmd_check_bot():
 
 if __name__ == "__main__":
     if 'check_transaction' in sys.argv:
-        cmd_check_new_transaction()
+        cmd_check_cron_transaction()
     elif 'check_bot' in sys.argv:
         cmd_check_bot()
     else:

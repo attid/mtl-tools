@@ -2,8 +2,8 @@ import base64
 import logging
 import math
 
-from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair
-from stellar_sdk import TransactionEnvelope  # , Operation, Payment, SetOptions
+from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair, FeeBumpTransaction
+from stellar_sdk import TransactionEnvelope, FeeBumpTransactionEnvelope  # , Operation, Payment, SetOptions
 import json, requests, datetime
 
 from stellar_sdk.exceptions import BaseHorizonError
@@ -14,6 +14,7 @@ from settings import private_div, private_bod_eur, private_key_rate, base_fee, p
 from datetime import datetime
 
 # https://stellar-sdk.readthedocs.io/en/latest/
+# https://github.com/StellarCN/py-stellar-base/tree/main/examples
 
 public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
@@ -28,6 +29,7 @@ public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
 public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
 public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
 public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
+public_defi = "GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI"
 
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
@@ -48,6 +50,7 @@ class BotValueTypes(enum.IntEnum):
     LastRectTransaction = 6
     LastMTLTransaction = 7
     LastMTLandTransaction = 8
+    LastDefiTransaction = 9
 
 
 def stellar_add_fond_trustline(userkey, asset_code):
@@ -163,7 +166,7 @@ def stellar_set_memo(xdr, memo):
 def stellar_del_operation(xdr, num):
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     transaction.signatures.clear()
-    transaction.signatures.fee -= 100
+    # transaction.transaction.fee -= 100
     operation = transaction.transaction.operations.pop(num)
     return [transaction.to_xdr(), transaction.transaction.sequence, len(transaction.transaction.operations), operation]
 
@@ -205,7 +208,11 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
     result = []
     data_exist = False
 
-    transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    if FeeBumpTransactionEnvelope.is_fee_bump_transaction_envelope(xdr):
+        fee_transaction = FeeBumpTransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction = fee_transaction.transaction.inner_transaction_envelope
+    else:
+        transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     result.append(f"Операции с аккаунта {key_name(transaction.transaction.source.account_id)}")
     result.append(f"  Memo {transaction.transaction.memo}\n")
     result.append(f"  Всего {len(transaction.transaction.operations)} операций\n")
@@ -546,13 +553,13 @@ def cmd_send(list_id):
 
     if pay_type == 0:
         public_sender = public_div
-        private_sender = private_div
+        private_sender = private_sign
     if pay_type == 1:
         public_sender = public_bod_eur
-        private_sender = private_bod_eur
+        private_sender = private_sign
     if pay_type == 3:
         public_sender = public_key_rate
-        private_sender = private_key_rate
+        private_sender = private_sign
 
     for record in records:
         transaction = TransactionEnvelope.from_xdr(record[1], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
@@ -654,11 +661,11 @@ def cmd_get_info(my_id):
     # 11 - Анекдот (+18);#12 - Рассказы (+18); 13 - Стишки (+18);  14 - Афоризмы (+18); 15 - Цитаты (+18);  16 - Тосты (+18); 18 - Статусы (+18);
 
 
-def cmd_check_new_fond_transaction(ignore_operation=[]):
+def cmd_check_new_transaction(ignore_operation=[], address_id=None, stellar_address=public_fond):
     result = []
-    last_id = cmd_load_bot_value(BotValueTypes.LastFondTransaction, 0)
+    last_id = cmd_load_bot_value(address_id, 0)
     server = Server(horizon_url="https://horizon.stellar.org")
-    tr = server.transactions().for_account(public_fond).order(desc=True).call()
+    tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
     new_transactions = []
     for record in tr["_embedded"]["records"]:
@@ -678,7 +685,7 @@ def cmd_check_new_fond_transaction(ignore_operation=[]):
         # print('****')
         # print(transaction["paging_token"])
 
-    cmd_save_bot_value(BotValueTypes.LastFondTransaction, 0, last_id)
+    cmd_save_bot_value(address_id, 0, last_id)
 
     return result
 
@@ -1104,10 +1111,25 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
     return dt
 
 
-if __name__ == "__main__":
-    # print(Server(horizon_url="https://horizon.stellar.org").fee_stats().call())
+def cmd_check_fee() -> str:
+    fee = Server(horizon_url="https://horizon.stellar.org").fee_stats().call()["fee_charged"]
+    return fee['min'] + '-' + fee['max']
     # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
-    # stellar_submite(stellar_sign(stellar_add_trustline(public_fire, eurmtl_asset.code, mtl_asset.issuer), private_sign))
 
-    # gen_new('FIRE')
+
+def cmd_update_fee_and_send(xdr: str) -> str:
+    transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    fee_transaction = TransactionBuilder.build_fee_bump_transaction(public_sign, 10000, transaction,
+                                                                    Network.PUBLIC_NETWORK_PASSPHRASE)
+    # fee_transaction = FeeBumpTransactionEnvelope(FeeBumpTransaction(public_sign, 10000, transaction),
+    #                                             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    fee_transaction.sign(private_sign)
+    server = Server(horizon_url="https://horizon.stellar.org")
+    resp = server.submit_transaction(fee_transaction)
+
+    return str(resp)
+
+
+if __name__ == "__main__":
+    # gen_new('DEFI')
     pass

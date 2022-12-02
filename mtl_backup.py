@@ -23,5 +23,5 @@ save_account(public_pawnshop)
 save_account(public_distributor)
 save_account(public_fond)
 
-for asset in MASTERASSETS:
-    save_asset(asset)
+#for asset in MASTERASSETS:
+save_asset('mtl')
