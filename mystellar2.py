@@ -288,7 +288,6 @@ def update_multi_sign_all():
     update_multi_sign(mystellar.public_exchange)
     update_multi_sign(mystellar.public_fire)
     update_multi_sign(mystellar.public_bod_eur)
-    update_multi_sign(mystellar.public_div)
 
 
 if __name__ == "__main__":
