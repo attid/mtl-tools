@@ -549,25 +549,14 @@ def cmd_gen_key_rate_xdr(list_id):
 def cmd_send(list_id):
     records = fb.execsql(f"select first 3 t.id, t.xdr from t_transaction t where t.was_send = 0 and t.id_div_list = ?",
                          [list_id])
-    pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
-
-    if pay_type == 0:
-        public_sender = public_div
-        private_sender = private_sign
-    if pay_type == 1:
-        public_sender = public_bod_eur
-        private_sender = private_sign
-    if pay_type == 3:
-        public_sender = public_key_rate
-        private_sender = private_sign
 
     for record in records:
         transaction = TransactionEnvelope.from_xdr(record[1], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         server = Server(horizon_url="https://horizon.stellar.org")
-        div_account = server.load_account(public_sender)
+        div_account = server.load_account(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence
-        n = transaction.sign(private_sender)
+        transaction.sign(private_sign)
         transaction_resp = server.submit_transaction(transaction)
         fb.execsql('update t_transaction set was_send = 1, xdr_id = ? where id = ?', [sequence, record[0]])
 
