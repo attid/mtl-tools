@@ -36,6 +36,8 @@ booms = ["AgACAgIAAxkBAAIINGIWWwHuiOBgxuBQ9CBnfL7-VPXVAALuuzEbbLOxSFW75wtHIJnnAQ
          "AgACAgIAAxkBAAIINmIWWzm8y-aDIF9fKLQqjdOMMfx4AALwuzEbbLOxSOot27VAmmSdAQADAgADeAADIwQ",
          "AgACAgIAAxkBAAIIN2IWW1Pq8xtfB-wHiMVVzNVCRk5iAALyuzEbbLOxSJ7cQZ9NcU-HAQADAgADbQADIwQ", ]
 
+my_talk_message = []
+
 
 # @dp.message_handler(state='*')  # chat_type=[ChatType.PRIVATE, ChatType.SUPERGROUP]
 async def cmd_last_check(message: types.Message):
@@ -134,9 +136,12 @@ async def cmd_last_check(message: types.Message):
             await message.reply(dialog.talk(message.chat.id, message.text))
 
     elif message.chat.type == ChatType.PRIVATE:
-        await message.reply(dialog.talk(message.chat.id, message.text))
+        msg = await message.reply(dialog.talk(message.chat.id, message.text))
+        my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
     else:
-        if message.reply_to_message and (message.reply_to_message.from_user.id == 2134695152):
+        if message.reply_to_message and (message.reply_to_message.from_user.id == 2134695152) \
+                and (f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message):
             # answer on bot message
-            await message.reply(dialog.talk(message.chat.id, message.text))
+            msg = await message.reply(dialog.talk(message.chat.id, message.text))
+            my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')

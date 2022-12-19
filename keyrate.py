@@ -1,6 +1,6 @@
 import requests
 import fb
-from mystellar import stellar_get_mtl_holders, eurmtl_asset, eurdebt_asset
+from mystellar import stellar_get_mtl_holders, eurmtl_asset, eurdebt_asset, get_balances, public_key_rate
 
 key_rate = 1.6
 
@@ -50,7 +50,8 @@ def update_eurmtl_log():
     fb.manyinsert("insert into t_keyrate (user_key, asset, amount) values (?,?,?)", insert_list)
 
 
-def show_key_rate(key):
+def show_key_rate(key = 'all', check_can_run = False):
+    remains = 0
     if len(key) < 10:
         eurmtl = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_keyrate ec '
                             'where ec.was_packed = 0 and ec.asset = ? group by ec.user_key)', ('EURMTL',))[0]
@@ -61,19 +62,16 @@ def show_key_rate(key):
 
         if eurmtl[0]:
             result += f'\n> {round(eurmtl[0], 7)} EURMTL на {eurmtl[1]} адресов'
+            remains -= round(eurmtl[0], 7)
         if eurdebt[0]:
             result += f'\n> {round(eurdebt[0], 7)} EURDEBT на {eurdebt[1]} адресов'
+            remains -= round(eurdebt[0], 7)
 
-        rq = requests.get(
-            'https://horizon.stellar.org/accounts/GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE')
-        assets = {}
-        for balance in rq.json()['balances']:
-            if balance['asset_type'] == "native":
-                assets['XLM'] = float(balance['balance'])
-            else:
-                assets[balance['asset_code']] = float(balance['balance'])
+        balances = get_balances(public_key_rate)
+        remains += float(balances['EURMTL'])
+        remains += float(balances['EURDEBT'])
 
-        result += f"\n\nТекущий баланс бота:\n> {assets['EURMTL']} EURMTL \n> {assets['EURDEBT']} EURDEBT"
+        result += f"\n\nТекущий баланс бота:\n> {balances['EURMTL']} EURMTL \n> {balances['EURDEBT']} EURDEBT"
     else:
         eurmtl = fb.execsql('select sum(ec.amount) from t_keyrate ec where ec.was_packed = 0 '
                             'and ec.asset = ? and ec.user_key = ?', ('EURMTL', key))[0][0]
@@ -85,7 +83,11 @@ def show_key_rate(key):
         if eurdebt:
             result += '\n> {: .7f} EURDEBT '.format(round(eurdebt, 7))
 
-    return result
+    if check_can_run:
+        can_run = remains > 0
+        return can_run
+    else:
+        return result
 
 
 if __name__ == "__main__":

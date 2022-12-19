@@ -14,7 +14,7 @@ if 'logger' not in globals():
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade', 'MonteAqua',
                 'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'OSW', 'XLM', 'MTLand', 'AUMTL',
-                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi']
+                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi', 'FCM', 'BIOMinvest']
 
 
 def update_main_report():
@@ -40,6 +40,11 @@ def update_main_report():
     rq = requests.get(
         'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
     wks.update('B9', float(rq.json()['_embedded']['records'][0]['amount']))
+    # MTLRECT
+    rq = requests.get(
+        'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
+    wks.update('C9', float(rq.json()['_embedded']['records'][0]['amount']))
+
 
     # FOND
     rq = requests.get('https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS')
@@ -195,7 +200,8 @@ def update_main_report():
 def update_fire():
     gc = gspread.service_account('mtl-google-doc.json')
     wks = gc.open("MTL Report").worksheet("AutoData")
-    cost_fire = wks.cell(33, 4).value
+    cost_fire = wks.cell(35, 4).value
+    logger.info(f'cost_fire {cost_fire}')
     cost_fire = float(cost_fire.replace(',', '.')) * 0.8
     check_fire(cost_fire)
 

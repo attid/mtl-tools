@@ -1,7 +1,8 @@
 from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, Asset, Account, SignerKey, Price
 import json, requests, math
 
-from mystellar import xlm_asset, usdc_asset, stellar_check_receive_sum
+from mtl_exchange import update_offer
+from mystellar import xlm_asset, usdc_asset, stellar_check_receive_sum, eurmtl_asset
 from settings import private_exchange2, openexchangerates_id
 import app_logger
 
@@ -10,11 +11,11 @@ import app_logger
 if 'logger' not in globals():
     logger = app_logger.get_logger("mtl_exchange")
 
-min_price = 6.0  # min max price in xlm
-max_price = 13.4
+min_price = 5.0  # min max price in xlm
+max_price = 20.4
 
 max_eurmtl = 300.0  # max offer 202
-max_xlm = 3000.0
+max_xlm = 3005.0
 
 min_xlm = 5.0
 persent_eurmtl = 1.04  # 3% наценки
@@ -27,9 +28,6 @@ public_exchange2 = "GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F"
 
 server = Server(horizon_url="https://horizon.stellar.org")
 account_exchange = server.load_account(public_exchange2)
-
-asset_xlm = Asset("XLM")
-asset_eurmtl = Asset("EURMTL", public_mtl)
 
 # get balance
 balances = {}
@@ -48,77 +46,39 @@ rq = requests.get(f'https://horizon.stellar.org/accounts/{public_exchange2}/offe
 # print(json.dumps(rq["_embedded"]["records"], indent=4))
 records = {}
 # if len(rq["_embedded"]["records"]) > 0:
-for record in rq["_embedded"]["records"]:
-    name = 'XLM' if record["selling"]["asset_type"] == 'native' else record["selling"]["asset_code"]
-    records[name] = record
+if len(rq["_embedded"]["records"]) > 0:
+    for record in rq["_embedded"]["records"]:
+        selling_name = 'XLM' if record["selling"]["asset_type"] == 'native' else record["selling"]["asset_code"]
+        buying_name = 'XLM' if record["buying"]["asset_type"] == 'native' else record["buying"]["asset_code"]
+        records[f'{selling_name}-{buying_name}'] = record
 
-if 'EURMTL' in records:
-    offer_eurmtl_id = int(records['EURMTL']["id"])
-    eurmtl_sale_sum = float(records['EURMTL']["amount"])
-    eurmtl_sale_price = float(records['EURMTL']["price"])
-    logger.info(['offer_eurmtl_id', offer_eurmtl_id, 'eurmtl_sale_sum', eurmtl_sale_sum, 'eurmtl_sale_price',
-                 eurmtl_sale_price])
-else:
-    offer_eurmtl_id = 0
-    logger.info(['offer_eurmtl_id', offer_eurmtl_id])
+# EUR cost
+rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').json()
+# print(rq)
+eur_cost = 1 / float(rq['price'])
 
-if 'XLM' in records:
-    offer_xlm_id = int(records['XLM']["id"])
-    xlm_sale_sum = float(records['XLM']["amount"])
-    xlm_sale_price = float(records['XLM']["price"])
-    logger.info(['offer_xlm_id', offer_xlm_id, 'xlm_sale_sum', xlm_sale_sum, 'xlm_sale_price', xlm_sale_price])
-else:
-    offer_xlm_id = 0
-    logger.info(['offer_xlm_id', offer_xlm_id])
+cost_usdc_xml = float(stellar_check_receive_sum(usdc_asset, '1', xlm_asset))
+cost_xlm_usdc = float(stellar_check_receive_sum(xlm_asset, '1', usdc_asset))
 
-cost_eur = float(stellar_check_receive_sum(usdc_asset, '1', xlm_asset))
-cost_xlm = float(stellar_check_receive_sum(xlm_asset, '1', usdc_asset))
+cost_eurmtl_xml = cost_usdc_xml / eur_cost * persent_eurmtl
+cost_xlm_eurmtl = cost_xlm_usdc * eur_cost
 
-logger.info(['cost_eur', cost_eur, 'cost_xlm', cost_xlm])
+logger.info(['cost_usdc_xml', cost_usdc_xml, cost_eurmtl_xml,
+             'cost_xlm_usdc', cost_xlm_usdc, cost_xlm_eurmtl,
+             'eur_cost', eur_cost])
 
 sum_eurmtl = sum_eurmtl if sum_eurmtl < max_eurmtl else max_eurmtl
 sum_xlm = sum_xlm if sum_xlm < max_xlm else max_xlm
 sum_xlm -= min_xlm
 sum_xlm = round(sum_xlm, 3)
 
-if (cost_eur < min_price) or (cost_eur > max_price):
-    sum_eurmtl = 0
-    sum_xlm = 0
+update_offer(account=account_exchange, price_min=min_price, price_max=max_price, price=round(cost_eurmtl_xml, 5),
+             selling_asset=eurmtl_asset, buying_asset=xlm_asset, amount=sum_eurmtl, check_persent=persent_cost,
+             record=records.get('EURMTL-XLM'))
 
+update_offer(account=account_exchange, price_min=1 / max_price, price_max=1 / min_price,
+             price=round(cost_xlm_eurmtl, 5),
+             selling_asset=xlm_asset, buying_asset=eurmtl_asset, amount=sum_xlm, check_persent=persent_cost,
+             record=records.get('XLM-EURMTL'))
 
-
-if (((offer_eurmtl_id == 0) and (sum_eurmtl > 0)) or (cost_eur * persent_eurmtl > eurmtl_sale_price * persent_cost) or (
-        cost_eur * persent_eurmtl * persent_cost < eurmtl_sale_price) or (sum_eurmtl != eurmtl_sale_sum)):
-    logger.info('need sale eurmtl')
-
-    transaction = TransactionBuilder(source_account=account_exchange,
-                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
-    transaction.append_manage_sell_offer_op(selling=asset_eurmtl, buying=asset_xlm, amount=str(sum_eurmtl),
-                                            price=Price.from_raw_price(str(round(cost_eur * persent_eurmtl, 7))),
-                                            offer_id=offer_eurmtl_id)
-    transaction = transaction.build()
-    transaction.sign(private_exchange2)
-    xdr = transaction.to_xdr()
-    logger.info(f"xdr: {xdr}")
-
-    transaction_resp = server.submit_transaction(transaction)
-    # logger.info(transaction_resp)
-
-if (((offer_xlm_id == 0) and (sum_xlm > 0)) or (cost_xlm * persent_xlm > xlm_sale_price * persent_cost) or (
-        cost_xlm * persent_xlm * persent_cost < xlm_sale_price) or (sum_xlm != xlm_sale_sum)):
-    #    if (cost_xlm > 1/min_price) or (cost_xlm < 1/max_price) or (sum_xlm < 1):
-    #        print(sum_xlm,cost_xlm,1/min_price,1/max_price)
-    logger.info('need sale xlm')
-
-    transaction = TransactionBuilder(source_account=account_exchange,
-                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=100)
-    transaction.append_manage_sell_offer_op(selling=asset_xlm, buying=asset_eurmtl, amount=str(sum_xlm),
-                                            price=Price.from_raw_price(str(round(cost_xlm * persent_xlm, 7))),
-                                            offer_id=offer_xlm_id)
-    transaction = transaction.build()
-    transaction.sign(private_exchange2)
-    xdr = transaction.to_xdr()
-    logger.info(f"xdr: {xdr}")
-
-    transaction_resp = server.submit_transaction(transaction)
-    # logger.info(transaction_resp)
+print(1 / max_price, 1 / min_price, cost_xlm_eurmtl)

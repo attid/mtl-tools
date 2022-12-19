@@ -43,7 +43,7 @@ def cmd_check_cron_transaction():
             cmd_add_message(chat_id_defi, msg[0:4000])
 
     # EURDEBT
-    result = cmd_check_new_asset_transaction('EURDEBT', BotValueTypes.LastDebtTransaction)
+    result = cmd_check_new_asset_transaction('EURDEBT', BotValueTypes.LastDebtTransaction, filter_operation=['Payment'])
     if len(result) > 0:
         cmd_add_message(chat_id_guarantors, "Получены новые транзакции для EURDEBT")
         for transaction in result:

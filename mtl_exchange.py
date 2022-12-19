@@ -44,13 +44,14 @@ def update_offer(account, price_min, price_max, price, selling_asset, buying_ass
 
     stellar_transaction = None
     # if offer and bad price need zero offer
-    if (offer_id > 0) and ((price > price_max) or (price < price_min)):
-        logger.info(f'need cancel {selling_asset.code} for {buying_asset.code} price {price} amount {amount}')
-        stellar_transaction = TransactionBuilder(source_account=account,
-                                                 network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                                 base_fee=base_fee)
-        stellar_transaction.append_manage_sell_offer_op(selling=selling_asset, buying=buying_asset, amount='0',
-                                                        price=Price.from_raw_price('1'), offer_id=offer_id)
+    if (price > price_max) or (price < price_min):
+        if offer_id > 0:
+            logger.info(f'need cancel {selling_asset.code} for {buying_asset.code} price {price} amount {amount}')
+            stellar_transaction = TransactionBuilder(source_account=account,
+                                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                                     base_fee=base_fee)
+            stellar_transaction.append_manage_sell_offer_op(selling=selling_asset, buying=buying_asset, amount='0',
+                                                            price=Price.from_raw_price('1'), offer_id=offer_id)
     elif (amount > 0) and (price > 0) and (
             (price > current_price * check_persent) or (price * check_persent < current_price) or
             (current_amount != amount)):

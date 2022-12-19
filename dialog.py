@@ -4,8 +4,6 @@ import random
 
 from google.cloud import dialogflow
 
-from MyMTLWalletBot_main import lang_dict
-
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "mtl-skynet-talks.json"
 
 
@@ -58,6 +56,7 @@ gor = (
      "выпить лозы", "выпить каспии", "сообразить на троих",)
 )
 
+lang_dict = {}
 
 def get_horoscope() -> list:
     if datetime.date.today() == lang_dict.get('horoscope_date'):
@@ -87,4 +86,3 @@ def get_horoscope() -> list:
 if __name__ == "__main__":
     pass
     # print(talk(9, 'Как дела'))
-

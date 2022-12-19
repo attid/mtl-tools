@@ -8,28 +8,25 @@ from settings import base_fee, private_sign
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
-public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
-public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
-public_city = "GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3"
-public_distrib = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
-public_collector = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
-public_competition = "GAIKBJYL5DZFHBL3R4HPFIA2U3ZEBTJ72RZLP444ACV24YZ2C73P6COM"
-
-public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
-public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
-public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
+#public_mtl = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
+#public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
+#public_distrib = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
+#public_collector = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
+#public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
+#public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
+#public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 
 
 def cmd_get_new_vote_mtlcity():
     divider = 1000
-    city_asset = Asset("MTLCITY", public_city)
+    city_asset = Asset("MTLCITY", mystellar.public_city)
 
     cityarr = []
     mtl_vote = mystellar.cmd_gen_vote_list()
 
     #################
     server = Server(horizon_url="https://horizon.stellar.org")
-    response = server.assets().for_code('MTL').for_issuer(public_mtl).limit(200).call()
+    response = server.assets().for_code('MTL').for_issuer(mystellar.public_issuer).limit(200).call()
 
     json_dump = json.dumps(response)
     response_json = json.loads(json_dump)
@@ -50,7 +47,7 @@ def cmd_get_new_vote_mtlcity():
                     bls = balance["balance"]
                     bli = int(bls[0:bls.find('.')])
                     lg = round(math.log2((bli + 0.001) / divider)) + 1
-                    if account["account_id"] == public_fond:
+                    if account["account_id"] == mystellar.public_fond:
                         cityinfond = bli
                     else:  # fond dont have voce
                         cityarr.append([account["account_id"], bli, lg, 0])
@@ -86,7 +83,7 @@ def cmd_get_new_vote_mtlcity():
     # 5
     # узнать кто в подписантах
     server = Server(horizon_url="https://horizon.stellar.org")
-    source_account = server.load_account(public_city)
+    source_account = server.load_account(mystellar.public_city)
     mtlcitysequence = source_account.sequence
 
     sg = source_account.load_ed25519_public_key_signers()
@@ -130,7 +127,7 @@ def cmd_get_new_vote_mtlcity():
     bigarr = bigarr2
 
     # 7
-    root_account = Account(public_city, sequence=mtlcitysequence)
+    root_account = Account(mystellar.public_city, sequence=mtlcitysequence)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     ithreshold = 0
@@ -196,6 +193,7 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
     if transaction is None:
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
+        transaction.set_timeout(60 * 60 * 48)
     threshold = 0
 
     for arr in vote_list:
@@ -218,27 +216,29 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None):
 def cmd_get_new_vote_mtl(public_key):
     if len(public_key) > 10:
         vote_list = mystellar.cmd_gen_vote_list()
-        result = []
-        result.append(gen_vote_xdr(public_key, vote_list))
+        result = [gen_vote_xdr(public_key, vote_list)]
     else:
         vote_list = mystellar.cmd_gen_vote_list()
         vote_list1 = copy.deepcopy(vote_list)
         vote_list2 = copy.deepcopy(vote_list)
         vote_list3 = copy.deepcopy(vote_list)
         vote_list4 = copy.deepcopy(vote_list)
+        vote_list5 = copy.deepcopy(vote_list)
         # print(vote_list)
         result = []
         transaction = TransactionBuilder(
-            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(public_fond),
+            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(mystellar.public_fond),
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
-        xdr = gen_vote_xdr(public_fond, vote_list, transaction)
-        xdr = gen_vote_xdr(public_mtl, vote_list1, transaction, public_mtl)
-        xdr = gen_vote_xdr(public_distrib, vote_list2, transaction, public_distrib)
-        xdr = gen_vote_xdr(public_distrib, vote_list3, transaction, public_competition)
+        xdr = gen_vote_xdr(mystellar.public_fond, vote_list, transaction)
+        xdr = gen_vote_xdr(mystellar.public_issuer, vote_list1, transaction, mystellar.public_issuer)
+        xdr = gen_vote_xdr(mystellar.public_distributor, vote_list2, transaction, mystellar.public_distributor)
+        xdr = gen_vote_xdr(mystellar.public_competition, vote_list3, transaction, mystellar.public_competition)
+        xdr = gen_vote_xdr(mystellar.public_adm, vote_list5, transaction, mystellar.public_adm)
         # return sequence because every build inc number
         transaction.source_account.sequence = sequence
-        xdr = gen_vote_xdr(public_collector, vote_list4, transaction, public_collector)
+        transaction.set_timeout(60*60*48)
+        xdr = gen_vote_xdr(mystellar.public_pawnshop, vote_list4, transaction, mystellar.public_pawnshop)
         result.append(xdr)
 
     # print(gen_vote_xdr(public_new,vote_list2))
@@ -246,7 +246,7 @@ def cmd_get_new_vote_mtl(public_key):
     return result
 
 
-def update_multi_sign(account):
+def update_multi_sign(account, only_show=False):
     from stellar_sdk import TransactionEnvelope
     server = Server(horizon_url="https://horizon.stellar.org")
     account_exchange = server.load_account(mystellar.public_exchange)
@@ -273,26 +273,31 @@ def update_multi_sign(account):
                                           network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                           base_fee=base_fee)
         transaction2.append_ed25519_public_key_signer(account_id=mystellar.public_sign, weight=threshold * 2)
+        print(transaction.transaction)
+        transaction2.set_timeout(60*60)
+        print(transaction.transaction)
 
         transaction.transaction.operations.insert(0, transaction2.operations[0])
 
-        transaction.sign(private_sign)
 
-        xdr = transaction.to_xdr()
-        # print(f"xdr: {xdr}")
-
-        server.submit_transaction(transaction)
+        if only_show:
+            xdr = transaction.to_xdr()
+            print(f"xdr: {xdr}")
+        else:
+            transaction.sign(private_sign)
+            server.submit_transaction(transaction)
 
 
 def update_multi_sign_all():
     update_multi_sign(mystellar.public_exchange)
     update_multi_sign(mystellar.public_fire)
     update_multi_sign(mystellar.public_bod_eur)
+    update_multi_sign(mystellar.public_boss)
 
 
 if __name__ == "__main__":
     pass
-    # print(mystellar.cmd_gen_vote_list())
-    update_multi_sign_all()
+    #update_multi_sign_all()
+    #update_multi_sign(mystellar.public_boss)
     # update_multi_sign(mystellar.public_bod_eur)
     # print(cmd_get_new_vote_mtlcity())

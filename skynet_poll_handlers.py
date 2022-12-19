@@ -10,7 +10,7 @@ import json
 
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
-from mystellar import key_name
+from mystellar import address_id_to_username
 from mystellar import cmd_gen_vote_list
 
 cb_poll_click = CallbackData("join_chat", "answer")
@@ -158,7 +158,7 @@ def cmd_save_votes():
         vote_list.pop(20)
     votes_list = {}
     for vote in vote_list:
-        votes_list[key_name(vote[0])] = vote[2]
+        votes_list[address_id_to_username(vote[0])] = vote[2]
         total += vote[2]
     votes_list['NEED'] = {'50': cmd_get_needed_votes(), '75': total // 3 * 2 + 1, '100': total}
     # print(votes)

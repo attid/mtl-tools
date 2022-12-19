@@ -1,4 +1,5 @@
 import json
+import os
 from enum import IntEnum
 
 from aiogram import Bot, Dispatcher, types
@@ -53,17 +54,33 @@ async def multi_answer(message: types.Message, text: str):
 
 
 delete_income = []
-try:
-    with open("polls/delete_income.json", "r") as fp:
-        delete_income = json.load(fp)
-except Exception as ex:
-    logger.info(ex)
+save_all = []
 
 
 def cmd_save_delete_income():
     with open("polls/delete_income.json", "w") as fp:
         json.dump(delete_income, fp)
 
+
+def cmd_save_save_all():
+    with open("polls/save_all.json", "w") as fp:
+        json.dump(save_all, fp)
+
+
+# create files
+if not os.path.isfile("polls/delete_income.json"):
+    cmd_save_delete_income()
+
+if not os.path.isfile("polls/save_all.json"):
+    cmd_save_save_all()
+
+try:
+    with open("polls/delete_income.json", "r") as fp:
+        delete_income = json.load(fp)
+    with open("polls/save_all.json", "r") as fp:
+        save_all = json.load(fp)
+except Exception as ex:
+    logger.info(ex)
 
 welcome_message = {}
 try:

@@ -11,7 +11,8 @@ from datetime import timedelta
 
 import update_report3
 from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
-    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha
+    welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha, save_all, \
+    cmd_save_save_all
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -159,7 +160,11 @@ async def cmd_show_key_rate(message: types.Message):
 async def cmd_do_bdm(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
-        return False
+        return
+
+    if int(mystellar.get_balances(mystellar.public_bod_eur).get('EURMTL', 0)) < 10:
+        await message.reply(f'Low balance at {mystellar.public_bod_eur} can`t pay BIM')
+        return
 
     # новая запись
     list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'), 1)  # ('mtl div 17/12/2021')
@@ -178,7 +183,7 @@ async def cmd_do_bdm(message: types.Message):
     e = 1
     while i > 0:
         try:
-            i = mystellar.cmd_send(list_id)
+            i = await mystellar.cmd_send_by_list_id(list_id)
             await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/7)"))
         except Exception as err:
             await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/7)"))
@@ -190,9 +195,13 @@ async def cmd_do_bdm(message: types.Message):
 async def cmd_do_key_rate(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
-        return False
+        return
 
     await message.answer(show_key_rate('key'))
+
+    if not show_key_rate(check_can_run=True):
+        await message.reply(f'Low balance at {mystellar.public_key_rate} can`t pay BIM')
+        return
 
     # новая запись
     list_id = mystellar.cmd_create_list(datetime.now().strftime('Key Rate %d/%m/%Y'), 3)  # ('mtl div 17/12/2021')
@@ -210,7 +219,7 @@ async def cmd_do_key_rate(message: types.Message):
     e = 1
     while i > 0:
         try:
-            i = mystellar.cmd_send(list_id)
+            i = await mystellar.cmd_send_by_list_id(list_id)
             await msg.edit_text(add_text(lines, 4, f"Part done. Need {i} more. Step (4/6)"))
         except Exception as err:
             await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (5/6)"))
@@ -234,10 +243,11 @@ async def cmd_do_key_rate(message: types.Message):
         e = 1
         while i > 0:
             try:
-                i = mystellar.cmd_send(list_id)
+                i = await mystellar.cmd_send_by_list_id(list_id)
                 await msg.edit_text(add_text(lines, 4, f"Part done. Need {i} more. Step (3/6)"))
             except Exception as err:
                 await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (4/6)"))
+                logger.info(f'249 line error {err}')
                 e += 1
         await msg.edit_text(add_text(lines, 6, f"Resend. Work done. Step (5/6)"))
 
@@ -250,15 +260,22 @@ async def cmd_do_all(message: types.Message):
 
     await cmd_do_div(message)
     await cmd_show_bdm(message)
+    await message.reply('***')
     await cmd_do_bdm(message)
+    await message.reply('*****')
     await cmd_do_key_rate(message)
+    await message.reply('*******')
 
 
 @dp.message_handler(commands="do_div")
 async def cmd_do_div(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
-        return False
+        return
+
+    if int(mystellar.get_balances(mystellar.public_div).get('EURMTL', 0)) < 10:
+        await message.reply(f'Low balance at {mystellar.public_div} can`t pay divs')
+        return
 
     # новая запись
     # ('mtl div 17/12/2021')
@@ -271,6 +288,7 @@ async def cmd_do_div(message: types.Message):
     await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
 
     i = 1
+
     while i > 0:
         i = mystellar.cmd_gen_xdr(div_list_id)
         await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
@@ -285,7 +303,7 @@ async def cmd_do_div(message: types.Message):
     e = 1
     while i > 0:
         try:
-            i = mystellar.cmd_send(div_list_id)
+            i = await mystellar.cmd_send_by_list_id(div_list_id)
             await msg.edit_text(add_text(lines, 6, f"Part done. Need {i} more. Step (6/12)"))
         except Exception as err:
             await msg.edit_text(add_text(lines, 7, f"Got error. New attempt {e}. Step (7/12)"))
@@ -297,7 +315,7 @@ async def cmd_do_div(message: types.Message):
     e = 1
     while i > 0:
         try:
-            i = mystellar.cmd_send(donate_list_id)
+            i = await mystellar.cmd_send_by_list_id(donate_list_id)
             await msg.edit_text(add_text(lines, 10, f"Part done. Need {i} more. Step (10/12)"))
         except Exception as err:
             await msg.edit_text(add_text(lines, 11, f"Got error. New attempt {e}. Step (11/12)"))
@@ -331,9 +349,9 @@ async def smd_all(message: types.Message, state: FSMContext):
         await message.reply(' '.join(members))
     # elif message.chat.id == MTLChats.Test.value:
     #    await message.reply('@SomeoneAny @itolstov')
-    elif message.chat.id == MTLChats.DistributedGroup.value:
-        result = mystellar.cmd_check_donate_list()
-        await message.reply(' '.join(result))
+    # elif message.chat.id == MTLChats.DistributedGroup.value:
+    #    result = mystellar.cmd_check_donate_list()
+    #    await message.reply(' '.join(result))
     else:
         all_file = f'polls/all{message.chat.id}'
         if isfile(all_file):
@@ -389,6 +407,22 @@ async def smd_del_all(message: types.Message, state: FSMContext):
             await message.reply('Настройки не найдены =(')
     else:
         await message.reply('не указаны параметры кого добавить')
+
+
+@dp.message_handler(commands="save_all")
+async def msg_save_all(message: types.Message, state: FSMContext):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id in save_all:
+        save_all.remove(message.chat.id)
+        cmd_save_save_all()
+        await message.reply('Removed')
+    else:
+        save_all.append(message.chat.id)
+        cmd_save_save_all()
+        await message.reply('Added')
 
 
 @dp.message_handler(commands="get_vote_fund_xdr")
@@ -563,6 +597,7 @@ def cmd_delete_later(message: types.Message, minutes=5):
 
 @dp.message_handler(content_types=types.ContentTypes.NEW_CHAT_MEMBERS)
 async def new_chat_member(message: types.Message):
+    logger.info(message.as_json())
     if str(message.chat.id) in welcome_message:
         if message.from_user in message.new_chat_members:
             msg = welcome_message.get(str(message.chat.id), 'Hi new user')
@@ -587,6 +622,21 @@ async def new_chat_member(message: types.Message):
 
             cmd_delete_later(answer)
 
+    if message.chat.id in save_all:
+        all_file = f'polls/all{message.chat.id}'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+        else:
+            members = []
+        for user in message.new_chat_members:
+            if user.username:
+                members.append('@' + user.username)
+            else:
+                await message.answer(f'{user.full_name} dont have username cant add to /all')
+        with open(all_file, "w") as fp:
+            json.dump(members, fp)
+
     if message.chat.id in delete_income:
         await message.delete()
 
@@ -606,6 +656,19 @@ async def new_chat_member(message: types.Message):
 async def left_chat_member(message: types.Message):
     if message.chat.id in delete_income:
         await message.delete()
+
+    if message.chat.id in save_all:
+        all_file = f'polls/all{message.chat.id}'
+        if isfile(all_file):
+            with open(all_file, "r") as fp:
+                members = list(json.load(fp))
+        else:
+            members = []
+        user = message.left_chat_member
+        if user.username:
+            members.remove('@' + user.username)
+        with open(all_file, "w") as fp:
+            json.dump(members, fp)
 
 
 @dp.callback_query_handler(cb_captcha.filter())
@@ -770,6 +833,54 @@ async def smd_me(message: types.Message):
         await message.delete()
     except:
         pass
+
+
+@dp.message_handler(commands="check_dg")
+async def smd_check_dg(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id != MTLChats.DistributedGroup.value:
+        await message.reply('Other group !')
+        return False
+
+    all_file = f'polls/all{message.chat.id}'
+    if isfile(all_file):
+        with open(all_file, "r") as fp:
+            members = list(json.load(fp))
+
+        tmp_list: list = mystellar.cmd_show_donates(return_table=True)
+        donate_list = []
+        donate_members = []
+        for tmp in tmp_list:
+            if len(tmp[0]) == 56:
+                donate_list.append(tmp[0])
+            if len(tmp[2]) == 56:
+                donate_list.append(tmp[2])
+
+        for address in donate_list:
+            username = mystellar.address_id_to_username(address)
+            if username.find('..') > 0:
+                await message.answer(f'{address} not found')
+            donate_members.append(username)
+
+        donate_members = list(set(donate_members))
+
+        for member in members:
+            if member in donate_members:
+                pass
+            else:
+                await message.answer(f'Need remove {member}')
+
+        for member in donate_members:
+            if member in members:
+                pass
+            else:
+                await message.answer(f'Need add {member}')
+    else:
+        await message.reply('/all не настроен, используйте /add_all и /del_all')
+
 
 if __name__ == "__main__":
     pass

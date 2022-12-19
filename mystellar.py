@@ -2,13 +2,16 @@ import base64
 import logging
 import math
 
-from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair, FeeBumpTransaction
+from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair, FeeBumpTransaction, \
+    ServerAsync, AiohttpClient
 from stellar_sdk import TransactionEnvelope, FeeBumpTransactionEnvelope  # , Operation, Payment, SetOptions
 import json, requests, datetime
 
 from stellar_sdk.exceptions import BaseHorizonError
 from stellar_sdk.sep.federation import resolve_stellar_address, resolve_account_id
+from stellar_sdk.xdr import SignatureHint
 
+import app_logger
 import fb, re, enum
 from settings import private_div, private_bod_eur, private_key_rate, base_fee, private_sign
 from datetime import datetime
@@ -16,20 +19,29 @@ from datetime import datetime
 # https://stellar-sdk.readthedocs.io/en/latest/
 # https://github.com/StellarCN/py-stellar-base/tree/main/examples
 
+if 'logger' not in globals():
+    logger = app_logger.get_logger("update_report")
+
+# multi
 public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
 public_fond = "GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS"
 public_pawnshop = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
 public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
-
+public_city = "GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3"
+public_competition = "GAIKBJYL5DZFHBL3R4HPFIA2U3ZEBTJ72RZLP444ACV24YZ2C73P6COM"
+public_defi = "GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI"
+# bot
 public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
 public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
 public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
-public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
 public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
-public_defi = "GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI"
+public_adm = "GBSCMGJCE4DLQ6TYRNUMXUZZUXGZBM4BXVZUIHBBL5CSRRW2GWEHUADM"
+public_boss = "GC72CB75VWW7CLGXS76FGN3CC5K7EELDAQCPXYMZLNMOTC42U3XJBOSS"
+# user
+public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
 
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
@@ -119,19 +131,6 @@ def stellar_sign(xdr, signkey):
     return transaction.to_xdr()
 
 
-def stellar_submite(xdr):
-    # Last, you can submit it to the network
-    transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-    server = Server(horizon_url="https://horizon.stellar.org")
-    resp = server.submit_transaction(transaction)
-
-    # json_dump = json.dumps(resp)
-    # print(json_dump)
-    # response_json = json.loads(json_dump)
-
-    return json.dumps(resp, indent=2)
-
-
 def stellar_check_xdr(xdr):
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     list_op = ''
@@ -187,13 +186,24 @@ def stellar_add_xdr(xdr, xdr2):
     return [transaction.to_xdr(), transaction.transaction.sequence, len(transaction.transaction.operations)]
 
 
-def key_name(key):
+def address_id_to_username(key) -> str:
     with open('members_key.json', 'r', encoding='UTF-8') as fp:
         data = json.load(fp)
     if key in data:
         return data[key]
     else:
         return key[:4] + '..' + key[-4:]
+
+
+def username_to_address_id(username: str) -> list:
+    with open('members_key.json', 'r', encoding='UTF-8') as fp:
+        data: dict = json.load(fp)
+    result = []
+    if username in data.values():
+        for key in data:
+            if data[key] == username:
+                result.append(data[key])
+    return result
 
 
 def good_operation(operation, operation_name, filter_operation, ignore_operation):
@@ -213,7 +223,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
         transaction = fee_transaction.transaction.inner_transaction_envelope
     else:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-    result.append(f"Операции с аккаунта {key_name(transaction.transaction.source.account_id)}")
+    result.append(f"Операции с аккаунта {address_id_to_username(transaction.transaction.source.account_id)}")
     result.append(f"  Memo {transaction.transaction.memo}\n")
     result.append(f"  Всего {len(transaction.transaction.operations)} операций\n")
 
@@ -221,18 +231,18 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
         result.append(f"Операция {idx} - {type(operation).__name__}")
         # print('bad xdr', idx, operation)
         if operation.source:
-            result.append(f"*** для аккаунта {key_name(operation.source.account_id)}")
+            result.append(f"*** для аккаунта {address_id_to_username(operation.source.account_id)}")
         if good_operation(operation, "Payment", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
                 data_exist = True
                 result.append(
-                    f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {key_name(operation.destination.account_id)}")
+                    f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {address_id_to_username(operation.destination.account_id)}")
             continue
         if good_operation(operation, "SetOptions", filter_operation, ignore_operation):
             data_exist = True
             if operation.signer:
                 result.append(
-                    f"    Изменяем подписанта {key_name(operation.signer.signer_key.encoded_signer_key)} новые голоса : {operation.signer.weight}")
+                    f"    Изменяем подписанта {address_id_to_username(operation.signer.signer_key.encoded_signer_key)} новые голоса : {operation.signer.weight}")
             if operation.med_threshold:
                 data_exist = True
                 result.append(f"Установка нового требования. Нужно будет {operation.med_threshold} голосов")
@@ -240,7 +250,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
         if good_operation(operation, "ChangeTrust", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {key_name(operation.asset.issuer)}")
+                f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer)}")
             continue
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
@@ -263,13 +273,13 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
             if (float(operation.dest_min) > filter_sum) and (float(operation.send_amount) > filter_sum):
                 data_exist = True
                 result.append(
-                    f"    Покупка {key_name(operation.destination.account_id)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
+                    f"    Покупка {address_id_to_username(operation.destination.account_id)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
             continue
         if good_operation(operation, "PathPaymentStrictReceive", filter_operation, ignore_operation):
             if (float(operation.send_max) > filter_sum) and (float(operation.dest_amount) > filter_sum):
                 data_exist = True
                 result.append(
-                    f"    Продажа {key_name(operation.destination.account_id)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
+                    f"    Продажа {address_id_to_username(operation.destination.account_id)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
             continue
         if good_operation(operation, "ManageData", filter_operation, ignore_operation):
             data_exist = True
@@ -546,7 +556,7 @@ def cmd_gen_key_rate_xdr(list_id):
     return need
 
 
-def cmd_send(list_id):
+async def cmd_send_by_list_id(list_id):
     records = fb.execsql(f"select first 3 t.id, t.xdr from t_transaction t where t.was_send = 0 and t.id_div_list = ?",
                          [list_id])
 
@@ -557,7 +567,8 @@ def cmd_send(list_id):
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence
         transaction.sign(private_sign)
-        transaction_resp = server.submit_transaction(transaction)
+        transaction_resp = await stellar_async_submit(transaction.to_xdr())
+        logger.info(transaction_resp)
         fb.execsql('update t_transaction set was_send = 1, xdr_id = ? where id = ?', [sequence, record[0]])
 
     need = fb.execsql('select count(*) from t_transaction where was_send = 0 and id_div_list = ?', [list_id])[0][0]
@@ -720,25 +731,6 @@ def cmd_gen_div_xdr(div_sum):
     xdr = transaction.to_xdr()
     # print(f"xdr: {xdr}")
     return xdr
-
-
-def cmd_check_donate_list():
-    donates = requests.get("https://raw.githubusercontent.com/montelibero-org/mtl/main/json/donation.json").json()
-    # print(donates)
-    donors = list(dict.fromkeys(donates))
-    # donates = list(donates)
-    # print(donates)
-    recipients = []
-    for donor in donors:
-        for recipient in donates[donor]["recipients"]:
-            if recipient['recipient'] not in recipients:
-                recipients.append(recipient['recipient'])
-    recipients.extend(donors)
-    recipients = list(dict.fromkeys(recipients))
-    names = []
-    for recipient in recipients:
-        names.append(key_name(recipient))
-    return names
 
 
 def cmd_gen_data_xdr(account_id: str, data: str):
@@ -1106,7 +1098,7 @@ def cmd_check_fee() -> str:
     # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
 
 
-def cmd_update_fee_and_send(xdr: str) -> str:
+async def cmd_update_fee_and_send(xdr: str) -> str:
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     fee_transaction = TransactionBuilder.build_fee_bump_transaction(public_sign, 10000, transaction,
                                                                     Network.PUBLIC_NETWORK_PASSPHRASE)
@@ -1114,11 +1106,21 @@ def cmd_update_fee_and_send(xdr: str) -> str:
     #                                             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     fee_transaction.sign(private_sign)
     server = Server(horizon_url="https://horizon.stellar.org")
-    resp = server.submit_transaction(fee_transaction)
+    resp = await stellar_async_submit(fee_transaction.to_xdr())
 
     return str(resp)
 
 
+async def stellar_async_submit(xdr: str):
+    async with ServerAsync(
+            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+    ) as server:
+        transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction_resp = await server.submit_transaction(transaction)
+        # return json.dumps(resp, indent=2)
+        return transaction_resp
+
+
 if __name__ == "__main__":
-    # gen_new('DEFI')
+    # gen_new('BOSS')
     pass

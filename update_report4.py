@@ -8,7 +8,7 @@ import fb
 from stellar_sdk.sep.federation import resolve_account_id
 
 # https://docs.gspread.org/en/latest/
-from mystellar import resolve_account, cmd_show_donates, key_name
+from mystellar import resolve_account, cmd_show_donates, address_id_to_username
 
 if 'logger' not in globals():
     logger = app_logger.get_logger("update_report")
@@ -65,7 +65,7 @@ def update_donate_report():
     update_list = []
 
     for key in updates:
-        account_name = key_name(key[0])
+        account_name = address_id_to_username(key[0])
         update_list.append([account_name, key[3], key[4], key[1], key[2]])
 
     update_list.append(['', '', '', '', ''])
