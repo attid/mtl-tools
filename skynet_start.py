@@ -1,4 +1,6 @@
 from aiogram import types
+from loguru import logger
+
 from skynet_main import dp, scheduler
 import importlib
 import aiogram
@@ -102,9 +104,14 @@ async def inline_handler(query: types.InlineQuery):
     return await query.answer(answers, cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
 
 
-if __name__ == "__main__":
+@logger.catch
+def main():
     # Запуск бота
     scheduler.start()
     skynet_time_handlers.scheduler_jobs(scheduler, dp)
     dp.register_message_handler(skynet_talk_handlers.cmd_last_check, state='*')
     aiogram.executor.start_polling(dp, skip_updates=True)
+
+
+if __name__ == "__main__":
+    main()

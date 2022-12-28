@@ -1,28 +1,28 @@
 import sys
 from datetime import datetime
 
-import app_logger
+from loguru import logger
 import fb
 from mystellar import cmd_check_new_transaction, cmd_check_new_asset_transaction, BotValueTypes, \
-    cmd_check_last_operation, get_balances, public_fond, public_defi
-
-if 'logger' not in globals():
-    logger = app_logger.get_logger("check_stellar")
+    cmd_check_last_operation, get_balances, public_fund, public_defi, mtl_asset
 
 chat_id_test = -1001767165598
 chat_id_signs = -1001239694752
 chat_id_guarantors = -1001169382324
 chat_id_defi = -1001876391583
+chat_id_fcm = -1001637378851
 
 
+@logger.catch
 def cmd_add_message(user_id, text, use_alarm=0):
     fb.execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (user_id, text, use_alarm))
 
 
+@logger.catch
 def cmd_check_cron_transaction():
     # logger.info('cmd_check_new_transaction')
     # FUND
-    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_fond,
+    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_fund,
                                        address_id=BotValueTypes.LastFondTransaction)
     if len(result) > 0:
         cmd_add_message(chat_id_signs, "Получены новые транзакции")
@@ -51,6 +51,7 @@ def cmd_check_cron_transaction():
             if len(msg) > 4096:
                 cmd_add_message(chat_id_guarantors, "Слишком много операций показаны первые ")
             cmd_add_message(chat_id_guarantors, msg[0:4000])
+
     # EURMTL
     result = cmd_check_new_asset_transaction('EURMTL', BotValueTypes.LastEurTransaction, 900, ['Payment'])
     if len(result) > 0:
@@ -60,6 +61,7 @@ def cmd_check_cron_transaction():
             if len(msg) > 4096:
                 cmd_add_message(chat_id_guarantors, "Слишком много операций показаны первые ")
             cmd_add_message(chat_id_guarantors, msg[0:4000])
+
     # MTLRECT
     result = cmd_check_new_asset_transaction('MTLRECT', BotValueTypes.LastRectTransaction, -1, ['Payment'])
     if len(result) > 0:
@@ -71,8 +73,9 @@ def cmd_check_cron_transaction():
             cmd_add_message(chat_id_signs, msg[0:4000])
 
     # MTL
-    result = cmd_check_new_asset_transaction('MTL', BotValueTypes.LastMTLTransaction, 10,
-                                             ['Payment', 'PathPaymentStrictSend', 'PathPaymentStrictReceive'])
+    result = cmd_check_new_asset_transaction('MTL', BotValueTypes.LastMTLTransaction, 10, filter_asset=mtl_asset,
+                                             filter_operation=['Payment', 'PathPaymentStrictSend',
+                                                               'PathPaymentStrictReceive'])
     if len(result) > 0:
         cmd_add_message(chat_id_signs, "Получены новые транзакции для MTL")
         for transaction in result:
@@ -92,7 +95,19 @@ def cmd_check_cron_transaction():
                 cmd_add_message(chat_id_signs, "Слишком много операций показаны первые ")
             cmd_add_message(chat_id_signs, msg[0:4000])
 
+    # FCM
+    result = cmd_check_new_asset_transaction('FCM', BotValueTypes.LastFCMTransaction,
+                                             issuer='GDIE253MSIYMFUS3VHRGEQPIBG7VAIPSMATWLTBF73UPOLBUH5RV2FCM')
+    if len(result) > 0:
+        cmd_add_message(chat_id_fcm, "Получены новые транзакции для FCM")
+        for transaction in result:
+            msg = f'\n'.join(transaction)
+            if len(msg) > 4096:
+                cmd_add_message(chat_id_fcm, "Слишком много операций показаны первые ")
+            cmd_add_message(chat_id_fcm, msg[0:4000])
 
+
+@logger.catch
 def cmd_check_bot():
     # balance Wallet
     if int(get_balances('GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL')['XLM']) < 100:
@@ -122,6 +137,8 @@ def cmd_check_bot():
 
 
 if __name__ == "__main__":
+    logger.add("check_stellar.log", rotation="1 MB")
+
     if 'check_transaction' in sys.argv:
         cmd_check_cron_transaction()
     elif 'check_bot' in sys.argv:

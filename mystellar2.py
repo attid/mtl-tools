@@ -47,7 +47,7 @@ def cmd_get_new_vote_mtlcity():
                     bls = balance["balance"]
                     bli = int(bls[0:bls.find('.')])
                     lg = round(math.log2((bli + 0.001) / divider)) + 1
-                    if account["account_id"] == mystellar.public_fond:
+                    if account["account_id"] == mystellar.public_fund:
                         cityinfond = bli
                     else:  # fond dont have voce
                         cityarr.append([account["account_id"], bli, lg, 0])
@@ -227,10 +227,10 @@ def cmd_get_new_vote_mtl(public_key):
         # print(vote_list)
         result = []
         transaction = TransactionBuilder(
-            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(mystellar.public_fond),
+            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(mystellar.public_fund),
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
-        xdr = gen_vote_xdr(mystellar.public_fond, vote_list, transaction)
+        xdr = gen_vote_xdr(mystellar.public_fund, vote_list, transaction)
         xdr = gen_vote_xdr(mystellar.public_issuer, vote_list1, transaction, mystellar.public_issuer)
         xdr = gen_vote_xdr(mystellar.public_distributor, vote_list2, transaction, mystellar.public_distributor)
         xdr = gen_vote_xdr(mystellar.public_competition, vote_list3, transaction, mystellar.public_competition)

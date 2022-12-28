@@ -2,13 +2,16 @@ import json
 import os
 from enum import IntEnum
 
+import tzlocal
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils.callback_data import CallbackData
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from loguru import logger
+
 from settings import bot_key
-import app_logger
+
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -22,11 +25,10 @@ bot = Bot(token=bot_key)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=str(tzlocal.get_localzone()))
 
 # Включаем логирование, чтобы не пропустить важные сообщения
-logger = app_logger.get_logger("skynet")
-
+logger.add("skynet.log", rotation="1 MB")
 
 class MTLChats(IntEnum):
     TestGroup = -1001767165598  # тестовая группа
@@ -80,7 +82,7 @@ try:
     with open("polls/save_all.json", "r") as fp:
         save_all = json.load(fp)
 except Exception as ex:
-    logger.info(ex)
+    logger.exception(ex)
 
 welcome_message = {}
 try:
@@ -91,7 +93,7 @@ try:
     else:
         welcome_message['captcha'] = []
 except Exception as ex:
-    logger.info(ex)
+    logger.exception(ex)
 
 
 def cmd_save_welcome_message():

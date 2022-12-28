@@ -5,7 +5,7 @@ import datetime
 import requests
 from stellar_sdk.sep.federation import resolve_stellar_address
 
-import app_logger
+from loguru import logger
 
 # import gspread_formatting
 # import json
@@ -13,15 +13,14 @@ import app_logger
 # https://docs.gspread.org/en/latest/
 import mystellar2
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("update_report")
 
-
+@logger.catch
 def my_float(s):
     result = round(float(s), 2) if len(s) > 1 else s
     return result
 
 
+@logger.catch
 def update_airdrop():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -47,7 +46,7 @@ def update_airdrop():
             if (len(address_list[idx]) < 10) and (len(fed_address_list[idx]) > 5) and (
                     fed_address_list[idx].count('*') > 0):
                 try:
-                    #print(address_list[idx], fed_address_list[idx])
+                    # print(address_list[idx], fed_address_list[idx])
                     address = resolve_stellar_address(fed_address_list[idx])
                     # print(address.account_id)
                     wks.update(f'D{idx + 1}', address.account_id)
@@ -97,4 +96,5 @@ def update_airdrop():
 
 
 if __name__ == "__main__":
+    logger.add("update_report.log", rotation="1 MB")
     update_airdrop()

@@ -1,0 +1,13 @@
+requests~=2.28.1
+cryptocode~=0.1
+stellar-sdk
+aiogram~=2.2
+PyQRCode~=1.2.1
+APScheduler~=3.9.1
+Pillow
+pyzbar
+fdb~=2.0.2
+python-dateutil~=2.8.2
+loguru~=0.6.0
+gspread~=5.6.0
+tzlocal~=4.2

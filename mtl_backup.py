@@ -21,7 +21,7 @@ def save_asset(asset: str):
 save_account(public_issuer)
 save_account(public_pawnshop)
 save_account(public_distributor)
-save_account(public_fond)
+save_account(public_fund)
 
 #for asset in MASTERASSETS:
 save_asset('mtl')

@@ -133,11 +133,11 @@ async def cmd_last_check(message: types.Message):
             await message.reply_audio("CQACAgIAAxkBAAIITGIWcuo8u7-EFN_bFSw_0J0wyx6jAAJtFgACR8y5S2F0QnIe8RZMIwQ")
 
         else:
-            await message.reply(dialog.talk(message.chat.id, message.text))
+            msg = await message.reply(dialog.talk(message.chat.id, message.text))
+            my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
     elif message.chat.type == ChatType.PRIVATE:
-        msg = await message.reply(dialog.talk(message.chat.id, message.text))
-        my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
+        await message.reply(dialog.talk(message.chat.id, message.text))
 
     else:
         if message.reply_to_message and (message.reply_to_message.from_user.id == 2134695152) \

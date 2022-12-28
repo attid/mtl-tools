@@ -1,16 +1,20 @@
 from os.path import isfile
 
+import requests
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ParseMode, ChatPermissions
 import json
+
+from loguru import logger
+
 import mystellar
 import mystellar2
 from datetime import datetime
 from datetime import timedelta
 
 import update_report3
-from skynet_main import dp, logger, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
+from skynet_main import dp, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
     welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha, save_all, \
     cmd_save_save_all
 
@@ -55,9 +59,9 @@ links_msg = f"""
 [Список всех документов](https://docs.google.com/spreadsheets/d/1x3E1ai_kPVMQ85nuGwuTq1bXD051fnVlf0Dz9NaFoq0)
 Тулзы [для подписания](mtl.ergvein.net/) / [расчет голосов и дивов](https://ncrashed.github.io/dividend-tools/votes/)
 [Лаборатория](https://laboratory.stellar.org/#?network=public)
-Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fond}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
+Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fund}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM) [mtl](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/MTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V)
-Списки [черный]({link_json}blacklist.json) / [BIM]({link_json}bodreplenish.json) / [донаты]({link_json}donation.json)
+Списки [черный]({link_json}blacklist.json) / [BL for DG]({link_json}dg_blacklist.json) 
 Боты [Обмен 1]({link_stellar}GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7) / \
 [Обмен 2]({link_stellar}GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F) / \
 [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \
@@ -67,7 +71,6 @@ links_msg = f"""
 [Бот сжигания]({link_stellar}GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE) 
 Видео [Как подписывать](https://t.me/MTL_production/26) / [Как проверять](https://t.me/MTL_production/27) / [Как склеить\редактировать транзакции](https://t.me/MTL_production/28)
 """
-
 
 @dp.message_handler(state='*', commands="start")
 @dp.message_handler(state='*', commands="cancel")
@@ -94,7 +97,7 @@ async def cmd_answer(message: types.Message):
 @dp.message_handler(commands="save")
 async def cmd_save(message: types.Message):
     logger.info(f'save {message.text}')
-    logger.info(f'{message}')
+    logger.warning(f'{message}')
     if message.from_user.username == "itolstov":
         await message.answer("Готово")
     else:
@@ -306,6 +309,7 @@ async def cmd_do_div(message: types.Message):
             i = await mystellar.cmd_send_by_list_id(div_list_id)
             await msg.edit_text(add_text(lines, 6, f"Part done. Need {i} more. Step (6/12)"))
         except Exception as err:
+            logger.info(str(err))
             await msg.edit_text(add_text(lines, 7, f"Got error. New attempt {e}. Step (7/12)"))
             e += 1
     await msg.edit_text(add_text(lines, 8, f"All work done. Step (8/12)"))
@@ -597,7 +601,7 @@ def cmd_delete_later(message: types.Message, minutes=5):
 
 @dp.message_handler(content_types=types.ContentTypes.NEW_CHAT_MEMBERS)
 async def new_chat_member(message: types.Message):
-    logger.info(message.as_json())
+    # logger.info(message.as_json())
     if str(message.chat.id) in welcome_message:
         if message.from_user in message.new_chat_members:
             msg = welcome_message.get(str(message.chat.id), 'Hi new user')
@@ -715,12 +719,20 @@ async def cmd_exit(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands="err")
-async def cmd_log(message: types.Message):
+async def cmd_log_err(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
 
     await dp.bot.send_document(message.chat.id, open('skynet.err', 'rb'))
+
+@dp.message_handler(commands="log")
+async def cmd_log(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    await dp.bot.send_document(message.chat.id, open('skynet.log', 'rb'))
 
 
 @dp.message_handler(commands="add_skynet_admin")
@@ -845,6 +857,8 @@ async def smd_check_dg(message: types.Message):
         await message.reply('Other group !')
         return False
 
+    blacklist = requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/dg_blacklist.json').json()
+
     all_file = f'polls/all{message.chat.id}'
     if isfile(all_file):
         with open(all_file, "r") as fp:
@@ -860,10 +874,13 @@ async def smd_check_dg(message: types.Message):
                 donate_list.append(tmp[2])
 
         for address in donate_list:
-            username = mystellar.address_id_to_username(address)
-            if username.find('..') > 0:
-                await message.answer(f'{address} not found')
-            donate_members.append(username)
+            if address in blacklist:
+                pass
+            else:
+                username = mystellar.address_id_to_username(address)
+                if username.find('..') > 0:
+                    await message.answer(f'{address} not found')
+                donate_members.append(username)
 
         donate_members = list(set(donate_members))
 

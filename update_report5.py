@@ -1,17 +1,15 @@
 import datetime
 import gspread
 import requests
-import app_logger
+from loguru import logger
 import fb
 from stellar_sdk.sep.federation import resolve_account_id
 
 # https://docs.gspread.org/en/latest/
 from mystellar import resolve_account, cmd_show_donates
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("update_report")
 
-
+@logger.catch
 def update_wallet_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -49,11 +47,12 @@ def update_wallet_report():
 
     # print(update_list)
     # print(update_list)
-    wks.update('A2', update_list)
+    wks.update('A4', update_list)
     wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'all done {now}')
 
 
 if __name__ == "__main__":
+    logger.add("update_report.log", rotation="1 MB")
     update_wallet_report()

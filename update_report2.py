@@ -1,7 +1,7 @@
 import gspread
 import datetime
 import requests
-import app_logger
+from loguru import logger
 
 # import gspread_formatting
 # import json
@@ -10,10 +10,8 @@ import app_logger
 import mystellar
 import mystellar2
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("update_report")
 
-
+@logger.catch
 def update_guarant_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -89,6 +87,7 @@ def update_guarant_report():
     logger.info(f'report Guarantors all done {now}')
 
 
+@logger.catch
 def update_top_holders_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -112,6 +111,7 @@ def update_top_holders_report():
     logger.info(f'report topholders all done {now}')
 
 
+@logger.catch
 def update_bdm_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -134,6 +134,7 @@ def update_bdm_report():
 
 
 if __name__ == "__main__":
-    #update_guarant_report()
+    logger.add("update_report.log", rotation="1 MB")
+    # update_guarant_report()
     update_top_holders_report()
     update_bdm_report()

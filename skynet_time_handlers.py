@@ -2,13 +2,14 @@ from datetime import datetime
 import random
 
 from aiogram import Dispatcher
+from aiogram.types import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import fb
 # from apscheduler.job import Job
 
 import mystellar
-from skynet_main import logger, MTLChats
+from skynet_main import MTLChats
 from keyrate import show_key_rate
 
 
@@ -39,10 +40,10 @@ async def cmd_send_message_1m(dp: Dispatcher):
     for record in fb.execsql('select m.id, m.user_id, m.text, m.use_alarm from t_message m where m.was_send = 0'):
         if record[1] == MTLChats.SignGroup.value:
             await dp.bot.send_message(record[1], record[2], disable_notification=record[3] == 0,
-                                      message_thread_id=59558, disable_web_page_preview=True)
+                                      message_thread_id=59558, disable_web_page_preview=True, parse_mode=ParseMode.HTML)
         else:
             await dp.bot.send_message(record[1], record[2], disable_notification=record[3] == 0,
-                                      disable_web_page_preview=True)
+                                      disable_web_page_preview=True, parse_mode=ParseMode.HTML)
 
         fb.execsql('update t_message m set m.was_send = 1 where m.id = ?', (record[0],))
 

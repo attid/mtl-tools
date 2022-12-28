@@ -2,21 +2,21 @@ import datetime
 import gspread
 import json
 import requests
-import app_logger
+from loguru import logger
 import fb
+import mystellar
 from mtl_exchange import check_fire
 from settings import currencylayer_id, coinlayer_id
 
 # https://docs.gspread.org/en/latest/
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("update_report")
-
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade', 'MonteAqua',
                 'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'OSW', 'XLM', 'MTLand', 'AUMTL',
-                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi', 'FCM', 'BIOMinvest']
+                'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi', 'FCM', 'BIOMinvest',
+                'SATSMTL']
 
 
+@logger.catch
 def update_main_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -44,7 +44,6 @@ def update_main_report():
     rq = requests.get(
         'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
     wks.update('C9', float(rq.json()['_embedded']['records'][0]['amount']))
-
 
     # FOND
     rq = requests.get('https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS')
@@ -130,16 +129,12 @@ def update_main_report():
 
     # exchange
     public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
-    balances = {}
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{public_exchange}').json()
-    # print(json.dumps(rq, indent=4))
-    for balance in rq["balances"]:
-        name = 'XLM' if balance["asset_type"] == 'native' else balance["asset_code"]
-        balances[name] = balance["balance"]
+    balances = mystellar.get_balances(public_exchange)
     wks.update('F10', float(balances['XLM']))
     wks.update('F11', float(balances['EURMTL']))
     wks.update('F12', float(balances['EURDEBT']))
     wks.update('F13', float(balances['BTCMTL']))
+    wks.update('F14', float(balances['SATSMTL']))
 
     # exchange
     public_exchange = "GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F"
@@ -197,6 +192,7 @@ def update_main_report():
     logger.info(f'all done {now}')
 
 
+@logger.catch
 def update_fire():
     gc = gspread.service_account('mtl-google-doc.json')
     wks = gc.open("MTL Report").worksheet("AutoData")
@@ -207,5 +203,6 @@ def update_fire():
 
 
 if __name__ == "__main__":
+    logger.add("update_report.log", rotation="1 MB")
     update_main_report()
     update_fire()

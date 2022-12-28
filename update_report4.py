@@ -3,17 +3,15 @@ from builtins import print
 
 import gspread
 import requests
-import app_logger
+from loguru import logger
 import fb
 from stellar_sdk.sep.federation import resolve_account_id
 
 # https://docs.gspread.org/en/latest/
 from mystellar import resolve_account, cmd_show_donates, address_id_to_username
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("update_report")
 
-
+@logger.catch
 def update_donate_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
@@ -90,4 +88,5 @@ def update_donate_report():
 
 
 if __name__ == "__main__":
+    logger.add("update_report.log", rotation="1 MB")
     update_donate_report()

@@ -1,19 +1,18 @@
+from loguru import logger
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Price
 import json, requests
 
 from mystellar import public_exchange, public_issuer, public_itolstov, public_sign, public_fire
 from settings import private_sign, base_fee
-import app_logger
 
 # https://stellar-sdk.readthedocs.io/en/latest/
 
-if 'logger' not in globals():
-    logger = app_logger.get_logger("mtl_exchange")
-
 max_eurmtl = 10000.0  # max offer
 max_btcmtl = 0.1  # max offer
+max_satsmtl = 1000000  # max offer
+sats_cost = 100000000
 
-min_xlm = 5.0
+min_xlm = 30.0
 persent_eurmtl = 1.05  # 5% наценки
 persent_btc = 1.01  # 5% наценки
 persent_xlm = 1.005  # 0,5% наценки
@@ -26,8 +25,10 @@ asset_xlm = Asset("XLM")
 asset_eurmtl = Asset("EURMTL", public_issuer)
 asset_mtl = Asset("MTL", public_issuer)
 asset_btcmtl = Asset("BTCMTL", public_issuer)
+asset_satsmtl = Asset("SATSMTL", public_issuer)
 
 
+@logger.catch
 def update_offer(account, price_min, price_max, price, selling_asset, buying_asset, amount,
                  check_persent, record):
     test_record = {'id': '1086147610', 'paging_token': '1086147610',
@@ -71,6 +72,7 @@ def update_offer(account, price_min, price_max, price, selling_asset, buying_ass
         server.submit_transaction(stellar_transaction)
 
 
+@logger.catch
 def fire_mtl(account, amount):
     stellar_transaction = TransactionBuilder(source_account=account,
                                              network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -84,6 +86,7 @@ def fire_mtl(account, amount):
     server.submit_transaction(stellar_transaction)
 
 
+@logger.catch
 def check_exchange():
     account_exchange = server.load_account(public_exchange)
     # get balance
@@ -98,7 +101,9 @@ def check_exchange():
     sum_mtl = float(balances['MTL'])
     sum_xlm = float(balances['XLM'])
     sum_btcmtl = float(balances['BTCMTL'])
-    logger.info(['sum_eurmtl', sum_eurmtl, 'sum_mtl', sum_mtl, 'sum_xlm', sum_xlm, 'sum_btcmtl', sum_btcmtl])
+    sum_satsmtl = float(balances['SATSMTL'])
+    logger.info(['sum_eurmtl', sum_eurmtl, 'sum_mtl', sum_mtl, 'sum_xlm', sum_xlm, 'sum_btcmtl', sum_btcmtl,
+                 'sum_satsmtl', sum_satsmtl])
 
     # get offers
     rq = requests.get(f'https://horizon.stellar.org/accounts/{public_exchange}/offers').json()
@@ -129,9 +134,10 @@ def check_exchange():
     sum_eurmtl = sum_eurmtl - sum_eurmtl_xlm
     sum_eurmtl_btc = sum_eurmtl if sum_eurmtl < max_eurmtl else max_eurmtl
     sum_btcmtl = sum_btcmtl if sum_btcmtl < max_btcmtl else max_btcmtl
-    max_xlm = round(max_eurmtl * cost_eurmtl / 1000) * 1000 + 5
+    max_xlm = round(max_eurmtl * cost_eurmtl / 1000) * 1000
     sum_xlm = sum_xlm if sum_xlm < max_xlm else max_xlm
     sum_xlm -= min_xlm
+    sum_satsmtl = sum_satsmtl if sum_satsmtl < max_satsmtl else max_satsmtl
 
     # print(records.get('EURMTL-XLM', {'price': cost_eurmtl})["price"], cost_eurmtl)
     # print(records.get('BTCMTL-EURMTL', {'price': cost_btc})["price"], cost_btc)
@@ -157,12 +163,22 @@ def check_exchange():
                  check_persent=persent_btc_cost,
                  record=records.get('EURMTL-BTCMTL'))
 
+    update_offer(account=account_exchange, price_min=sats_cost - 1, price_max=sats_cost + 1, price=round(sats_cost),
+                 selling_asset=asset_btcmtl, buying_asset=asset_satsmtl, amount=0.1,
+                 check_persent=persent_btc_cost, record=records.get('BTCMTL-SATSMTL'))
+
+    update_offer(account=account_exchange, price_min=1 / (sats_cost + 1), price_max=1 / (sats_cost - 2),
+                 price=1 / (sats_cost - 1),
+                 selling_asset=asset_satsmtl, buying_asset=asset_btcmtl, amount=sum_satsmtl,
+                 check_persent=persent_btc_cost, record=records.get('SATSMTL-BTCMTL'))
+
     # update_offer(account=account_exchange, price_min=15000 * cost_eurmtl, price_max=1 * cost_eurmtl,
     #             price=round(cost_btc * cost_eurmtl * persent_btc),
     #             selling_asset=asset_btcmtl, buying_asset=asset_xlm, amount=sum_btcmtl, check_persent=persent_cost,
     #             record=records.get('BTCMTL-XLM'))
 
 
+@logger.catch
 def check_fire(cost_fire):
     account_fire = server.load_account(public_fire)
     # get balance
@@ -196,5 +212,6 @@ def check_fire(cost_fire):
 
 
 if __name__ == "__main__":
+    logger.add("mtl_exchange.log", rotation="1 MB")
     check_exchange()
     # check_fire(1.5)

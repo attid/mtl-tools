@@ -1,10 +1,13 @@
 import requests
+from loguru import logger
+
 import fb
 from mystellar import stellar_get_mtl_holders, eurmtl_asset, eurdebt_asset, get_balances, public_key_rate
 
 key_rate = 1.6
 
 
+@logger.catch
 def get_pair(holders, eurmtl_dic, eurdebt_dic):
     for account in holders:
         # print(json.dumps(account,indent=4))
@@ -30,6 +33,7 @@ def get_pair(holders, eurmtl_dic, eurdebt_dic):
         # print(eurdebt_dic)
 
 
+@logger.catch
 def update_eurmtl_log():
     eurmtl_dic = {}
     eurdebt_dic = {}
@@ -47,10 +51,11 @@ def update_eurmtl_log():
         persent = eurdebt_dic[key] * (key_rate / 100) / 365
         insert_list.append([key, 'EURDEBT', persent])
 
-    fb.manyinsert("insert into t_keyrate (user_key, asset, amount) values (?,?,?)", insert_list)
+    fb.many_insert("insert into t_keyrate (user_key, asset, amount) values (?,?,?)", insert_list)
 
 
-def show_key_rate(key = 'all', check_can_run = False):
+@logger.catch
+def show_key_rate(key='all', check_can_run=False):
     remains = 0
     if len(key) < 10:
         eurmtl = fb.execsql('select sum(a), count(c) from (select sum(ec.amount) a, count(*) c from t_keyrate ec '
@@ -92,4 +97,4 @@ def show_key_rate(key = 'all', check_can_run = False):
 
 if __name__ == "__main__":
     update_eurmtl_log()
-    #print(show_key_rate('GAHSPXXXAEIGIHQR3Z3KNINXANPUAYGNQTYB5WAHWJXBAKUQ7VKTZVXT'))
+    # print(show_key_rate('GAHSPXXXAEIGIHQR3Z3KNINXANPUAYGNQTYB5WAHWJXBAKUQ7VKTZVXT'))
