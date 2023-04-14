@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import gspread
 import json
@@ -11,13 +12,15 @@ from settings import currencylayer_id, coinlayer_id
 # https://docs.gspread.org/en/latest/
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EUR', 'EURDEBT', 'EURMTL', 'GPA', 'GRAFDRON', 'iTrade', 'MonteAqua',
-                'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'OSW', 'XLM', 'MTLand', 'AUMTL',
+                'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY', 'Agora', 'XLM', 'MTLand', 'AUMTL',
                 'MTLMiner', 'MTLDVL', 'GPACAR', 'SwapCoin', 'BIOM', 'MrxpInvest', 'MTLDefi', 'FCM', 'BIOMinvest',
-                'SATSMTL']
+                'SATSMTL', 'USDC', 'MonteSol', 'MTLGoldriver']
+
+CITYASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP']
 
 
 @logger.catch
-def update_main_report():
+async def update_main_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     # Open a sheet from a spreadsheet in one go
@@ -44,19 +47,24 @@ def update_main_report():
     rq = requests.get(
         'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
     wks.update('C9', float(rq.json()['_embedded']['records'][0]['amount']))
+    # MTLCITY
+    rq = requests.get(
+        'https://horizon.stellar.org/assets?asset_code=MTLCITY&asset_issuer=GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3')
+    wks.update('J9', float(rq.json()['_embedded']['records'][0]['amount']))
+
+    #cost data
+    cost_data = {}
 
     # FOND
     rq = requests.get('https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS')
+    cost_data.update(rq.json()['data'])
     assets = []
-
     for balance in rq.json()['balances']:
         if balance['asset_type'] == "native":
             assets.append(['XLM', float(balance['balance'])])
         else:
             assets.append([balance['asset_code'], float(balance['balance'])])
-
     goodassets = []
-
     for ms in MASTERASSETS:
         asset = list(filter(lambda x: x[0] == ms, assets))
         if asset:
@@ -64,8 +72,28 @@ def update_main_report():
         else:
             asset = [ms, 0]
         goodassets.append(asset)
-
     wks.update('A14', goodassets)
+
+    # CITY
+    rq = requests.get('https://horizon.stellar.org/accounts/GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3')
+    assets = []
+    cost_data.update(rq.json()['data'])
+
+    for balance in rq.json()['balances']:
+        if balance['asset_type'] == "native":
+            assets.append(['XLM', float(balance['balance'])])
+        else:
+            assets.append([balance['asset_code'], float(balance['balance'])])
+    goodassets = []
+    for ms in CITYASSETS:
+        asset = list(filter(lambda x: x[0] == ms, assets))
+        if asset:
+            asset = list(filter(lambda x: x[0] == ms, assets))[0]
+        else:
+            asset = [ms, 0]
+        goodassets.append(asset)
+    wks.update('I14', goodassets)
+
 
     # MTLand
     json_land = requests.get(
@@ -86,24 +114,17 @@ def update_main_report():
             competition_assets[balance['asset_code']] = float(balance['balance'])
     # FOND safe desk
     safe_desk_assets = {}
-    rq = requests.get('https://horizon.stellar.org/accounts/GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            safe_desk_assets['XLM'] = float(balance['balance'])
-        else:
-            safe_desk_assets[balance['asset_code']] = float(balance['balance'])
-    rq = requests.get('https://horizon.stellar.org/accounts/GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            safe_desk_assets['XLM'] = float(balance['balance'])
-        else:
-            safe_desk_assets[balance['asset_code']] += float(balance['balance'])
-    rq = requests.get('https://horizon.stellar.org/accounts/GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            safe_desk_assets['XLM'] = float(balance['balance'])
-        else:
-            safe_desk_assets[balance['asset_code']] += float(balance['balance'])
+    debt_holders = await mystellar.stellar_get_mtl_holders(mystellar.eurdebt_asset)
+    for record in debt_holders:
+        if record['id'] != mystellar.public_fund:
+            found = list(filter(lambda x: x.get('asset_code') == 'EURDEBT', record['balances']))
+            if float(found[0]['balance']) > 0:
+                for balance in record['balances']:
+                    if balance['asset_type'] == "native":
+                        safe_desk_assets['XLM'] = float(balance['balance'])
+                    else:
+                        safe_desk_assets[balance['asset_code']] = float(balance['balance']) + \
+                                                                  safe_desk_assets.get(balance['asset_code'], 0)
 
     # aum
     s = requests.get(
@@ -128,47 +149,41 @@ def update_main_report():
     wks.update('C33', miner_count)
 
     # exchange
-    public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
-    balances = mystellar.get_balances(public_exchange)
-    wks.update('F10', float(balances['XLM']))
-    wks.update('F11', float(balances['EURMTL']))
-    wks.update('F12', float(balances['EURDEBT']))
-    wks.update('F13', float(balances['BTCMTL']))
-    wks.update('F14', float(balances['SATSMTL']))
-
-    # exchange
-    public_exchange = "GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F"
-    balances = {}
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{public_exchange}').json()
-    # print(json.dumps(rq, indent=4))
-    for balance in rq["balances"]:
-        name = 'XLM' if balance["asset_type"] == 'native' else balance["asset_code"]
-        balances[name] = balance["balance"]
-    wks.update('H10', float(balances['XLM']))
-    wks.update('H11', float(balances['EURMTL']))
-    wks.update('H12', float(balances['EURDEBT']))
-
-    # fire
-    public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
-    balances = {}
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{public_fire}').json()
-    # print(json.dumps(rq, indent=4))
-    for balance in rq["balances"]:
-        name = 'XLM' if balance["asset_type"] == 'native' else balance["asset_code"]
-        balances[name] = balance["balance"]
-    wks.update('E18', float(balances['EURMTL']))
+    exchange_balances = {}
+    for bot in mystellar.exchange_bots:
+        bot_balances = await mystellar.get_balances(bot)
+        for balance in bot_balances:
+            exchange_balances[balance] = bot_balances[balance] + exchange_balances.get(balance, 0)
+    # {'EURMTL': 66008.3838227, 'XLM': 68700.34405200001, 'BTCMTL': 1.0014920999999999, 'SATSMTL': 9601261.275270201, 'USDC': 5338.6724997, 'MTL': 0.0}
+    wks.update('E18', exchange_balances['EURMTL'])
+    wks.update('E30', exchange_balances['XLM'])
+    wks.update('E15', exchange_balances['BTCMTL'])
+    wks.update('E42', exchange_balances['SATSMTL'])
+    wks.update('E43', exchange_balances['USDC'])
 
     # divs
-    j = requests.get(
-        f'https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS/operations?order=desc&limit=50').text
-    j = json.loads(j)
-    div_sum = 0
-    for record in j["_embedded"]["records"]:
-        # print('*',record)
-        if record['type'] == 'payment' and 'GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ' == record['to']:
-            div_sum = float(record['amount'])
-            break
-    wks.update('B10', div_sum)
+    div_sum = await mystellar.cmd_show_data(mystellar.public_div, 'LAST_DIVS', True)
+    wks.update('B10', int(float(div_sum[0])))
+
+    # defi
+    defi_balance = 0
+    debank = requests.get("https://api.debank.com/token/balance_list?user_addr=0x0358d265874b5cf002d1801949f1cee3b08fa2e9&chain=bsc").json()
+    for row in debank['data']:
+        defi_balance += row['amount'] * row['price']
+    debank = requests.get("https://api.debank.com/portfolio/project_list?user_addr=0x0358d265874b5cf002d1801949f1cee3b08fa2e9").json()
+    for row in debank['data']:
+        for row2 in row['portfolio_item_list']:
+            for row3 in row2['asset_token_list']:
+                defi_balance += row3['amount'] * row3['price']
+    wks.update('E4', int(defi_balance))
+    #amount
+    rq = requests.get(
+        'https://horizon.stellar.org/assets?asset_code=MTLDefi&asset_issuer=GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI')
+    wks.update('E5', float(rq.json()['_embedded']['records'][0]['amount']))
+    # buyback balance
+    bot_balances = await mystellar.get_balances(mystellar.public_defi)
+    wks.update('E6', float(bot_balances.get('BTCMTL',0)))
+
 
     # donates
     donates = requests.get("https://raw.githubusercontent.com/montelibero-org/mtl/main/json/donation.json").json()
@@ -187,22 +202,29 @@ def update_main_report():
     wks.update('D18', safe_desk_assets.get('EURMTL'))
     wks.update('D17', safe_desk_assets.get('EURDEBT'))
 
+    # cost data
+    update_data = []
+    for data_name in cost_data:
+        if data_name.find('_COST') != -1 or data_name.find('_AMOUNT') != -1:
+            update_data.append([data_name, float(mystellar.decode_data_value(cost_data[data_name]))])
+    wks.update('L10', update_data)
+
     wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'all done {now}')
 
 
 @logger.catch
-def update_fire():
+async def update_fire():
     gc = gspread.service_account('mtl-google-doc.json')
     wks = gc.open("MTL Report").worksheet("AutoData")
-    cost_fire = wks.cell(35, 4).value
+    cost_fire = wks.cell(32, 4).value
     logger.info(f'cost_fire {cost_fire}')
     cost_fire = float(cost_fire.replace(',', '.')) * 0.8
-    check_fire(cost_fire)
+    await check_fire(cost_fire)
 
 
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
-    update_main_report()
-    update_fire()
+    asyncio.run(update_main_report())
+    asyncio.run(update_fire())

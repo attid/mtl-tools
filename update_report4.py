@@ -1,18 +1,15 @@
+import asyncio
 import datetime
-from builtins import print
-
 import gspread
-import requests
 from loguru import logger
 import fb
-from stellar_sdk.sep.federation import resolve_account_id
 
 # https://docs.gspread.org/en/latest/
 from mystellar import resolve_account, cmd_show_donates, address_id_to_username
 
 
 @logger.catch
-def update_donate_report():
+async def update_donate_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     # Open a sheet from a spreadsheet in one go
@@ -73,10 +70,17 @@ def update_donate_report():
     # print(update_list)
     wks.update('A2', update_list)
     wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    logger.info(f'donate report done {now}')
 
+async def update_donates_new():
+    gc = gspread.service_account('mtl-google-doc.json')
+
+    # Update a range of cells using the top left corner address
+    now = datetime.datetime.now()
     # Open a sheet from a spreadsheet in one go
     wks = gc.open("MTL_TopHolders").worksheet("DonatesNew")
-    update_list = cmd_show_donates(return_table=True)
+
+    update_list = await cmd_show_donates(return_table=True)
 
     wks.update('A2', update_list)
     wks.update('E1', now.strftime('%d.%m.%Y %H:%M:%S'))
@@ -84,9 +88,15 @@ def update_donate_report():
     update_list.append(['', '', ''])
     update_list.append(['', '', ''])
 
-    logger.info(f'all done {now}')
+    logger.info(f'new done {now}')
 
 
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
-    update_donate_report()
+    logger.info(datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+
+    asyncio.run(update_donate_report())
+    asyncio.run(update_donates_new())
+
+
+

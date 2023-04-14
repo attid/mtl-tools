@@ -17,9 +17,9 @@ import skynet_talk_handlers
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 
 @dp.message_handler(commands="poll_reload_vote")
-async def cmd_poll_check(message: types.Message):
+async def cmd_poll_reload_vote(message: types.Message):
     if message.from_user.username == "itolstov":
-        print(skynet_poll_handlers.cmd_save_votes())
+        await skynet_poll_handlers.cmd_save_votes()
         importlib.reload(skynet_poll_handlers)
         await message.reply('reload complete')
     else:
@@ -40,6 +40,7 @@ info_cmd = {
     "/drink": " попросить тост",
     "/decode": "декодирует xdr использовать: /decode xdr где ",
     "/do_div": "начать выплаты дивидентов",
+    "/do_sats_div": "выплата дивидентов в satsmtl",
     "/all": "тегнуть всех пользователей. работает зависимо от чата. и только  в рабочих чатах",
     "/gen_data": "сгенерить xdr для сохранения данных в стеларе. например для bdm или делигирования. Использовать : /gen_data public_key data_name:data_value",
     "/show_data": "Показать какие данные есть в стеларе на этот адрес. Use: /show_data public_key",
@@ -49,7 +50,7 @@ info_cmd = {
     "/poll": "Создать голование с учетом веса голосов, надо слать в ответ на стандартное голосование",
     "/poll_replace_text": "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text",
     "/poll_close": "Закрыть голосование. после этого нельзя голосовать или менять его.",
-    "/poll_check": "Проверить кто не головал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'",
+    "/poll_check": "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'",
     "/poll_reload_vote": "Перечитать голоса из блокчейна",
     "skynet update donates": "Попросить Скайнет обновить табличку донатов",
     "Скайнет сгенери дивиденты на 100 мулек": "Попросить Скайнет сгенерить xdr для дивов. 'сгенери', 'сделай', 'подготовь' 'дивиденты', 'дивы'",
@@ -83,7 +84,11 @@ info_cmd = {
     "/fee": "показать комиссию в стелларе",
     "/show_id": "Показать ID чата",
     "/do_resend": "Переотправить транзакцию. Только для админов",
-    "/check_dg": "Проверить членов GP. Только для админов"
+    "/check_dg": "Проверить членов GP. Только для админов",
+    "/stop_exchange": "Остановить ботов обмена. Только для админов",
+    "/start_exchange": "Запустить ботов обмена. Только для админов",
+    "/push": "Отправить сообщение в личку. Только для админов скайнета",
+    "/set_reply_only": "Следить за сообщениями вне тренда и сообщать об этом."
 }
 
 global_dict = {}
@@ -101,7 +106,8 @@ async def inline_handler(query: types.InlineQuery):
                 description=value,
                 input_message_content=types.InputTextMessageContent(key),
             ))
-    return await query.answer(answers, cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+    return await query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+    # https://mastergroosha.github.io/aiogram-2-guide/inline_mode/
 
 
 @logger.catch

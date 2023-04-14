@@ -34,14 +34,14 @@ def get_pair(holders, eurmtl_dic, eurdebt_dic):
 
 
 @logger.catch
-def update_eurmtl_log():
+async def update_eurmtl_log():
     eurmtl_dic = {}
     eurdebt_dic = {}
     insert_list = []
 
-    holders = stellar_get_mtl_holders(eurdebt_asset)
+    holders = await stellar_get_mtl_holders(eurdebt_asset)
     get_pair(holders, eurmtl_dic, eurdebt_dic)
-    holders = stellar_get_mtl_holders(eurmtl_asset)
+    holders = await stellar_get_mtl_holders(eurmtl_asset)
     get_pair(holders, eurmtl_dic, eurdebt_dic)
 
     for key in eurmtl_dic:

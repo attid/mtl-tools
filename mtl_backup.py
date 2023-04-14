@@ -12,9 +12,10 @@ def save_account(account: str):
         json.dump(rq.json(), fp, indent=2)
 
 
-def save_asset(asset: str):
-    accounts = mystellar.stellar_get_mtl_holders()
-    with open(f"backup/{asset}.json", "w") as fp:
+async def save_asset(asset: str):
+    accounts = await mystellar.stellar_get_mtl_holders()
+    d = datetime.now().day % 5
+    with open(f"backup/{asset}.{d}.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
 
 
@@ -24,4 +25,5 @@ save_account(public_distributor)
 save_account(public_fund)
 
 #for asset in MASTERASSETS:
-save_asset('mtl')
+asyncio.run(save_asset('mtl'))
+

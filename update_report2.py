@@ -1,3 +1,5 @@
+import asyncio
+
 import gspread
 import datetime
 import requests
@@ -8,11 +10,10 @@ from loguru import logger
 # from settings import currencylayer_id, coinlayer_id
 # https://docs.gspread.org/en/latest/
 import mystellar
-import mystellar2
 
 
 @logger.catch
-def update_guarant_report():
+async def update_guarantors_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     # Open a sheet from a spreadsheet in one go
@@ -34,12 +35,15 @@ def update_guarant_report():
     address_list.pop(0)
     len_address_list = len(address_list)
 
-    all_accounts = mystellar.stellar_get_mtl_holders(mystellar.eurdebt_asset)
+    all_accounts = await mystellar.stellar_get_mtl_holders(mystellar.eurdebt_asset)
     for account in all_accounts:
         if account["id"] in address_list:
             pass
         else:
-            address_list.append(account["id"])
+            balances = account['balances']
+            found = list(filter(lambda x: x.get('asset_code') and x.get('asset_code') == 'EURDEBT', balances))
+            if float(found[0]['balance']) > 1:
+                address_list.append(account["id"])
 
     if len(address_list) > len_address_list:
         update_list = []
@@ -53,20 +57,15 @@ def update_guarant_report():
 
     update_list = []
 
-    for idx, adress in enumerate(address_list):
+    for idx, address in enumerate(address_list):
         eur_sum = ''
         debt_sum = ''
         if idx == len(date_list):
             date_list.append('')
-        if adress and (len(adress) == 56):
+        if address and (len(address) == 56):
             # print(val)
             # get balance
-            balances = {}
-            rq = requests.get(f'https://horizon.stellar.org/accounts/{adress}').json()
-            # print(json.dumps(rq, indent=4))
-            for balance in rq["balances"]:
-                if balance["asset_type"] == 'credit_alphanum12':
-                    balances[balance["asset_code"]] = balance["balance"]
+            balances = await mystellar.get_balances(address)
             eur_sum = round(float(balances.get('EURMTL', 0)))
             debt_sum = float(balances.get('EURDEBT', 0))
             if eur_sum >= debt_sum:
@@ -78,28 +77,43 @@ def update_guarant_report():
         # datetime.datetime.strptime(dt, '%d.%m.%Y') - datetime.datetime(1899, 12, 30)).days
         update_list.append([dt_google, eur_sum, debt_sum])
 
-    wks.update('D3', update_list)
-    wks.format("D3:D40", {"numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}})
+    wks.update('E3', update_list)
+    # wks.format("E3:E40", {"numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}})
+
+    # rects
+    address_list = wks.col_values(3)
+    address_list.pop(0)
+    address_list.pop(0)
+    update_list = []
+    for address in address_list:
+        if len(address) == 56:
+            balances = await mystellar.get_balances(address)
+            update_list.append([balances.get('MTLRECT',0)])
+        else:
+            update_list.append(['=['])
+
+    wks.update('H3', update_list)
 
     # dt1 = datetime.datetime.strptime(record["created_at"], '%Y-%m-%dT%H:%M:%SZ')
     # print(update_list)
+    wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'report Guarantors all done {now}')
 
 
 @logger.catch
-def update_top_holders_report():
+async def update_top_holders_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     now = datetime.datetime.now()
 
     wks = gc.open("MTL_TopHolders").worksheet("TopHolders")
 
-    vote_list = mystellar.cmd_gen_vote_list()
-    vote_list = mystellar.stellar_add_mtl_holders_info(vote_list)
+    vote_list = await mystellar.cmd_gen_vote_list()
+    vote_list = await mystellar.stellar_add_mtl_holders_info(vote_list)
 
     for vote in vote_list:
-        vote[0] = mystellar.resolve_account(vote[0]) if vote[1] > 400 else vote[0][:4] + '..' + vote[0][-4:]
+        vote[0] = await mystellar.resolve_account(vote[0]) if vote[1] > 400 else vote[0][:4] + '..' + vote[0][-4:]
         vote.pop(4)
 
     vote_list.sort(key=lambda k: k[2], reverse=True)
@@ -112,20 +126,20 @@ def update_top_holders_report():
 
 
 @logger.catch
-def update_bdm_report():
+async def update_bdm_report():
     gc = gspread.service_account('mtl-google-doc.json')
 
     now = datetime.datetime.now()
 
     wks = gc.open("MTL_TopHolders").worksheet("BDM")
 
-    bdm_list = mystellar.cmd_show_guards_list()
+    bdm_list = await mystellar.cmd_show_guards_list()
 
     for bdm in bdm_list:
         if len(bdm[0]) == 56:
-            bdm.append(mystellar.resolve_account(bdm[0]))
+            bdm.append(await mystellar.resolve_account(bdm[0]))
         if len(bdm[2]) == 56:
-            bdm.append(mystellar.resolve_account(bdm[2]))
+            bdm.append(await mystellar.resolve_account(bdm[2]))
 
     wks.update('A2', bdm_list)
     wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
@@ -135,6 +149,7 @@ def update_bdm_report():
 
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
-    # update_guarant_report()
-    update_top_holders_report()
-    update_bdm_report()
+    asyncio.run(update_guarantors_report())
+    asyncio.run(update_bdm_report())
+    asyncio.run(update_top_holders_report())
+

@@ -3,7 +3,7 @@ from os.path import isfile
 import requests
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.types import ParseMode, ChatPermissions
+from aiogram.types import ParseMode
 import json
 
 from loguru import logger
@@ -16,7 +16,7 @@ from datetime import timedelta
 import update_report3
 from skynet_main import dp, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
     welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha, save_all, \
-    cmd_save_save_all
+    cmd_save_save_all, bot, reply_only, cmd_save_reply_only, send_by_list
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
 
@@ -30,11 +30,6 @@ startmsg = """
 Это все что я умею:
 /start  начать все с чистого листа
 /links  показать полезные ссылки
-/dron2 открыть линию доверия дрону2
-/mtlcamp открыть линию доверия mtlcamp
-/blacklist операции с блеклистом
-/get_vote_fund_xdr сделать транзакцию на обновление голосов фонда
-/get_vote_city_xdr сделать транзакцию на обновление голосов сити
 /editxdr редактировать транзакцию
 /show_bdm показать инфо по БОД
 наберите в поле ввода @mymtlbot и любое слово для поиска команды
@@ -62,8 +57,11 @@ links_msg = f"""
 Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fund}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM) [mtl](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/MTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V)
 Списки [черный]({link_json}blacklist.json) / [BL for DG]({link_json}dg_blacklist.json) 
-Боты [Обмен 1]({link_stellar}GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7) / \
-[Обмен 2]({link_stellar}GAEFTFGQYWSF5T3RVMBSW2HFZMFZUQFBYU5FUF3JT3ETJ42NXPDWOO2F) / \
+Боты [Обмен eurmtl_xlm]({link_stellar}{mystellar.public_exchange_eurmtl_xlm}) / \
+[Обмен eurmtl_usdc]({link_stellar}{mystellar.public_exchange_eurmtl_usdc}) / \
+[Обмен eurmtl_sats]({link_stellar}{mystellar.public_exchange_eurmtl_sats}) / \
+[Обмен eurmtl_btc]({link_stellar}{mystellar.public_exchange_eurmtl_btc}) / \
+[Обмен btc_sats]({link_stellar}{mystellar.public_exchange_btc_sats}) / \
 [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \
 [BIM-XLM]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / \
 [BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \
@@ -71,6 +69,7 @@ links_msg = f"""
 [Бот сжигания]({link_stellar}GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE) 
 Видео [Как подписывать](https://t.me/MTL_production/26) / [Как проверять](https://t.me/MTL_production/27) / [Как склеить\редактировать транзакции](https://t.me/MTL_production/28)
 """
+
 
 @dp.message_handler(state='*', commands="start")
 @dp.message_handler(state='*', commands="cancel")
@@ -80,6 +79,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     # Cancel state and inform user about it
     await state.finish()
     # And remove keyboard (just in case)
+    mystellar.cmd_save_bot_user(message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
 
 
@@ -129,15 +129,15 @@ async def cmd_drink(message: types.Message):
 @dp.message_handler(commands="decode")
 async def cmd_decode(message: types.Message):
     try:
-        logger.info(f'decode {message}')
-        if message.text.find('mtl.ergvein.net/view') > -1:
+        # logger.info(f'decode {message}')
+        if message.text.find('eurmtl.me/sign_tools') > -1:
             msg = mystellar.check_url_xdr(message.get_args())
         else:
             msg = mystellar.decode_xdr(message.get_args())
         msg = f'\n'.join(msg)
         await message.reply(msg)
     except Exception as e:
-        await message.reply(f'Параметр не распознан. Надо ссылку на тулзу')
+        await message.reply(f'Параметр не распознан. Надо xdr или ссылку на тулзу')
 
 
 @dp.message_handler(commands="show_bdm")
@@ -147,7 +147,8 @@ async def cmd_show_bdm(message: types.Message):
 
 @dp.message_handler(commands="balance")
 async def cmd_show_balance(message: types.Message):
-    await message.answer(mystellar.get_safe_balance())
+    result = await mystellar.get_safe_balance()
+    await message.answer(result)
 
 
 @dp.message_handler(commands="show_key_rate")
@@ -164,8 +165,8 @@ async def cmd_do_bdm(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
-
-    if int(mystellar.get_balances(mystellar.public_bod_eur).get('EURMTL', 0)) < 10:
+    balance = await mystellar.get_balances(mystellar.public_bod_eur)
+    if int(balance.get('EURMTL', 0)) < 10:
         await message.reply(f'Low balance at {mystellar.public_bod_eur} can`t pay BIM')
         return
 
@@ -263,11 +264,11 @@ async def cmd_do_all(message: types.Message):
 
     await cmd_do_div(message)
     await cmd_show_bdm(message)
-    await message.reply('***')
+    # await message.reply('***')
     await cmd_do_bdm(message)
-    await message.reply('*****')
-    await cmd_do_key_rate(message)
-    await message.reply('*******')
+    # await message.reply('*****')
+    # await cmd_do_key_rate(message)
+    # await message.reply('*******')
 
 
 @dp.message_handler(commands="do_div")
@@ -276,7 +277,8 @@ async def cmd_do_div(message: types.Message):
         await message.reply('You are not my admin.')
         return
 
-    if int(mystellar.get_balances(mystellar.public_div).get('EURMTL', 0)) < 10:
+    balance = await mystellar.get_balances(mystellar.public_div)
+    if int(balance.get('EURMTL', 0)) < 10:
         await message.reply(f'Low balance at {mystellar.public_div} can`t pay divs')
         return
 
@@ -287,7 +289,7 @@ async def cmd_do_div(message: types.Message):
     lines = []
     msg = await message.answer(
         add_text(lines, 1, f"Start div pays №{div_list_id} donate pays №{donate_list_id}. Step (1/12)"))
-    result = mystellar.cmd_calc_divs(div_list_id, donate_list_id)
+    result = await mystellar.cmd_calc_divs(div_list_id, donate_list_id)
     await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
 
     i = 1
@@ -325,6 +327,46 @@ async def cmd_do_div(message: types.Message):
             await msg.edit_text(add_text(lines, 11, f"Got error. New attempt {e}. Step (11/12)"))
             e += 1
     await msg.edit_text(add_text(lines, 12, f"All work done. Step (12/12)"))
+
+
+@dp.message_handler(commands="do_sats_div")
+async def cmd_do_sats_div(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    balance = await mystellar.get_balances(mystellar.public_div)
+    if int(balance.get('SATSMTL', 0)) < 100:
+        await message.reply(f'Low sats balance at {mystellar.public_div} can`t pay divs')
+        return
+
+    # новая запись
+    # ('mtl div 17/12/2021')
+    div_list_id = mystellar.cmd_create_list(datetime.now().strftime('mtl div %d/%m/%Y'), 4)
+    lines = []
+    msg = await message.answer(
+        add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+    result = await mystellar.cmd_calc_sats_divs(div_list_id)
+    await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    i = 1
+
+    while i > 0:
+        i = mystellar.cmd_gen_xdr(div_list_id)
+        await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
+
+    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    i = 1
+    e = 1
+    while i > 0:
+        try:
+            i = await mystellar.cmd_send_by_list_id(div_list_id)
+            await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/12)"))
+        except Exception as err:
+            logger.info(str(err))
+            await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
 
 
 @dp.message_handler(commands="open")
@@ -432,11 +474,11 @@ async def msg_save_all(message: types.Message, state: FSMContext):
 @dp.message_handler(commands="get_vote_fund_xdr")
 async def cmd_get_vote_fund_xdr(message: types.Message):
     if len(message.get_args()) > 10:
-        arr2 = mystellar2.cmd_get_new_vote_mtl(message.get_args())
+        arr2 = await mystellar2.cmd_get_new_vote_mtl(message.get_args())
         await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
-        arr2 = mystellar2.cmd_get_new_vote_mtl('')
+        arr2 = await mystellar2.cmd_get_new_vote_mtl('')
         await message.answer('for FUND')
         await multi_answer(message, arr2[0])
 
@@ -444,11 +486,11 @@ async def cmd_get_vote_fund_xdr(message: types.Message):
 @dp.message_handler(commands="get_vote_city_xdr")
 async def cmd_get_vote_city_xdr(message: types.Message):
     if len(message.get_args()) > 10:
-        arr2 = mystellar2.cmd_get_new_vote_mtl(message.get_args())
+        arr2 = await mystellar2.cmd_get_new_vote_mtl(message.get_args())
         await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
-        arr1 = mystellar2.cmd_get_new_vote_mtlcity()
+        arr1 = await mystellar2.cmd_get_new_vote_mtlcity()
         await message.answer('for MTLCITY')
         await multi_answer(message, arr1[0])
 
@@ -456,8 +498,19 @@ async def cmd_get_vote_city_xdr(message: types.Message):
 @dp.message_handler(commands="get_mrxpinvest_xdr")
 async def cmd_get_mrxpinvest_xdr(message: types.Message):
     if len(message.get_args()) > 1:
-        xdr = mystellar.get_mrxpinvest_xdr(float(message.get_args()))
+        xdr = await mystellar.get_mrxpinvest_xdr(float(message.get_args()))
         await multi_answer(message, xdr)
+
+
+@dp.message_handler(commands="get_defi_xdr")
+async def cmd_get_mrxpinvest_xdr(message: types.Message):
+    arg = message.get_args().split(' ')
+    if len(arg) > 1:
+        xdr = await mystellar.get_defi_xdr(mystellar.float2str(arg[0]), mystellar.float2str(arg[1]))
+        await multi_answer(message, xdr)
+        await multi_answer(message, '\n'.join(mystellar.decode_xdr(xdr=xdr)))
+    else:
+        await multi_answer(message, 'use -  /get_defi_xdr 0.001 0.002 \n where 0.001 sum to fond 0.002 sum for Seregan')
 
 
 @dp.message_handler(commands="delete")
@@ -472,7 +525,7 @@ async def cmd_update_airdrops(message: types.Message):
         return False
 
     await message.answer('Запускаю полное обновление')
-    update_report3.update_airdrop()
+    await update_report3.update_airdrop()
     await message.answer('Обновление завершено')
 
 
@@ -492,7 +545,7 @@ async def cmd_gen_data(message: types.Message):
 async def cmd_show_data(message: types.Message):
     if len(message.get_args()) > 2:
         arg = message.get_args().split()
-        result = mystellar.cmd_show_data(arg[0])
+        result = await mystellar.cmd_show_data(arg[0])
         if len(result) == 0:
             await message.reply('Data not found')
         else:
@@ -549,6 +602,29 @@ async def cmd_set_welcome(message: types.Message):
     cmd_delete_later(message, 1)
 
 
+@dp.message_handler(commands="set_reply_only")
+async def cmd_set_reply_only(message: types.Message):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id in reply_only:
+        reply_only.remove(message.chat.id)
+        cmd_save_reply_only()
+        await message.reply('Removed')
+    else:
+        reply_only.append(message.chat.id)
+        cmd_save_reply_only()
+        await message.reply('Added')
+
+    cmd_delete_later(message, 1)
+
+
+
 @dp.message_handler(commands="set_welcome_button")
 async def cmd_set_welcome(message: types.Message):
     if not await is_admin(message):
@@ -584,6 +660,31 @@ async def cmd_set_captcha(message: types.Message):
         msg = await message.reply('captcha off')
         cmd_delete_later(msg, 1)
     cmd_delete_later(message, 1)
+
+
+@dp.message_handler(commands="stop_exchange")
+async def cmd_delete_welcome(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    welcome_message['stop_exchange'] = True
+
+    mystellar.stellar_stop_all_exchange()
+    cmd_save_welcome_message()
+    await message.reply('Was stop')
+
+
+@dp.message_handler(commands="start_exchange")
+async def cmd_delete_welcome(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    welcome_message['stop_exchange'] = None
+    cmd_save_welcome_message()
+
+    await message.reply('Was start')
 
 
 async def cmd_delete_by_scheduler(message: types.Message):
@@ -726,6 +827,7 @@ async def cmd_log_err(message: types.Message):
 
     await dp.bot.send_document(message.chat.id, open('skynet.err', 'rb'))
 
+
 @dp.message_handler(commands="log")
 async def cmd_log(message: types.Message):
     if not await is_skynet_admin(message):
@@ -864,7 +966,7 @@ async def smd_check_dg(message: types.Message):
         with open(all_file, "r") as fp:
             members = list(json.load(fp))
 
-        tmp_list: list = mystellar.cmd_show_donates(return_table=True)
+        tmp_list: list = await mystellar.cmd_show_donates(return_table=True)
         donate_list = []
         donate_members = []
         for tmp in tmp_list:
@@ -897,6 +999,24 @@ async def smd_check_dg(message: types.Message):
                 await message.answer(f'Need add {member}')
     else:
         await message.reply('/all не настроен, используйте /add_all и /del_all')
+
+
+@dp.message_handler(commands="push")
+async def smd_push(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    if message.reply_to_message is None:
+        await message.reply('Команду надо посылать в ответ на список логинов')
+        return
+
+    if message.reply_to_message.text.find('@') == -1:
+        await message.reply('Нет не одной собаки. Команда работает в ответ на список логинов')
+        return
+
+    all_users = message.reply_to_message.text.split()
+    await send_by_list(all_users, message)
 
 
 if __name__ == "__main__":

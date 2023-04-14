@@ -1,9 +1,13 @@
+import asyncio
 import copy
 
 import requests
 from aiogram import types
+from aiogram.types import ContentType
 from aiogram.utils.callback_data import CallbackData
-from skynet_main import dp
+from loguru import logger
+
+from skynet_main import dp, is_skynet_admin, bot
 import json
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -14,12 +18,52 @@ from mystellar import address_id_to_username
 from mystellar import cmd_gen_vote_list
 
 cb_poll_click = CallbackData("join_chat", "answer")
+cb_sp_click = CallbackData("sp", "answer")
+
+
+@dp.channel_post_handler(content_types=ContentType.all())
+async def channel_post(message: types.Message):
+    # logger.info(f'save {message.text}')
+    if message.chat.id in (-1001649743884, -1001837984392):
+        if message.poll:
+            buttons = []
+            my_buttons = []
+            my_poll = {}
+            for option in message.poll.options:
+                my_buttons.append([option.text, 0, []])
+                buttons.append(types.InlineKeyboardButton(option.text + '(0)',
+                                                          callback_data=cb_poll_click.new(answer=len(buttons))))
+            # print(my_buttons)
+            msg = await message.answer(message.poll.question,
+                                       reply_markup=types.InlineKeyboardMarkup(row_width=1).add(*buttons))
+            my_poll["question"] = message.poll.question
+            my_poll["closed"] = False
+            my_poll['message_id'] = msg.message_id
+            my_poll['buttons'] = my_buttons
+            with open(f"polls/{msg.message_id}{message.chat.id}.json", "w") as fp:
+                json.dump(my_poll, fp)
 
 
 @dp.message_handler(commands="test")
 async def cmd_test(message: types.Message):
-    print(message)
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+    # https://t.me/c/1948478564/2
+    buttons = []
+    buttons.append(types.InlineKeyboardButton('Поддерживаю',
+                                              callback_data=cb_sp_click.new(answer=len(buttons))))
+    buttons.append(types.InlineKeyboardButton('Воздерживаюсь',
+                                              callback_data=cb_sp_click.new(answer=len(buttons))))
+    buttons.append(types.InlineKeyboardButton('Против',
+                                              callback_data=cb_sp_click.new(answer=len(buttons))))
+    buttons.append(types.InlineKeyboardButton('Узнать результат',
+                                              callback_data=cb_sp_click.new(answer=len(buttons))))
+    # https://t.me/c/1863399780/16
+    m = await bot.edit_message_reply_markup(-1001863399780, 16,
+                                            reply_markup=None)
     await message.reply("test")
+    await message.reply(str(m))
 
 
 @dp.message_handler(commands="poll2")
@@ -78,7 +122,12 @@ async def cmd_poll_rt(message: types.Message):
 async def cmd_poll_close(message: types.Message):
     # print(message)
     if message.reply_to_message:
-        with open(f"polls/{message.reply_to_message.message_id}{message.chat.id}.json", "r") as fp:
+        if message.reply_to_message.forward_from_chat and message.reply_to_message.forward_from_message_id:
+            file_name = f"polls/{message.reply_to_message.forward_from_message_id}{message.reply_to_message.forward_from_chat.id}.json"
+        else:
+            file_name = f"polls/{message.reply_to_message.message_id}{message.chat.id}.json"
+
+        with open(file_name, "r") as fp:
             my_poll = json.load(fp)
 
         if my_poll["closed"]:
@@ -86,7 +135,7 @@ async def cmd_poll_close(message: types.Message):
         else:
             my_poll["closed"] = True
 
-            with open(f"polls/{message.reply_to_message.message_id}{message.chat.id}.json", "w") as fp:
+            with open(file_name, "w") as fp:
                 json.dump(my_poll, fp)
     else:
         await message.answer('Требуется в ответ на голосование')
@@ -105,8 +154,9 @@ async def cmd_poll_check(message: types.Message):
                     votes_check.pop(vote)
         votes_check.pop("NEED")
         keys = votes_check.keys()
-        await dp.bot.send_message(message.chat.id, ' '.join(keys) + '\nСмотрите закреп \ Look at the pinned message',
-                                  reply_to_message_id=message.reply_to_message)
+        await message.reply_to_message.reply(' '.join(keys) + '\nСмотрите голосование \ Look at the poll')
+        # await dp.bot.send_message(message.chat.id, ' '.join(keys) + '\nСмотрите закреп \ Look at the pinned message',
+        #                          reply_to_message_id=message.reply_to_message, message_thread_id=)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -148,9 +198,9 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
     return True
 
 
-def cmd_save_votes():
+async def cmd_save_votes():
     total = 0
-    vote_list = cmd_gen_vote_list()
+    vote_list = await cmd_gen_vote_list()
     for vote in vote_list:
         if vote[2] == 0:
             vote_list.remove(vote)
@@ -178,5 +228,5 @@ with open("polls/votes.json", "r") as fp:
 
 if __name__ == "__main__":
     pass
-    a = cmd_save_votes()
+    a = asyncio.run(cmd_save_votes())
     print(a)

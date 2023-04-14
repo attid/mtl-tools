@@ -7,7 +7,8 @@ import re, random
 import update_report
 import update_report2
 import update_report4
-from skynet_main import dp, is_skynet_admin, MTLChats
+from skynet_main import dp, is_skynet_admin, MTLChats, reply_only, send_by_list
+from loguru import logger
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -39,9 +40,14 @@ booms = ["AgACAgIAAxkBAAIINGIWWwHuiOBgxuBQ9CBnfL7-VPXVAALuuzEbbLOxSFW75wtHIJnnAQ
 my_talk_message = []
 
 
+@dp.message_handler(commands="skynet")
+async def cmd_skynet(message: types.Message):
+    await cmd_last_check(message)
+
+
 # @dp.message_handler(state='*')  # chat_type=[ChatType.PRIVATE, ChatType.SUPERGROUP]
 async def cmd_last_check(message: types.Message):
-    if message.text.find('mtl.ergvein.net/view') > -1:
+    if message.text.find('eurmtl.me/sign_tools') > -1:
         msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
         try:
             await dp.bot.unpin_chat_message(message.chat.id, msg_id)
@@ -50,7 +56,7 @@ async def cmd_last_check(message: types.Message):
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
         if message.chat.id in (MTLChats.SignGroup.value, MTLChats.TestGroup.value, MTLChats.ShareholderGroup.value,
-                               MTLChats.SafeGroup.value):
+                               MTLChats.SafeGroup.value, MTLChats.LandLordGroup.value, MTLChats.SignGroupForChanel.value):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
@@ -58,9 +64,18 @@ async def cmd_last_check(message: types.Message):
                 await message.answer("Слишком много операций показаны первые ")
             await message.reply(msg[:4000])
 
-        if message.chat.id in (MTLChats.SignGroup.value,):
-            msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
+        if message.chat.id in (MTLChats.SignGroup.value,MTLChats.SignGroupForChanel.value,):
+            msg = mystellar.cmd_alarm_pin_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
             await message.reply(msg)
+
+    if message.chat.id in reply_only:
+        if message.reply_to_message or message.forward_from_chat:
+            pass
+        else:
+            await message.reply('Осуждаю ! Это сообщения не увидят в комментариях. '
+                                'Рекомендую удалить его, и повторить его с использованием функции «ответ». \n'
+                                'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
+            return
 
     if has_words(message.text, ['Кузя', 'Скайнет', 'prst', 'skynet']):  # message.text.upper().find('СКАЙНЕТ') > -1
         if has_words(message.text, ['УБИТЬ', 'убей', 'kill']):
@@ -79,9 +94,7 @@ async def cmd_last_check(message: types.Message):
                 await message.reply(mystellar.cmd_gen_div_xdr(float(re.findall(r'\d+', message.text)[0])))
 
         elif has_words(message.text, ['НАПОМНИ', 'remind']):
-            msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
-            msg = mystellar.cmd_alarm_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
-            await dp.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id)
+            await remind(message)
 
         elif has_words(message.text, ['ОБНОВИ', 'update']):
             if not await is_skynet_admin(message):
@@ -89,35 +102,35 @@ async def cmd_last_check(message: types.Message):
                 return False
             if has_words(message.text, ['ГАРАНТОВ']):
                 msg = await message.reply('Зай, я запустила обновление')
-                update_report2.update_guarant_report()
+                await update_report2.update_guarantors_report()
                 await msg.reply('Обновление завершено')
             if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
                 msg = await message.reply('Зай, я запустила обновление')
-                update_report.update_main_report()
-                update_report.update_fire()
+                await update_report.update_main_report()
+                await update_report.update_fire()
                 await msg.reply('Обновление завершено')
             if has_words(message.text, ['donate', 'donates', 'donated']):
                 msg = await message.reply('Зай, я запустила обновление')
-                update_report4.update_donate_report()
+                await update_report4.update_donate_report()
                 await msg.reply('Обновление завершено')
 
-        elif has_words(message.text, ['ВЫПЬЕМ', 'ТОСТ']):
-            await message.answer(mystellar.cmd_get_info(6))
+        # elif has_words(message.text, ['ВЫПЬЕМ', 'ТОСТ']):
+        #    await message.answer(mystellar.cmd_get_info(6))
 
-        elif has_words(message.text, ['АНЕКДОТ']):
-            await message.answer(mystellar.cmd_get_info(1))
+        # elif has_words(message.text, ['АНЕКДОТ']):
+        #    await message.answer(mystellar.cmd_get_info(1))
 
         elif has_words(message.text, ['гороскоп']):
             await message.answer('\n'.join(dialog.get_horoscope()), parse_mode=ParseMode.MARKDOWN)
 
-        elif has_words(message.text, ['ХОРОШИЙ', 'МОЛОДЕЦ', 'УМНИЦА']):
-            await message.reply('Спасибо ^_^')
+        # elif has_words(message.text, ['ХОРОШИЙ', 'МОЛОДЕЦ', 'УМНИЦА']):
+        #    await message.reply('Спасибо ^_^')
 
-        elif has_words(message.text, ['ГОТОВО', 'Signed']):
-            await message.reply('Молодец ! Держи пирожок <ooo>')
+        # elif has_words(message.text, ['ГОТОВО', 'Signed']):
+        #    await message.reply('Молодец ! Держи пирожок <ooo>')
 
-        elif has_words(message.text, ['похвали', 'Поддержи']):
-            await message.reply(f'{message.text.split()[2]} Молодец !')
+        # elif has_words(message.text, ['похвали', 'Поддержи']):
+        #    await message.reply(f'{message.text.split()[2]} Молодец !')
 
         elif has_words(message.text, ['кто молчит', 'найди молчунов', 'найди безбилетника']):
             await skynet_poll_handlers.cmd_poll_check(message)
@@ -126,22 +139,44 @@ async def cmd_last_check(message: types.Message):
             await message.reply_photo(random.choice(booms))
 
         elif has_words(message.text, ['сколько']) and has_words(message.text, ['кубышк']):
-            await message.reply(mystellar.get_safe_balance())
+            result = await mystellar.get_safe_balance()
+            await message.reply(result)
 
         elif has_words(message.text, ['хочется', 'нет', 'дай']) and has_words(message.text,
                                                                               ['стабильности', 'стабильность']):
             await message.reply_audio("CQACAgIAAxkBAAIITGIWcuo8u7-EFN_bFSw_0J0wyx6jAAJtFgACR8y5S2F0QnIe8RZMIwQ")
 
         else:
-            msg = await message.reply(dialog.talk(message.chat.id, message.text))
+            msg = await dialog.talk(message.chat.id, message.text)
+            msg = await message.reply(msg)
             my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
     elif message.chat.type == ChatType.PRIVATE:
-        await message.reply(dialog.talk(message.chat.id, message.text))
+        msg = await dialog.talk(message.chat.id, message.text)
+        msg = await message.reply(msg)
 
     else:
         if message.reply_to_message and (message.reply_to_message.from_user.id == 2134695152) \
                 and (f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message):
             # answer on bot message
-            msg = await message.reply(dialog.talk(message.chat.id, message.text))
+            msg = await dialog.talk(message.chat.id, message.text)
+            msg = await message.reply(msg)
             my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
+
+
+async def remind(message):
+    if message.reply_to_message and message.reply_to_message.forward_from_chat:
+        alarm_list = mystellar.cmd_alarm_url_(mystellar.extract_url(message.reply_to_message.text))
+        msg =  alarm_list + '\nСмотрите топик / Look at the topic message'
+        await message.reply(text=msg)
+        if alarm_list.find('@') != -1:
+            if await is_skynet_admin(message):
+                all_users = alarm_list.split()
+                url  = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
+                await send_by_list(all_users, message, url=url)
+
+    else:
+        msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
+        msg = mystellar.cmd_alarm_pin_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
+        await dp.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
+                              message_thread_id=message.message_thread_id)

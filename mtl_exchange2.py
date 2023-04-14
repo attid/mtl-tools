@@ -1,9 +1,7 @@
-from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, Asset, Account, SignerKey, Price
-import json, requests, math
-
+import requests
+from stellar_sdk import Server
 from mtl_exchange import update_offer
 from mystellar import xlm_asset, usdc_asset, stellar_check_receive_sum, eurmtl_asset
-from settings import private_exchange2, openexchangerates_id
 from loguru import logger
 
 

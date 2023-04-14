@@ -1,15 +1,23 @@
+import asyncio
 import datetime
 import os
 import random
 
+import openai
 from google.cloud import dialogflow
+from async_openai import OpenAI, settings, CompletionResponse
+from settings import opanaikey
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "mtl-skynet-talks.json"
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
 
-def talk(session_id, msg):
+async def talk(session_id, msg):
+    return await talk_open_ai_async(msg)
+
+
+def talk_old(session_id, msg):
     project_id = 'mtl-skynet-hldy'
     language_code = 'RU'
 
@@ -18,8 +26,8 @@ def talk(session_id, msg):
     session = session_client.session_path(project_id, session_id)
     # print("Session path: {}\n".format(session))
 
-    text_input = dialogflow.TextInput(text=msg[:240], language_code='RU')
-    query_input = dialogflow.QueryInput(text=text_input)
+    text_input = dialogflow.TextInput(text=msg[:240])
+    query_input = dialogflow.QueryInput()  # text=text_input
 
     response = session_client.detect_intent(
         request={"session": session, "query_input": query_input}
@@ -41,7 +49,38 @@ def talk(session_id, msg):
     #    print("Fulfillment text: {}\n".format(response.query_result.fulfillment_text))
 
 
-# def talk(id,msg):
+def talk_open_ai(msg):
+    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
+    openai.api_key = opanaikey
+    # print(openai.Model.list())
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=msg,
+        temperature=0.7,
+        max_tokens=2048,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    story = response['choices'][0]['text']
+    return story
+
+
+async def talk_open_ai_async(msg):
+    OpenAI.configure(
+        api_key=opanaikey,
+        organization="org-Iq64OmMI81NWnwcPtn72dc7E",
+        debug_enabled=False,
+    )
+
+    r = await OpenAI.completions.async_create(
+        prompt=msg,
+        max_tokens=2048,
+        stream=True
+    )
+    story = r.text
+    return story
 
 
 gor = (
@@ -57,6 +96,7 @@ gor = (
 )
 
 lang_dict = {}
+
 
 def get_horoscope() -> list:
     if datetime.date.today() == lang_dict.get('horoscope_date'):
@@ -85,4 +125,5 @@ def get_horoscope() -> list:
 
 if __name__ == "__main__":
     pass
-    # print(talk(9, 'Как дела'))
+    # print(talk(9, 'Как выглядит марс ?'))
+    print(asyncio.run(talk_open_ai_async('Как выглядит марс ?')))

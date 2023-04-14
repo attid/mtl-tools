@@ -80,7 +80,7 @@ async def smd_dron_sign(message: types.Message, state: FSMContext):
     await message.answer(xdr)
     await message.answer('Попытка отправить')
 
-    resp = mystellar.stellar_submite(xdr)
+    resp = await mystellar.stellar_submite(xdr)
 
     await message.answer(resp)
     await message.answer('Вы можете выйти /start')
@@ -294,7 +294,7 @@ async def smd_mtl_camp_sign(message: types.Message, state: FSMContext):
     await message.answer(xdr)
     await message.answer('Попытка отправить')
 
-    resp = mystellar.stellar_submite(xdr)
+    resp = await mystellar.stellar_submite(xdr)
 
     await message.answer(resp)
     await message.answer('Вы можете выйти /start')

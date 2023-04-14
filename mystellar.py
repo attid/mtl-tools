@@ -1,20 +1,23 @@
+import asyncio
 import base64
-import logging
 import math
+from builtins import print
+from contextlib import suppress
 
+import aiohttp
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair, FeeBumpTransaction, \
-    ServerAsync, AiohttpClient, Memo
+    ServerAsync, AiohttpClient, Memo, Price
 from stellar_sdk import TransactionEnvelope, FeeBumpTransactionEnvelope  # , Operation, Payment, SetOptions
 import json, requests, datetime
 
-from stellar_sdk.exceptions import BaseHorizonError
-from stellar_sdk.sep.federation import resolve_stellar_address, resolve_account_id
-from stellar_sdk.xdr import SignatureHint
+from stellar_sdk.exceptions import BaseHorizonError, NotFoundError, BadSignatureError
+from stellar_sdk.sep.federation import resolve_account_id_async
 
 from loguru import logger
+from stellar_sdk.xdr import TransactionResult
+
 import fb, re, enum
-from mytypes import MyAccount
-from settings import private_div, private_bod_eur, private_key_rate, base_fee, private_sign
+from settings import base_fee, private_sign
 from datetime import datetime
 
 # https://stellar-sdk.readthedocs.io/en/latest/
@@ -33,24 +36,36 @@ public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
 public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
 public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
-public_exchange = "GCVF74HQRLPAGTPFSYUAKGHSDSMBQTMVSLKWKUU65ULEN7TL4N56IPZ7"
 public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
 public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
 public_adm = "GBSCMGJCE4DLQ6TYRNUMXUZZUXGZBM4BXVZUIHBBL5CSRRW2GWEHUADM"
 public_boss = "GC72CB75VWW7CLGXS76FGN3CC5K7EELDAQCPXYMZLNMOTC42U3XJBOSS"
+
+public_exchange_eurmtl_xlm = "GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT"
+public_exchange_eurmtl_btc = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
+public_exchange_eurmtl_sats = "GAEO4HE7DJAJPOEE4KU375WEGB2IWO42KVTG3PLBTXL7TSWDSPHPZBOT"
+public_exchange_btc_sats = "GAILTHJGIDSJGKGB22WWEBJXEVVXRLX5JMQKSGNUYICBHMTE3TE43BOT"
+public_exchange_eurmtl_usdc = "GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT"
+
 # user
 public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
-public_wallet = "GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL"
+public_pending = "GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL"
+public_wallet = "GBSNN2SPYZB2A5RPDTO3BLX4TP5KNYI7UMUABUS3TYWWEWAAM2D7CMMW"
+public_seregan = "GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU"
 
 mtl_asset = Asset("MTL", public_issuer)
 eurmtl_asset = Asset("EURMTL", public_issuer)
 eurdebt_asset = Asset("EURDEBT", public_issuer)
 xlm_asset = Asset("XLM", None)
 satsmtl_asset = Asset("SATSMTL", public_issuer)
+btcmtl_asset = Asset("BTCMTL", public_issuer)
 usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
 mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
 
 pack_count = 70  # for select first pack_count - to pack to xdr
+
+exchange_bots = (public_exchange_eurmtl_xlm, public_exchange_eurmtl_btc, public_exchange_eurmtl_sats,
+                 public_exchange_eurmtl_usdc, public_exchange_btc_sats, public_fire)
 
 
 class BotValueTypes(enum.IntEnum):
@@ -64,17 +79,20 @@ class BotValueTypes(enum.IntEnum):
     LastMTLandTransaction = 8
     LastDefiTransaction = 9
     LastFCMTransaction = 10
+    LastLedger = 11
+    LastMMWBTransaction = 10
 
 
 def stellar_add_fond_trustline(userkey, asset_code):
     return stellar_add_trustline(userkey, asset_code, public_issuer)
 
 
-def stellar_add_mtl_holders_info(accounts: dict):
-    server = Server(horizon_url="https://horizon.stellar.org")
-    source_account = server.load_account(public_fund)
-
-    sg = source_account.load_ed25519_public_key_signers()
+async def stellar_add_mtl_holders_info(accounts: dict):
+    async with ServerAsync(
+            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+    ) as server:
+        source_account = await server.load_account(public_fund)
+        sg = source_account.load_ed25519_public_key_signers()
 
     for s in sg:
         for arr in accounts:
@@ -84,47 +102,77 @@ def stellar_add_mtl_holders_info(accounts: dict):
     return accounts
 
 
-def stellar_get_mtl_holders(asset=mtl_asset):
-    server = Server(horizon_url="https://horizon.stellar.org")
-    accounts = []
-    accounts_call_builder = server.accounts().for_asset(asset).limit(50)
+async def stellar_get_mtl_holders(asset=mtl_asset, mini=False):
+    client = AiohttpClient(request_timeout=3 * 60)
 
-    accounts += accounts_call_builder.call()["_embedded"]["records"]
+    async with ServerAsync(
+            horizon_url="https://horizon.stellar.org", client=client
+    ) as server:
+        accounts = []
+        accounts_call_builder = server.accounts().for_asset(asset).limit(200)
 
-    while page_records := accounts_call_builder.next()["_embedded"]["records"]:
-        accounts += page_records
-    # print(json.dumps(response, indent=4))
+        page_records = await accounts_call_builder.call()
+        while page_records["_embedded"]["records"]:
+            accounts.extend(page_records["_embedded"]["records"])
+            page_records = await accounts_call_builder.next()
+            if mini:
+                return accounts
+        # print(json.dumps(response, indent=4))
+        return accounts
 
-    return accounts
 
-
-def stellar_add_trustline(userkey, asset_code, asset_issuer):
-    # keypair = Keypair.from_public_key(userkey)
-    # can_sign = keypair.can_sign()  # False
-    # print(keypair)
-
-    server = Server(horizon_url="https://horizon.stellar.org")
-    source_account = server.load_account(userkey)
-    mysequence = source_account.sequence
-
-    root_account = Account(userkey, sequence=mysequence)
+def stellar_add_trustline(public_key, asset_code, asset_issuer):
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60*60)
+    transaction.set_timeout(60 * 60)
     transaction.append_change_trust_op(Asset(asset_code, asset_issuer))
     transaction = transaction.build()
 
     xdr = transaction.to_xdr()
-    # print(f"xdr: {xdr}")
+
     return xdr
 
 
-def stellar_add_drone2(userkey):
-    return stellar_add_trustline(userkey, 'DRONE2DEBT', 'GACJQY4DGVRCVCPURAOH7PH2ERWCG5ATAUXKJFD4ON5ON6PWRJWCBQNN')
+def stellar_remove_orders(public_key, xdr):
+    if xdr:
+        transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    else:
+        root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
+        transaction = TransactionBuilder(source_account=root_account,
+                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                         base_fee=base_fee)
+        transaction.set_timeout(60 * 60)
+
+    call = Server(horizon_url="https://horizon.stellar.org").offers().for_account(public_key).limit(200).call()
+
+    for record in call['_embedded']['records']:
+        # print(record['price'], record)
+        transaction.append_manage_sell_offer_op(
+            selling=Asset(record['selling'].get('asset_code', 'XLM'), record['selling'].get('asset_issuer')),
+            buying=Asset(record['buying'].get('asset_code', 'XLM'), record['buying'].get('asset_issuer')),
+            amount='0', price=Price(record['price_r']['n'], record['price_r']['d']), offer_id=int(record['id']),
+            source=public_key)
+
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
 
 
-def stellar_add_mtlcamp(userkey):
-    return stellar_add_trustline(userkey, 'MTLCAMP', 'GBK2NV2L6A6TLKJSEJX3YZH7DEEHOOLB56WIK64Y5T2SFGNCG5FABKUB')
+def stellar_stop_all_exchange():
+    xdr = None
+    for bot in exchange_bots:
+        xdr = stellar_remove_orders(bot, xdr)
+    stellar_sync_submit(stellar_sign(xdr, private_sign))
+
+
+def stellar_add_drone2(public_key):
+    return stellar_add_trustline(public_key, 'DRONE2DEBT', 'GACJQY4DGVRCVCPURAOH7PH2ERWCG5ATAUXKJFD4ON5ON6PWRJWCBQNN')
+
+
+def stellar_add_mtlcamp(public_key):
+    return stellar_add_trustline(public_key, 'MTLCAMP', 'GBK2NV2L6A6TLKJSEJX3YZH7DEEHOOLB56WIK64Y5T2SFGNCG5FABKUB')
 
 
 def stellar_sign(xdr, signkey):
@@ -216,7 +264,11 @@ def good_operation(operation, operation_name, filter_operation, ignore_operation
     return False
 
 
-def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=[], filter_asset=None):
+def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None):
+    if ignore_operation is None:
+        ignore_operation = []
+    if filter_operation is None:
+        filter_operation = []
     result = []
     data_exist = False
 
@@ -298,13 +350,27 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
             result.append(
                 f"    Создание аккаунта {address_id_to_username(operation.destination)} с суммой {operation.starting_balance} XLM")
             continue
+        if good_operation(operation, "AccountMerge", filter_operation, ignore_operation):
+            data_exist = True
+            result.append(
+                f"    Слияние аккаунта c {address_id_to_username(operation.destination.account_id)} ")
+            continue
         if good_operation(operation, "ClaimClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
             result.append(f"    ClaimClaimableBalance {address_id_to_username(operation.balance_id)}")
             continue
-        if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer",
+        if good_operation(operation, "BeginSponsoringFutureReserves", filter_operation, ignore_operation):
+            data_exist = True
+            result.append(f"    BeginSponsoringFutureReserves {address_id_to_username(operation.sponsored_id)}")
+            continue
+        if good_operation(operation, "EndSponsoringFutureReserves", filter_operation, ignore_operation):
+            data_exist = True
+            result.append(f"    EndSponsoringFutureReserves")
+            continue
+        if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
                                         "PathPaymentStrictReceive", "ClaimClaimableBalance", "CreateAccount",
-                                        "CreateClaimableBalance", "ChangeTrust", "SetOptions", "Payment", "ManageData"]:
+                                        "CreateClaimableBalance", "ChangeTrust", "SetOptions", "Payment", "ManageData",
+                                        "BeginSponsoringFutureReserves", "EndSponsoringFutureReserves"]:
             continue
 
         data_exist = True
@@ -314,6 +380,15 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=[], ignore_operation=
         return result
     else:
         return []
+
+
+def load_xdr(xdr) -> TransactionEnvelope:
+    if FeeBumpTransactionEnvelope.is_fee_bump_transaction_envelope(xdr):
+        fee_transaction = FeeBumpTransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction = fee_transaction.transaction.inner_transaction_envelope
+    else:
+        transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    return transaction
 
 
 def check_url_xdr(url):
@@ -415,7 +490,7 @@ def get_donate_list(account: dict):
     return donate_list
 
 
-def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
+async def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
     server = Server(horizon_url="https://horizon.stellar.org")
 
     # MTL
@@ -424,7 +499,7 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
     rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={public_issuer}')
     mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
     # FOND
-    fund_balance = get_balances(public_fund)
+    fund_balance = await get_balances(public_fund)
     mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
 
     div_accounts = []
@@ -433,13 +508,15 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
         div_sum = test_sum
     else:
         # get balance
-        div_sum = get_balances(public_div)['EURMTL']
+        div_sum = await get_balances(public_div)
+        div_sum = div_sum['EURMTL']
         logger.info(f'div_sum = {div_sum}')
+        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(public_div, f'LAST_DIVS:{div_sum}'), private_sign))
 
     sponsor_sum = 0.0
 
     # print(json.dumps(response, indent=4))
-    accounts = stellar_get_mtl_holders()
+    accounts = await stellar_get_mtl_holders()
     for account in accounts:
         # print(json.dumps(account,indent=4))
         # print('***')
@@ -492,20 +569,82 @@ def cmd_calc_divs(div_list_id: int, donate_list_id: int, test_sum=0):
     # print(*mtl_accounts, sep='\n')
 
 
+async def cmd_calc_sats_divs(div_list_id: int, test_sum=0):
+    # MTL
+    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={public_issuer}')
+    mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
+    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={public_issuer}')
+    mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
+    # FOND
+    fund_balance = await get_balances(public_fund)
+    mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+
+    div_accounts = []
+    donates = []
+    if test_sum > 0:
+        div_sum = test_sum
+    else:
+        # get balance
+        div_sum = await get_balances(public_div)
+        div_sum = float(div_sum['SATSMTL'])
+        logger.info(f"div_sum = {div_sum}")
+
+    sponsor_sum = 0.0
+
+    # print(json.dumps(response, indent=4))
+    accounts = await stellar_get_mtl_holders()
+    for account in accounts:
+        # print(json.dumps(account,indent=4))
+        # print('***')
+        balances = account["balances"]
+        balance_mtl = 0
+        balance_rect = 0
+        sats_open = 0
+        # check all balance
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_code"] == "MTL":
+                    balance_mtl = round(float(balance["balance"]), 7)
+                if balance["asset_code"] == "MTLRECT":
+                    balance_rect = round(float(balance["balance"]), 7)
+                if balance["asset_code"] == "SATSMTL":
+                    sats_open = 1
+        div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
+        # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
+        # check sponsor
+        donates.extend(get_donate_list(account))
+
+        if (sats_open > 0) and (div > 0.0001) and (account["account_id"] != public_fund) \
+                and (account["account_id"] != public_pawnshop):
+            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
+
+    div_accounts.sort(key=get_key_1, reverse=True)
+    fb.many_insert("insert into T_PAYMENTS (USER_KEY, MTL_SUM, USER_CALC, USER_DIV, ID_DIV_LIST) values (?,?,?,?,?)",
+                   div_accounts)
+
+    return div_accounts
+    # print(*mtl_accounts, sep='\n')
+
+
 def cmd_gen_xdr(list_id):
     memo = fb.execsql(f'select dl.memo from t_div_list dl where dl.id = {list_id}')[0][0]
     pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
     records = fb.execsql(
         f"select first {pack_count} ID, USER_KEY, USER_DIV from T_PAYMENTS where WAS_PACKED = 0 and ID_DIV_LIST = {list_id}")
-
     # print(memo)
     # print(*rq)
     server = Server(horizon_url="https://horizon.stellar.org")
     if pay_type == 0:
         div_account = server.load_account(public_div)
+        asset = eurmtl_asset
 
     if pay_type == 1:
         div_account = server.load_account(public_bod_eur)
+        asset = eurmtl_asset
+
+    if pay_type == 4:
+        div_account = server.load_account(public_div)
+        asset = satsmtl_asset
 
     transaction = TransactionBuilder(source_account=div_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
@@ -513,7 +652,7 @@ def cmd_gen_xdr(list_id):
 
     for record in records:
         if round(record[2], 7) > 0:
-            transaction.append_payment_op(destination=record[1], amount=str(round(record[2], 7)), asset=eurmtl_asset)
+            transaction.append_payment_op(destination=record[1], amount=str(round(record[2], 7)), asset=asset)
         fb.execsql('update T_PAYMENTS set WAS_PACKED = 1 where ID = ?', [record[0]])
 
     transaction.add_text_memo(memo)
@@ -527,17 +666,17 @@ def cmd_gen_xdr(list_id):
     return need
 
 
-def cmd_gen_key_rate_xdr(list_id):
+async def cmd_gen_key_rate_xdr(list_id):
     memo = fb.execsql(f'select dl.memo from t_div_list dl where dl.id = {list_id}')[0][0]
     pay_type = fb.execsql(f'select dl.pay_type from t_div_list dl where dl.id = {list_id}')[0][0]
     records = fb.execsql(f"select first {pack_count} e.asset, e.user_key, sum(e.amount) amount from t_keyrate e "
                          f"where e.was_packed = 0 group by e.user_key, e.asset order by e.asset")
 
     accounts_list = []
-    accounts = stellar_get_mtl_holders(eurmtl_asset)
+    accounts = await stellar_get_mtl_holders(eurmtl_asset)
     for account in accounts:
         accounts_list.append(f"{account['account_id']}-EURMTL")
-    accounts = stellar_get_mtl_holders(eurdebt_asset)
+    accounts = await stellar_get_mtl_holders(eurdebt_asset)
     for account in accounts:
         accounts_list.append(f"{account['account_id']}-EURDEBT")
 
@@ -634,19 +773,38 @@ def cmd_load_bot_value(param_id: BotValueTypes, key_id: int, default_value: any 
     result = fb.execsql(f"select MYVALUE from BOT_TABLE where MYPARAM = {param_id} and MYKEY = {key_id}")
     if result != []:
         return result[0][0]
-
     return default_value
 
 
+def cmd_save_bot_user(user_id: int, user_name: str):
+    fb.execsql(f"update or insert into bot_users (user_id, user_name) values (?, ?) matching (user_id)",
+               (user_id, user_name)
+               )
+
+
+def cmd_load_user_id(user_name: str) -> int:
+    result = fb.execsql1('select user_id from bot_users where user_name = ?', (user_name,), 0)
+    return result
+
+
+
 def cmd_save_url(chat_id, msg_id, msg):
-    url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
+    url = extract_url(msg)
     cmd_save_bot_value(BotValueTypes.PinnedUrl, chat_id, url)
     cmd_save_bot_value(BotValueTypes.PinnedId, chat_id, msg_id)
 
 
+def extract_url(msg, surl='eurmtl.me'):
+    if surl:
+        url = re.search("(?P<url>https?://"+surl+"[^\s]+)", msg).group("url")
+    else:
+        url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
+    return url
+
+
 def cleanhtml(raw_html):
-    CLEANR = re.compile('<.*?>')
-    cleantext = re.sub(CLEANR, '', raw_html)
+    CLEAN = re.compile('<.*?>')
+    cleantext = re.sub(CLEAN, '', raw_html)
     while cleantext.find("\n") > -1:
         cleantext = cleantext.replace("\n", " ")
     while cleantext.find("  ") > -1:
@@ -654,18 +812,19 @@ def cleanhtml(raw_html):
     return cleantext
 
 
-def cmd_alarm_url(chat_id):
+def cmd_alarm_pin_url(chat_id):
     url = cmd_load_bot_value(BotValueTypes.PinnedUrl, chat_id)
+    return cmd_alarm_url_(url)
+
+
+def cmd_alarm_url_(url):
     rq = requests.get(url).text
     if rq.find('<h4 class="published">') > -1:
         return 'Нечего напоминать, транзакция отправлена.'
     rq = rq[rq.find('<div class="col-10 ignorants-nicks">'):]
     rq = rq[rq.find('">') + 2:]
-    # print(rq)
-    # print(rq.find('</div>'))
     rq = rq[:rq.find('</div>')]
     rq = rq.replace("&#x3D;", "=")
-
     return cleanhtml(rq)
 
 
@@ -676,9 +835,9 @@ def cmd_get_info(my_id):
     # 11 - Анекдот (+18);#12 - Рассказы (+18); 13 - Стишки (+18);  14 - Афоризмы (+18); 15 - Цитаты (+18);  16 - Тосты (+18); 18 - Статусы (+18);
 
 
-def cmd_check_new_transaction(ignore_operation=[], address_id=None, stellar_address=public_fund):
+def cmd_check_new_transaction(ignore_operation=[], value_id=None, stellar_address=public_fund):
     result = []
-    last_id = cmd_load_bot_value(address_id, 0)
+    last_id = cmd_load_bot_value(value_id, 0)
     server = Server(horizon_url="https://horizon.stellar.org")
     tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
@@ -697,26 +856,28 @@ def cmd_check_new_transaction(ignore_operation=[], address_id=None, stellar_addr
         if len(tr) > 0:
             link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
             tr = decode_xdr(transaction["envelope_xdr"])
-            tr.insert(0,f'(<a href="{link}">expert link</a>)')
+            tr.insert(0, f'(<a href="{link}">expert link</a>)')
             result.append(tr)
         # print(decode_xdr(transaction["envelope_xdr"]))
         # print('****')
         # print(transaction["paging_token"])
 
-    cmd_save_bot_value(address_id, 0, last_id)
+    cmd_save_bot_value(value_id, 0, last_id)
 
     return result
 
 
-def cmd_check_new_asset_transaction(asset_name: str, save_id: BotValueTypes, filter_sum: int = -1,
-                                    filter_operation=[], issuer=public_issuer, filter_asset=None):
+def cmd_check_new_asset_transaction_old(asset_name: str, save_id: BotValueTypes, filter_sum: int = -1,
+                                        filter_operation=None, issuer=public_issuer, filter_asset=None):
+    if filter_operation is None:
+        filter_operation = []
     result = []
     transactions = {}
     last_id = int(cmd_load_bot_value(save_id, 0, '0'))
     max_id = last_id
     rq = requests.get(
         f"https://api.stellar.expert/explorer/public/asset/{asset_name}-{issuer}/history/all?limit=10&order=desc&sort=id").json()
-    #print(json.dumps(rq, indent=4))
+    # print(json.dumps(rq, indent=4))
     for operation in rq["_embedded"]["records"]:
         current_id = int(operation["id"])
         if current_id == last_id:
@@ -736,11 +897,43 @@ def cmd_check_new_asset_transaction(asset_name: str, save_id: BotValueTypes, fil
                                 filter_asset=filter_asset)
         if len(xdr_result) > 0:
             link = transactions[paging_token]["link"]
-            xdr_result.insert(0,f'(<a href="{link}">expert link</a>)')
+            xdr_result.insert(0, f'(<a href="{link}">expert link</a>)')
             result.append(xdr_result)
         # print(decode_xdr(transaction["envelope_xdr"]))
 
     cmd_save_bot_value(save_id, 0, max_id)
+    return result
+
+
+def decode_db_effect(row):
+    # id, dt, operation, amount1, code1, amount2, code2, from_account, for_account,
+    result = f'<a href="https://stellar.expert/explorer/public/op/{row[0].split("-")[0]}">' \
+             f'Операция</a> с аккаунта {address_id_to_username(row[8])} \n'
+    if row[2] == 'trade':
+        result += f'  {row[2]}  {float2str(row[3])} {row[4]} for {float2str(row[5])} {row[6]} \n'
+    else:
+        result += f'  {row[2]} for {float2str(row[3])} {row[4]} \n'
+        # if row[2] == 'account_credited':  if row[2] == 'account_debited':
+    return result
+
+
+def cmd_check_new_asset_transaction(asset_name: str, save_id: BotValueTypes, filter_sum: int = -1,
+                                    filter_operation=None, issuer=public_issuer, filter_asset=None):
+    if filter_operation is None:
+        filter_operation = []
+    result = []
+
+    last_id = cmd_load_bot_value(save_id, 0, '0')
+    max_id = last_id
+
+    data = fb.get_new_effects_for_token(asset_name, issuer, last_id, filter_sum)
+    for row in data:
+        result.append(decode_db_effect(row))
+        max_id = row[0]
+
+    if max_id > last_id:
+        cmd_save_bot_value(save_id, 0, max_id)
+
     return result
 
 
@@ -762,12 +955,16 @@ def cmd_gen_div_xdr(div_sum):
     return xdr
 
 
-def cmd_gen_data_xdr(account_id: str, data: str):
-    server = Server(horizon_url="https://horizon.stellar.org")
-    root_account = server.load_account(account_id)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                     base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
+def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
+    if xdr:
+        transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    else:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        root_account = server.load_account(account_id)
+        transaction = TransactionBuilder(source_account=root_account,
+                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                         base_fee=base_fee)
+        transaction.set_timeout(60 * 60)
     data = data.split(':')
     data_name = data[0]
     data_value = data[1]
@@ -788,9 +985,9 @@ def decode_data_value(data_value: str):
     return message
 
 
-def cmd_show_guards_list():
-    account_json = requests.get(
-        f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
+async def cmd_show_guards_list():
+    account_json = await stellar_get_account(public_bod_eur)
+
     result_data = []
     if "data" in account_json:
         data = account_json["data"]
@@ -799,7 +996,7 @@ def cmd_show_guards_list():
             if data_name[:13] == 'bod_guarantor':
                 guard = decode_data_value(data_value)
                 result_data.append([guard, '', ''])
-                account_json2 = requests.get(f'https://horizon.stellar.org/accounts/{guard}').json()
+                account_json2 = await stellar_get_account(guard)
                 if "data" in account_json2:
                     data2 = account_json2["data"]
                     for data_name_2 in list(data2):
@@ -827,8 +1024,8 @@ def cmd_show_guards():
     return result_data
 
 
-def cmd_show_donates(return_json=False, return_table=False):
-    accounts = stellar_get_mtl_holders()
+async def cmd_show_donates(return_json=False, return_table=False):
+    accounts = await stellar_get_mtl_holders()
     account_list = []
 
     for account in accounts:
@@ -874,11 +1071,11 @@ def cmd_getblacklist():
     return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
 
 
-def cmd_gen_vote_list(return_delegate_list: bool = False):
+async def cmd_gen_vote_list(return_delegate_list: bool = False, mini=False):
     account_list = []
     divider = 1000
 
-    accounts = stellar_get_mtl_holders()
+    accounts = await stellar_get_mtl_holders(mini=mini)
 
     # mtl
     for account in accounts:
@@ -887,10 +1084,10 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
         balance_rect = 0
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
+                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == public_issuer:
                     balance_mtl = balance["balance"]
                     balance_mtl = int(balance_mtl[0:balance_mtl.find('.')])
-                if balance["asset_code"] == "MTLRECT":
+                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == public_issuer:
                     balance_rect = balance["balance"]
                     balance_rect = int(balance_rect[0:balance_rect.find('.')])
         lg = round(math.log2((balance_mtl + balance_rect + 0.001) / divider)) + 1
@@ -902,14 +1099,6 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
         if int(arr[1]) >= 1:
             big_list.append(arr)
     big_list.sort(key=lambda k: k[1], reverse=True)
-
-    # delete blacklist user
-    bl = cmd_getblacklist()
-    for arr in big_list:
-        if bl.get(arr[0]):
-            arr[2] = 0
-            # vote_list.remove(arr)
-            # print(arr)
 
     # find delegate
     delegate_list = {}
@@ -923,6 +1112,15 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
 
     if return_delegate_list:
         return delegate_list
+
+    # delete blacklist user
+    bl = cmd_getblacklist()
+    for arr in big_list:
+        if bl.get(arr[0]):
+            arr[1] = 0
+            arr[2] = 0
+            # vote_list.remove(arr)
+            # print(arr)
 
     for arr_from in big_list:
         if delegate_list.get(arr_from[0]):
@@ -938,15 +1136,32 @@ def cmd_gen_vote_list(return_delegate_list: bool = False):
             # print(arr,source)
 
     big_list.sort(key=lambda k: k[1], reverse=True)
+    big_list = big_list[:20]
+    total_sum = 0
+    for account in big_list:
+        total_sum += account[1]
+    #divider = total_sum#ceil() #big_list[19][1]
+    total_vote = 0
+    for account in big_list:
+        account[2] = math.ceil(account[1] * 100 / total_sum)
+        total_vote += account[2]
+
+    big_vote = big_list[0][2]
+
+    for account in big_list:
+        account[2] = round(account[2] ** (
+                1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
+    # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
 
     return big_list
 
 
-def cmd_show_data(account_id: str, filter_by: str = None):
+async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool = False):
     result_data = []
     if account_id == 'delegate':
         # get all delegate
-        for k, v in cmd_gen_vote_list(return_delegate_list=True).items():
+        vote_list = await cmd_gen_vote_list(return_delegate_list=True)
+        for k, v in vote_list.items():
             result_data.append(f'{k} => {v}')
     elif account_id == 'bdm':
         # get all guards
@@ -962,28 +1177,36 @@ def cmd_show_data(account_id: str, filter_by: str = None):
                 data_value = data[data_name]
                 # print(data_name, decode_data_vlue(data_value))
                 if not filter_by or data_name.find(filter_by) == 0:
-                    result_data.append(f'{data_name} => {decode_data_value(data_value)}')
+                    if only_data:
+                        result_data.append(decode_data_value(data_value))
+                    else:
+                        result_data.append(f'{data_name} => {decode_data_value(data_value)}')
     return result_data
 
 
-def resolve_account(account_id: str):
+async def resolve_account(account_id: str):
     result = ''
+    client = AiohttpClient()
     try:
-        result = resolve_account_id(account_id, domain='eurmtl.me').stellar_address
+        result = await resolve_account_id_async(account_id, domain='eurmtl.me', client=client)
+        result = result.stellar_address
     except Exception as e:
         pass
     if result == '':
         try:
-            result = resolve_account_id(account_id, domain='lobstr.co').stellar_address
+            result = await resolve_account_id_async(account_id, domain='lobstr.co', client=client)
+            result = result.stellar_address
         except Exception as e:
             pass
     if result == '':
         try:
-            result = resolve_account_id(account_id, domain='keybase.io').stellar_address
+            result = await resolve_account_id_async(account_id, domain='keybase.io', client=client)
+            result = result.stellar_address
         except Exception as e:
             pass
     if result == '':
         result = account_id[:4] + '..' + account_id[-4:]
+    await client.close()
     return result
 
 
@@ -1000,53 +1223,54 @@ def gen_new(last_name):
     i = 0
     while new_account.public_key[-len(last_name):] != last_name:
         new_account = Keypair.random()
+        # print(i, new_account.public_key, new_account.secret)
         i += 1
-    print(i, new_account.public_key, new_account.secret)
+        print(i, new_account.public_key, new_account.secret)
     return [i, new_account.public_key, new_account.secret]
 
 
-def get_safe_balance():
-    rq = requests.get('https://horizon.stellar.org/accounts/GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
-    assets = {}
+async def get_safe_balance():
     total_cash = 0
     total_eurmtl = 0
 
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            assets['XLM'] = float(balance['balance'])
-        else:
-            assets[balance['asset_code']] = float(balance['balance'])
+    assets = await get_balances('GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
     diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-
     result = f"Сейчас в кубышке И {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
     total_cash += diff
     total_eurmtl += int(assets['EURMTL'])
 
-    rq = requests.get('https://horizon.stellar.org/accounts/GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
-    assets = {}
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            assets['XLM'] = float(balance['balance'])
-        else:
-            assets[balance['asset_code']] = float(balance['balance'])
+    assets = await get_balances('GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
     diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-
     result += f"Сейчас в кубышке C {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
     total_cash += diff
     total_eurmtl += int(assets['EURMTL'])
 
-    rq = requests.get('https://horizon.stellar.org/accounts/GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
-    assets = {}
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            assets['XLM'] = float(balance['balance'])
-        else:
-            assets[balance['asset_code']] = float(balance['balance'])
+    assets = await get_balances('GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
     diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-
     result += f"Сейчас в кубышке Г {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
     total_cash += diff
     total_eurmtl += int(assets['EURMTL'])
+
+    assets = await get_balances('GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM')
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+    result += f"Сейчас в кубышке Д {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    assets = await get_balances('GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ')
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+    result += f"Сейчас в кубышке Е {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    assets = await get_balances('GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV')
+    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+    result += f"Сейчас в кубышке А {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+    total_cash += diff
+    total_eurmtl += int(assets['EURMTL'])
+
+    assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
+    result += f"А у Skynet {int(assets['USDC'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
 
     result += f"\n"
     result += f"Итого в кубышках {total_cash} наличных и {total_eurmtl} EURMTL \n"
@@ -1054,20 +1278,23 @@ def get_safe_balance():
     return result
 
 
-def get_balances(address: str):
-    rq = requests.get('https://horizon.stellar.org/accounts/' + address)
+async def get_balances(address: str):
+    account = await stellar_get_account(address)
     assets = {}
-    for balance in rq.json()['balances']:
-        if balance['asset_type'] == "native":
-            assets['XLM'] = float(balance['balance'])
-        elif balance["asset_type"][0:15] == "credit_alphanum":
-            assets[balance['asset_code']] = float(balance['balance'])
+    if account.get('type'):
+        return []
+    else:
+        for balance in account['balances']:
+            if balance['asset_type'] == "native":
+                assets['XLM'] = float(balance['balance'])
+            elif balance["asset_type"][0:15] == "credit_alphanum":
+                assets[balance['asset_code']] = float(balance['balance'])
 
-    return assets
+        return assets
 
 
-def get_mrxpinvest_xdr(div_sum: float):
-    accounts = stellar_get_mtl_holders(mrxpinvest_asset)
+async def get_mrxpinvest_xdr(div_sum: float):
+    accounts = await stellar_get_mtl_holders(mrxpinvest_asset)
     accounts_list = []
     total_sum = 0
 
@@ -1094,6 +1321,19 @@ def get_mrxpinvest_xdr(div_sum: float):
     transaction.set_timeout(60 * 60)
     for account in accounts_list:
         transaction.append_payment_op(destination=account[0], asset=mrxpinvest_asset, amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+async def get_defi_xdr(div_sum1, div_sum2: str):
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_defi)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60)
+    transaction.append_payment_op(destination=public_fund, asset=btcmtl_asset, amount=div_sum1)
+    transaction.append_payment_op(destination=public_seregan, asset=btcmtl_asset, amount=div_sum2)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 
@@ -1191,6 +1431,14 @@ def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: As
         return []
 
 
+async def stellar_get_account(account_id) -> json:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f'https://horizon.stellar.org/accounts/{account_id}') as resp:
+            # print(resp.status)
+            # print(await resp.text())
+            return await resp.json()
+
+
 def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive_asset: Asset,
                  receive_amount: str):
     server = Server(horizon_url="https://horizon.stellar.org")
@@ -1226,21 +1474,25 @@ def stellar_claimable(source_address, asset, amount, destination_address, xdr=No
     return xdr
 
 
-def stellar_claim_claimable(source_address, balance_id):
-    server = Server(horizon_url="https://horizon.stellar.org")
-    root_account = server.load_account(source_address)
-    transaction = TransactionBuilder(source_account=root_account,
-                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                     base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
+def stellar_claim_claimable(source_address, balance_id, xdr=None):
+    if xdr:
+        transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    else:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        root_account = server.load_account(source_address)
+        transaction = TransactionBuilder(source_account=root_account,
+                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                         base_fee=base_fee)
+        transaction.set_timeout(60 * 60)
+
     transaction.append_claim_claimable_balance_op(balance_id=balance_id)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
     return xdr
 
 
-def send_satsmtl_pending():
-    accounts = stellar_get_mtl_holders()
+async def send_satsmtl_pending():
+    accounts = await stellar_get_mtl_holders()
     print(len(accounts))
     cnt = 0
     xdr = None
@@ -1285,10 +1537,10 @@ def save_usdc_accounts():
     print(json.dumps(accounts, indent=4))
 
 
-#from loguru import logger
+# from loguru import logger
 
 
-#@logger.catch
+@logger.catch
 def send_mtl_pending():
     records = fb.execsql(f"select address_id from t_pending where dt_send is null and home_domain = ?", ['lobstr.co'])
     print(len(records))
@@ -1309,14 +1561,245 @@ def send_mtl_pending():
     stellar_sync_submit(stellar_sign(xdr, private_sign))
 
 
+def no_err():
+    with suppress(NotFoundError):
+        cb = Server(horizon_url="https://horizon.stellar.org").transactions().transaction(
+            '8bde064fe81b9383543ba2e043fe47f0a916941f390564a4dcab33d44fd81ab8').call()
+        print(cb)
+
+
+def return_satsmtl_pending():
+    cb_cb = Server(horizon_url="https://horizon.stellar.org").claimable_balances().for_sponsor(public_div).limit(
+        90).call()
+    xdr = None
+    for record in cb_cb['_embedded']['records']:
+        xdr = stellar_claim_claimable(public_div, record['id'], xdr=xdr)
+
+    stellar_sync_submit(stellar_sign(xdr, private_sign))
+
+
+def return_mtl_pending():
+    cb_cb = Server(horizon_url="https://horizon.stellar.org").claimable_balances().for_sponsor(public_wallet).limit(
+        10).call()
+    xdr = None
+    insert = []
+    for record in cb_cb['_embedded']['records']:
+        # print(record['claimants'][1]['destination'])
+        insert.append([record['claimants'][1]['destination']])
+        xdr = stellar_claim_claimable(public_wallet, record['id'], xdr=xdr)
+
+    stellar_sync_submit(stellar_sign(xdr, private_sign))
+    fb.many_insert(f"update t_pending set dt_back = localtimestamp where address_id = ?", insert)
+
+
+def save_transactions():
+    cb_cb = Server(horizon_url="https://horizon.stellar.org").transactions().for_account(public_wallet).limit(
+        200).order()
+    cb_list = []
+    returned_list = []
+    i = 0
+    records = cb_cb.call()
+    while len(records['_embedded']['records']) > 0:
+        for record in records['_embedded']['records']:
+            xdr = record['envelope_xdr']
+            transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+            txResult = TransactionResult.from_xdr(record["result_xdr"])
+            results = txResult.result.results
+            if type(transaction.transaction.operations[0]).__name__ == 'CreateClaimableBalance':
+                if transaction.transaction.operations[0].asset.code == 'MTL':
+                    for idx, operation in enumerate(transaction.transaction.operations):
+                        operationResult = results[idx].tr.create_claimable_balance_result
+                        balanceId = operationResult.balance_id.to_xdr_bytes().hex()
+                        # print(f"Balance ID (2): {balanceId}")
+                        # print(operation.claimants[1].destination)
+                        cb_list.append([operation.claimants[1].destination, balanceId])
+            if type(transaction.transaction.operations[0]).__name__ == 'ClaimClaimableBalance':
+                for operation in transaction.transaction.operations:
+                    # print(operation.balance_id)
+                    returned_list.append([operation.balance_id])
+
+        records = cb_cb.next()
+        i += 1
+        print(i)
+
+    with open(f"cb_list.json", "w") as fp:
+        json.dump(cb_list, fp, indent=2)
+    with open(f"returned_list.json", "w") as fp:
+        json.dump(returned_list, fp, indent=2)
+    #############################
+    with open('returned_list.json', 'r', encoding='UTF-8') as fp:
+        data = json.load(fp)
+    print(data)
+    fb.many_insert(f"update t_pending set dt_back = localtimestamp where dt_back is null and CLAIMABLE_BALANCE_ID = ?",
+                   data)
+
+
+async def send_msg_to_mtl():
+    holders = await stellar_get_mtl_holders(mini=False)
+    i = 0
+    x = 0
+    transaction = TransactionBuilder(
+        source_account=Server(horizon_url="https://horizon.stellar.org").load_account(public_pending),
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=base_fee)
+    transaction.set_timeout(60 * 60)
+
+    for record in holders:
+        found1 = list(filter(lambda x: x.get('asset_code') == 'EURMTL', record['balances']))
+        found2 = list(filter(lambda x: x.get('asset_code') == 'SATSMTL', record['balances']))
+        if len(found1) > 0 and len(found2) > 0:
+            print('found ' + record['id'])
+        else:
+            print('not found', record['id'], i)
+            i = i + 1
+            x = x + 1
+            transaction.append_payment_op(destination=record['id'], amount='0.0000001', asset=mtl_asset)
+            if i > 90:
+                i = 0
+                transaction.add_text_memo('Visit our site for dividends')
+                xdr = transaction.build().to_xdr()
+                print(xdr)
+                stellar_sync_submit(stellar_sign(xdr, private_sign))
+                # new tr
+                transaction = TransactionBuilder(
+                    source_account=Server(horizon_url="https://horizon.stellar.org").load_account(public_pending),
+                    network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                    base_fee=base_fee)
+                transaction.set_timeout(60 * 60)
+
+    transaction.add_text_memo('Visit our site for dividends')
+    xdr = transaction.build().to_xdr()
+    print(xdr)
+    stellar_sync_submit(stellar_sign(xdr, private_sign))
+    print(x)
+
+
+def float2str(f) -> str:
+    if isinstance(f, str):
+        f = f.replace(',', '.')
+        f = float(f)
+    s = "%.7f" % f
+    while len(s) > 1 and s[-1] in ('0', '.'):
+        l = s[-1]
+        s = s[0:-1]
+        if l == '.':
+            break
+    return s
+
+
+def decode_effects_records(watch_list, records, ledger):
+    result = []
+    for record in records:
+        if record['type'] in ('liquidity_pool_trade', 'account_created', 'claimable_balance_sponsorship_removed',
+                              'trustline_created', 'trustline_removed', 'claimable_balance_created',
+                              'signer_created', 'signer_removed', 'trustline_flags_updated', 'trustline_authorized',
+                              'trustline_authorized_to_maintain_liabilities', 'trustline_sponsorship_created',
+                              'claimable_balance_claimant_created', 'claimable_balance_sponsorship_created',
+                              'data_updated', 'trustline_updated', 'signer_updated', 'account_thresholds_updated',
+                              'trustline_deauthorized', 'account_flags_updated', 'liquidity_pool_deposited',
+                              'data_created', 'data_removed', 'account_removed', 'account_sponsorship_created',
+                              'signer_sponsorship_created', 'account_home_domain_updated', 'liquidity_pool_removed',
+                              'trustline_sponsorship_removed', 'liquidity_pool_withdrew', 'liquidity_pool_created',
+                              'account_inflation_destination_updated', 'sequence_bumped', 'signer_sponsorship_removed',
+                              'account_sponsorship_removed', 'liquidity_pool_revoked', 'claimable_balance_clawed_back'):
+            continue
+
+        if record['type'] == 'account_debited':
+            if record['account'] in watch_list or record.get('asset_issuer') in watch_list:
+                # account_debited
+                # 'id': '0193165308029165569-0000000002', 'paging_token': '193165308029165569-2', 'account': 'GAO6SHKSQ3T3COGUWM3PYW4TELCFKCC57OOSM7QFZP6UA5OSDDNCTZPS',
+                # 'type': 'account_debited', 'type_i': 3, 'created_at': '2023-02-16T14:50:53Z', 'asset_type': 'native', 'amount': '0.0655842'}
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                result.append([op_date, record['type'], record['amount'],
+                               record.get('asset_code', 'XLM'), None, None, None, record.get('account'), None, '',
+                               record['paging_token'], ledger])
+            continue
+
+        if record['type'] == 'account_credited':
+            if record['account'] in watch_list or record.get('asset_issuer') in watch_list:
+                # account_credited
+                # 'id': '0193165308029046787-0000000001', 'paging_token': '193165308029046787-1', 'account': 'GBVOXZ3W3ECRPABUNXAW6UWZZ7D7MOW5RQZWBKW3NJZC33JEKO55LXXD',
+                # 'type': 'account_credited', 'type_i': 2, 'created_at': '2023-02-16T14:50:53Z', 'asset_type': 'credit_alphanum12', 'asset_code': 'GOLDRESERVE',
+                # 'asset_issuer': 'GBVOXZ3W3ECRPABUNXAW6UWZZ7D7MOW5RQZWBKW3NJZC33JEKO55LXXD', 'amount': '2427.0000000'}
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                result.append([op_date, record['type'], record['amount'],
+                               record.get('asset_code', 'XLM'), None, None, None, record.get('account'), None, '',
+                               record['paging_token'], ledger])
+            continue
+
+        if record['type'] == 'trade':
+            if record['account'] in watch_list or record['seller'] in watch_list or record.get(
+                    'sold_asset_issuer') in watch_list or record.get('bought_asset_issuer') in watch_list:
+                # trade
+                # 'id': '0193165308029235201-0000000001', 'paging_token': '193165308029235201-1', 'account': 'GBKGNJW7NYSHKFR3RQECSSB2ZD74SVCAOOJEUINPNK3Q2S5JDS3FFMGX',
+                # 'type': 'trade', 'type_i': 33, 'created_at': '2023-02-16T14:50:53Z', 'seller': 'GDXID5C7CB3HRT7OHPNTYO2A53UUQB7EPKTZAMV3HTOPKE5JYJFT2P7P',
+                # 'offer_id': '1186493974', 'sold_amount': '690.8303426', 'sold_asset_type': 'credit_alphanum4', 'sold_asset_code': 'EURV',
+                # 'sold_asset_issuer': 'GDB6ZOJ46MDSERVTH2B7P6C4LEAWU3UDJZLPUFERROEDV774U4AQIG5G', 'bought_amount': '737.1159935', 'bought_asset_type': 'credit_alphanum4',
+                # 'bought_asset_code': 'USDV', 'bought_asset_issuer': 'GDB6ZOJ46MDSERVTH2B7P6C4LEAWU3UDJZLPUFERROEDV774U4AQIG5G'}
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                result.append([op_date, record['type'], record['sold_amount'],
+                               record.get('sold_asset_code', 'XLM'), record['bought_amount'],
+                               record.get('bought_asset_code', 'XLM'), record.get('seller'), record.get('account'),
+                               None, '', record['paging_token'], ledger])
+            continue
+        if record['type'] == 'claimable_balance_claimed':
+            if record['account'] in watch_list:
+                # claimable_balance_claimed
+                # 'id': '0193165308029046786-0000000001', 'paging_token': '193165308029046786-1', 'account': 'GCHGRZLYXNTMRIICT2RK6OMABNP7RSNWL7GQCI5MKH5YGOVMUUWTPNGG',
+                # 'type': 'claimable_balance_claimed', 'type_i': 52, 'created_at': '2023-02-16T14:50:53Z', 'asset': 'GOLDRESERVE:GBVOXZ3W3ECRPABUNXAW6UWZZ7D7MOW5RQZWBKW3NJZC33JEKO55LXXD',
+                # 'balance_id': '00000000bbd6448ce50c7ae88ac7237fb3e83f6ca9b0326093de06508080d9cccf96c460', 'amount': '2427.0000000'}
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                result.append([op_date, record['type'], record['amount'],
+                               record['asset'].split(':')[0], None, None, None, record.get('account'), None, '',
+                               record['paging_token'], ledger])
+
+            continue
+        print(record['type'], record)
+    return result
+
+
+def cmd_check_ledger():
+    watch_list = fb.get_watch_list()
+    ledger_id = int(cmd_load_bot_value(BotValueTypes.LastLedger, 0, '45407700'))
+    while True:
+        ledger_data = []
+        ledger_id += 1
+        logger.info(f'ledger_id {ledger_id}')
+        call_builder = Server(horizon_url="https://horizon.stellar.org").effects().for_ledger(ledger_id).limit(200)
+        effects = call_builder.call()
+        while len(effects['_embedded']['records']) > 0:
+            data = decode_effects_records(watch_list, effects['_embedded']['records'], ledger_id)
+            if len(data) > 0:
+                ledger_data.extend(data)
+            effects = call_builder.next()
+
+        # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token', 'ledger']]]
+        logger.info(f'ledger_data {ledger_data}')
+        fb.many_insert("insert into t_operations (dt, operation, amount1, code1, amount2, code2, "
+                       "from_account, for_account, transaction_hash, memo, id, ledger) "
+                       "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       ledger_data)
+        cmd_save_bot_value(BotValueTypes.LastLedger, 0, ledger_id)
+
+
+async def get_clear_data_xdr(address: str):
+    acc = await stellar_get_account(address)
+    xdr = None
+    for data_name in acc['data']:
+        xdr = cmd_gen_data_xdr(address, data_name + ':', xdr)
+    return xdr
+
+
 if __name__ == "__main__":
-    xdr = stellar_add_fond_trustline('GC72CB75VWW7CLGXS76FGN3CC5K7EELDAQCPXYMZLNMOTC42U3XJBOSS','MTL')
-    print(stellar_sync_submit(stellar_sign(xdr,private_sign)))
-# **********************************
-# gen_new('BOSS')
-# xdr = stellar_add_trustline(public_div, satsmtl_asset.code, public_issuer)
-# xdr = stellar_swap(public_div, xlm_asset, '1', satsmtl_asset, '10')
-# print(cmd_calc_divs(1,2))
-# xdr = stellar_claimable(public_div, satsmtl_asset, '1', public_itolstov)
-# stellar_sync_submit(stellar_sign(xdr, private_sign))
+    #a = asyncio.run(get_safe_balance())
+    print(get_bod_list())
+    # s = asyncio.run(cmd_show_data(public_div,'LAST_DIVS',True))
+    # print(cmd_check_new_asset_transaction('MTL',BotValueTypes.LastMTLTransaction,10))
+    # xdr = cmd_gen_data_xdr(public_div,'LAST_DIVS:1386')
+    #print(gen_new('USD'))
+    # print(stellar_sync_submit(stellar_sign(xdr, private_sign)))
     pass
