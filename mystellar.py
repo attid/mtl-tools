@@ -5,6 +5,7 @@ from builtins import print
 from contextlib import suppress
 
 import aiohttp
+import gspread
 from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account, TextMemo, Keypair, FeeBumpTransaction, \
     ServerAsync, AiohttpClient, Memo, Price
 from stellar_sdk import TransactionEnvelope, FeeBumpTransactionEnvelope  # , Operation, Payment, SetOptions
@@ -31,6 +32,7 @@ public_distributor = "GB7NLVMVC6NWTIFK7ULLEQDF5CBCI2TDCO3OZWWSFXQCT7OPU3P4EOSR"
 public_city = "GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3"
 public_competition = "GAIKBJYL5DZFHBL3R4HPFIA2U3ZEBTJ72RZLP444ACV24YZ2C73P6COM"
 public_defi = "GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI"
+public_btc_guards = "GATUN5FV3QF35ZMU3C63UZ63GOFRYUHXV2SHKNTKPBZGYF2DU3B7IW6Z"
 # bot
 public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
 public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
@@ -59,12 +61,14 @@ eurdebt_asset = Asset("EURDEBT", public_issuer)
 xlm_asset = Asset("XLM", None)
 satsmtl_asset = Asset("SATSMTL", public_issuer)
 btcmtl_asset = Asset("BTCMTL", public_issuer)
+btcdebt_asset = Asset("BTCDEBT", public_issuer)
 usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
 mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
+defi_asset = Asset("MTLDefi", public_defi)
 
 pack_count = 70  # for select first pack_count - to pack to xdr
 
-exchange_bots = (public_exchange_eurmtl_xlm, public_exchange_eurmtl_btc, public_exchange_eurmtl_sats,
+exchange_bots = (public_exchange_eurmtl_xlm, public_exchange_eurmtl_btc,
                  public_exchange_eurmtl_usdc, public_exchange_btc_sats, public_fire)
 
 
@@ -306,8 +310,13 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             continue
         if good_operation(operation, "ChangeTrust", filter_operation, ignore_operation):
             data_exist = True
-            result.append(
+            if operation.limit == '0':
+                result.append(
+                f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer)}")
+            else:
+                result.append(
                 f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer)}")
+
             continue
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
@@ -319,6 +328,12 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
                 data_exist = True
                 result.append(
                     f"    Офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}")
+            continue
+        if good_operation(operation, "CreatePassiveSellOffer", filter_operation, ignore_operation):
+            if float(operation.amount) > filter_sum:
+                data_exist = True
+                result.append(
+                    f"    Пассивный офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}")
             continue
         if good_operation(operation, "ManageBuyOffer", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
@@ -370,7 +385,8 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
                                         "PathPaymentStrictReceive", "ClaimClaimableBalance", "CreateAccount",
                                         "CreateClaimableBalance", "ChangeTrust", "SetOptions", "Payment", "ManageData",
-                                        "BeginSponsoringFutureReserves", "EndSponsoringFutureReserves"]:
+                                        "BeginSponsoringFutureReserves", "EndSponsoringFutureReserves",
+                                        "CreatePassiveSellOffer"]:
             continue
 
         data_exist = True
@@ -401,26 +417,18 @@ def check_url_xdr(url):
     return decode_xdr(rq)
 
 
-def get_bod_list():
+def get_bim_list():
     # ['GARNOMR62CRFSI2G2OQYA5SPGFFDBBY566AWZF4637MNF74UZMBNOZVD', True],
-    account_json = requests.get(
-        f'https://horizon.stellar.org/accounts/GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW').json()
+    gc = gspread.service_account('mtl-google-doc.json')
+    wks = gc.open("MTL_BIM_register").worksheet("List")
+
     addresses = []
-    if "data" in account_json:
-        data = account_json["data"]
-        for data_name in list(data):
-            data_value = data[data_name]
-            if data_name[:13] == 'bod_guarantor':
-                # decode_data_vlue(data_value) - address guard
-                bod_json = requests.get(f'https://horizon.stellar.org/accounts/{decode_data_value(data_value)}').json()
-                if "data" in bod_json:
-                    bod_data = bod_json["data"]
-                    for bod_data_name in list(bod_data):
-                        if bod_data_name[:3] == 'bod':
-                            bod_data_value = decode_data_value(bod_data[bod_data_name])
-                            found = list(filter(lambda x: x == bod_data_value, addresses))
-                            if len(found) == 0:
-                                addresses.append(bod_data_value)
+    data = wks.get_all_values()
+    for record in data[2:]:
+        if record[20] and len(record[4]) == 56 and record[10] == 'TRUE' and float(float2str(record[17])) > 0.5:
+            # print(record[4], record[10])
+            addresses.append(record[4])
+
     # check eurmtl
     result = []
     for address in addresses:
@@ -438,9 +446,9 @@ def get_bod_list():
     return result
 
 
-def cmd_show_bdm():
+def cmd_show_bim():
     result = ''
-    bod_list = get_bod_list()
+    bod_list = get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
     total_sum = \
@@ -730,8 +738,8 @@ async def cmd_send_by_list_id(list_id):
     return need
 
 
-def cmd_calc_bods(list_id, test_sum=0):
-    bod_list = get_bod_list()
+def cmd_calc_bim_pays(list_id, test_sum=0):
+    bod_list = get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
     balances = {}
@@ -787,7 +795,6 @@ def cmd_load_user_id(user_name: str) -> int:
     return result
 
 
-
 def cmd_save_url(chat_id, msg_id, msg):
     url = extract_url(msg)
     cmd_save_bot_value(BotValueTypes.PinnedUrl, chat_id, url)
@@ -796,7 +803,7 @@ def cmd_save_url(chat_id, msg_id, msg):
 
 def extract_url(msg, surl='eurmtl.me'):
     if surl:
-        url = re.search("(?P<url>https?://"+surl+"[^\s]+)", msg).group("url")
+        url = re.search("(?P<url>https?://" + surl + "[^\s]+)", msg).group("url")
     else:
         url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
     return url
@@ -1140,7 +1147,7 @@ async def cmd_gen_vote_list(return_delegate_list: bool = False, mini=False):
     total_sum = 0
     for account in big_list:
         total_sum += account[1]
-    #divider = total_sum#ceil() #big_list[19][1]
+    # divider = total_sum#ceil() #big_list[19][1]
     total_vote = 0
     for account in big_list:
         account[2] = math.ceil(account[1] * 100 / total_sum)
@@ -1229,45 +1236,29 @@ def gen_new(last_name):
     return [i, new_account.public_key, new_account.secret]
 
 
-async def get_safe_balance():
+async def get_safe_balance(chat_id):
     total_cash = 0
     total_eurmtl = 0
+    result = ''
 
-    assets = await get_balances('GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result = f"Сейчас в кубышке И {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
+    treasure_list = [
+        ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
+        ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
+        ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
+        ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
+        ['GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ', 'Егора'],
+        ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
+        ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
 
-    assets = await get_balances('GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result += f"Сейчас в кубышке C {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
+    ]
 
-    assets = await get_balances('GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result += f"Сейчас в кубышке Г {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
-
-    assets = await get_balances('GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result += f"Сейчас в кубышке Д {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
-
-    assets = await get_balances('GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result += f"Сейчас в кубышке Е {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
-
-    assets = await get_balances('GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV')
-    diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-    result += f"Сейчас в кубышке А {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
-    total_cash += diff
-    total_eurmtl += int(assets['EURMTL'])
+    for treasure in treasure_list:
+        assets = await get_balances(treasure[0])
+        diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+        name = treasure[1] if chat_id == -1001169382324 else treasure[1][0]
+        result += f"Сейчас в кубышке {name} {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+        total_cash += diff
+        total_eurmtl += int(assets['EURMTL'])
 
     assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
     result += f"А у Skynet {int(assets['USDC'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
@@ -1278,17 +1269,22 @@ async def get_safe_balance():
     return result
 
 
-async def get_balances(address: str):
+async def get_balances(address: str, return_assets = False):
     account = await stellar_get_account(address)
     assets = {}
     if account.get('type'):
         return []
     else:
-        for balance in account['balances']:
-            if balance['asset_type'] == "native":
-                assets['XLM'] = float(balance['balance'])
-            elif balance["asset_type"][0:15] == "credit_alphanum":
-                assets[balance['asset_code']] = float(balance['balance'])
+        if return_assets:
+            for balance in account['balances']:
+                if balance["asset_type"][0:15] == "credit_alphanum":
+                    assets[Asset(balance['asset_code'],balance['asset_issuer'])] = float(balance['balance'])
+        else:
+            for balance in account['balances']:
+                if balance['asset_type'] == "native":
+                    assets['XLM'] = float(balance['balance'])
+                elif balance["asset_type"][0:15] == "credit_alphanum":
+                    assets[balance['asset_code']] = float(balance['balance'])
 
         return assets
 
@@ -1327,13 +1323,52 @@ async def get_mrxpinvest_xdr(div_sum: float):
     return xdr
 
 
-async def get_defi_xdr(div_sum1, div_sum2: str):
+async def get_defi_xdr(div_sum: int):
+    accounts = await stellar_get_mtl_holders(defi_asset)
+    accounts_list = []
+    total_sum = 0
+    div_bonus = div_sum * 0.1
+    div_sum = div_sum - div_bonus
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_code"] == defi_asset.code:
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        accounts_list.append([account["account_id"], token_balance, 0])
+        total_sum += token_balance
+
+    persent = div_sum / total_sum
+
+    for account in accounts_list:
+        if account[0] == 'GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU':
+            account[2] = account[1] * persent + div_bonus
+        else:
+            account[2] = account[1] * persent
+
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_defi)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
-    transaction.append_payment_op(destination=public_fund, asset=btcmtl_asset, amount=div_sum1)
-    transaction.append_payment_op(destination=public_seregan, asset=btcmtl_asset, amount=div_sum2)
+    transaction.set_timeout(60 * 60 * 12)
+    for account in accounts_list:
+        transaction.append_payment_op(destination=account[0], asset=satsmtl_asset, amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+
+async def get_mtlbtc_xdr(btc_sum, address: str):
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 12)
+    transaction.append_payment_op(destination=public_btc_guards, asset=btcdebt_asset, amount=btc_sum)
+    transaction.append_payment_op(destination=address, asset=btcmtl_asset, amount=btc_sum)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 
@@ -1768,7 +1803,7 @@ def cmd_check_ledger():
     while True:
         ledger_data = []
         ledger_id += 1
-        logger.info(f'ledger_id {ledger_id}')
+        # logger.info(f'ledger_id {ledger_id}')
         call_builder = Server(horizon_url="https://horizon.stellar.org").effects().for_ledger(ledger_id).limit(200)
         effects = call_builder.call()
         while len(effects['_embedded']['records']) > 0:
@@ -1778,7 +1813,7 @@ def cmd_check_ledger():
             effects = call_builder.next()
 
         # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token', 'ledger']]]
-        logger.info(f'ledger_data {ledger_data}')
+        # logger.info(f'ledger_data {ledger_data}')
         fb.many_insert("insert into t_operations (dt, operation, amount1, code1, amount2, code2, "
                        "from_account, for_account, transaction_hash, memo, id, ledger) "
                        "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1794,12 +1829,27 @@ async def get_clear_data_xdr(address: str):
     return xdr
 
 
+def get_memo_by_op(op: str):
+    operation = Server(horizon_url="https://horizon.stellar.org").operations().operation(op).call()
+    transaction = Server(horizon_url="https://horizon.stellar.org").transactions().transaction(
+        operation['transaction_hash']).call()
+
+    return transaction.get('memo', 'None')
+
+
 if __name__ == "__main__":
-    #a = asyncio.run(get_safe_balance())
-    print(get_bod_list())
+
+    #a = asyncio.run(get_defi_xdr(677000))
+    #print('\n'.join(decode_xdr(a)))
+
+    # print(get_memo_by_op('191744829201014785'))
     # s = asyncio.run(cmd_show_data(public_div,'LAST_DIVS',True))
     # print(cmd_check_new_asset_transaction('MTL',BotValueTypes.LastMTLTransaction,10))
     # xdr = cmd_gen_data_xdr(public_div,'LAST_DIVS:1386')
-    #print(gen_new('USD'))
-    # print(stellar_sync_submit(stellar_sign(xdr, private_sign)))
+    # print(gen_new('USD'))
+    #xdr = 'AAAAAgAAAADvrYnmZDi297UxB1Ll4EsBQh5HAxOjMFTWZHb2BeTZnAGvj8wCFwdIAAABAQAAAAEAAAAAAAAAAAAAAABkZzKUAAAAAAAAABwAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAATi7x4khT64pDB+j5hh573eQ0GhP/FQ8vfdYa/slzdKwAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAEGTWGjvR2G0C8ycFJJ5kz9dBhpuTXiNyYQk5dVQwz3gAAAAIAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAABV7mlOMsaqtm81h/Xd3/GWM/RPm9V5bZtQgJLDCCVV4QAAAAEAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAABAAAAGwAAAAEAAAAbAAAAAQAAABsAAAAAAAAAAAAAAAEAAAAABKm3owZNa8bB1ZbPOeEZwMn6SWmWnL4MJkNI8TQwb6oAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAABOLvHiSFPrikMH6PmGHnvd5DQaE/8VDy991hr+yXN0rAAAAAAAAAAEAAAAABKm3owZNa8bB1ZbPOeEZwMn6SWmWnL4MJkNI8TQwb6oAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAQZNYaO9HYbQLzJwUknmTP10GGm5NeI3JhCTl1VDDPeAAAAAgAAAAEAAAAABKm3owZNa8bB1ZbPOeEZwMn6SWmWnL4MJkNI8TQwb6oAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAFXuaU4yxqq2bzWH9d3f8ZYz9E+b1Xltm1CAksMIJVXhAAAAAQAAAAEAAAAABKm3owZNa8bB1ZbPOeEZwMn6SWmWnL4MJkNI8TQwb6oAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAbAAAAAQAAABsAAAABAAAAGwAAAAAAAAAAAAAAAQAAAAB+1dWVF5tpoKr9FrJAZeiCJGpjE7bs2tIt4Cn9z6bfwgAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAE4u8eJIU+uKQwfo+YYee93kNBoT/xUPL33WGv7Jc3SsAAAAAAAAAAQAAAAB+1dWVF5tpoKr9FrJAZeiCJGpjE7bs2tIt4Cn9z6bfwgAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAABBk1ho70dhtAvMnBSSeZM/XQYabk14jcmEJOXVUMM94AAAACAAAAAQAAAAB+1dWVF5tpoKr9FrJAZeiCJGpjE7bs2tIt4Cn9z6bfwgAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAVe5pTjLGqrZvNYf13d/xljP0T5vVeW2bUICSwwglVeEAAAABAAAAAQAAAAB+1dWVF5tpoKr9FrJAZeiCJGpjE7bs2tIt4Cn9z6bfwgAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAQAAABsAAAABAAAAGwAAAAEAAAAbAAAAAAAAAAAAAAABAAAAABCgpwvo8lOFe48O8qAapvJAzT/UcrfznACrrmM6F/b/AAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAATi7x4khT64pDB+j5hh573eQ0GhP/FQ8vfdYa/slzdKwAAAAAAAAABAAAAABCgpwvo8lOFe48O8qAapvJAzT/UcrfznACrrmM6F/b/AAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAEGTWGjvR2G0C8ycFJJ5kz9dBhpuTXiNyYQk5dVQwz3gAAAAIAAAABAAAAABCgpwvo8lOFe48O8qAapvJAzT/UcrfznACrrmM6F/b/AAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAABV7mlOMsaqtm81h/Xd3/GWM/RPm9V5bZtQgJLDCCVV4QAAAAEAAAABAAAAABCgpwvo8lOFe48O8qAapvJAzT/UcrfznACrrmM6F/b/AAAABQAAAAAAAAAAAAAAAAAAAAAAAAABAAAAGwAAAAEAAAAbAAAAAQAAABsAAAAAAAAAAAAAAAEAAAAAZCYZIicGuHp4i2jL0zmlzZCzgb1zRBwhX0Uoxto1iHoAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAABOLvHiSFPrikMH6PmGHnvd5DQaE/8VDy991hr+yXN0rAAAAAAAAAAEAAAAAZCYZIicGuHp4i2jL0zmlzZCzgb1zRBwhX0Uoxto1iHoAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAQZNYaO9HYbQLzJwUknmTP10GGm5NeI3JhCTl1VDDPeAAAAAgAAAAEAAAAAZCYZIicGuHp4i2jL0zmlzZCzgb1zRBwhX0Uoxto1iHoAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAFXuaU4yxqq2bzWH9d3f8ZYz9E+b1Xltm1CAksMIJVXhAAAAAQAAAAEAAAAAZCYZIicGuHp4i2jL0zmlzZCzgb1zRBwhX0Uoxto1iHoAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAbAAAAAQAAABsAAAABAAAAGwAAAAAAAAAAAAAAAQAAAADoj6aqtmvFJrjhE4Ddhri0neRe/nzuwK/mWVgzVOpurQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAE4u8eJIU+uKQwfo+YYee93kNBoT/xUPL33WGv7Jc3SsAAAAAAAAAAQAAAADoj6aqtmvFJrjhE4Ddhri0neRe/nzuwK/mWVgzVOpurQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAABBk1ho70dhtAvMnBSSeZM/XQYabk14jcmEJOXVUMM94AAAACAAAAAQAAAADoj6aqtmvFJrjhE4Ddhri0neRe/nzuwK/mWVgzVOpurQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAVe5pTjLGqrZvNYf13d/xljP0T5vVeW2bUICSwwglVeEAAAABAAAAAQAAAADoj6aqtmvFJrjhE4Ddhri0neRe/nzuwK/mWVgzVOpurQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAQAAABsAAAABAAAAGwAAAAEAAAAbAAAAAAAAAAAAAAABAAAAAMEsWf4vOTq1KsqhqhK5cqZGiSWdqsf6gvpDk2OZaH2AAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAATi7x4khT64pDB+j5hh573eQ0GhP/FQ8vfdYa/slzdKwAAAAAAAAABAAAAAMEsWf4vOTq1KsqhqhK5cqZGiSWdqsf6gvpDk2OZaH2AAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAEGTWGjvR2G0C8ycFJJ5kz9dBhpuTXiNyYQk5dVQwz3gAAAAIAAAABAAAAAMEsWf4vOTq1KsqhqhK5cqZGiSWdqsf6gvpDk2OZaH2AAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAABV7mlOMsaqtm81h/Xd3/GWM/RPm9V5bZtQgJLDCCVV4QAAAAEAAAABAAAAAMEsWf4vOTq1KsqhqhK5cqZGiSWdqsf6gvpDk2OZaH2AAAAABQAAAAAAAAAAAAAAAAAAAAAAAAABAAAAGwAAAAEAAAAbAAAAAQAAABsAAAAAAAAAAAAAAAAAAAAA'
+    #xdr2 = 'AAAAAgAAAAAQoKcL6PJThXuPDvKgGqbyQM0/1HK385wAq65jOhf2/wAAE4gCeukxAAAABAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAABCgpwvo8lOFe48O8qAapvJAzT/UcrfznACrrmM6F/b/AAAABQAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAAA'
+    #print(stellar_sync_submit(stellar_sign(xdr, private_sign)))
+    #print(stellar_add_xdr(xdr, xdr2))
+    print(decode_xdr('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'))
     pass
