@@ -126,7 +126,7 @@ async def update_top_holders_report():
     records = wks.get_values('F2:F21')
     gd_link = 'https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156'
     for record in records:
-        if record != '0':
+        if record[0] != '0':
             text = f'You need update votes <a href="{gd_link}">more info</a>'
             fb.execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (-1001239694752, text, True))
             break
