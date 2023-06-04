@@ -7,7 +7,7 @@ import re, random
 import update_report
 import update_report2
 import update_report4
-from skynet_main import dp, is_skynet_admin, MTLChats, reply_only, send_by_list
+from skynet_main import dp, is_skynet_admin, MTLChats, reply_only, send_by_list, multi_answer, multi_reply
 from loguru import logger
 
 
@@ -56,15 +56,16 @@ async def cmd_last_check(message: types.Message):
         mystellar.cmd_save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
         if message.chat.id in (MTLChats.SignGroup.value, MTLChats.TestGroup.value, MTLChats.ShareholderGroup.value,
-                               MTLChats.SafeGroup.value, MTLChats.LandLordGroup.value, MTLChats.SignGroupForChanel.value):
+                               MTLChats.SafeGroup.value, MTLChats.LandLordGroup.value,
+                               MTLChats.SignGroupForChanel.value):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
-            if len(msg) > 4096:
-                await message.answer("Слишком много операций показаны первые ")
-            await message.reply(msg[:4000])
+            # if len(msg) > 4096:
+            #    await message.answer("Слишком много операций показаны первые ")
+            await multi_reply(message, msg)
 
-        if message.chat.id in (MTLChats.SignGroup.value,MTLChats.SignGroupForChanel.value,):
+        if message.chat.id in (MTLChats.SignGroup.value, MTLChats.SignGroupForChanel.value,):
             msg = mystellar.cmd_alarm_pin_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
             await message.reply(msg)
 
@@ -85,9 +86,7 @@ async def cmd_last_check(message: types.Message):
             msg = mystellar.check_url_xdr(
                 mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedUrl, message.chat.id))
             msg = f'\n'.join(msg)
-            if len(msg) > 4096:
-                await message.answer("Слишком много операций показаны первые ")
-            await message.reply(msg[:4000])
+            await multi_reply(message,msg[:4000])
 
         elif has_words(message.text, ['СГЕНЕРИ', 'сделай', 'подготовь']):
             if has_words(message.text, ['ДИВИДЕНДЫ', 'дивы']):
@@ -139,7 +138,7 @@ async def cmd_last_check(message: types.Message):
             await message.reply_photo(random.choice(booms))
 
         elif has_words(message.text, ['сколько']) and has_words(message.text, ['кубышк']):
-            result = await mystellar.get_safe_balance()
+            result = await mystellar.get_safe_balance(message.chat.id)
             await message.reply(result)
 
         elif has_words(message.text, ['хочется', 'нет', 'дай']) and has_words(message.text,
@@ -153,7 +152,7 @@ async def cmd_last_check(message: types.Message):
 
     elif message.chat.type == ChatType.PRIVATE:
         msg = await dialog.talk(message.chat.id, message.text)
-        msg = await message.reply(msg)
+        await message.reply(msg)
 
     else:
         if message.reply_to_message and (message.reply_to_message.from_user.id == 2134695152) \
@@ -167,16 +166,34 @@ async def cmd_last_check(message: types.Message):
 async def remind(message):
     if message.reply_to_message and message.reply_to_message.forward_from_chat:
         alarm_list = mystellar.cmd_alarm_url_(mystellar.extract_url(message.reply_to_message.text))
-        msg =  alarm_list + '\nСмотрите топик / Look at the topic message'
+        msg = alarm_list + '\nСмотрите топик / Look at the topic message'
         await message.reply(text=msg)
         if alarm_list.find('@') != -1:
             if await is_skynet_admin(message):
                 all_users = alarm_list.split()
-                url  = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
+                url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
                 await send_by_list(all_users, message, url=url)
 
     else:
         msg_id = mystellar.cmd_load_bot_value(mystellar.BotValueTypes.PinnedId, message.chat.id)
         msg = mystellar.cmd_alarm_pin_url(message.chat.id) + '\nСмотрите закреп / Look at the pinned message'
         await dp.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
-                              message_thread_id=message.message_thread_id)
+                                  message_thread_id=message.message_thread_id)
+
+
+@dp.message_handler(commands="comment")
+async def cmd_comment(message: types.Message):
+    if message.reply_to_message is None:
+        await message.reply('А чего коментить то?')
+        return
+    if message.reply_to_message.text:
+        msg = message.reply_to_message.text
+    else:
+        msg = message.reply_to_message.caption
+    try:
+        await message.delete()
+    except:
+        pass
+    msg = await dialog.talk_get_comment(message.chat.id, msg)
+    msg = await message.reply_to_message.reply(msg)
+    my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')

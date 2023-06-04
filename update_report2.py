@@ -1,10 +1,12 @@
 import asyncio
 
 import gspread
+import gspread_asyncio
 import datetime
 import requests
 from loguru import logger
 
+import fb
 # import gspread_formatting
 # import json
 # from settings import currencylayer_id, coinlayer_id
@@ -88,7 +90,7 @@ async def update_guarantors_report():
     for address in address_list:
         if len(address) == 56:
             balances = await mystellar.get_balances(address)
-            update_list.append([balances.get('MTLRECT',0)])
+            update_list.append([balances.get('MTLRECT', 0)])
         else:
             update_list.append(['=['])
 
@@ -109,7 +111,7 @@ async def update_top_holders_report():
 
     wks = gc.open("MTL_TopHolders").worksheet("TopHolders")
 
-    vote_list = await mystellar.cmd_gen_vote_list()
+    vote_list = await mystellar.cmd_gen_mtl_vote_list()
     vote_list = await mystellar.stellar_add_mtl_holders_info(vote_list)
 
     for vote in vote_list:
@@ -118,9 +120,16 @@ async def update_top_holders_report():
 
     vote_list.sort(key=lambda k: k[2], reverse=True)
 
-    # print(vote_list)
     wks.update('B2', vote_list)
     wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+
+    records = wks.get_values('F2:F21')
+    gd_link = 'https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156'
+    for record in records:
+        if record != '0':
+            text = f'You need update votes <a href="{gd_link}">more info</a>'
+            fb.execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (-1001239694752, text, True))
+            break
 
     logger.info(f'report topholders all done {now}')
 
@@ -147,9 +156,37 @@ async def update_bdm_report():
     logger.info(f'update bdm_report all done {now}')
 
 
+@logger.catch
+async def update_bim_data():
+    gc = gspread.service_account('mtl-google-doc.json')
+
+    now = datetime.datetime.now()
+
+    wks = gc.open("MTL_BIM_register").worksheet("List")
+    use_date_list = []
+    mtl_amount_list = []
+    data = wks.get_all_values()
+    for record in data[2:]:
+        mtl_amount = 0
+        mmwb_date = None
+        if len(record[4]) == 56 and record[10] == 'TRUE':
+            use_date = fb.get_mmwb_use_date(record[4])
+            if use_date:
+                mmwb_date = use_date.strftime('%d.%m.%Y %H:%M:%S')
+            # get balance
+            balances = await mystellar.get_balances(record[4])
+            mtl_amount = float(balances.get('MTL', 0) + balances.get('MTLRECT', 0))
+        mtl_amount_list.append([mtl_amount])
+        use_date_list.append([mmwb_date])
+
+    wks.update('R3', mtl_amount_list)
+    wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
+    wks.update('AG1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    logger.info(f'update bdm_report all done {now}')
+
+
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
     asyncio.run(update_guarantors_report())
-    asyncio.run(update_bdm_report())
+    asyncio.run(update_bim_data())
     asyncio.run(update_top_holders_report())
-

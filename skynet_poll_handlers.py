@@ -7,6 +7,7 @@ from aiogram.types import ContentType
 from aiogram.utils.callback_data import CallbackData
 from loguru import logger
 
+import mystellar
 from skynet_main import dp, is_skynet_admin, bot
 import json
 
@@ -15,10 +16,16 @@ import json
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 from mystellar import address_id_to_username
-from mystellar import cmd_gen_vote_list
+from mystellar import cmd_gen_mtl_vote_list
 
 cb_poll_click = CallbackData("join_chat", "answer")
 cb_sp_click = CallbackData("sp", "answer")
+
+# we have dict with votes for different chats
+
+chat_to_address = {-1001649743884: mystellar.public_issuer,
+                   -1001837984392: mystellar.public_issuer,
+                   -1001800264199: mystellar.public_usdm}
 
 
 @dp.channel_post_handler(content_types=ContentType.all())
@@ -173,12 +180,13 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
     else:
         # {'question': '????? ????? ??? ???????? ?', 'closed': False, 'message_id': 80, 'buttons': [['??????', 0, []],
         # ['??????', 0, []], ['??????', 0, []]]}
-        if user in votes:
+        local_votes = votes[chat_to_address[query.message.chat.id]]
+        if user in local_votes:
             if user in my_poll["buttons"][answer][2]:
-                my_poll["buttons"][answer][1] -= votes[user]
+                my_poll["buttons"][answer][1] -= local_votes[user]
                 my_poll["buttons"][answer][2].remove(user)
             else:
-                my_poll["buttons"][answer][1] += votes[user]
+                my_poll["buttons"][answer][1] += local_votes[user]
                 my_poll["buttons"][answer][2].append(user)
             msg = my_poll["question"] + "\n\n"
             buttons = []
@@ -186,7 +194,7 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
                 msg += f"{button[0][:3]} ({button[1]}) : {' '.join(button[2])}\n"
                 buttons.append(types.InlineKeyboardButton(button[0] + f"({button[1]})",
                                                           callback_data=cb_poll_click.new(answer=len(buttons))))
-            msg += f'Need {votes["NEED"]["50"]}({votes["NEED"]["75"]}) votes from {votes["NEED"]["100"]}'
+            msg += f'Need {local_votes["NEED"]["50"]}({local_votes["NEED"]["75"]}) votes from {local_votes["NEED"]["100"]}'
 
             await query.message.edit_text(msg, reply_markup=types.InlineKeyboardMarkup(row_width=1).add(*buttons))
             with open(f"polls/{query.message.message_id}{query.message.chat.id}.json", "w") as fp:
@@ -199,32 +207,45 @@ async def cq_join_list(query: types.CallbackQuery, callback_data: dict):
 
 
 async def cmd_save_votes():
-    total = 0
-    vote_list = await cmd_gen_vote_list()
-    for vote in vote_list:
-        if vote[2] == 0:
-            vote_list.remove(vote)
-    while len(vote_list) > 20:
-        vote_list.pop(20)
-    votes_list = {}
-    for vote in vote_list:
-        votes_list[address_id_to_username(vote[0])] = vote[2]
-        total += vote[2]
-    votes_list['NEED'] = {'50': cmd_get_needed_votes(), '75': total // 3 * 2 + 1, '100': total}
-    # print(votes)
-    with open("polls/votes.json", "w") as fp:
-        json.dump(votes_list, fp)
-    return votes_list
+    vote_list = {}
+    for chat_id in chat_to_address:
+        if chat_to_address[chat_id] in vote_list:
+            pass
+        else:
+            total = 0
+            vote_list[chat_to_address[chat_id]] = {}
+            _, signers = await mystellar.get_balances(address=chat_to_address[chat_id], return_signers=True)
+            for signer in signers:
+                if signer['weight'] > 0:
+                    total += signer['weight']
+                    vote_list[chat_to_address[chat_id]][address_id_to_username(signer['key'])] = signer['weight']
+            vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1, '75': total // 3 * 2 + 1,
+                                                           '100': total}
+            # print(votes)
+            with open("polls/votes.json", "w") as fp:
+                json.dump(vote_list, fp)
+            global votes
+            votes = vote_list
+    return votes
 
 
-def cmd_get_needed_votes():
-    rq = requests.get(
-        'https://horizon.stellar.org/accounts/GDX23CPGMQ4LN55VGEDVFZPAJMAUEHSHAMJ2GMCU2ZSHN5QF4TMZYPIS').json()
-    return int(rq["thresholds"]["med_threshold"])
+@dp.message_handler(commands="poll_reload_vote")
+async def cmd_poll_reload_vote(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    await cmd_save_votes()
+    # importlib.reload(skynet_poll_handlers)
+    await message.reply('reload complete')
 
 
-with open("polls/votes.json", "r") as fp:
-    votes = json.load(fp)
+def cmd_load_votes():
+    with open("polls/votes.json", "r") as fp:
+        return json.load(fp)
+
+
+votes = cmd_load_votes()
 
 if __name__ == "__main__":
     pass

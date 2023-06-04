@@ -1,86 +1,112 @@
 import asyncio
-import datetime
-import os
+import json
+from datetime import datetime, date
 import random
-
 import openai
-from google.cloud import dialogflow
-from async_openai import OpenAI, settings, CompletionResponse
+from aioredis import Redis
 from settings import opanaikey
+from loguru import logger
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "mtl-skynet-talks.json"
+save_time_long = 60 * 60 * 2
+redis = Redis(host='localhost', port=6379, db=6)
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
 
-async def talk(session_id, msg):
-    return await talk_open_ai_async(msg)
 
-
-def talk_old(session_id, msg):
-    project_id = 'mtl-skynet-hldy'
-    language_code = 'RU'
-
-    session_client = dialogflow.SessionsClient()
-
-    session = session_client.session_path(project_id, session_id)
-    # print("Session path: {}\n".format(session))
-
-    text_input = dialogflow.TextInput(text=msg[:240])
-    query_input = dialogflow.QueryInput()  # text=text_input
-
-    response = session_client.detect_intent(
-        request={"session": session, "query_input": query_input}
-    )
-
-    if len(response.query_result.fulfillment_text) > 2:
-        return response.query_result.fulfillment_text
+async def save_to_redis(chat_id, msg, is_answer=False):
+    data_name = f'{chat_id}:{round(datetime.now().timestamp())}'
+    j = {"content": msg}
+    if is_answer:
+        j["role"] = "assistant"
     else:
-        return "Žao mi je što ne razumijem."
-
-    # print("=" * 20)
-    # print("Query text: {}".format(response.query_result.query_text))
-    # print(
-    #     "Detected intent: {} (confidence: {})\n".format(
-    #        response.query_result.intent.display_name,
-    #        response.query_result.intent_detection_confidence,
-    #    )
-    # )
-    #    print("Fulfillment text: {}\n".format(response.query_result.fulfillment_text))
+        j["role"] = "user"
+    await redis.set(data_name, json.dumps(j))
+    await redis.expire(data_name, save_time_long)
 
 
-def talk_open_ai(msg):
+async def load_from_redis(chat_id):
+    keys = await redis.keys(f'{chat_id}:*')
+    messages = []
+
+    for key in keys:
+        value = await redis.get(key)
+        # извлекаем сообщение и добавляем его в список сообщений
+        message = json.loads(value)
+        # извлекаем timestamp из ключа
+        _, timestamp = key.decode().split(":")
+        # добавляем сообщение и соответствующий timestamp в список
+        messages.append((float(timestamp), message))
+
+    # сортируем сообщения по времени
+    messages.sort(key=lambda x: x[0])
+
+    # возвращаем только сообщения, без timestamp
+    return [msg for _, msg in messages]
+
+
+async def delete_last_redis(chat_id):
+    keys = await redis.keys(f'{chat_id}:*')
+
+    if not keys:  # проверяем, есть ли ключи
+        return
+
+    # Извлекаем timestamp из каждого ключа и сортируем ключи по времени
+    keys.sort(key=lambda key: float(key.decode().split(":")[1]))
+
+    # Удаляем ключ с наибольшим значением времени (т.е. последний ключ)
+    await redis.delete(keys[-1])
+
+
+
+async def talk(chat_id, msg):
+    await save_to_redis(chat_id, msg)
+    msg_data = await load_from_redis(chat_id)
+    msg = await talk_open_ai_async(msg_data=msg_data)
+    if msg:
+        await save_to_redis(chat_id, msg, is_answer=True)
+        return msg
+    else:
+        await delete_last_redis(chat_id)
+        return '=( connection error, retry again )='
+
+
+
+async def talk_open_ai_async(msg=None, msg_data=None, user_name=None):
     openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
     openai.api_key = opanaikey
-    # print(openai.Model.list())
+    # list models
+    # models = openai.Model.list()
 
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=msg,
-        temperature=0.7,
-        max_tokens=2048,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    story = response['choices'][0]['text']
-    return story
+    if msg_data:
+        messages = msg_data
+    else:
+        messages = [{"role": "user", "content": msg}]
+        if user_name:
+            messages[0]["name"] = user_name
+    try:
+        print('****', messages)
+        chat_completion_resp = await openai.ChatCompletion.acreate(model="gpt-3.5-turbo", messages=messages)
+        return chat_completion_resp.choices[0].message.content
+    except openai.error.APIError as e:
+        logger.info(e.code)
+        logger.info(e.args)
+        return None
 
 
-async def talk_open_ai_async(msg):
-    OpenAI.configure(
-        api_key=opanaikey,
-        organization="org-Iq64OmMI81NWnwcPtn72dc7E",
-        debug_enabled=False,
-    )
+async def talk_get_comment(chat_id, article):
+    messages = [{"role": "system",
+                 "content": "Напиши комментарий к статье, ты сторонник либертарианства. Комментарий должен быть прикольный, дружественный, не более 300 символов. Не указывай, что это комментарий или анализируй его. Напиши комментарий сразу, без введения или заключения. Не используй кавычки в ответе. Не используй хештеги # в комментариях !"},
+                {"role": "user", "content": article}]
+    await save_to_redis(chat_id, article)
+    msg = await talk_open_ai_async(msg_data=messages)
+    if msg:
+        await save_to_redis(chat_id, msg, is_answer=True)
+        return msg
+    else:
+        await delete_last_redis(chat_id)
+        return '=( connection error, retry again )='
 
-    r = await OpenAI.completions.async_create(
-        prompt=msg,
-        max_tokens=2048,
-        stream=True
-    )
-    story = r.text
-    return story
 
 
 gor = (
@@ -99,12 +125,12 @@ lang_dict = {}
 
 
 def get_horoscope() -> list:
-    if datetime.date.today() == lang_dict.get('horoscope_date'):
+    if date.today() == lang_dict.get('horoscope_date'):
         return lang_dict.get('horoscope', ['Ошибка при получении =('])
     else:
         today_dic = [""]
         s3 = ""
-        lang_dict['horoscope_date'] = datetime.date.today()
+        lang_dict['horoscope_date'] = date.today()
         horoscope = ["Гороскоп на сегодня"]
         for s in gor[0]:
             horoscope.append(f'**{s}**')
@@ -123,7 +149,27 @@ def get_horoscope() -> list:
         return horoscope
 
 
+# messages array Required
+
+# A list of messages describing the conversation so far.
+
+# role string Required
+# The role of the author of this message. One of system, user, or assistant.
+
+# content string Required
+# The contents of the message.
+
+# name string Optional
+# The name of the author of this message. May contain a-z, A-Z, 0-9, and underscores, with a maximum length of 64 characters.
+
 if __name__ == "__main__":
+    article  = '''*'''
+    print(asyncio.run(talk_get_comment(1, article)))
     pass
     # print(talk(9, 'Как выглядит марс ?'))
-    print(asyncio.run(talk_open_ai_async('Как выглядит марс ?')))
+    # print(asyncio.run(talk_open_ai_async('Привет, запомни, тебя зовут скайнет.')))
+    # print(asyncio.run(talk_open_ai_async('Давай поиграем, представь тебя зовут Скайнет, ты продавец сладостей.')))
+
+    # print(asyncio.run(talk(58, 'Давай поиграем, представь тебя зовут Скайнет, ты продавец сладостей.')))
+    # print(asyncio.run(talk(58, 'Я тебе давал имя, Как тебя зовут ?')))
+    # print(asyncio.run(talk(58, 'Взвесте мне 500 грамм ')))

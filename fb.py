@@ -45,7 +45,9 @@ def execsql(sql, param=None):
 @logger.catch
 def execsql1(sql, param=None, default=''):
     result = execsql(sql, param)
-    if len(result) > 0:
+    if result is None:
+        return default
+    elif len(result) > 0:
         return result[0][0]
     else:
         return default
@@ -62,6 +64,11 @@ def many_insert(sql, param):
 
 
 def send_admin_message(msg: str):
+    execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)',
+            (84131737, msg, 0))
+
+
+def save_exception(msg: str):
     # msg = quote(msg)[:4000]
     # msg = msg.replace('<','[').replace('>',']')[:4000]
     # execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (84131737, msg, 0))
@@ -74,7 +81,8 @@ def send_admin_message(msg: str):
         f.write('\n')
         f.write('******************************************************************************\n')
 
-logger.add(send_admin_message, level='WARNING', format="{time} {level} {message}")
+
+logger.add(save_exception, level='WARNING', format="{time} {level} {message}")
 
 
 def get_watch_list():
@@ -92,6 +100,18 @@ def get_new_effects_for_token(token, issuer, last_id, amount):
                    'and (cast(amount1 as float) > ? or cast(amount2 as float) > ?) '
                    'order by id',
                    (last_id, token, amount, amount))
+
+
+def get_mmwb_accounts():
+    result = []
+    for record in execsql('select m.public_key from mymtlwalletbot m where m.need_delete = 0 and m.user_id > 1'):
+        result.append(record[0])
+    return result
+
+
+def get_mmwb_use_date(address):
+    return execsql1('select max(m.last_use_day) from mymtlwalletbot m where m.need_delete = 0 and m.public_key = ?',
+                    (address,), None)
 
 
 if __name__ == "__main__":

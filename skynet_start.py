@@ -1,4 +1,5 @@
 from aiogram import types
+from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
 from loguru import logger
 
 from skynet_main import dp, scheduler
@@ -16,16 +17,6 @@ import skynet_talk_handlers
 # https://docs.aiogram.dev/en/latest/quick_start.html
 # https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
 
-@dp.message_handler(commands="poll_reload_vote")
-async def cmd_poll_reload_vote(message: types.Message):
-    if message.from_user.username == "itolstov":
-        await skynet_poll_handlers.cmd_save_votes()
-        importlib.reload(skynet_poll_handlers)
-        await message.reply('reload complete')
-    else:
-        await message.answer("Не положено, хозяин не разрешил.")
-
-
 info_cmd = {
     "/start": "начать все с чистого листа",
     "/links": "показать полезные ссылки",
@@ -36,7 +27,7 @@ info_cmd = {
     "/get_vote_city_xdr": "сделать транзакцию на обновление голосов сити",
     "/get_mrxpinvest_xdr": "сделать транзакцию на дивы mrxpinvest (div)",
     "/editxdr": "редактировать транзакцию",
-    "/show_bdm": "показать инфо по БОД",
+    "/show_bim": "показать инфо по БОД",
     "/drink": " попросить тост",
     "/decode": "декодирует xdr использовать: /decode xdr где ",
     "/do_div": "начать выплаты дивидентов",
@@ -88,7 +79,9 @@ info_cmd = {
     "/stop_exchange": "Остановить ботов обмена. Только для админов",
     "/start_exchange": "Запустить ботов обмена. Только для админов",
     "/push": "Отправить сообщение в личку. Только для админов скайнета",
-    "/set_reply_only": "Следить за сообщениями вне тренда и сообщать об этом."
+    "/set_reply_only": "Следить за сообщениями вне тренда и сообщать об этом.",
+    "/get_btcmtl_xdr": "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send MTLBTC"
+
 }
 
 global_dict = {}
@@ -109,6 +102,38 @@ async def inline_handler(query: types.InlineQuery):
     return await query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
     # https://mastergroosha.github.io/aiogram-2-guide/inline_mode/
 
+async def set_commands(_):
+    commands_clear = []
+    commands_admin = [
+        BotCommand(
+            command="start",
+            description="Start or ReStart bot",
+        ),
+        BotCommand(
+            command="restart",
+            description="ReStart bot",
+        ),
+        BotCommand(
+            command="fee",
+            description="check fee",
+        ),
+    ]
+    commands_private = [
+        BotCommand(
+            command="start",
+            description="Start or ReStart bot",
+        ),
+    ]
+    commands_treasury = [
+        BotCommand(
+            command="balance",
+            description="Show balance",
+        ),
+    ]
+
+    await dp.bot.set_my_commands(commands=commands_private, scope=BotCommandScopeAllPrivateChats())
+    await dp.bot.set_my_commands(commands=commands_admin, scope=BotCommandScopeChat(chat_id=84131737))
+    await dp.bot.set_my_commands(commands=commands_treasury, scope=BotCommandScopeChat(chat_id=-1001169382324))
 
 @logger.catch
 def main():
@@ -116,7 +141,7 @@ def main():
     scheduler.start()
     skynet_time_handlers.scheduler_jobs(scheduler, dp)
     dp.register_message_handler(skynet_talk_handlers.cmd_last_check, state='*')
-    aiogram.executor.start_polling(dp, skip_updates=True)
+    aiogram.executor.start_polling(dp, skip_updates=True, on_startup=set_commands)
 
 
 if __name__ == "__main__":

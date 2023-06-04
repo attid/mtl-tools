@@ -2,7 +2,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 import mystellar
-from skynet_main import dp
+from skynet_main import dp, multi_answer
 
 
 # from aiogram.utils.markdown import bold, code, italic, text, link
@@ -125,9 +125,9 @@ async def smd_editxdr3(message: types.Message, state: FSMContext):
     trList = mystellar.stellar_check_xdr(xdr)
     msg = mystellar.decode_xdr(xdr)
     msg = f'\n'.join(msg)
-    if len(msg) > 4096:
-        await message.answer("Слишком много операций показаны первые ")
-    await message.answer(msg[0:4000])
+    #if len(msg) > 4096:
+    #    await message.answer("Слишком много операций показаны первые ")
+    await multi_answer(message,msg)
     await cmd_xdr_msg(message, trList)
     # if len(info) > 4096:
     # for x in range(0, len(info), 4096):

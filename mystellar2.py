@@ -1,8 +1,7 @@
 import asyncio
 import copy
 
-from stellar_sdk import Keypair, Network, Server, Signer, TransactionBuilder, Asset, Account, SignerKey, \
-    TransactionEnvelope
+from stellar_sdk import Network, Server, TransactionBuilder, Asset, Account
 import json, math, mystellar
 
 from settings import base_fee, private_sign
@@ -24,7 +23,7 @@ async def cmd_get_new_vote_mtlcity():
     city_asset = Asset("MTLCITY", mystellar.public_city)
 
     cityarr = []
-    mtl_vote = await mystellar.cmd_gen_vote_list()
+    mtl_vote = await mystellar.cmd_gen_mtl_vote_list()
 
     #################
     server = Server(horizon_url="https://horizon.stellar.org")
@@ -218,12 +217,12 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
     return xdr
 
 
-async def cmd_get_new_vote_mtl(public_key, remove_master=False):
+async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     if len(public_key) > 10:
-        vote_list = await mystellar.cmd_gen_vote_list()
+        vote_list = await mystellar.cmd_gen_mtl_vote_list()
         result = [gen_vote_xdr(public_key, vote_list, remove_master=remove_master, source=public_key)]
     else:
-        vote_list = await mystellar.cmd_gen_vote_list()
+        vote_list = await mystellar.cmd_gen_mtl_vote_list()
         vote_list1 = copy.deepcopy(vote_list)
         vote_list2 = copy.deepcopy(vote_list)
         vote_list3 = copy.deepcopy(vote_list)
@@ -233,19 +232,21 @@ async def cmd_get_new_vote_mtl(public_key, remove_master=False):
         # print(vote_list)
         result = []
         transaction = TransactionBuilder(
-            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(mystellar.public_fund),
+            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(mystellar.public_issuer),
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
-        xdr = gen_vote_xdr(mystellar.public_fund, vote_list, transaction)
-        xdr = gen_vote_xdr(mystellar.public_issuer, vote_list1, transaction, mystellar.public_issuer)
-        xdr = gen_vote_xdr(mystellar.public_distributor, vote_list2, transaction, mystellar.public_distributor)
-        xdr = gen_vote_xdr(mystellar.public_competition, vote_list3, transaction, mystellar.public_competition)
-        xdr = gen_vote_xdr(mystellar.public_adm, vote_list5, transaction, mystellar.public_adm)
-        xdr = gen_vote_xdr(mystellar.public_city, vote_list6, transaction, mystellar.public_city)
+        xdr = gen_vote_xdr(mystellar.public_issuer, vote_list, transaction)
+        xdr = gen_vote_xdr(mystellar.public_adm, vote_list2, transaction, mystellar.public_adm, remove_master=True)
+        xdr = gen_vote_xdr(mystellar.public_fund_defi, vote_list3, transaction, mystellar.public_fund_defi,
+                           remove_master=True)
+        xdr = gen_vote_xdr(mystellar.public_fund_city, vote_list4, transaction, mystellar.public_fund_city,
+                           remove_master=True)
+        xdr = gen_vote_xdr(mystellar.public_fund_mabiz, vote_list5, transaction, mystellar.public_fund_mabiz,
+                           remove_master=True)
         # return sequence because every build inc number
         transaction.source_account.sequence = sequence
         transaction.set_timeout(60 * 60 * 48)
-        xdr = gen_vote_xdr(mystellar.public_pawnshop, vote_list4, transaction, mystellar.public_pawnshop)
+        xdr = gen_vote_xdr(mystellar.public_pawnshop, vote_list6, transaction, mystellar.public_pawnshop)
         result.append(xdr)
 
     # print(gen_vote_xdr(public_new,vote_list2))
@@ -255,14 +256,14 @@ async def cmd_get_new_vote_mtl(public_key, remove_master=False):
 
 async def update_multi_sign(public_key, second_master_key=None, only_show=False):
     # get data
-    fund_account = await mystellar.stellar_get_account(mystellar.public_fund)
+    fund_account = await mystellar.stellar_get_account(mystellar.public_issuer)
     print(fund_account['signers'])
     threshold = max(fund_account['thresholds']['low_threshold'], fund_account['thresholds']['med_threshold'],
                     fund_account['thresholds']['high_threshold'])
     print(threshold)
     new_signers = []
     for signer in fund_account['signers']:
-        if not signer['key'] in (mystellar.public_fund, mystellar.public_itolstov):
+        if not signer['key'] in (mystellar.public_issuer, mystellar.public_itolstov):
             new_signers.append([signer['key'], signer['weight']])
 
     new_signers.sort(key=lambda k: k[1], reverse=True)
@@ -327,7 +328,7 @@ async def update_multi_sign_old(account, only_show=False):
     account_exchange = server.load_account(mystellar.public_sign)
 
     threshold = 0
-    xdr = await cmd_get_new_vote_mtl(account)
+    xdr = await cmd_get_new_vote_all_mtl(account)
     transaction = TransactionEnvelope.from_xdr(xdr[0], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
 
     for operation in transaction.transaction.operations:
@@ -385,13 +386,13 @@ async def get_required_signers(public_key):
         master_keys[public_key] = 15
 
     # Шаг 2: Получаем всех подписантов mystellar.public_fund и проверяем наличие существующих подписей
-    fund_account = await mystellar.stellar_get_account(mystellar.public_fund)
+    fund_account = await mystellar.stellar_get_account(mystellar.public_issuer)
     new_signers = []
     # existing_signers = set([signer['key'] for signer in user_account['signers']])
     for signer in fund_account['signers']:
         if signer['key'] in master_keys:
             pass
-        elif signer['key'] == mystellar.public_fund:
+        elif signer['key'] == mystellar.public_issuer:
             pass
         else:
             new_signers.append([signer['key'], signer['weight']])
@@ -450,8 +451,8 @@ async def update_signers_on_blockchain(public_key, required_signers):
 
 
 async def create_many():
-    new_account = 'GAQ5ERJVI6IW5UVNPEVXUUVMXH3GCDHJ4BJAXMAAKPR5VBWWAUOMABIZ'
-    old_account = 'GDWLM7WZP7PEVO3OBNEUJY7HX3DLJ3LQNNVTJLQIO6SYK2SHA6VMABIZ'
+    new_account = 'GCOJHUKGHI6IATN7AIEK4PSNBPXIAIZ7KB2AWTTUCNIAYVPUB2DMCITY'
+    old_account = 'GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3'
     transaction = TransactionBuilder(
         source_account=Server(horizon_url="https://horizon.stellar.org").load_account(old_account),
         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -461,11 +462,11 @@ async def create_many():
     # transaction.append_create_account_op(new_account, '100')
     balances = await mystellar.get_balances(old_account, return_assets=True)
     for asset in balances:
-        transaction.append_change_trust_op(asset=asset, source=new_account)
-        if balances[asset] > 0:
+        # transaction.append_change_trust_op(asset=asset, source=new_account)
+        if balances.get(asset, 0) > 0:
             transaction.append_payment_op(asset=asset, destination=new_account, amount=str(balances[asset]),
                                           source=old_account)
-        transaction.append_change_trust_op(asset=asset, source=old_account, limit='0')
+        # transaction.append_change_trust_op(asset=asset, source=old_account, limit='0')
 
     # copy_xdr = transaction.build().to_xdr()
     # узнать кто в подписантах
@@ -474,19 +475,15 @@ async def create_many():
 
     sg = issuer_account.load_ed25519_public_key_signers()
 
-    for s in sg:
-        if s.weight > 0:
-            transaction.append_ed25519_public_key_signer(s.account_id, s.weight, source=new_account)
+    # for s in sg:
+    #   if s.weight > 0:
+    #       transaction.append_ed25519_public_key_signer(s.account_id, s.weight, source=new_account)
 
-    transaction.append_set_options_op(low_threshold=issuer_account.thresholds.high_threshold,
-                                      med_threshold=issuer_account.thresholds.high_threshold,
-                                      high_threshold=issuer_account.thresholds.high_threshold,
-                                      source=new_account, master_weight=0)
-    # transaction.append_account_merge_op(destination=new_account, source=old_account)
-    transaction.append_set_options_op(low_threshold=1,
-                                      med_threshold=1,
-                                      high_threshold=1,
-                                      source=old_account, master_weight=0)
+    # transaction.append_set_options_op(low_threshold=issuer_account.thresholds.high_threshold,
+    #                                 med_threshold=issuer_account.thresholds.high_threshold,
+    #                                 high_threshold=issuer_account.thresholds.high_threshold,
+    #                                 source=new_account, master_weight=0)
+    # transaction.append_account_merge_op(destination=mystellar.public_issuer, source=old_account)
 
     # new_xdr = mystellar.stellar_add_xdr(copy_xdr, voice_xdr[0])
 
@@ -494,8 +491,11 @@ async def create_many():
 
 
 if __name__ == "__main__":
-    print(asyncio.run(create_many()))
-    # print(asyncio.run(cmd_get_new_vote_mtl('')))
+    # update USDM
+    # print(gen_vote_xdr(mystellar.public_usdm, asyncio.run(mystellar.cmd_gen_usdm_vote_list())))
+
+    # print(asyncio.run(create_many()))
+    print(asyncio.run(cmd_get_new_vote_all_mtl('')))
     # print(asyncio.run(mystellar.stellar_get_account('GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN')))
     # print(asyncio.run(get_required_signers('GBYH3M3REQM3WQOJY26FYORN23EXY22FWBHVZ74TT5GYOF22IIA7YSOX')))
     # print(asyncio.run(get_required_signers('GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN')))

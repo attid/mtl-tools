@@ -1,5 +1,6 @@
 from os.path import isfile
 
+import gspread
 import requests
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -14,6 +15,8 @@ from datetime import datetime
 from datetime import timedelta
 
 import update_report3
+from dialog import talk_get_comment
+from gspread_tools import check_bim
 from skynet_main import dp, multi_reply, multi_answer, delete_income, cmd_save_delete_income, is_admin, \
     welcome_message, cmd_save_welcome_message, scheduler, is_skynet_admin, MTLChats, add_text, cb_captcha, save_all, \
     cmd_save_save_all, bot, reply_only, cmd_save_reply_only, send_by_list
@@ -31,7 +34,7 @@ startmsg = """
 /start  начать все с чистого листа
 /links  показать полезные ссылки
 /editxdr редактировать транзакцию
-/show_bdm показать инфо по БОД
+/show_bim показать инфо по БОД
 наберите в поле ввода @mymtlbot и любое слово для поиска команды
 """
 
@@ -54,14 +57,13 @@ links_msg = f"""
 [Список всех документов](https://docs.google.com/spreadsheets/d/1x3E1ai_kPVMQ85nuGwuTq1bXD051fnVlf0Dz9NaFoq0)
 Тулзы [для подписания](mtl.ergvein.net/) / [расчет голосов и дивов](https://ncrashed.github.io/dividend-tools/votes/)
 [Лаборатория](https://laboratory.stellar.org/#?network=public)
-Ссылки на аккаунты фонда [Хранение]({link_stellar}{mystellar.public_fund}) / [Эмитент]({link_stellar}{mystellar.public_issuer}) / [Дистрибьютор]({link_stellar}{mystellar.public_distributor}) / [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
+Ссылки на аккаунты фонда / [Эмитент]({link_stellar}{mystellar.public_issuer}) /  [Залоговый счет]({link_stellar}{mystellar.public_pawnshop})
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM) [mtl](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/MTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V)
 Списки [черный]({link_json}blacklist.json) / [BL for DG]({link_json}dg_blacklist.json) 
 Боты [Обмен eurmtl_xlm]({link_stellar}{mystellar.public_exchange_eurmtl_xlm}) / \
 [Обмен eurmtl_usdc]({link_stellar}{mystellar.public_exchange_eurmtl_usdc}) / \
 [Обмен eurmtl_sats]({link_stellar}{mystellar.public_exchange_eurmtl_sats}) / \
 [Обмен eurmtl_btc]({link_stellar}{mystellar.public_exchange_eurmtl_btc}) / \
-[Обмен btc_sats]({link_stellar}{mystellar.public_exchange_btc_sats}) / \
 [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \
 [BIM-XLM]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / \
 [BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \
@@ -135,19 +137,19 @@ async def cmd_decode(message: types.Message):
         else:
             msg = mystellar.decode_xdr(message.get_args())
         msg = f'\n'.join(msg)
-        await message.reply(msg)
+        await multi_reply(message, msg)
     except Exception as e:
         await message.reply(f'Параметр не распознан. Надо xdr или ссылку на тулзу')
 
 
-@dp.message_handler(commands="show_bdm")
-async def cmd_show_bdm(message: types.Message):
-    await message.answer(mystellar.cmd_show_bdm())
+@dp.message_handler(commands="show_bim")
+async def cmd_show_bim(message: types.Message):
+    await message.answer(mystellar.cmd_show_bim())
 
 
 @dp.message_handler(commands="balance")
 async def cmd_show_balance(message: types.Message):
-    result = await mystellar.get_safe_balance()
+    result = await mystellar.get_safe_balance(message.chat.id)
     await message.answer(result)
 
 
@@ -160,8 +162,8 @@ async def cmd_show_key_rate(message: types.Message):
     await message.answer(show_key_rate(key))
 
 
-@dp.message_handler(commands="do_bdm")
-async def cmd_do_bdm(message: types.Message):
+@dp.message_handler(commands="do_bim")
+async def cmd_do_bim(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
@@ -174,7 +176,7 @@ async def cmd_do_bdm(message: types.Message):
     list_id = mystellar.cmd_create_list(datetime.now().strftime('Basic Income %d/%m/%Y'), 1)  # ('mtl div 17/12/2021')
     lines = []
     msg = await message.answer(add_text(lines, 1, f"Start BDM pays. PayID №{list_id}. Step (1/7)"))
-    result = mystellar.cmd_calc_bods(list_id)
+    result = mystellar.cmd_calc_bim_pays(list_id)
     await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/7)"))
 
     i = 1
@@ -263,9 +265,9 @@ async def cmd_do_all(message: types.Message):
         return False
 
     await cmd_do_div(message)
-    await cmd_show_bdm(message)
+    await cmd_show_bim(message)
     # await message.reply('***')
-    await cmd_do_bdm(message)
+    await cmd_do_bim(message)
     # await message.reply('*****')
     # await cmd_do_key_rate(message)
     # await message.reply('*******')
@@ -370,7 +372,7 @@ async def cmd_do_sats_div(message: types.Message):
 
 
 @dp.message_handler(commands="open")
-async def smd_add_trust_line(message: types.Message, state: FSMContext):
+async def cmd_add_trust_line(message: types.Message, state: FSMContext):
     try:
         args = message.get_args().split()
         xdr = mystellar.stellar_add_fond_trustline(args[1], args[0])
@@ -387,7 +389,7 @@ async def smd_add_trust_line(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands="all")
-async def smd_all(message: types.Message, state: FSMContext):
+async def cmd_all(message: types.Message, state: FSMContext):
     if message.chat.id == MTLChats.SignGroup.value:
         with open("polls/votes.json", "r") as fp:
             members = list(json.load(fp))
@@ -409,7 +411,7 @@ async def smd_all(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands="add_all")
-async def smd_add_all(message: types.Message, state: FSMContext):
+async def cmd_add_all(message: types.Message, state: FSMContext):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
@@ -432,7 +434,7 @@ async def smd_add_all(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands="del_all")
-async def smd_del_all(message: types.Message, state: FSMContext):
+async def cmd_del_all(message: types.Message, state: FSMContext):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
@@ -474,11 +476,11 @@ async def msg_save_all(message: types.Message, state: FSMContext):
 @dp.message_handler(commands="get_vote_fund_xdr")
 async def cmd_get_vote_fund_xdr(message: types.Message):
     if len(message.get_args()) > 10:
-        arr2 = await mystellar2.cmd_get_new_vote_mtl(message.get_args())
+        arr2 = await mystellar2.cmd_get_new_vote_all_mtl(message.get_args())
         await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
-        arr2 = await mystellar2.cmd_get_new_vote_mtl('')
+        arr2 = await mystellar2.cmd_get_new_vote_all_mtl('')
         await message.answer('for FUND')
         await multi_answer(message, arr2[0])
 
@@ -486,7 +488,7 @@ async def cmd_get_vote_fund_xdr(message: types.Message):
 @dp.message_handler(commands="get_vote_city_xdr")
 async def cmd_get_vote_city_xdr(message: types.Message):
     if len(message.get_args()) > 10:
-        arr2 = await mystellar2.cmd_get_new_vote_mtl(message.get_args())
+        arr2 = await mystellar2.cmd_get_new_vote_all_mtl(message.get_args())
         await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
@@ -503,14 +505,28 @@ async def cmd_get_mrxpinvest_xdr(message: types.Message):
 
 
 @dp.message_handler(commands="get_defi_xdr")
-async def cmd_get_mrxpinvest_xdr(message: types.Message):
-    arg = message.get_args().split(' ')
-    if len(arg) > 1:
-        xdr = await mystellar.get_defi_xdr(mystellar.float2str(arg[0]), mystellar.float2str(arg[1]))
+async def cmd_get_defi_xdr(message: types.Message):
+    if len(message.get_args()) > 1:
+        xdr = await mystellar.get_defi_xdr(int(message.get_args()))
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(mystellar.decode_xdr(xdr=xdr)))
     else:
-        await multi_answer(message, 'use -  /get_defi_xdr 0.001 0.002 \n where 0.001 sum to fond 0.002 sum for Seregan')
+        await multi_answer(message, 'use -  /get_defi_xdr 44444 \n where 44444 satoshi sum to pay')
+    # arg = message.get_args().split(' ')
+    # if len(arg) > 1:
+    #    xdr = await mystellar.get_defi_xdr(mystellar.float2str(arg[0]), mystellar.float2str(arg[1]))
+
+
+@dp.message_handler(commands="get_btcmtl_xdr")
+async def cmd_get_defi_xdr(message: types.Message):
+    arg = message.get_args().split(' ')
+    if len(arg) > 1:
+        xdr = await mystellar.get_mtlbtc_xdr(mystellar.float2str(arg[0]), arg[1])
+        await multi_answer(message, xdr)
+        await multi_answer(message, '\n'.join(mystellar.decode_xdr(xdr=xdr)))
+    else:
+        await multi_answer(message,
+                           'use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send MTLBTC')
 
 
 @dp.message_handler(commands="delete")
@@ -622,7 +638,6 @@ async def cmd_set_reply_only(message: types.Message):
         await message.reply('Added')
 
     cmd_delete_later(message, 1)
-
 
 
 @dp.message_handler(commands="set_welcome_button")
@@ -838,7 +853,7 @@ async def cmd_log(message: types.Message):
 
 
 @dp.message_handler(commands="add_skynet_admin")
-async def smd_add_skynet_admin(message: types.Message):
+async def cmd_add_skynet_admin(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -861,7 +876,7 @@ async def smd_add_skynet_admin(message: types.Message):
 
 
 @dp.message_handler(commands="del_skynet_admin")
-async def smd_del_skynet_admin(message: types.Message):
+async def cmd_del_skynet_admin(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -885,7 +900,7 @@ async def smd_del_skynet_admin(message: types.Message):
 
 
 @dp.message_handler(commands="show_skynet_admin")
-async def smd_show_skynet_admin(message: types.Message):
+async def cmd_show_skynet_admin(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -900,7 +915,7 @@ async def smd_show_skynet_admin(message: types.Message):
 
 
 @dp.message_handler(commands="save_income_id")
-async def smd_save_income_id(message: types.Message):
+async def cmd_save_income_id(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -918,7 +933,7 @@ async def smd_save_income_id(message: types.Message):
 
 
 @dp.message_handler(commands="show_income_id")
-async def smd_show_income_id(message: types.Message):
+async def cmd_show_income_id(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -928,7 +943,7 @@ async def smd_show_income_id(message: types.Message):
 
 
 @dp.message_handler(commands="delete_income_id")
-async def smd_delete_income_id(message: types.Message):
+async def cmd_delete_income_id(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -940,7 +955,7 @@ async def smd_delete_income_id(message: types.Message):
 
 
 @dp.message_handler(commands="me")
-async def smd_me(message: types.Message):
+async def cmd_me(message: types.Message):
     msg = message.get_args()
     await message.answer(f'<i><b>{message.from_user.username}</b> {msg}</i>', parse_mode=ParseMode.HTML)
     try:
@@ -950,7 +965,7 @@ async def smd_me(message: types.Message):
 
 
 @dp.message_handler(commands="check_dg")
-async def smd_check_dg(message: types.Message):
+async def cmd_check_dg(message: types.Message):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
@@ -1002,7 +1017,7 @@ async def smd_check_dg(message: types.Message):
 
 
 @dp.message_handler(commands="push")
-async def smd_push(message: types.Message):
+async def cmd_push(message: types.Message):
     if not await is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
@@ -1017,6 +1032,45 @@ async def smd_push(message: types.Message):
 
     all_users = message.reply_to_message.text.split()
     await send_by_list(all_users, message)
+
+
+@dp.message_handler(commands="update_bim1")
+async def cmd_update_bim1(message: types.Message):
+    if not await is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    gc = gspread.service_account('mtl-google-doc.json')
+
+    wks = gc.open("MTL_BIM_register").worksheet("List")
+    update_list = []
+    data = wks.get_all_values()
+    for record in data[2:]:
+        new_data = None
+        if record[3]:
+            try:
+                chat_member = await bot.get_chat_member(MTLChats.ShareholderGroup.value, int(record[3]))
+                new_data = chat_member.is_chat_member()
+            except:
+                new_data = False
+        update_list.append([new_data])
+
+    wks.update('S3', update_list)
+    await message.reply('Done')
+
+
+@dp.message_handler(commands="check_bim")
+async def cmd_check_bim(message: types.Message):
+    cmd = message.text.split()
+    if len(cmd) > 1 and cmd[1][0] == '@':
+        if not await is_skynet_admin(message):
+            await message.reply('You are not my admin.')
+            return
+        msg = await check_bim(user_name=cmd[1][1:])
+    else:
+        msg = await check_bim(message.from_user.id)
+
+    await message.reply(msg)
 
 
 if __name__ == "__main__":

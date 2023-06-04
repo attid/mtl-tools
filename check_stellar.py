@@ -17,15 +17,16 @@ def cmd_add_message(user_id, text, use_alarm=0):
 
 @logger.catch
 def cmd_check_cron_ledger():
-    with suppress(NotFoundError, requests.exceptions.ConnectionError, exceptions.ConnectionError, exceptions.BadResponseError):
-        cmd_check_ledger()
+    with suppress(NotFoundError, requests.exceptions.ConnectionError, exceptions.ConnectionError,
+                  exceptions.BadResponseError, asyncio.exceptions.TimeoutError):
+        asyncio.run(asyncio.wait_for(cmd_check_ledger(), timeout=55))
 
 
 @logger.catch
 def cmd_check_cron_transaction():
     # logger.info('cmd_check_new_transaction')
     # FUND
-    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_fund,
+    result = cmd_check_new_transaction(ignore_operation=['CreateClaimableBalance'], stellar_address=public_issuer,
                                        value_id=BotValueTypes.LastFondTransaction)
     if len(result) > 0:
         cmd_add_message(chat_id_signs, "Получены новые транзакции")
@@ -75,13 +76,7 @@ async def cmd_check_bot():
     # bot1
     now = datetime.now()
     for bot_address in exchange_bots:
-        if bot_address == public_exchange_btc_sats:
-            dt = cmd_check_last_operation(bot_address)
-            delta = now - dt
-            if delta.days > 10:
-                cmd_add_message(chat_id_signs,
-                                f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
-        elif bot_address == public_fire:
+        if bot_address == public_fire:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 15:

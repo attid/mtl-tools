@@ -21,8 +21,9 @@ async def save_asset(asset: str):
 
 save_account(public_issuer)
 save_account(public_pawnshop)
-save_account(public_distributor)
-save_account(public_fund)
+save_account(public_fund_mabiz)
+save_account(public_fund_city)
+save_account(public_fund_defi)
 
 #for asset in MASTERASSETS:
 asyncio.run(save_asset('mtl'))

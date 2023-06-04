@@ -15,14 +15,16 @@ sats_cost = 100000000
 min_xlm = 50.0
 persent_eurmtl = 1.03  # 5% наценки
 persent_btc = 1.01  # 5% наценки
-persent_xlm = 1.01  # 0,5% наценки
-persent_usdc = 1  # 0.05% наценки 0.975 for fund exchange
+persent_xlm = 0.99  # 0,5% наценки
+persent_usdc = 0.99  # 0.05% наценки 0.975 for fund exchange
 persent_cost = 1.01  # 1% изменения цены для обновления
 persent_btc_cost = 1.001  # 1% изменения цены для обновления
 
 server = Server(horizon_url="https://horizon.stellar.org")
-#server = Server(horizon_url="http://158.58.231.224:8000/")
-#server = Server(horizon_url="https://horizon.publicnode.org")
+
+
+# server = Server(horizon_url="http://158.58.231.224:8000/")
+# server = Server(horizon_url="https://horizon.publicnode.org")
 
 
 def get_offers(address: str):
@@ -103,15 +105,12 @@ async def check_exchange():
     balances_eurmtl_xlm = await get_balances(public_exchange_eurmtl_xlm)
     balances_eurmtl_btc = await get_balances(public_exchange_eurmtl_btc)
     balances_eurmtl_sats = await get_balances(public_exchange_eurmtl_sats)
-    balances_btc_sats = await get_balances(public_exchange_btc_sats)
     balances_eurmtl_usdc = await get_balances(public_exchange_eurmtl_usdc)
 
     sum_eurmtl_xlm = float(balances_eurmtl_xlm['EURMTL'])
     sum_xlm = float(balances_eurmtl_xlm['XLM'])
     sum_btcmtl = float(balances_eurmtl_btc['BTCMTL'])
     sum_eurmtl_btc = float(balances_eurmtl_btc['EURMTL'])
-    sum_btcmtl_sats = float(balances_btc_sats['BTCMTL'])
-    sum_satsmtl_btc = float(balances_btc_sats['SATSMTL'])
     sum_satsmtl_eur = float(balances_eurmtl_sats['SATSMTL'])
     sum_eurmtl_sats = float(balances_eurmtl_sats['EURMTL'])
     sum_eurmtl_usdc = float(balances_eurmtl_usdc['EURMTL'])
@@ -122,7 +121,6 @@ async def check_exchange():
     offers_eurmtl_btc = get_offers(public_exchange_eurmtl_btc)
     offers_eurmtl_sats = get_offers(public_exchange_eurmtl_sats)
     offers_eurmtl_usdc = get_offers(public_exchange_eurmtl_usdc)
-    offers_btc_sats = get_offers(public_exchange_btc_sats)
 
     # EUR cost
     rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').json()
@@ -144,8 +142,6 @@ async def check_exchange():
     sum_xlm = int(sum_xlm) if sum_xlm < max_xlm else max_xlm
     sum_xlm -= min_xlm
 
-    sum_btcmtl_sats = sum_btcmtl_sats if sum_btcmtl_sats < max_btcmtl else max_btcmtl
-    sum_satsmtl_btc = int(sum_satsmtl_btc) if sum_satsmtl_btc < max_satsmtl else max_satsmtl
     sum_satsmtl_eur = int(sum_satsmtl_eur) if sum_satsmtl_eur < max_satsmtl else max_satsmtl
     sum_eurmtl_sats = int(sum_eurmtl_sats) if sum_eurmtl_sats < max_eurmtl else max_eurmtl
     sum_eurmtl_usdc = int(sum_eurmtl_usdc) if sum_eurmtl_usdc < max_eurmtl else max_eurmtl
@@ -185,17 +181,6 @@ async def check_exchange():
                        price=round(1 / cost_btc * sats_cost * persent_btc),
                        selling_asset=eurmtl_asset, buying_asset=satsmtl_asset, amount=sum_eurmtl_sats,
                        check_persent=persent_btc_cost, record=offers_eurmtl_sats.get('EURMTL-SATSMTL'))
-
-    # sats 2 btc
-    await update_offer(account_key=public_exchange_btc_sats, price_min=sats_cost - 1, price_max=sats_cost + 1,
-                       price=round(sats_cost),
-                       selling_asset=btcmtl_asset, buying_asset=satsmtl_asset, amount=sum_btcmtl_sats,
-                       check_persent=persent_btc_cost, record=offers_btc_sats.get('BTCMTL-SATSMTL'))
-
-    await update_offer(account_key=public_exchange_btc_sats, price_min=1 / (sats_cost + 1),
-                       price_max=1 / (sats_cost - 100), price=1 / (sats_cost - 100),
-                       selling_asset=satsmtl_asset, buying_asset=btcmtl_asset, amount=sum_satsmtl_btc,
-                       check_persent=persent_btc_cost, record=offers_btc_sats.get('SATSMTL-BTCMTL'))
 
     # eurmtl 2 usdc
     await update_offer(account_key=public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
@@ -243,6 +228,13 @@ async def check_fire(cost_fire):
 
 
 if __name__ == "__main__":
+    #asyncio.run(update_offer(account_key=public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
+    #                         price=1/1.109,
+    #                         selling_asset=usdc_asset, buying_asset=eurmtl_asset, amount=52,
+    #                         check_persent=persent_cost,
+    #                         record=[])
+    #            )
+    #exit(0)
     logger.add("mtl_exchange.log", rotation="1 MB")
     with open("polls/welcome_message.json", "r") as fp:
         welcome_message = json.load(fp)
