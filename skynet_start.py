@@ -1,108 +1,27 @@
-from aiogram import types
+import asyncio
+import json
+import sys
+
+import tzlocal
+from aiogram import types, Bot, Dispatcher
+from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
+from aioredis import Redis
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 
-from skynet_main import dp, scheduler
-import importlib
-import aiogram
-import skynet_first_handlers
-import skynet_time_handlers
-import skynet_poll_handlers
-import skynet_state_handlers
-import skynet_talk_handlers
+from config_reader import config
+from db.requests import cmd_load_bot_value, get_chat_ids_by_key, get_chat_dict_by_key
+from middlewares.db import DbSessionMiddleware
 
-
-# from aiogram.utils.markdown import bold, code, italic, text, link
-
-# https://docs.aiogram.dev/en/latest/quick_start.html
-# https://surik00.gitbooks.io/aiogram-lessons/content/chapter3.html
-
-info_cmd = {
-    "/start": "начать все с чистого листа",
-    "/links": "показать полезные ссылки",
-    "/dron2": "открыть линию доверия дрону2",
-    "/mtlcamp": "открыть линию доверия mtlcamp",
-    "/blacklist": "операции с блеклистом",
-    "/get_vote_fund_xdr": "сделать транзакцию на обновление голосов фонда",
-    "/get_vote_city_xdr": "сделать транзакцию на обновление голосов сити",
-    "/get_mrxpinvest_xdr": "сделать транзакцию на дивы mrxpinvest (div)",
-    "/editxdr": "редактировать транзакцию",
-    "/show_bim": "показать инфо по БОД",
-    "/drink": " попросить тост",
-    "/decode": "декодирует xdr использовать: /decode xdr где ",
-    "/do_div": "начать выплаты дивидентов",
-    "/do_sats_div": "выплата дивидентов в satsmtl",
-    "/all": "тегнуть всех пользователей. работает зависимо от чата. и только  в рабочих чатах",
-    "/gen_data": "сгенерить xdr для сохранения данных в стеларе. например для bdm или делигирования. Использовать : /gen_data public_key data_name:data_value",
-    "/show_data": "Показать какие данные есть в стеларе на этот адрес. Use: /show_data public_key",
-    "/show_data bdm": "Показать какие данные есть в стеларе по боду",
-    "/show_data delegate": "Показать какие данные есть в стеларе по делегированию",
-    "/show_data donate": "Показать какие данные есть в стеларе по донатам в правительство",
-    "/poll": "Создать голование с учетом веса голосов, надо слать в ответ на стандартное голосование",
-    "/poll_replace_text": "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text",
-    "/poll_close": "Закрыть голосование. после этого нельзя голосовать или менять его.",
-    "/poll_check": "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'",
-    "/poll_reload_vote": "Перечитать голоса из блокчейна",
-    "skynet update donates": "Попросить Скайнет обновить табличку донатов",
-    "Скайнет сгенери дивиденты на 100 мулек": "Попросить Скайнет сгенерить xdr для дивов. 'сгенери', 'сделай', 'подготовь' 'дивиденты', 'дивы'",
-    "Скайнет напомни": "Попросить Скайнет напопнить про подпись транзакции. Только в рабочем чате.",
-    "Скайнет обнови отчёт": "Попросить Скайнет обновить файл отчета. Только в рабочем чате.",
-    "Скайнет обнови гарантов": "Попросить Скайнет обновить файл гарантов. Только в рабочем чате.",
-    "Скайнет анекдот": "Попросить Скайнет рассказать анекдот",
-    "Скайнет тост": "Попросить Скайнет сказать тост. 'выпьем', 'тост' ",
-    "Скайнет умница": "Похвалить Скайнет",
-    "Скайнет покажи сиськи": "Домогаться Скайнет ",
-    "Скайнет хочется стабильности": "Попросить Скайнет поворчать про стабильность",
-    "/delete_income": "Разрешить боту удалять сообщения о входе и выходе участников чата",
-    "/delete_welcome": "Отключить сообщения приветствия",
-    "/set_welcome": "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$",
-    "/set_welcome_button": "Установить текст на кнопке капчи",
-    "/set_captcha on": "Включает капчу",
-    "/set_captcha off": "Выключает капчу",
-    "/set_check_welcome": "Установить отслеживания с добавлением в /all",
-    "/add_all": "Добавить пользователей в /all. запуск с параметрами /add_all @user1 @user2 итд",
-    "/del_all": "Убрать пользователей в /all. запуск с параметрами /del_all @user1 @user2 итд",
-    "/save_all": "Добавлять пользователей в /all при входе",
-    "/show_key_rate": "Показать сколько начислено мулек по ключевой ставке на всех",
-    "/show_key_rate key": "Показать сколько начислено мулек по ключевой ставке на указанный адрес",
-    "/balance": "Показать сколько денег или мулек(EURMTL) в кубышке",
-    "Скайнет сколько в кубышке": "Показать сколько денег или мулек(EURMTL) в кубышке",
-    "/update_airdrops": "Обновить файл airdrops",
-    "/do_key_rate": "Запустить выплату по ключевой ставке",
-    "/add_skynet_admin": "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд",
-    "/del_skynet_admin": "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд",
-    "/show_skynet_admin": "Показать админов скайнета",
-    "/fee": "показать комиссию в стелларе",
-    "/show_id": "Показать ID чата",
-    "/do_resend": "Переотправить транзакцию. Только для админов",
-    "/check_dg": "Проверить членов GP. Только для админов",
-    "/stop_exchange": "Остановить ботов обмена. Только для админов",
-    "/start_exchange": "Запустить ботов обмена. Только для админов",
-    "/push": "Отправить сообщение в личку. Только для админов скайнета",
-    "/set_reply_only": "Следить за сообщениями вне тренда и сообщать об этом.",
-    "/get_btcmtl_xdr": "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send MTLBTC"
-
-}
-
-global_dict = {}
+from routers import (admin, all, inline, polls, start, stellar, talk_handlers, time_handlers, welcome)
+from utils import aiogram_utils
+from utils.global_data import global_data, BotValueTypes
 
 
-@dp.inline_handler(state="*")
-async def inline_handler(query: types.InlineQuery):
-    switch_text = "По Вашему запросу найдено :"
-    answers = []
-    for key, value in info_cmd.items():
-        if (key.upper().find(query.query.upper()) > -1) or (value.upper().find(query.query.upper()) > -1):
-            answers.append(types.InlineQueryResultArticle(
-                id=str(len(answers)),
-                title=key,
-                description=value,
-                input_message_content=types.InputTextMessageContent(key),
-            ))
-    return await query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
-    # https://mastergroosha.github.io/aiogram-2-guide/inline_mode/
-
-async def set_commands(_):
+async def set_commands(bot):
     commands_clear = []
     commands_admin = [
         BotCommand(
@@ -131,18 +50,74 @@ async def set_commands(_):
         ),
     ]
 
-    await dp.bot.set_my_commands(commands=commands_private, scope=BotCommandScopeAllPrivateChats())
-    await dp.bot.set_my_commands(commands=commands_admin, scope=BotCommandScopeChat(chat_id=84131737))
-    await dp.bot.set_my_commands(commands=commands_treasury, scope=BotCommandScopeChat(chat_id=-1001169382324))
+    await bot.set_my_commands(commands=commands_private, scope=BotCommandScopeAllPrivateChats())
+    await bot.set_my_commands(commands=commands_admin, scope=BotCommandScopeChat(chat_id=84131737))
+    # await bot.set_my_commands(commands=commands_treasury, scope=BotCommandScopeChat(chat_id=-1001169382324))
+
+
+def load_globals(session: Session):
+    global_data.skynet_admins = json.loads(cmd_load_bot_value(session, 0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.votes = json.loads(cmd_load_bot_value(session, 0, BotValueTypes.Votes, '{}'))
+    global_data.auto_all = get_chat_ids_by_key(session, BotValueTypes.AutoAll)
+    global_data.reply_only = get_chat_ids_by_key(session, BotValueTypes.ReplyOnly)
+    global_data.captcha = get_chat_ids_by_key(session, BotValueTypes.Captcha)
+
+    global_data.welcome_messages = get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
+    global_data.welcome_button = get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
+    global_data.delete_income = get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
+
+
 
 @logger.catch
-def main():
+async def main():
+    logger.add("skynet.log", rotation="1 MB", level='INFO')
+
     # Запуск бота
+    engine = create_engine(config.db_dns, pool_pre_ping=True)
+    # Creating DB connections pool
+    db_pool = sessionmaker(bind=engine)
+
+    # Creating bot and its dispatcher
+    if 'test' in sys.argv:
+        bot = Bot(token=config.test_token.get_secret_value(), parse_mode='HTML')
+        print('start test')
+    else:
+        bot = Bot(token=config.bot_token.get_secret_value(), parse_mode="HTML")
+
+
+    storage = RedisStorage(redis=Redis(host='localhost', port=6379, db=4))
+    dp = Dispatcher(storage=storage)
+
+    load_globals(db_pool())
+
+    dp.message.middleware(DbSessionMiddleware(db_pool))
+    dp.callback_query.middleware(DbSessionMiddleware(db_pool))
+    dp.chat_member.middleware(DbSessionMiddleware(db_pool))
+
+    dp.include_router(admin.router)
+    dp.include_router(all.router)
+    dp.include_router(inline.router)
+    dp.include_router(polls.router)
+    dp.include_router(start.router)
+    dp.include_router(stellar.router)
+    dp.include_router(welcome.router)
+    dp.include_router(talk_handlers.router)  # last
+
+    scheduler = AsyncIOScheduler(timezone=str(tzlocal.get_localzone()))
+    aiogram_utils.scheduler = scheduler
     scheduler.start()
-    skynet_time_handlers.scheduler_jobs(scheduler, dp)
-    dp.register_message_handler(skynet_talk_handlers.cmd_last_check, state='*')
-    aiogram.executor.start_polling(dp, skip_updates=True, on_startup=set_commands)
+    time_handlers.scheduler_jobs(scheduler, bot, db_pool())
+
+    # Запускаем бота и пропускаем все накопленные входящие
+    # Да, этот метод можно вызвать даже если у вас поллинг
+    await bot.delete_webhook(drop_pending_updates=True)
+    await set_commands(bot)
+    print(dp.resolve_used_update_types())
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.error("Exit")

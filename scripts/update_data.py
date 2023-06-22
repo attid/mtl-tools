@@ -1,12 +1,10 @@
-from mystellar import *
-
-# https://docs.gspread.org/en/latest/
+from utils.stellar_utils import *
 
 
 @logger.catch
 async def update_bim_in_id():
-    gc = gspread.service_account('mtl-google-doc.json')
-    now = datetime.datetime.now()
+    agc = await agcm.authorize()
+    now = datetime.now()
     wks_bim = gc.open("MTL_BIM_register").worksheet("List")
     wks_id = gc.open("MTL_ID_register").worksheet("List")
 
@@ -31,8 +29,8 @@ async def update_bim_in_id():
 
 @logger.catch
 async def update_id_in_bim():
-    gc = gspread.service_account('mtl-google-doc.json')
-    now = datetime.datetime.now()
+    agc = await agcm.authorize()
+    now = datetime.now()
     wks_bim = gc.open("MTL_BIM_register").worksheet("List")
     wks_id = gc.open("MTL_ID_register").worksheet("List")
 
@@ -56,8 +54,8 @@ async def update_id_in_bim():
 
 
 async def update_tg_id():
-    gc = gspread.service_account('mtl-google-doc.json')
-    now = datetime.datetime.now()
+    agc = await agcm.authorize()
+    now = datetime.now()
     wks_id = gc.open("MTL_ID_register").worksheet("username")
 
     data_id = wks_id.get_all_values()
@@ -65,8 +63,8 @@ async def update_tg_id():
     update_list = []
 
     for record_id in data_id[1:]:
-        tg_name = None
-        if len(record_id[0]) > 1 and record_id[0][0]=='@':
+        # tg_name = None
+        if len(record_id[0]) > 1 and record_id[0][0] == '@':
             tg_name = record_id[0][1:]
         else:
             tg_name = record_id[0]
@@ -78,8 +76,8 @@ async def update_tg_id():
 
 
 async def update_tg_id_bim():
-    gc = gspread.service_account('mtl-google-doc.json')
-    now = datetime.datetime.now()
+    agc = await agcm.authorize()
+    now = datetime.now()
     wks_id = gc.open("MTL_ID_register").worksheet("username")
 
     data_id = wks_id.get_all_values()
@@ -87,8 +85,8 @@ async def update_tg_id_bim():
     update_list = []
 
     for record_id in data_id[1:]:
-        tg_name = None
-        if len(record_id[0]) > 1 and record_id[0][0]=='@':
+        #tg_name = None
+        if len(record_id[0]) > 1 and record_id[0][0] == '@':
             tg_name = record_id[0][1:]
         else:
             tg_name = record_id[0]
@@ -101,15 +99,15 @@ async def update_tg_id_bim():
 
 @logger.catch
 async def update_id_in_bim():
-    gc = gspread.service_account('mtl-google-doc.json')
-    now = datetime.datetime.now()
+    agc = await agcm.authorize()
+    now = datetime.now()
     wks_bim = gc.open("MTL_BIM_register").worksheet("List")
     wks_id = gc.open("MTL_ID_register").worksheet("username")
 
     data_bim = wks_bim.get_all_values()
     data_id = wks_id.get_all_values()
 
-    list_id = []
+    #list_id = []
 
     for idx, record_bim in enumerate(data_bim[2:]):
         if len(record_bim[2]) > 0 and len(record_bim[3]) > 0:
@@ -118,30 +116,30 @@ async def update_id_in_bim():
             if record_bim[2]:
                 for record_id in data_id:
                     if record_id[0] == record_bim[2]:
-                        wks_bim.update(f'D{idx+3}', [[record_id[1]]])
-                        #id_id = record_id[0]
-                        print(record_id,record_bim,idx)
+                        wks_bim.update(f'D{idx + 3}', [[record_id[1]]])
+                        # id_id = record_id[0]
+                        print(record_id, record_bim, idx)
 
     logger.info(f'all done {now}')
 
+
 async def update_memo():
-    gc = gspread.service_account('mtl-google-doc.json')
+    agc = await agcm.authorize()
     now = datetime.now()
     wks = gc.open("test export 4").worksheet("2023")
 
     data = wks.get_all_values()
 
     for idx, record in enumerate(data[1:]):
-        if len(record[8]) > 0 and record[8] == public_issuer and len(record[9]) == 0:
+        if len(record[8]) > 0 and record[8] == MTLAddresses.public_issuer and len(record[9]) == 0:
             memo = get_memo_by_op(record[0].split('-')[0])
-            print(idx, memo,record)
-            wks.update(f'J{idx+2}', [[memo]])
+            print(idx, memo, record)
+            wks.update(f'J{idx + 2}', [[memo]])
 
     logger.info(f'all done {now}')
-
 
 
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
     logger.info(datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
-    #asyncio.run(update_memo())
+    # asyncio.run(update_memo())

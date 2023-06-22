@@ -1,11 +1,14 @@
 import asyncio
+import json
+import os
+from datetime import datetime
 
 import gspread_asyncio
 
 # from google-auth package
 from google.oauth2.service_account import Credentials
 
-from mystellar import float2str
+from utils.global_data import float2str
 
 
 # https://gspread-asyncio.readthedocs.io/en/latest/index.html#
@@ -16,7 +19,11 @@ from mystellar import float2str
 def get_creds():
     # To obtain a service account JSON file, follow these steps:
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
-    creds = Credentials.from_service_account_file("mtl-google-doc.json")
+    start_path = os.path.dirname(__file__)
+    key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
+    print(start_path, key_path)
+
+    creds = Credentials.from_service_account_file(key_path)
     scoped = creds.with_scopes([
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/spreadsheets",
@@ -49,7 +56,7 @@ async def example(agcm1):
     print("All done!")
 
 
-async def check_bim(user_id = None, user_name = None):
+async def check_bim(user_id=None, user_name=None):
     agc = await agcm.authorize()
     ss = await agc.open("MTL_BIM_register")
     ws = await ss.worksheet("List")
@@ -86,7 +93,30 @@ async def check_bim(user_id = None, user_name = None):
     return f'{user_name} in BIM!'
 
 
+# получить ID
+async def cmd_get_last_task_id():
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_TASKS_register")
+    ws = await ss.worksheet("Term")
+
+    record = await ws.col_values(1)
+    return int(record[-1]), len(record)
+
+
+async def cmd_save_new_task(task_name, customer, manager, executor, contract_url):
+    last_task_number, last_col = await cmd_get_last_task_id()
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_TASKS_register")
+    ws = await ss.worksheet("Term")
+    # N	task	date_in	plan	fact	customer	manager	executor	program	contract
+    await ws.update(f'A{last_col + 1}', [[last_task_number + 1, task_name, datetime.now().strftime('%d.%m'), None, None,
+                                          customer, manager, executor, None, contract_url]])
+    return json.dumps({'task_number': last_task_number + 1,
+                       'task_name': task_name
+                       })
+
+
 if __name__ == "__main__":
-    # Turn on debugging if you're new to asyncio!
-    a = asyncio.run(check_bim(user_name='itolstov'))
+    # a = asyncio.run(check_bim(user_name='itolstov'))
+    a = asyncio.run(cmd_save_new_task())
     print(a)

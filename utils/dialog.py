@@ -4,11 +4,14 @@ from datetime import datetime, date
 import random
 import openai
 from aioredis import Redis
-from settings import opanaikey
 from loguru import logger
+
+from config_reader import config
+from utils.gspread_tools import cmd_save_new_task
 
 save_time_long = 60 * 60 * 2
 redis = Redis(host='localhost', port=6379, db=6)
+openai_key = config.openai_key.get_secret_value()
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
@@ -58,7 +61,6 @@ async def delete_last_redis(chat_id):
     await redis.delete(keys[-1])
 
 
-
 async def talk(chat_id, msg):
     await save_to_redis(chat_id, msg)
     msg_data = await load_from_redis(chat_id)
@@ -71,10 +73,26 @@ async def talk(chat_id, msg):
         return '=( connection error, retry again )='
 
 
+async def talk_open_ai_list_models():
+    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
+    openai.api_key = openai_key
+    # list models
+    models = openai.Model.list()
+    print(list(models))
+    for raw in models['data']:
+        if raw['id'].find('gpt') > -1:
+            print(raw['id'])
+    # print(raw)
+    # gpt-3.5-turbo-0613
+    # gpt-3.5-turbo-16k-0613
+    # gpt-3.5-turbo-16k
+    # gpt-3.5-turbo-0301
+    # gpt-3.5-turbo
+
 
 async def talk_open_ai_async(msg=None, msg_data=None, user_name=None):
     openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
-    openai.api_key = opanaikey
+    openai.api_key = openai_key
     # list models
     # models = openai.Model.list()
 
@@ -106,7 +124,6 @@ async def talk_get_comment(chat_id, article):
     else:
         await delete_last_redis(chat_id)
         return '=( connection error, retry again )='
-
 
 
 gor = (
@@ -149,27 +166,111 @@ def get_horoscope() -> list:
         return horoscope
 
 
-# messages array Required
+async def talk_check_spam(article):
+    messages = [{"role": "system",
+                 "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. Предоставьте свой ответ в виде процентной вероятности, что данное объявление является спамом. Ваша оценка должна быть выражена в числовом формате, например, 70.0 для 70% вероятности. Никакого текста, только 2 цифры. Верни сообщение длиной в 2 символа."},
+                {"role": "user", "content": article}]
+    msg = None
+    while msg is None:
+        msg = await talk_open_ai_async(msg_data=messages)
+        if not msg:
+            await asyncio.sleep(1)
+        if len(msg) > 3:
+            logger.info(msg)
+            msg = None
+    return float(msg)
 
-# A list of messages describing the conversation so far.
 
-# role string Required
-# The role of the author of this message. One of system, user, or assistant.
+async def add_task_to_google(msg):
+    # Step 1: send the conversation and available functions to GPT
+    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
+    openai.api_key = openai_key
 
-# content string Required
-# The contents of the message.
+    messages = [{"role": "user", "content": msg}]
+    #async def cmd_save_new_task(task_name, customer, manager, executor, contract_url):
+    functions = [
+        {
+            "name": "cmd_save_new_task",
+            "description": "Добавляет задачу в таблицу задач",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_name": {
+                        "type": "string",
+                        "description": "Описание задачи",
+                    },
+                    "customer": {
+                        "type": "string",
+                        "description": "Заказчик, может быть None",
+                    },
+                    "manager": {
+                        "type": "string",
+                        "description": "Менеджер задачи, может быть None",
+                    },
+                    "executor": {
+                        "type": "string",
+                        "description": "Исполнитель, по умолчанию пользователь который дает задачу",
+                    },
+                    "contract_url": {
+                        "type": "string",
+                        "description": "Ссылка на задачу, по умолчанию ссылка на прошлое сообщение",
+                    },
+                    #"unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+                },
+                "required": ["task_name", "executor", "contract_url"],
+            },
+        }
+    ]
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo-0613",
+        messages=messages,
+        functions=functions,
+        function_call="auto",  # auto is default, but we'll be explicit
+    )
+    print(response)
+    print('*************')
+    response_message = response["choices"][0]["message"]
 
-# name string Optional
-# The name of the author of this message. May contain a-z, A-Z, 0-9, and underscores, with a maximum length of 64 characters.
+    # Step 2: check if GPT wanted to call a function
+    if response_message.get("function_call"):
+        # Step 3: call the function
+        # Note: the JSON response may not always be valid; be sure to handle errors
+        available_functions = {
+            "cmd_save_new_task": cmd_save_new_task,
+        }  # only one function in this example, but you can have multiple
+        function_name = response_message["function_call"]["name"]
+        function_to_call = available_functions[function_name]
+        function_args = json.loads(response_message["function_call"]["arguments"])
+        print(function_args)
+        # async def cmd_save_new_task(task_name, customer, manager, executor, contract_url):
+        function_response = await function_to_call(
+            task_name=function_args.get("task_name"),
+            customer=function_args.get("customer"),
+            manager=function_args.get("manager"),
+            executor=function_args.get("executor"),
+            contract_url=function_args.get("contract_url"),
+        )
+
+        # Step 4: send the info on the function call and function response to GPT
+        messages.append(response_message)  # extend conversation with assistant's reply
+        messages.append(
+            {
+                "role": "function",
+                "name": function_name,
+                "content": function_response,
+            }
+        )  # extend conversation with function response
+        second_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo-0613",
+            messages=messages,
+        )  # get a new response from GPT where it can see the function response
+        return second_response.choices[0].message.content
+
 
 if __name__ == "__main__":
-    article  = '''*'''
-    print(asyncio.run(talk_get_comment(1, article)))
     pass
-    # print(talk(9, 'Как выглядит марс ?'))
-    # print(asyncio.run(talk_open_ai_async('Привет, запомни, тебя зовут скайнет.')))
-    # print(asyncio.run(talk_open_ai_async('Давай поиграем, представь тебя зовут Скайнет, ты продавец сладостей.')))
+    #print(asyncio.run(add_task_to_google('Скайнет, задача. Добавь задачу , заказчик эни, ссылка ya.ru , описание "Добавить новые поля в отчет"')))
+    #asyncio.run(talk_open_ai_list_models())
 
-    # print(asyncio.run(talk(58, 'Давай поиграем, представь тебя зовут Скайнет, ты продавец сладостей.')))
-    # print(asyncio.run(talk(58, 'Я тебе давал имя, Как тебя зовут ?')))
-    # print(asyncio.run(talk(58, 'Взвесте мне 500 грамм ')))
+    # article  = '''привет, ищу где купить мыло '''
+    # print(asyncio.run(talk_check_spam(article)))
