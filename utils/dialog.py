@@ -182,6 +182,7 @@ async def talk_check_spam(article):
 
 
 async def add_task_to_google(msg):
+    # https://platform.openai.com/docs/guides/gpt/function-calling
     # Step 1: send the conversation and available functions to GPT
     openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
     openai.api_key = openai_key
@@ -227,8 +228,6 @@ async def add_task_to_google(msg):
         functions=functions,
         function_call="auto",  # auto is default, but we'll be explicit
     )
-    print(response)
-    print('*************')
     response_message = response["choices"][0]["message"]
 
     # Step 2: check if GPT wanted to call a function
@@ -241,7 +240,6 @@ async def add_task_to_google(msg):
         function_name = response_message["function_call"]["name"]
         function_to_call = available_functions[function_name]
         function_args = json.loads(response_message["function_call"]["arguments"])
-        print(function_args)
         # async def cmd_save_new_task(task_name, customer, manager, executor, contract_url):
         function_response = await function_to_call(
             task_name=function_args.get("task_name"),

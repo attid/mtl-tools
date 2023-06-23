@@ -15,7 +15,7 @@ from scripts.update_report import update_guarantors_report, update_main_report, 
 from utils import dialog
 from utils.aiogram_utils import multi_reply
 from utils.dialog import talk_check_spam, add_task_to_google
-from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin
+from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
 
 router = Router()
@@ -75,16 +75,15 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
             await message.reply(msg)
 
 
-# @router.message()
-# async def cmd_last_check(message: Message):
-#    if message.chat.id in reply_only:
-#        if message.reply_to_message or message.forward_from_chat:
-#            pass
-#        else:
-#            await message.reply('Осуждаю ! Это сообщения не увидят в комментариях. '
-#                                'Рекомендую удалить его, и повторить его с использованием функции «ответ». \n'
-#                                'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
-#            return
+@router.message(F.chat.id.in_(global_data.reply_only))
+async def cmd_check_reply_only(message: Message):
+    if message.reply_to_message or message.forward_from_chat:
+        pass
+    else:
+        await message.reply('Осуждаю ! Это сообщения не увидят в комментариях. Я удалю сообщение через 5 минут ! '
+                            'Рекомендую удалить его, и повторить его с использованием функции «ответ». \n'
+                            'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
+        return
 
 
 @router.message(F.text)

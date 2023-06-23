@@ -16,7 +16,6 @@ from config_reader import config
 from db.requests import cmd_load_bot_value, get_chat_ids_by_key, get_chat_dict_by_key
 from middlewares.db import DbSessionMiddleware
 
-from routers import (admin, all, inline, polls, start, stellar, talk_handlers, time_handlers, welcome)
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes
 
@@ -89,6 +88,8 @@ async def main():
     dp = Dispatcher(storage=storage)
 
     load_globals(db_pool())
+    from routers import (admin, all, inline, polls, start, stellar, talk_handlers, time_handlers, welcome)
+
 
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
