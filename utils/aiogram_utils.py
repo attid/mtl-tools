@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from aiogram.filters import Filter
 from aiogram.types import Message
 
 from utils.global_data import MTLChats
@@ -50,3 +51,17 @@ async def multi_answer(message: Message, text: str):
         await message.answer(text[:4000])
         text = text[4000:]
 
+
+def has_words(master, words_array):
+    for word in words_array:
+        if master.upper().find(word.upper()) > -1:
+            return True
+    return False
+
+
+class HasText(Filter):
+    def __init__(self, my_arr: tuple) -> None:
+        self.my_arr = my_arr
+
+    async def __call__(self, message: Message) -> bool:
+        return has_words(message.text, self.my_arr)
