@@ -834,6 +834,7 @@ async def get_mtlbtc_xdr(btc_sum, address: str):
 
     return xdr
 
+
 async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool = False):
     result_data = []
     if account_id == 'delegate':
@@ -1262,3 +1263,46 @@ async def stellar_add_mtl_holders_info(accounts: dict):
                 arr[3] = s.weight
 
     return accounts
+
+
+def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
+    try:
+        server = Server(horizon_url="https://horizon.stellar.org")
+        call_result = server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
+        if len(call_result['_embedded']['records']) > 0:
+            # [{'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL',
+            #  'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'},
+            # {'asset_type': 'credit_alphanum12', 'asset_code': 'BTCMTL',
+            #  'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'}]
+            if len(call_result['_embedded']['records'][0]['path']) == 0:
+                return []
+            else:
+                result = []
+                for record in call_result['_embedded']['records'][0]['path']:
+                    if record['asset_type'] == 'native':
+                        result.append(MTLAssets.xlm_asset)
+                    else:
+                        result.append(Asset(record['asset_code'],
+                                            record['asset_issuer']))
+                return result
+        else:
+            return []
+    except Exception as ex:
+        logger.exception(["stellar_check_receive_sum", send_asset.code + ' ' + send_sum + ' ' + receive_asset.code, ex])
+        return []
+
+
+def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive_asset: Asset,
+                 receive_amount: str):
+    server = Server(horizon_url="https://horizon.stellar.org")
+    source_account = server.load_account(from_account)
+    transaction = TransactionBuilder(source_account=source_account,
+                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
+    transaction.set_timeout(60 * 60)
+    transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, receive_asset,
+                                                   receive_amount,
+                                                   stellar_get_receive_path(send_asset, send_amount, receive_asset))
+    transaction.set_timeout(60 * 60)
+    full_transaction = transaction.build()
+    logger.info(full_transaction.to_xdr())
+    return full_transaction.to_xdr()

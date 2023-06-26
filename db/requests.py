@@ -116,8 +116,8 @@ def cmd_load_new_message(session: Session) -> list[TMessage]:
 
 def cmd_save_url(session, chat_id, msg_id, msg):
     url = extract_url(msg)
-    cmd_save_bot_value(session, BotValueTypes.PinnedUrl, chat_id, url)
-    cmd_save_bot_value(session, BotValueTypes.PinnedId, chat_id, msg_id)
+    cmd_save_bot_value(session, chat_id, BotValueTypes.PinnedUrl, url)
+    cmd_save_bot_value(session, chat_id, BotValueTypes.PinnedId, msg_id)
 
 
 def extract_url(msg, surl='eurmtl.me'):

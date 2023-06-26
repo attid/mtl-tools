@@ -94,6 +94,7 @@ async def main():
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
+    dp.channel_post.middleware(DbSessionMiddleware(db_pool))
 
     dp.include_router(admin.router)
     dp.include_router(all.router)
