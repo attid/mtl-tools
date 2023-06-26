@@ -360,7 +360,7 @@ async def update_mmwb_report(session: Session):
 
     # check structure
     records = await wks.get_values('D1:E1')
-    if records != [['валюта1', 'валюта2']]:
+    if records != [['EURMTL', 'валюта2']]:
         print(records)
         raise Exception('wrong structure')
     records = await wks.get_values('B2:B6')
@@ -672,7 +672,9 @@ async def main():
 
 if __name__ == "__main__":
     # asyncio.run(update_airdrop())  # only from skynet
-    # exit()
+    #from db.quik_pool import quik_pool
+    #asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
+    #exit()
     #from db.quik_pool import quik_pool
     #asyncio.run(update_mmwb_report(quik_pool()))
     asyncio.run(main())

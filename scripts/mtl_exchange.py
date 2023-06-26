@@ -8,12 +8,12 @@ max_satsmtl = 1000000  # max offer
 sats_cost = 100000000
 
 min_xlm = 50.0
-persent_eurmtl = 1.03  # 5% наценки
-persent_btc = 1.01  # 5% наценки
-persent_xlm = 0.99  # 0,5% наценки
-persent_usdc = 0.99  # 0.05% наценки 0.975 for fund exchange
+persent_eurmtl = 1.03  # 1.03 =  5% наценки
+persent_btc = 1.01  #
+persent_xlm = 1.002  #
+persent_usdc = 1.002  # 0.975 for fund exchange
 persent_cost = 1.01  # 1% изменения цены для обновления
-persent_btc_cost = 1.001  # 1% изменения цены для обновления
+persent_btc_cost = 1.001  # 0,1% изменения цены для обновления
 
 server = Server(horizon_url="https://horizon.stellar.org")
 
@@ -228,7 +228,39 @@ async def check_fire(cost_fire):
         fire_mtl(account_fire, sum_mtl)
 
 
+def move_usdc():
+    # swap usdc - xlm
+    account = server.load_account(MTLAddresses.public_exchange_eurmtl_usdc)
+    stellar_transaction = TransactionBuilder(source_account=account,
+                                             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                             base_fee=base_fee)
+
+    stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_usdc,
+                                          asset=MTLAssets.eurmtl_asset,
+                                          amount='15000',
+                                          source=MTLAddresses.public_exchange_eurmtl_xlm)
+
+    stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
+                                                           send_asset=MTLAssets.usdc_asset,
+                                                           send_amount='15000',
+                                                           source=MTLAddresses.public_exchange_eurmtl_usdc,
+                                                           dest_asset=MTLAssets.xlm_asset,
+                                                           dest_min='15000',
+                                                           path=stellar_get_receive_path(MTLAssets.usdc_asset, '15000',
+                                                                                         MTLAssets.xlm_asset))
+
+    stellar_transaction.set_timeout(250)
+    stellar_transaction = stellar_transaction.build()
+    stellar_transaction.sign(get_private_sign())
+    xdr = stellar_transaction.to_xdr()
+    logger.info(f"xdr: {xdr}")
+
+    server.submit_transaction(stellar_transaction)
+
+
 if __name__ == "__main__":
+    #move_usdc()
+    #exit()
     # asyncio.run(update_offer(account_key=public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
     #                         price=1/1.109,
     #                         selling_asset=usdc_asset, buying_asset=eurmtl_asset, amount=52,
