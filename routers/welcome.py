@@ -11,7 +11,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_save_bot_user, cmd_save_bot_value, cmd_load_bot_value
+from db.requests import cmd_save_bot_user, cmd_save_bot_value, cmd_load_bot_value, send_admin_message
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.global_data import MTLChats, global_data, BotValueTypes, is_skynet_admin
 from utils.stellar_utils import stellar_stop_all_exchange
@@ -160,12 +160,12 @@ async def cmd_delete_welcome(message: Message, session: Session):
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.chat.id in global_data.welcome_messages:
-        if event.from_user:
+        if event.new_chat_member.user:
             msg = global_data.welcome_messages.get(event.chat.id, 'Hi new user')
             if event.from_user.username:
-                username = f'@{event.from_user.username} {event.from_user.full_name}'
+                username = f'@{event.new_chat_member.user.username} {event.new_chat_member.user.full_name}'
             else:
-                username = f'<a href="tg://user?id={event.from_user.id}">{event.from_user.full_name}</a>'
+                username = f'<a href="tg://user?id={event.new_chat_member.user.id}">{event.new_chat_member.user.full_name}</a>'
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
@@ -173,12 +173,15 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                 btn_msg = global_data.welcome_button.get(str(event.chat.id) + 'button', "I'm not bot")
                 kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text=btn_msg,
-                                         callback_data=CaptchaCallbackData(answer=event.from_user.id).pack())
+                                         callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack())
                 ]])
 
-                await event.chat.restrict(event.from_user.id, permissions=ChatPermissions(can_send_messages=False,
+                try:
+                    await event.chat.restrict(event.new_chat_member.user.id, permissions=ChatPermissions(can_send_messages=False,
                                                                                           can_send_media_messages=False,
                                                                                           can_send_other_messages=False))
+                except Exception as e:
+                    send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.json()}')
 
             answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
@@ -187,10 +190,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
 
     if event.chat.id in global_data.auto_all:
         members = json.loads(cmd_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
-        if event.from_user.username:
-            members.append('@' + event.from_user.username)
+        if event.new_chat_member.user.username:
+            members.append('@' + event.new_chat_member.user.username)
         else:
-            await bot.send_message(event.chat.id, f'{event.from_user.full_name} dont have username cant add to /all')
+            await bot.send_message(event.chat.id, f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
         cmd_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
 
     # if message.chat.id in global_data.l_dict.get('save_income_id', []):
