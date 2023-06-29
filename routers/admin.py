@@ -2,14 +2,17 @@ import json
 import os
 
 from aiogram import Router, Bot
+from aiogram.enums import ChatMemberStatus
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import cmd_save_bot_value
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes
 from utils.stellar_utils import send_by_list
+from aiogram.exceptions import TelegramBadRequest
 
 router = Router()
 
@@ -155,3 +158,34 @@ async def cmd_push(message: Message, bot: Bot):
 
     all_users = message.reply_to_message.text.split()
     await send_by_list(bot, all_users, message)
+
+
+async def check_membership(bot: Bot, chat_id: str, user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
+    except TelegramBadRequest:
+        return False
+
+
+@router.message(Command(commands=["get_info"]))
+async def cmd_get_info(message: Message, bot: Bot):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    command_args = message.text.split()
+    if len(command_args) < 2 or not command_args[1].startswith("#ID"):
+        await message.reply('Пришлите ID в формате #ID0000')
+        return
+
+    user_id = command_args[1][3:]  # убрать "#ID" из начала строки
+    if not user_id.isdigit():
+        await message.reply('ID должен быть числом.')
+        return
+
+    is_member = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
+    if is_member:
+        await message.reply("Пользователь подписан на канал Montelibero")
+    else:
+        await message.reply("Пользователь не подписан на канал")
