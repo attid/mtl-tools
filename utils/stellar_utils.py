@@ -64,6 +64,7 @@ class MTLAssets:
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
     defi_asset = Asset("MTLDefi", MTLAddresses.public_defi)
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
+    usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
 
 
 pack_count = 70  # for select first pack_count - to pack to xdr
@@ -786,8 +787,8 @@ async def get_defi_xdr(div_sum: int):
     accounts = await stellar_get_mtl_holders(MTLAssets.defi_asset)
     accounts_list = []
     total_sum = 0
-    div_bonus = div_sum * 0.1
-    div_sum = div_sum - div_bonus
+    # div_bonus = div_sum * 0.1
+    # div_sum = div_sum - div_bonus
 
     for account in accounts:
         balances = account["balances"]
@@ -803,18 +804,55 @@ async def get_defi_xdr(div_sum: int):
     persent = div_sum / total_sum
 
     for account in accounts_list:
-        if account[0] == 'GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU':
-            account[2] = account[1] * persent + div_bonus
-        else:
-            account[2] = account[1] * persent
+        # if account[0] == 'GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU':
+        #    account[2] = account[1] * persent + div_bonus
+        # else:
+        account[2] = account[1] * persent
 
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_defi)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 12)
     for account in accounts_list:
-        transaction.append_payment_op(destination=account[0], asset=MTLAssets.satsmtl_asset,
-                                      amount=str(round(account[2], 7)))
+        if account[2] > 0.0001:
+            transaction.append_payment_op(destination=account[0], asset=MTLAssets.satsmtl_asset,
+                                          amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+async def get_usdm_xdr(div_sum: int):
+    accounts = await stellar_get_mtl_holders(MTLAssets.usdm_asset)
+    accounts_list = []
+    total_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if (balance["asset_code"] == MTLAssets.usdm_asset.code and
+                        balance["asset_issuer"] == MTLAssets.usdm_asset.issuer):
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        accounts_list.append([account["account_id"], token_balance, 0])
+        total_sum += token_balance
+
+    persent = div_sum / total_sum
+
+    for account in accounts_list:
+        account[2] = account[1] * persent
+
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_usdm)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 12)
+    for account in accounts_list:
+        if account[2] > 0.0001:
+            transaction.append_payment_op(destination=account[0], asset=MTLAssets.usdm_asset,
+                                          amount=str(round(account[2], 7)))
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 

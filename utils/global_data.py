@@ -21,6 +21,7 @@ class MTLChats:
     MMWBGroup = -1001729647273
     FinGroup = -1001941169217
     EURMTLClubGroup = -1001707489173
+    MonteliberoChanel = -1001009485608
 
 
 class BotValueTypes:
