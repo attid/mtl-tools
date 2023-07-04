@@ -38,8 +38,8 @@ async def cmd_decode(message: Message):
 
 
 @router.message(Command(commands=["show_bim"]))
-async def cmd_show_bim_msg(message: Message, session: Session):
-    await message.answer(cmd_show_bim(session))
+async def rt_show_bim_msg(message: Message, session: Session):
+    await message.answer(await cmd_show_bim(session))
 
 
 @router.message(Command(commands=["balance"]))
@@ -62,7 +62,7 @@ async def cmd_do_bim(message: Message, session: Session):
     list_id = cmd_create_list(session, datetime.now().strftime('Basic Income %d/%m/%Y'), 1)  # ('mtl div 17/12/2021')
     lines = []
     msg = await message.answer(add_text(lines, 1, f"Start BDM pays. PayID №{list_id}. Step (1/7)"))
-    result = cmd_calc_bim_pays(session, list_id)
+    result = await cmd_calc_bim_pays(session, list_id)
     await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/7)"))
 
     i = 1
@@ -116,7 +116,7 @@ async def cmd_do_all(message: Message):
 
     await cmd_do_div(message)
     await cmd_do_sats_div(message)
-    await cmd_show_bim_msg(message)
+    await rt_show_bim_msg(message)
     await cmd_do_bim(message)
 
 

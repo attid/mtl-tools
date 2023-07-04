@@ -342,7 +342,7 @@ async def get_bim_list():
     wks = await ss.worksheet("List")
 
     addresses = []
-    data = wks.get_all_values()
+    data = await wks.get_all_values()
     for record in data[2:]:
         if record[20] and len(record[4]) == 56 and record[10] == 'TRUE' and float(float2str(record[17])) > 0.5:
             # print(record[4], record[10])
@@ -365,9 +365,9 @@ async def get_bim_list():
     return result
 
 
-def cmd_show_bim(session: Session):
+async def cmd_show_bim(session: Session):
     result = ''
-    bod_list = get_bim_list()
+    bod_list = await get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
     total_sum = exec_total_user_div(session)
@@ -428,8 +428,8 @@ def cmd_create_list(session: Session, memo: str, pay_type: int):
     return new.id
 
 
-def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
-    bod_list = get_bim_list()
+async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
+    bod_list = await get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
     balances = {}
@@ -520,8 +520,8 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
     # records = fb.execsql(f"select first 3 t.id, t.xdr from t_transaction t where t.was_send = 0 and t.id_div_list = ?",
     #                     [list_id])
 
-    for record in cmd_load_transactions(session, list_id):
-        transaction = TransactionEnvelope.from_xdr(record[1], network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+    for db_transaction in cmd_load_transactions(session, list_id):
+        transaction = TransactionEnvelope.from_xdr(db_transaction.xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         server = Server(horizon_url="https://horizon.stellar.org")
         div_account = server.load_account(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
@@ -529,8 +529,8 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
         transaction.sign(config.private_sign.get_secret_value())
         transaction_resp = await stellar_async_submit(transaction.to_xdr())
         logger.info(transaction_resp)
-        record.was_send = 1
-        record.xdr_id = sequence
+        db_transaction.was_send = 1
+        db_transaction.xdr_id = sequence
     session.commit()
 
     return cmd_count_unsent_transactions(session, list_id)

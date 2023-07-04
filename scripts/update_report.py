@@ -8,7 +8,7 @@ from scripts.mtl_exchange import check_fire
 
 CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', ]
 MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', ]
-DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', ]
+DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT' ]
 ISSUER_ASSETS = ['XLM', ]
 
 COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', ]
@@ -166,10 +166,10 @@ async def update_fire(session: Session):
     agc = await agcm.authorize()
     ss = await agc.open("MTL Report")
     wks = await ss.worksheet("AutoData")
-    if 'book value of 1 token' != (await wks.cell(35, 2)).value:
+    if 'book value of 1 token' != (await wks.cell(36, 2)).value:
         send_admin_message(session, 'bad fire value')
         raise Exception('bad fire value')
-    cost_fire = (await wks.cell(35, 4)).value
+    cost_fire = (await wks.cell(36, 4)).value
     logger.info(f'cost_fire {cost_fire}')
     cost_fire = float(cost_fire.replace(',', '.')) * 0.8
     await check_fire(cost_fire)

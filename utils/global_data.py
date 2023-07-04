@@ -22,6 +22,7 @@ class MTLChats:
     FinGroup = -1001941169217
     EURMTLClubGroup = -1001707489173
     MonteliberoChanel = -1001009485608
+    HelperChat = -1001466779498
 
 
 class BotValueTypes:

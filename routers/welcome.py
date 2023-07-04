@@ -69,7 +69,7 @@ async def cmd_set_welcome(message: Message, session: Session):
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
-        await cmd_delete_welcome(message)
+        await cmd_delete_welcome(message, session)
 
     cmd_delete_later(message, 1)
 
@@ -134,7 +134,7 @@ async def cmd_set_captcha(message: Message, session: Session):
 
 
 @router.message(Command(commands=["stop_exchange"]))
-async def cmd_delete_welcome(message: Message, session: Session):
+async def cmd_stop_exchange(message: Message, session: Session):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -146,7 +146,7 @@ async def cmd_delete_welcome(message: Message, session: Session):
 
 
 @router.message(Command(commands=["start_exchange"]))
-async def cmd_delete_welcome(message: Message, session: Session):
+async def cmd_start_exchange(message: Message, session: Session):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False

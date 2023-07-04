@@ -1,9 +1,11 @@
 import asyncio
 import json
 import sys
+from contextlib import suppress
 
 import tzlocal
 from aiogram import types, Bot, Dispatcher
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
 from aioredis import Redis
@@ -17,7 +19,7 @@ from db.requests import cmd_load_bot_value, get_chat_ids_by_key, get_chat_dict_b
 from middlewares.db import DbSessionMiddleware
 
 from utils import aiogram_utils
-from utils.global_data import global_data, BotValueTypes
+from utils.global_data import global_data, BotValueTypes, MTLChats
 
 
 async def set_commands(bot):
@@ -66,13 +68,25 @@ def load_globals(session: Session):
     global_data.delete_income = get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
 
 
+async def on_startup(bot: Bot):
+    await set_commands(bot)
+    with suppress(TelegramBadRequest):
+        await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
+    with suppress(TelegramBadRequest):
+        await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
+
+
+async def on_shutdown(bot: Bot):
+    with suppress(TelegramBadRequest):
+        await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot stopped')
+
 
 @logger.catch
 async def main():
     logger.add("skynet.log", rotation="1 MB", level='INFO')
 
     # Запуск бота
-    engine = create_engine(config.db_dns, pool_pre_ping=True)
+    engine = create_engine(config.db_dns, pool_pre_ping=True, max_overflow=50)
     # Creating DB connections pool
     db_pool = sessionmaker(bind=engine)
 
@@ -83,13 +97,11 @@ async def main():
     else:
         bot = Bot(token=config.bot_token.get_secret_value(), parse_mode="HTML")
 
-
     storage = RedisStorage(redis=Redis(host='localhost', port=6379, db=4))
     dp = Dispatcher(storage=storage)
 
     load_globals(db_pool())
     from routers import (admin, all, inline, polls, start, stellar, talk_handlers, time_handlers, welcome)
-
 
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
@@ -109,12 +121,12 @@ async def main():
     aiogram_utils.scheduler = scheduler
     scheduler.start()
     time_handlers.scheduler_jobs(scheduler, bot, db_pool())
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
 
     # Запускаем бота и пропускаем все накопленные входящие
     # Да, этот метод можно вызвать даже если у вас поллинг
     await bot.delete_webhook(drop_pending_updates=True)
-    await set_commands(bot)
-    print(dp.resolve_used_update_types())
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
