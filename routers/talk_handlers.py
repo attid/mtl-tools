@@ -183,7 +183,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
 
 
 @router.message(F.chat.type == ChatType.PRIVATE)
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=False))
+@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True))
 @router.message(Command(commands=["skynet"]))
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     msg = await dialog.talk(message.chat.id, message.text)

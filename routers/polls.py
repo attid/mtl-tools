@@ -23,6 +23,7 @@ empty_poll = '{"closed": true, "question": "", "options": []}'
 # we have dict with votes for different chats
 chat_to_address = {-1001649743884: MTLAddresses.public_issuer,
                    -1001837984392: MTLAddresses.public_issuer,
+                   MTLChats.TestGroup: MTLAddresses.public_issuer,
                    MTLChats.USDMMGroup: MTLAddresses.public_usdm}
 
 
@@ -38,7 +39,7 @@ async def channel_post(message: Message, session: Session):
                 buttons.append([InlineKeyboardButton(text=option.text + '(0)',
                                                      callback_data=PollCallbackData(answer=len(buttons)).pack())])
             msg = await message.answer(message.poll.question,
-                                       reply_markup=InlineKeyboardMarkup(inline_keyboard=my_buttons))
+                                       reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
             my_poll["question"] = message.poll.question
             my_poll["closed"] = False
             my_poll['message_id'] = msg.message_id
@@ -58,7 +59,7 @@ async def cmd_poll(message: Message, session: Session):
             buttons.append([InlineKeyboardButton(text=option.text + '(0)',
                                                  callback_data=PollCallbackData(answer=len(buttons)).pack())])
         # print(my_buttons)
-        msg = await message.answer(poll.question, reply_markup=InlineKeyboardMarkup(inline_keyboard=my_buttons))
+        msg = await message.answer(poll.question, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
         my_poll["question"] = poll.question
         my_poll["closed"] = False
         my_poll['message_id'] = msg.message_id
@@ -125,7 +126,7 @@ async def cmd_poll_check(message: Message, session: Session):
 @router.callback_query(PollCallbackData.filter())
 async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, session: Session):
     answer = callback_data.answer
-    user = '@' + query.from_user.username
+    user = '@' + query.from_user.username if query.from_user.username else query.from_user.id
     my_poll = json.loads(
         cmd_load_bot_value(session, query.message.chat.id, -1 * query.message.message_id, empty_poll))
 
@@ -156,7 +157,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
             await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
             if need_close:
                 my_poll["closed"] = True
-            cmd_save_bot_value(session, query.message.message_id, -1 * msg.message_id, json.dumps(my_poll))
+            cmd_save_bot_value(session, query.message.chat.id, -1 * query.message.message_id, json.dumps(my_poll))
         else:
             await query.answer("You are't in list!", show_alert=True)
     return True

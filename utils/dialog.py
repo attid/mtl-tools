@@ -272,3 +272,4 @@ if __name__ == "__main__":
 
     # article  = '''привет, ищу где купить мыло '''
     # print(asyncio.run(talk_check_spam(article)))
+    print(asyncio.run(talk(0,'Привет, ты какая модель?')))
