@@ -21,7 +21,7 @@ def get_creds():
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
     start_path = os.path.dirname(__file__)
     key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
-    print(start_path, key_path)
+    #print(start_path, key_path)
 
     creds = Credentials.from_service_account_file(key_path)
     scoped = creds.with_scopes([

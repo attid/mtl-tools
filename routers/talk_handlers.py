@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from db.requests import cmd_load_bot_value, cmd_save_url, extract_url
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
-    update_mmwb_report
+    update_mmwb_report, update_bim_data
 from utils import dialog
 from utils.aiogram_utils import multi_reply, HasText, has_words
 from utils.dialog import talk_check_spam, add_task_to_google
@@ -166,6 +166,10 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
     if has_words(message.text, ['MM', 'ММ']):
         msg = await message.reply('Зай, я запустила обновление')
         await update_mmwb_report(session)
+        await msg.reply('Обновление завершено')
+    if has_words(message.text, ['БДМ', 'BIM']):
+        msg = await message.reply('Зай, я запустила обновление')
+        await update_bim_data(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['ГАРАНТОВ']):
         msg = await message.reply('Зай, я запустила обновление')

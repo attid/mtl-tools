@@ -10,7 +10,7 @@ from aiogram import Bot
 from aiogram.types import Message
 from loguru import logger
 from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
-                         AiohttpClient, ServerAsync, Price, TransactionBuilder, Account)
+                         AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from config_reader import config
@@ -44,6 +44,7 @@ class MTLAddresses:
     public_exchange_eurmtl_btc = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
     public_exchange_eurmtl_sats = "GAEO4HE7DJAJPOEE4KU375WEGB2IWO42KVTG3PLBTXL7TSWDSPHPZBOT"
     public_exchange_eurmtl_usdc = "GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT"
+    public_exchange_mtl_xlm = "GDLIKJG7G3DDGK53TCWMXIEJF3D2U4MBUGINZJFPLHI2JLJBNBE3GBOT"
 
     # user
     public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
@@ -521,7 +522,8 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
     #                     [list_id])
 
     for db_transaction in cmd_load_transactions(session, list_id):
-        transaction = TransactionEnvelope.from_xdr(db_transaction.xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction = TransactionEnvelope.from_xdr(db_transaction.xdr,
+                                                   network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         server = Server(horizon_url="https://horizon.stellar.org")
         div_account = server.load_account(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
@@ -1344,3 +1346,40 @@ def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive
     full_transaction = transaction.build()
     logger.info(full_transaction.to_xdr())
     return full_transaction.to_xdr()
+
+
+def gen_new(last_name):
+    new_account = Keypair.random()
+    i = 0
+    while new_account.public_key[-len(last_name):] != last_name:
+        new_account = Keypair.random()
+        # print(i, new_account.public_key, new_account.secret)
+        i += 1
+        print(i, new_account.public_key, new_account.secret)
+    return [i, new_account.public_key, new_account.secret]
+
+
+def stellar_add_fond_trustline(address_id, asset_code):
+    return stellar_add_trustline(address_id, asset_code, MTLAddresses.public_issuer)
+
+
+def stellar_add_trustline(address_id, asset_code, asset_issuer):
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(address_id)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60)
+    transaction.append_change_trust_op(Asset(asset_code, asset_issuer))
+    transaction = transaction.build()
+
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+if __name__ == '__main__':
+    pass
+    # gen new
+    # print(gen_new('BOT'))
+
+    # open and send
+    stellar_sync_submit(stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))

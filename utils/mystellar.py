@@ -25,25 +25,12 @@
 # # https://github.com/StellarCN/py-stellar-base/tree/main/examples
 #
 #
-# def stellar_add_fond_trustline(userkey, asset_code):
-#     return stellar_add_trustline(userkey, asset_code, public_issuer)
 #
 #
 #
 #
 #
 #
-# def stellar_add_trustline(public_key, asset_code, asset_issuer):
-#     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
-#     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-#                                      base_fee=base_fee)
-#     transaction.set_timeout(60 * 60)
-#     transaction.append_change_trust_op(Asset(asset_code, asset_issuer))
-#     transaction = transaction.build()
-#
-#     xdr = transaction.to_xdr()
-#
-#     return xdr
 #
 #
 #
@@ -355,15 +342,6 @@
 #
 #
 #
-# def gen_new(last_name):
-#     new_account = Keypair.random()
-#     i = 0
-#     while new_account.public_key[-len(last_name):] != last_name:
-#         new_account = Keypair.random()
-#         # print(i, new_account.public_key, new_account.secret)
-#         i += 1
-#         print(i, new_account.public_key, new_account.secret)
-#     return [i, new_account.public_key, new_account.secret]
 #
 #
 # async def get_mrxpinvest_xdr(div_sum: float):

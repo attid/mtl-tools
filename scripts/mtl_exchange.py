@@ -102,6 +102,7 @@ async def check_exchange():
     balances_eurmtl_btc = await get_balances(MTLAddresses.public_exchange_eurmtl_btc)
     balances_eurmtl_sats = await get_balances(MTLAddresses.public_exchange_eurmtl_sats)
     balances_eurmtl_usdc = await get_balances(MTLAddresses.public_exchange_eurmtl_usdc)
+    balances_mtl_xlm = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
 
     sum_eurmtl_xlm = float(balances_eurmtl_xlm['EURMTL'])
     sum_xlm = float(balances_eurmtl_xlm['XLM'])
@@ -111,9 +112,12 @@ async def check_exchange():
     sum_eurmtl_sats = float(balances_eurmtl_sats['EURMTL'])
     sum_eurmtl_usdc = float(balances_eurmtl_usdc['EURMTL'])
     sum_usdc = float(balances_eurmtl_usdc['USDC'])
+    sum_mtl_xlm = float(balances_mtl_xlm['XLM'])
+    sum_mtl = float(balances_mtl_xlm['MTL'])
 
     # get offers
     offers_eurmtl_xlm = get_offers(MTLAddresses.public_exchange_eurmtl_xlm)
+    offers_mtl_xlm = get_offers(MTLAddresses.public_exchange_mtl_xlm)
     offers_eurmtl_btc = get_offers(MTLAddresses.public_exchange_eurmtl_btc)
     offers_eurmtl_sats = get_offers(MTLAddresses.public_exchange_eurmtl_sats)
     offers_eurmtl_usdc = get_offers(MTLAddresses.public_exchange_eurmtl_usdc)
@@ -133,6 +137,8 @@ async def check_exchange():
     sum_eurmtl_xlm = int(sum_eurmtl_xlm) if sum_eurmtl_xlm < max_eurmtl else max_eurmtl
     sum_eurmtl_btc = int(sum_eurmtl_btc) if sum_eurmtl_btc < max_eurmtl else max_eurmtl
 
+    sum_mtl_xlm = sum_mtl_xlm - min_xlm
+
     sum_btcmtl = sum_btcmtl if sum_btcmtl < max_btcmtl else max_btcmtl
     max_xlm = int(max_eurmtl * cost_eurmtl / 1000) * 1000
     sum_xlm = int(sum_xlm) if sum_xlm < max_xlm else max_xlm
@@ -143,6 +149,7 @@ async def check_exchange():
     sum_eurmtl_usdc = int(sum_eurmtl_usdc) if sum_eurmtl_usdc < max_eurmtl else max_eurmtl
     sum_usdc = int(sum_usdc) if sum_usdc < max_eurmtl else max_eurmtl
 
+    #eurmtl-xlm
     await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_xlm, price_min=5, price_max=15,
                        price=cost_eurmtl * persent_eurmtl,
                        selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.xlm_asset, amount=sum_eurmtl_xlm,
@@ -154,6 +161,19 @@ async def check_exchange():
                        selling_asset=MTLAssets.xlm_asset, buying_asset=MTLAssets.eurmtl_asset, amount=sum_xlm,
                        check_persent=persent_cost,
                        record=offers_eurmtl_xlm.get('XLM-EURMTL'))
+
+    #mtl-xlm
+    await update_offer(account_key=MTLAddresses.public_exchange_mtl_xlm, price_min=5*4, price_max=15*4,
+                       price=cost_eurmtl * persent_eurmtl * 4,
+                       selling_asset=MTLAssets.mtl_asset, buying_asset=MTLAssets.xlm_asset, amount=sum_mtl,
+                       check_persent=persent_cost,
+                       record=offers_mtl_xlm.get('MTL-XLM'))
+
+    await update_offer(account_key=MTLAddresses.public_exchange_mtl_xlm, price_min=1 / 15 / 3, price_max=1 / 5 / 3,
+                       price=round((1 / cost_eurmtl / 3) * persent_xlm, 5),
+                       selling_asset=MTLAssets.xlm_asset, buying_asset=MTLAssets.mtl_asset, amount=sum_mtl_xlm,
+                       check_persent=persent_cost,
+                       record=offers_mtl_xlm.get('XLM-MTL'))
 
     # btc
     await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_btc, price_min=15000, price_max=30000,
@@ -235,19 +255,19 @@ def move_usdc():
                                              network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                              base_fee=base_fee)
 
-    stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_usdc,
+    stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
                                           asset=MTLAssets.eurmtl_asset,
-                                          amount='15000',
-                                          source=MTLAddresses.public_exchange_eurmtl_xlm)
+                                          amount='10000',
+                                          source=MTLAddresses.public_exchange_eurmtl_usdc)
 
-    stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
-                                                           send_asset=MTLAssets.usdc_asset,
-                                                           send_amount='15000',
-                                                           source=MTLAddresses.public_exchange_eurmtl_usdc,
-                                                           dest_asset=MTLAssets.xlm_asset,
-                                                           dest_min='15000',
-                                                           path=stellar_get_receive_path(MTLAssets.usdc_asset, '15000',
-                                                                                         MTLAssets.xlm_asset))
+    #stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
+    #                                                       send_asset=MTLAssets.usdc_asset,
+    #                                                       send_amount='15000',
+    #                                                       source=MTLAddresses.public_exchange_eurmtl_usdc,
+    #                                                       dest_asset=MTLAssets.xlm_asset,
+    #                                                       dest_min='15000',
+    #                                                       path=stellar_get_receive_path(MTLAssets.usdc_asset, '15000',
+    #                                                                                     MTLAssets.xlm_asset))
 
     stellar_transaction.set_timeout(250)
     stellar_transaction = stellar_transaction.build()
@@ -261,13 +281,6 @@ def move_usdc():
 if __name__ == "__main__":
     #move_usdc()
     #exit()
-    # asyncio.run(update_offer(account_key=public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
-    #                         price=1/1.109,
-    #                         selling_asset=usdc_asset, buying_asset=eurmtl_asset, amount=52,
-    #                         check_persent=persent_cost,
-    #                         record=[])
-    #            )
-    # exit(0)
     logger.add("mtl_exchange.log", rotation="1 MB")
     if cmd_load_bot_value(quik_pool(), 0, BotValueTypes.StopExchange, None):
         exit()

@@ -378,6 +378,8 @@ async def update_mmwb_report(session: Session):
     update_data.append([balances.get('EURMTL', 0), balances.get('SATSMTL', 0)])
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_btc)
     update_data.append([balances.get('EURMTL', 0), balances.get('BTCMTL', 0)])
+    balances = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
+    update_data.append([balances.get('MTL', 0), balances.get('XLM', 0)])
     balances = await get_balances(MTLAddresses.public_fire)
     update_data.append([balances.get('EURMTL', 0), balances.get('MTL', 0)])
 
