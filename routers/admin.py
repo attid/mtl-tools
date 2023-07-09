@@ -3,16 +3,19 @@ import os
 
 from aiogram import Router, Bot
 from aiogram.enums import ChatMemberStatus
-from aiogram.filters import Command
+from aiogram.filters import Command, Text
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, FSInputFile, ChatPermissions
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import cmd_save_bot_value
+from utils.aiogram_utils import is_admin
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes
 from utils.stellar_utils import send_by_list
 from aiogram.exceptions import TelegramBadRequest
+
+from utils.timedelta import parse_timedelta_from_message
 
 router = Router()
 
@@ -189,3 +192,24 @@ async def cmd_get_info(message: Message, bot: Bot):
         await message.reply("Пользователь подписан на канал Montelibero")
     else:
         await message.reply("Пользователь не подписан на канал")
+
+
+@router.message(Text(startswith="!ro"))
+async def cmd_set_ro(message: Message):
+    if not is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.reply_to_message is None:
+        await message.reply('Please send for reply message to set ro')
+        return
+
+    delta = await parse_timedelta_from_message(message)
+    await message.chat.restrict(message.reply_to_message.from_user.id,
+                                permissions=ChatPermissions(can_send_messages=False,
+                                                            can_send_media_messages=False,
+                                                            can_send_other_messages=False),
+                                until_date=delta)
+
+    user = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username else message.reply_to_message.from_user.full_name
+    await message.reply(f'{user} was set ro for {delta}')
