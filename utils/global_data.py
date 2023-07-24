@@ -72,6 +72,7 @@ class GlobalData:
 
 
 global_data = GlobalData()
+global_tasks = []
 
 
 def is_skynet_admin(message: Message):

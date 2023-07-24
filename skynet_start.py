@@ -19,7 +19,8 @@ from db.requests import cmd_load_bot_value, get_chat_ids_by_key, get_chat_dict_b
 from middlewares.db import DbSessionMiddleware
 
 from utils import aiogram_utils
-from utils.global_data import global_data, BotValueTypes, MTLChats
+from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
+from utils.support_tools import work_with_support
 
 
 async def set_commands(bot):
@@ -74,11 +75,14 @@ async def on_startup(bot: Bot):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
+    global_tasks.append(asyncio.create_task(work_with_support()))
 
 
 async def on_shutdown(bot: Bot):
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot stopped')
+    for task in global_tasks:
+        task.cancel()
 
 
 @logger.catch
