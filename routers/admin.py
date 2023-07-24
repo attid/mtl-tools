@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from aiogram import Router, Bot
 from aiogram.enums import ChatMemberStatus
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from db.requests import cmd_save_bot_value
 from utils.aiogram_utils import is_admin
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes
+from utils.gspread_tools import cmd_find_user
 from utils.stellar_utils import send_by_list
 from aiogram.exceptions import TelegramBadRequest
 
@@ -172,26 +174,38 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> bool:
 
 
 @router.message(Command(commands=["get_info"]))
+@router.message(Command(re.compile(r"get_info_(\d+)")))
 async def cmd_get_info(message: Message, bot: Bot):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
 
     command_args = message.text.split()
-    if len(command_args) < 2 or not command_args[1].startswith("#ID"):
-        await message.reply('Пришлите ID в формате #ID0000')
-        return
+    if command_args[0] == "get_info":
+        if len(command_args) < 2 or not command_args[1].startswith("#ID"):
+            await message.reply('Пришлите ID в формате #ID0000')
+            return
+        user_id = command_args[1][3:]  # убрать "#ID" из начала строки
+    else:
+        user_id = command_args[0].split('_')
+        if len(user_id) == 3:
+            user_id = user_id[2].split('@')[0]
 
-    user_id = command_args[1][3:]  # убрать "#ID" из начала строки
     if not user_id.isdigit():
         await message.reply('ID должен быть числом.')
         return
 
+    messages = []
+
     is_member = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
     if is_member:
-        await message.reply("Пользователь подписан на канал Montelibero")
+        messages.append("Пользователь подписан на канал Montelibero")
     else:
-        await message.reply("Пользователь не подписан на канал")
+        messages.append("Пользователь не подписан на канал")
+
+    messages.extend(await cmd_find_user(user_id))
+
+    await message.reply('\n'.join(messages))
 
 
 @router.message(Text(startswith="!ro"))
