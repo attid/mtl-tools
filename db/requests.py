@@ -380,7 +380,7 @@ def get_log_count(session, operation_type):
     return log_count
 
 
-def get_wallet_info(session):
+def get_wallet_info(session)-> List[MyMtlWalletBot]:
     """
     Получает информацию об кошельках из таблицы mymtlwalletbot, где user_id больше 100 и need_delete равно 0.
 
@@ -391,10 +391,7 @@ def get_wallet_info(session):
         result: Список кортежей с информацией о кошельках.
     """
     result = session.query(
-        MyMtlWalletBot.public_key,
-        MyMtlWalletBot.free_wallet,
-        MyMtlWalletBot.default_wallet,
-        MyMtlWalletBot.last_use_day,
+        MyMtlWalletBot
     ).filter(
         MyMtlWalletBot.user_id > 100,
         MyMtlWalletBot.need_delete == 0,

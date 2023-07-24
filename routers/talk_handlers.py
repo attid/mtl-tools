@@ -1,7 +1,7 @@
 from aiogram import types, F, Bot
 import re, random
 
-from aiogram.enums import ChatType, ParseMode
+from aiogram.enums import ChatType, ParseMode, ChatAction
 from loguru import logger
 from aiogram import Router
 from aiogram.filters import Command, Text
@@ -165,23 +165,28 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         return False
     if has_words(message.text, ['MM', 'ММ']):
         msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_mmwb_report(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['БДМ', 'BIM']):
         msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_bim_data(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['ГАРАНТОВ']):
         msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_guarantors_report()
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
         msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_main_report()
         await update_fire(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['donate', 'donates', 'donated']):
         msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_donate_report(session)
         await msg.reply('Обновление завершено')
 

@@ -66,7 +66,7 @@ async def cmd_send_message_1m(bot: Bot, session: Session):
         except Exception as ex:
             record.was_send = 2
             session.commit()
-            logger.error(f'Error in cmd_send_message_1m: {ex}')
+            logger.error(f'Error in cmd_send_message_1m: {ex} {record}')
 
 
 @logger.catch

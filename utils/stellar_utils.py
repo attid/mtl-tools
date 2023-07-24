@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import math
@@ -51,6 +52,7 @@ class MTLAddresses:
     public_pending = "GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL"
     public_wallet = "GBSNN2SPYZB2A5RPDTO3BLX4TP5KNYI7UMUABUS3TYWWEWAAM2D7CMMW"
     public_seregan = "GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU"
+    public_damir = "GAUJWORZF3ROOQ2XLYY7ZINSXZ5IVSUSSKAOOEV7QNLWZBVVLSDQBDF2"
 
 
 class MTLAssets:
@@ -66,6 +68,7 @@ class MTLAssets:
     defi_asset = Asset("MTLDefi", MTLAddresses.public_defi)
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
+    damircoin_asset = Asset("DamirCoin", MTLAddresses.public_damir)
 
 
 pack_count = 70  # for select first pack_count - to pack to xdr
@@ -861,7 +864,44 @@ async def get_usdm_xdr(div_sum: int):
     return xdr
 
 
-async def get_mtlbtc_xdr(btc_sum, address: str):
+async def get_damircoin_xdr(div_sum: int):
+    accounts = await stellar_get_mtl_holders(MTLAssets.damircoin_asset)
+    accounts_list = []
+    total_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if (balance["asset_code"] == MTLAssets.damircoin_asset.code and
+                        balance["asset_issuer"] == MTLAssets.damircoin_asset.issuer):
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        accounts_list.append([account["account_id"], token_balance, 0])
+        total_sum += token_balance
+
+    persent = div_sum / total_sum
+
+    for account in accounts_list:
+        account[2] = account[1] * persent
+
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_damir)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 12)
+    for account in accounts_list:
+        if account[2] > 0.0001:
+            transaction.append_payment_op(destination=account[0], asset=MTLAssets.eurmtl_asset,
+                                          amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+
+async def get_btcmtl_xdr(btc_sum, address: str):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
@@ -1377,7 +1417,9 @@ def stellar_add_trustline(address_id, asset_code, asset_issuer):
 
 
 if __name__ == '__main__':
+    print(asyncio.run(get_damircoin_xdr(150)))
     pass
+
     # gen new
     # print(gen_new('BOT'))
 

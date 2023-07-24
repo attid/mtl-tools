@@ -8,7 +8,7 @@ from scripts.mtl_exchange import check_fire
 
 CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', ]
 MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', ]
-DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT' ]
+DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT']
 ISSUER_ASSETS = ['XLM', ]
 
 COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', ]
@@ -134,7 +134,7 @@ async def update_main_report():
         await wks.update('E4', int(defi_balance))
     else:
         logger.warning(f'debank error - {debank}')
-        #send_admin_message(session, 'debank error')
+        # send_admin_message(session, 'debank error')
 
     # amount
     rq = requests.get(
@@ -147,7 +147,7 @@ async def update_main_report():
 
     # cost data
     update_data = []
-    print(cost_data)
+    # print(cost_data)
     for ms in COST_DATA:
         # update_data.append([ms, float(assets[ms])])
         if ms in cost_data:
@@ -361,11 +361,11 @@ async def update_mmwb_report(session: Session):
     # check structure
     records = await wks.get_values('D1:E1')
     if records != [['EURMTL', 'валюта2']]:
-        print(records)
+        # print(records)
         raise Exception('wrong structure')
     records = await wks.get_values('B2:B6')
     if records[0][0] != 'GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT':
-        print(records)
+        # print(records)
         raise Exception('wrong structure')
 
     # update data
@@ -435,7 +435,7 @@ async def update_airdrop():
                     # print(address.account_id)
                     await wks.update(f'D{idx + 1}', address.account_id)
                 except:
-                    print('Resolving error', address_list[idx], fed_address_list[idx])
+                    logger.info('Resolving error', address_list[idx], fed_address_list[idx])
         else:  # if federal more that address
             if (len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count('*') > 0):
                 # print(fed_address_list[idx], '***')
@@ -573,9 +573,10 @@ async def update_wallet_report(session: Session):
     update_list = []
 
     for wallet in list_wallet:
-        balances = await get_balances(wallet[0])
+        balances = await get_balances(wallet.public_key)
         if balances:
-            update_list.append([wallet[0], wallet[1], wallet[2], wallet[3].strftime('%d.%m.%Y %H:%M:%S'),
+            date = wallet.last_use_day.strftime('%d.%m.%Y %H:%M:%S') if wallet.last_use_day else None
+            update_list.append([wallet.public_key, wallet.free_wallet, wallet.default_wallet, date,
                                 float(balances.get('EURMTL', 0)),
                                 float(balances.get('MTL', 0))])
 
@@ -666,7 +667,8 @@ async def main():
         update_donates_new(),
         update_wallet_report(quik_pool()),
         update_wallet_report2(quik_pool()),
-        update_export(quik_pool())
+        update_export(quik_pool()),
+        return_exceptions=True
     )
 
     await update_fire(quik_pool())
@@ -674,9 +676,9 @@ async def main():
 
 if __name__ == "__main__":
     # asyncio.run(update_airdrop())  # only from skynet
-    #from db.quik_pool import quik_pool
-    #asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
-    #exit()
-    #from db.quik_pool import quik_pool
-    #asyncio.run(update_mmwb_report(quik_pool()))
+    # from db.quik_pool import quik_pool
+    # asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
+    # exit()
+    # from db.quik_pool import quik_pool
+    # asyncio.run(update_mmwb_report(quik_pool()))
     asyncio.run(main())

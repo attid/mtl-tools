@@ -68,7 +68,7 @@ info_cmd = {
     "/start_exchange": "Запустить ботов обмена. Только для админов",
     "/push": "Отправить сообщение в личку. Только для админов скайнета",
     "/set_reply_only": "Следить за сообщениями вне тренда и сообщать об этом.",
-    "/get_btcmtl_xdr": "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send MTLBTC"
+    "/get_btcmtl_xdr": "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL"
 
 }
 

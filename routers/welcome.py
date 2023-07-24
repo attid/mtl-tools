@@ -7,7 +7,7 @@ from aiogram.filters import Command, Text, ChatMemberUpdatedFilter, IS_NOT_MEMBE
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
-    ChatMemberUpdated
+    ChatMemberUpdated, ChatMemberMember
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -103,8 +103,8 @@ async def cmd_set_welcome(message: Message, session: Session):
         return False
 
     if len(message.text.split()) > 1:
-        global_data.welcome_button[message.chat.id] = message.html_text[19:]
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeButton, message.html_text[19:])
+        global_data.welcome_button[message.chat.id] = message.text[19:]
+        cmd_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -156,7 +156,6 @@ async def cmd_start_exchange(message: Message, session: Session):
     await message.reply('Was start')
 
 
-# todo
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.chat.id in global_data.welcome_messages:
@@ -170,16 +169,17 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
 
             kb_captcha = None
             if event.chat.id in global_data.captcha:
-                btn_msg = global_data.welcome_button.get(str(event.chat.id) + 'button', "I'm not bot")
+                btn_msg = global_data.welcome_button.get(event.chat.id, "I'm not bot")
                 kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text=btn_msg,
                                          callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack())
                 ]])
 
                 try:
-                    await event.chat.restrict(event.new_chat_member.user.id, permissions=ChatPermissions(can_send_messages=False,
-                                                                                          can_send_media_messages=False,
-                                                                                          can_send_other_messages=False))
+                    await event.chat.restrict(event.new_chat_member.user.id,
+                                              permissions=ChatPermissions(can_send_messages=False,
+                                                                          can_send_media_messages=False,
+                                                                          can_send_other_messages=False))
                 except Exception as e:
                     send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.json()}')
 
@@ -193,18 +193,11 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
         if event.new_chat_member.user.username:
             members.append('@' + event.new_chat_member.user.username)
         else:
-            await bot.send_message(event.chat.id, f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
+            await bot.send_message(event.chat.id,
+                                   f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
         cmd_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
 
-    # if message.chat.id in global_data.l_dict.get('save_income_id', []):
-    #    users_id = global_dict.get(message.chat.id, [])
-    #    users_id.append(message.from_user.id)
-    #    global_dict[message.chat.id] = users_id
-    #    await message.delete()
-    #    # await message.answer(f' new user {message.from_user.id}')
 
-
-# todo
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.chat.id in global_data.auto_all:
@@ -258,4 +251,33 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
         await query.message.chat.restrict(query.from_user.id, permissions=chat.permissions)
     else:
         await query.answer("For other user", show_alert=True)
+    await query.answer()
+
+
+@router.message(Command(commands=["recaptcha"]))
+async def cmd_recaptcha(message: Message, session: Session):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if len(message.text.split()) < 2:
+        msg = await message.reply('need more words')
+        cmd_delete_later(msg)
+        return
+
+    await message.answer(' '.join(message.text.split()[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text='Get Captcha',
+                             callback_data='ReCaptcha')
+    ]]))
+    await message.delete()
+
+
+@router.callback_query(Text(text=["ReCaptcha"]))
+async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot):
+    await new_chat_member(ChatMemberUpdated(chat=query.message.chat,
+                                            from_user=query.from_user,
+                                            new_chat_member=ChatMemberMember(user=query.from_user),
+                                            old_chat_member=ChatMemberMember(user=query.from_user),
+                                            date=query.message.date
+                                            ), session, bot)
     await query.answer()
