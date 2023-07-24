@@ -13,7 +13,8 @@ from utils.global_data import MTLChats, is_skynet_admin
 from utils.gspread_tools import check_bim
 from utils.stellar_utils import cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances, \
     MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id, cmd_calc_divs, \
-    cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr, get_mtlbtc_xdr, float2str, cmd_show_data, get_usdm_xdr
+    cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr, get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, \
+    get_damircoin_xdr
 
 router = Router()
 
@@ -243,7 +244,7 @@ async def cmd_get_defi_xdr(message: Message):
 @router.message(Command(commands=["get_usdm_xdr"]))
 async def cmd_get_usdm_xdr(message: Message):
     if len(message.text.split()) > 1:
-        xdr = await get_usdm_xdr(int(message.text.split()[1]))
+        xdr = await cmd_get_damircoin_xdr(int(message.text.split()[1]))
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
     else:
@@ -254,12 +255,24 @@ async def cmd_get_usdm_xdr(message: Message):
 async def cmd_get_defi_xdr_(message: Message):
     arg = message.text.split()
     if len(arg) > 1:
-        xdr = await get_mtlbtc_xdr(float2str(arg[0]), arg[1])
+        xdr = await get_btcmtl_xdr(float2str(arg[1]), arg[2])
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
     else:
         await multi_answer(message,
-                           'use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send MTLBTC')
+                           'use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL')
+
+
+@router.message(Command(commands=["get_damircoin_xdr"]))
+async def cmd_get_damircoin_xdr(message: Message):
+    arg = message.text.split()
+    if len(arg) > 1:
+        xdr = await get_damircoin_xdr(int(arg[1]))
+        await multi_answer(message, xdr)
+        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+    else:
+        await multi_answer(message,
+                           'use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL')
 
 
 @router.message(Command(commands=["update_airdrops"]))
