@@ -21,7 +21,7 @@ def get_creds():
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
     start_path = os.path.dirname(__file__)
     key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
-    #print(start_path, key_path)
+    # print(start_path, key_path)
 
     creds = Credentials.from_service_account_file(key_path)
     scoped = creds.with_scopes([
@@ -116,7 +116,61 @@ async def cmd_save_new_task(task_name, customer, manager, executor, contract_url
                        })
 
 
+async def cmd_get_last_support_id():
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_support_register")
+    ws = await ss.worksheet("ALL")
+
+    record = await ws.col_values(1)
+    return int(record[-1]), len(record)
+
+
+async def cmd_save_new_support(user_id, username, agent_username, url):
+    last_number, last_col = await cmd_get_last_support_id()
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_support_register")
+    ws = await ss.worksheet("ALL")
+    # n	date_in	username	ID	ticket	request	status	1	2	3	4	5	6	notes	agent
+    await ws.update(f'A{last_col + 1}', [[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
+                                          None, None, None, None, None, None, None, None, None, agent_username]])
+
+async def cmd_close_support(url):
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_support_register")
+    ws = await ss.worksheet("ALL")
+
+    data = await ws.find(url, in_column=5)
+    if data:
+        print(data)
+        record = await ws.row_values(data.row)
+        user_id = record[3]
+
+
+async def cmd_find_user(user_id):
+    result = []
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_ID_register")
+    ws = await ss.worksheet("List")
+    data = await ws.find(str(user_id), in_column=5)
+    if data:
+        result.append('Найден в ID')
+    else:
+        result.append('Не найден в ID')
+
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_BIM_register")
+    ws = await ss.worksheet("List")
+    data = await ws.find(str(user_id), in_column=4)
+    if data:
+        result.append('Найден в BIM')
+    else:
+        result.append('Не найден в BIM')
+
+    return result
+
+
+
 if __name__ == "__main__":
     # a = asyncio.run(check_bim(user_name='itolstov'))
-    a = asyncio.run(cmd_save_new_task())
+    a = asyncio.run(cmd_find_user('710700915'))
     print(a)
