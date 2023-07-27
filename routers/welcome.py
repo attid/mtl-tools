@@ -265,7 +265,7 @@ async def cmd_recaptcha(message: Message, session: Session):
         cmd_delete_later(msg)
         return
 
-    await message.answer(' '.join(message.text.split()[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+    await message.answer(' '.join(message.text.split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text='Get Captcha',
                              callback_data='ReCaptcha')
     ]]))
