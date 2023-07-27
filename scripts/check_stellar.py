@@ -78,6 +78,18 @@ def cmd_check_cron_transaction(session: Session):
             if len(msg) > 4096:
                 cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
             cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
+    # TFM
+    asyncio.run(asyncio.sleep(10))
+    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
+                                       stellar_address=MTLAddresses.public_tfm,
+                                       value_id=BotValueTypes.LastTFMFundTransaction)
+    if len(result) > 0:
+        cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
+        for transaction in result:
+            msg = f'\n'.join(transaction)
+            if len(msg) > 4096:
+                cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
+            cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
 
 
 @logger.catch
