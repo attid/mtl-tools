@@ -50,6 +50,7 @@ class BotValueTypes:
     ReplyOnly = 22
     Captcha = 23
     StopExchange = 24
+    LastTFMFundTransaction = 25
 
 
 class LogQuery:

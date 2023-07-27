@@ -31,6 +31,7 @@ class MTLAddresses:
     public_fund_mabiz = "GAQ5ERJVI6IW5UVNPEVXUUVMXH3GCDHJ4BJAXMAAKPR5VBWWAUOMABIZ"
     public_usdm = "GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM"
     public_fin = "GCSAXEHZBQY65URLO6YYDOCTRLIGTNMGCQHVW2RZPFNPTEJN6VN7TFIN"
+    public_tfm = "GDOJK7UAUMQX5IZERYPNBPQYQ3SHPKGLF5MBUKWLDL2UV2AY6BIS3TFM"
     # bot
     public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
     public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
@@ -900,7 +901,6 @@ async def get_damircoin_xdr(div_sum: int):
     return xdr
 
 
-
 async def get_btcmtl_xdr(btc_sum, address: str):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -1117,6 +1117,75 @@ async def cmd_gen_mtl_vote_list(return_delegate_list: bool = False, mini=False):
     return big_list
 
 
+async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
+    delegate_key = "tfm_delegate"
+    days_to_track = 365
+    days_inactive = 90
+    top_donors = 10
+    coefficients = [12, 5]
+
+    # Step 1
+    now = datetime.now()
+    one_year_ago = now - timedelta(days=days_to_track)
+
+    donor_dict = {}
+
+    async with ServerAsync(horizon_url="https://horizon.stellar.org") as server:
+        payments_call_builder = server.payments().for_account(account_id).order(desc=True)
+        page_records = await payments_call_builder.call()
+
+        while page_records["_embedded"]["records"]:
+            for payment in page_records["_embedded"]["records"]:
+                if payment.get('to') and payment['to'] == account_id and datetime.strptime(payment['created_at'],
+                                                                                           '%Y-%m-%dT%H:%M:%SZ') > one_year_ago:
+                    amount = float(payment['amount'])
+                    last_donation_date = datetime.strptime(payment['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                    if payment['from'] not in donor_dict:
+                        donor_dict[payment['from']] = {'sum': amount, 'date': last_donation_date}
+                    else:
+                        donor_dict[payment['from']]['sum'] += amount
+                        if last_donation_date > donor_dict[payment['from']]['date']:
+                            donor_dict[payment['from']]['date'] = last_donation_date
+            page_records = await payments_call_builder.next()
+
+        # Step 3
+        ninety_days_ago = now - timedelta(days=days_inactive)
+        for donor, data in list(donor_dict.items()):
+            if data['date'] < ninety_days_ago:
+                donor_dict.pop(donor)
+
+        # Step 4 and 5
+        for donor, data in donor_dict.items():
+            account_data = await server.accounts().account_id(donor).call()
+            delegate_data = account_data['data']
+            if delegate_key in delegate_data:
+                delegate_id = delegate_data[delegate_key]
+                payment_amount = data['sum']
+                payment_date = data['date']
+
+                if delegate_id in donor_dict:
+                    donor_dict[delegate_id]['sum'] += payment_amount
+                    if payment_date > donor_dict[delegate_id]['date']:
+                        donor_dict[delegate_id]['date'] = payment_date
+
+        # Step 6
+        sorted_donors = sorted(donor_dict.items(), key=lambda x: (x[1]['sum'], x[1]['date']), reverse=True)
+
+        # Step 7
+        top_sorted_donors = sorted_donors[:top_donors]
+
+        # Step 8
+        final_list = []
+        for donor, data in top_sorted_donors:
+            sum_of_payments = data['sum']
+            for coeff in coefficients:
+                sum_of_payments /= coeff
+            votes = math.log2(sum_of_payments)
+            final_list.append([donor, data['sum'], int(votes), 0, data['date']])
+
+    return final_list
+
+
 def cmd_getblacklist():
     return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
 
@@ -1155,7 +1224,8 @@ def isfloat(value):
         return False
 
 
-def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_master=False):
+def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_master=False, max_count=20,
+                 threshold_style=0):
     # узнать кто в подписантах
     server = Server(horizon_url="https://horizon.stellar.org")
     source_account = server.load_account(public_key)
@@ -1185,8 +1255,8 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
 
     tmp_list.extend(vote_list)
 
-    while len(tmp_list) > 20 + del_count:
-        arr = tmp_list.pop(20 + del_count)
+    while len(tmp_list) > max_count + del_count:
+        arr = tmp_list.pop(max_count + del_count)
         if arr[3] > 0:
             del_count += 1
             tmp_list.insert(0, [arr[0], 0, 0, arr[3]])
@@ -1207,7 +1277,10 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
             transaction.append_ed25519_public_key_signer(arr[0], int(arr[2]), source=source)
         threshold += int(arr[2])
 
-    threshold = threshold // 2 + 1
+    if threshold_style == 1:
+        threshold = threshold // 3 * 2
+    else:
+        threshold = threshold // 2 + 1
 
     if remove_master:
         transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
@@ -1416,12 +1489,33 @@ def stellar_add_trustline(address_id, asset_code, asset_issuer):
     return xdr
 
 
+async def cmd_get_new_vote_all_tfm():
+    vote_list = await cmd_gen_fin_vote_list()
+    vote_list2 = deepcopy(vote_list)
+
+    transaction = TransactionBuilder(
+        source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_fin),
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
+    sequence = transaction.source_account.sequence
+    transaction.set_timeout(60 * 60 * 48)
+    xdr = gen_vote_xdr(public_key=MTLAddresses.public_fin, vote_list=vote_list,
+                       threshold_style=1, transaction=transaction)
+
+    # return sequence because every build inc number
+    transaction.source_account.sequence = sequence
+    xdr = gen_vote_xdr(public_key=MTLAddresses.public_tfm, vote_list=vote_list2,
+                       threshold_style=1, transaction=transaction, source=MTLAddresses.public_tfm)
+
+    # print(gen_vote_xdr(public_new,vote_list2))
+    return xdr
+
 if __name__ == '__main__':
-    print(asyncio.run(get_damircoin_xdr(150)))
+    print(asyncio.run(cmd_get_new_vote_all_tfm()))
     pass
 
     # gen new
     # print(gen_new('BOT'))
 
     # open and send
-    stellar_sync_submit(stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))
+    stellar_sync_submit(
+        stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))
