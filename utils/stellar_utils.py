@@ -15,7 +15,7 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from config_reader import config
-from utils.global_data import float2str
+from utils.global_data import float2str, global_data
 from utils.gspread_tools import agcm
 
 base_fee = config.base_fee
@@ -78,14 +78,14 @@ exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_ex
                  MTLAddresses.public_exchange_eurmtl_usdc, MTLAddresses.public_fire)
 
 
-def check_url_xdr(url):
+def check_url_xdr(url, full_data=True):
     rq = requests.get(url).text
     rq = rq[rq.find('<span class="tx-body">') + 22:]
     # print(rq)
     rq = rq[:rq.find('</span>')]
     rq = rq.replace("&#x3D;", "=")
     # print(rq)
-    return decode_xdr(rq)
+    return decode_xdr(rq, full_data=full_data)
 
 
 def cleanhtml(raw_html):
@@ -117,7 +117,8 @@ def good_operation(operation, operation_name, filter_operation, ignore_operation
     return False
 
 
-def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None):
+def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None,
+               full_data=False):
     if ignore_operation is None:
         ignore_operation = []
     if filter_operation is None:
@@ -130,7 +131,8 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         transaction = fee_transaction.transaction.inner_transaction_envelope
     else:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-    result.append(f"Операции с аккаунта {address_id_to_username(transaction.transaction.source.account_id)}")
+    result.append(
+        f"Операции с аккаунта {address_id_to_username(transaction.transaction.source.account_id, full_data=full_data)}")
     if transaction.transaction.memo.__class__ == TextMemo:
         memo: TextMemo = transaction.transaction.memo
         result.append(f'  Memo "{memo.memo_text.decode()}"\n')
@@ -140,19 +142,20 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         result.append(f"Операция {idx} - {type(operation).__name__}")
         # print('bad xdr', idx, operation)
         if operation.source:
-            result.append(f"*** для аккаунта {address_id_to_username(operation.source.account_id)}")
+            result.append(
+                f"*** для аккаунта {address_id_to_username(operation.source.account_id, full_data=full_data)}")
         if good_operation(operation, "Payment", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
                 if (filter_asset is None) or (operation.asset == filter_asset):
                     data_exist = True
                     result.append(
-                        f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {address_id_to_username(operation.destination.account_id)}")
+                        f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {address_id_to_username(operation.destination.account_id, full_data=full_data)}")
             continue
         if good_operation(operation, "SetOptions", filter_operation, ignore_operation):
             data_exist = True
             if operation.signer:
                 result.append(
-                    f"    Изменяем подписанта {address_id_to_username(operation.signer.signer_key.encoded_signer_key)} новые голоса : {operation.signer.weight}")
+                    f"    Изменяем подписанта {address_id_to_username(operation.signer.signer_key.encoded_signer_key, full_data=full_data)} новые голоса : {operation.signer.weight}")
             if operation.med_threshold:
                 data_exist = True
                 result.append(f"Установка нового требования. Нужно будет {operation.med_threshold} голосов")
@@ -161,10 +164,10 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             data_exist = True
             if operation.limit == '0':
                 result.append(
-                    f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer)}")
+                    f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
             else:
                 result.append(
-                    f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer)}")
+                    f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
 
             continue
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
@@ -195,14 +198,14 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
                 if (filter_asset is None) or (filter_asset in [operation.send_asset, operation.dest_asset]):
                     data_exist = True
                     result.append(
-                        f"    Покупка {address_id_to_username(operation.destination.account_id)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
+                        f"    Покупка {address_id_to_username(operation.destination.account_id, full_data=full_data)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
             continue
         if good_operation(operation, "PathPaymentStrictReceive", filter_operation, ignore_operation):
             if (float(operation.send_max) > filter_sum) and (float(operation.dest_amount) > filter_sum):
                 if (filter_asset is None) or (filter_asset in [operation.send_asset, operation.dest_asset]):
                     data_exist = True
                     result.append(
-                        f"    Продажа {address_id_to_username(operation.destination.account_id)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
+                        f"    Продажа {address_id_to_username(operation.destination.account_id, full_data=full_data)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
             continue
         if good_operation(operation, "ManageData", filter_operation, ignore_operation):
             data_exist = True
@@ -212,20 +215,22 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         if good_operation(operation, "CreateAccount", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Создание аккаунта {address_id_to_username(operation.destination)} с суммой {operation.starting_balance} XLM")
+                f"    Создание аккаунта {address_id_to_username(operation.destination, full_data=full_data)} с суммой {operation.starting_balance} XLM")
             continue
         if good_operation(operation, "AccountMerge", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Слияние аккаунта c {address_id_to_username(operation.destination.account_id)} ")
+                f"    Слияние аккаунта c {address_id_to_username(operation.destination.account_id, full_data=full_data)} ")
             continue
         if good_operation(operation, "ClaimClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
-            result.append(f"    ClaimClaimableBalance {address_id_to_username(operation.balance_id)}")
+            result.append(
+                f"    ClaimClaimableBalance {address_id_to_username(operation.balance_id, full_data=full_data)}")
             continue
         if good_operation(operation, "BeginSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
-            result.append(f"    BeginSponsoringFutureReserves {address_id_to_username(operation.sponsored_id)}")
+            result.append(
+                f"    BeginSponsoringFutureReserves {address_id_to_username(operation.sponsored_id, full_data=full_data)}")
             continue
         if good_operation(operation, "EndSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
@@ -247,13 +252,9 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         return []
 
 
-def address_id_to_username(key) -> str:
-    # toDo to gogledocs
-    # with open('members_key.json', 'r', encoding='UTF-8') as fp:
-    #    data = json.load(fp)
-    # if key in data:
-    #    return data[key]
-    # else:
+def address_id_to_username(key, full_data=False) -> str:
+    if full_data and key in global_data.full_data:
+        return global_data.full_data[key]
     return key[:4] + '..' + key[-4:]
 
 
@@ -266,7 +267,7 @@ async def send_by_list(bot: Bot, all_users: list, message: Message, session: Ses
     for user in all_users:
         if len(user) > 2 and user[0] == '@':
             try:
-                chat_id = cmd_load_user_id(session, user[1:])
+                chat_id = db_load_user_id(session, user[1:])
                 await bot.send_message(chat_id=chat_id, text=msg)
                 good_users.append(user)
             except Exception as ex:
@@ -375,7 +376,7 @@ async def cmd_show_bim(session: Session):
     bod_list = await get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
-    total_sum = exec_total_user_div(session)
+    total_sum = db_get_total_user_div(session)
 
     result += f'Всего {len(bod_list)} участников'
     result += f'\n{len(good)} участников c доступом к EURMTL'
@@ -481,7 +482,7 @@ def get_key_1(key):
 
 
 def cmd_gen_xdr(session: Session, list_id: int):
-    div_list = get_div_list(session, list_id)
+    div_list = db_get_div_list(session, list_id)
     memo = div_list.memo
     pay_type = div_list.pay_type
     server = Server(horizon_url="https://horizon.stellar.org")
@@ -502,7 +503,7 @@ def cmd_gen_xdr(session: Session, list_id: int):
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60)
 
-    for payment in get_payments(session, list_id, pack_count):
+    for payment in db_get_payments(session, list_id, pack_count):
         if round(payment.user_div, 7) > 0:
             transaction.append_payment_op(destination=payment.user_key, amount=str(round(payment.user_div, 7)),
                                           asset=asset)
@@ -516,7 +517,7 @@ def cmd_gen_xdr(session: Session, list_id: int):
 
     session.add(TTransaction(xdr=xdr, id_div_list=list_id, xdr_id=0))
     session.commit()
-    need = count_unpacked_payments(session, list_id)
+    need = db_count_unpacked_payments(session, list_id)
     # print(f'need {need} more')
     return need
 
@@ -539,7 +540,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
         db_transaction.xdr_id = sequence
     session.commit()
 
-    return cmd_count_unsent_transactions(session, list_id)
+    return db_count_unsent_transactions(session, list_id)
 
 
 async def stellar_async_submit(xdr: str):
@@ -1299,7 +1300,7 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
 def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
                               stellar_address=MTLAddresses.public_issuer):
     result = []
-    last_id = cmd_load_bot_value(session, 0, value_id)
+    last_id = db_load_bot_value(session, 0, value_id)
     server = Server(horizon_url="https://horizon.stellar.org")
     tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
@@ -1324,7 +1325,7 @@ def cmd_check_new_transaction(session: requests.Session, ignore_operation: List,
         # print('****')
         # print(transaction["paging_token"])
 
-    cmd_save_bot_value(session, 0, value_id, last_id)
+    db_save_bot_value(session, 0, value_id, last_id)
 
     return result
 
@@ -1335,16 +1336,16 @@ def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: 
         filter_operation = []
     result = []
 
-    last_id = cmd_load_bot_value(session, 0, save_id, '0')
+    last_id = db_load_bot_value(session, 0, save_id, '0')
     max_id = last_id
 
-    data = get_new_effects_for_token(session, asset_name, last_id, filter_sum)
+    data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
     for row in data:
         result.append(decode_db_effect(row))
         max_id = row.id
 
     if max_id > last_id:
-        cmd_save_bot_value(session, 0, save_id, max_id)
+        db_save_bot_value(session, 0, save_id, max_id)
 
     return result
 
@@ -1509,13 +1510,12 @@ async def cmd_get_new_vote_all_tfm():
     # print(gen_vote_xdr(public_new,vote_list2))
     return xdr
 
-if __name__ == '__main__':
-    print(asyncio.run(cmd_get_new_vote_all_tfm()))
-    pass
 
+if __name__ == '__main__':
+    pass
     # gen new
     # print(gen_new('BOT'))
 
     # open and send
-    stellar_sync_submit(
-        stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))
+    # stellar_sync_submit(
+    #    stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))

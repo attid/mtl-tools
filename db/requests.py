@@ -2,13 +2,13 @@ import re
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast
-from sqlalchemy import select, and_, case, distinct
+from sqlalchemy import select, and_, case, distinct, Date, extract
 from sqlalchemy.orm import Session
 from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
 
 
-def cmd_save_bot_value(session, chat_id: int, chat_key: int, chat_value: any):
+def db_save_bot_value(session, chat_id: int, chat_key: int, chat_value: any):
     """
     Update or insert a record in the BOT_TABLE.
 
@@ -33,7 +33,7 @@ def cmd_save_bot_value(session, chat_id: int, chat_key: int, chat_value: any):
     session.commit()
 
 
-def cmd_load_bot_value(session, chat_id: int, chat_key: int, default_value: any = ''):
+def db_load_bot_value(session, chat_id: int, chat_key: int, default_value: any = ''):
     """
     Get a chat_value by chat_id and chat_key from the BOT_TABLE.
 
@@ -48,7 +48,7 @@ def cmd_load_bot_value(session, chat_id: int, chat_key: int, default_value: any 
     return result[0] if result else default_value
 
 
-def get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
+def db_get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
     """
     Get list of chat IDs by a specific chat key.
 
@@ -60,7 +60,7 @@ def get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
     return [row[0] for row in result]
 
 
-def get_chat_dict_by_key(session: Session, chat_key: int) -> Dict[int, str]:
+def db_get_chat_dict_by_key(session: Session, chat_key: int) -> Dict[int, str]:
     """
     Get dictionary of chat IDs and corresponding values by a specific chat key.
 
@@ -72,7 +72,7 @@ def get_chat_dict_by_key(session: Session, chat_key: int) -> Dict[int, str]:
     return {row[0]: row[1] for row in result}
 
 
-def cmd_save_bot_user(session: Session, user_id: int, user_name: str):
+def db_save_bot_user(session: Session, user_id: int, user_name: str):
     """
     Update or insert a user in the bot_users table.
 
@@ -91,7 +91,7 @@ def cmd_save_bot_user(session: Session, user_id: int, user_name: str):
     session.commit()
 
 
-def cmd_load_user_id(session, user_name: str) -> int:
+def db_load_user_id(session, user_name: str) -> int:
     """
     Get a user_id by user_name from the bot_users table.
 
@@ -103,7 +103,7 @@ def cmd_load_user_id(session, user_name: str) -> int:
     return result[0] if result else 0
 
 
-def cmd_load_new_message(session: Session) -> list[TMessage]:
+def db_load_new_message(session: Session) -> list[TMessage]:
     """
     Load new messages from the database
 
@@ -114,10 +114,10 @@ def cmd_load_new_message(session: Session) -> list[TMessage]:
     return cast(list[TMessage], result.scalars().all())
 
 
-def cmd_save_url(session, chat_id, msg_id, msg):
+def db_save_url(session, chat_id, msg_id, msg):
     url = extract_url(msg)
-    cmd_save_bot_value(session, chat_id, BotValueTypes.PinnedUrl, url)
-    cmd_save_bot_value(session, chat_id, BotValueTypes.PinnedId, msg_id)
+    db_save_bot_value(session, chat_id, BotValueTypes.PinnedUrl, url)
+    db_save_bot_value(session, chat_id, BotValueTypes.PinnedId, msg_id)
 
 
 def extract_url(msg, surl='eurmtl.me'):
@@ -128,7 +128,7 @@ def extract_url(msg, surl='eurmtl.me'):
     return url
 
 
-def exec_total_user_div(session: Session) -> float:
+def db_get_total_user_div(session: Session) -> float:
     stmt = (
         select(func.sum(TPayments.user_div))
         .select_from(TPayments)
@@ -139,7 +139,7 @@ def exec_total_user_div(session: Session) -> float:
     return session.execute(stmt).scalar()
 
 
-def get_div_list(session: Session, list_id: int) -> TDivList:
+def db_get_div_list(session: Session, list_id: int) -> TDivList:
     """
     Fetch t_div_list
 
@@ -150,7 +150,7 @@ def get_div_list(session: Session, list_id: int) -> TDivList:
     return cast(TDivList, session.query(TDivList).filter(TDivList.id == list_id).first())
 
 
-def get_payments(session: Session, list_id: int, pack_count: int) -> List[TPayments]:
+def db_get_payments(session: Session, list_id: int, pack_count: int) -> List[TPayments]:
     """
     Fetch first pack_count payments from T_PAYMENTS table where WAS_PACKED = 0 and ID_DIV_LIST = list_id
 
@@ -167,7 +167,7 @@ def get_payments(session: Session, list_id: int, pack_count: int) -> List[TPayme
     return cast(List[TPayments], payments)
 
 
-def count_unpacked_payments(session: Session, list_id: int):
+def db_count_unpacked_payments(session: Session, list_id: int):
     """
     Count the number of unpacked payments for a given list id
 
@@ -179,7 +179,7 @@ def count_unpacked_payments(session: Session, list_id: int):
     return count
 
 
-def cmd_count_unsent_transactions(session: Session, list_id: int) -> int:
+def db_count_unsent_transactions(session: Session, list_id: int) -> int:
     """
     Count unsent transactions for a specific list in the TTransaction table.
 
@@ -207,7 +207,7 @@ def cmd_load_transactions(session: Session, list_id: int) -> List[TTransaction]:
     return cast(List[TTransaction], result.scalars().all())
 
 
-def get_watch_list(session: Session):
+def db_get_watch_list(session: Session):
     """
     Fetch accounts from t_watch_list and mymtlwalletbot
 
@@ -221,7 +221,29 @@ def get_watch_list(session: Session):
     return result
 
 
-def get_first_100_ledgers(session: Session) -> List[TLedgers]:
+def add_to_watchlist(session: Session, public_keys: list):
+    """
+    Add public keys to the T_WATCH_LIST if they're not already present
+
+    :param session: SQLAlchemy DB session
+    :param public_keys: list of public keys to be added
+    """
+    # Fetch current watch list
+    current_watch_list = db_get_watch_list(session)
+
+    # Identify new public keys that are not in the watch list
+    new_keys = [key for key in public_keys if key not in current_watch_list]
+
+    # Add new keys to the T_WATCH_LIST
+    for key in new_keys:
+        new_watchlist_entry = TWatchList(account=key)
+        session.add(new_watchlist_entry)
+
+    # Commit the new entries to the DB
+    session.commit()
+
+
+def db_get_first_100_ledgers(session: Session) -> List[TLedgers]:
     """
     Get the first 100 ledgers, ordered by ledger number
 
@@ -232,7 +254,7 @@ def get_first_100_ledgers(session: Session) -> List[TLedgers]:
     return cast(List[TLedgers], result.scalars().all())
 
 
-def get_ledger(session: Session, ledger_id: int) -> TLedgers:
+def db_get_ledger(session: Session, ledger_id: int) -> TLedgers:
     """
     Get a ledger with a specific ID
 
@@ -244,8 +266,8 @@ def get_ledger(session: Session, ledger_id: int) -> TLedgers:
     return cast(TLedgers, result.scalars().first())
 
 
-def cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int = 0, update_id: int = None,
-                    button_json: str = None) -> None:
+def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int = 0, update_id: int = None,
+                       button_json: str = None) -> None:
     """
     Insert a new message into the t_message table.
 
@@ -262,7 +284,7 @@ def cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int = 
     session.commit()
 
 
-def get_new_effects_for_token(session: Session, token: str, last_id: str, amount: float) -> list[
+def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amount: float) -> list[
     TOperations]:
     """
     Get the first 10 operations with ID greater than the given ID and with a token either in code1 or code2,
@@ -291,7 +313,7 @@ def get_new_effects_for_token(session: Session, token: str, last_id: str, amount
     return cast(list[TOperations], result)
 
 
-def get_operations(session, last_id, limit=3000) -> List[TOperations]:
+def db_get_operations(session, last_id, limit=3000) -> List[TOperations]:
     """
     Получает записи из таблицы t_operations, где id больше заданного значения.
 
@@ -313,8 +335,8 @@ def get_operations(session, last_id, limit=3000) -> List[TOperations]:
     return records
 
 
-def send_admin_message(session: Session, msg: str):
-    cmd_add_message(session, MTLChats.ITolstov, msg)
+def db_send_admin_message(session: Session, msg: str):
+    db_cmd_add_message(session, MTLChats.ITolstov, msg)
 
 
 def get_mmwb_use_date(session: Session, address: str) -> datetime:
@@ -330,7 +352,7 @@ def get_mmwb_use_date(session: Session, address: str) -> datetime:
     return result
 
 
-def get_wallet_stats(session: Session):
+def db_get_wallet_stats(session: Session):
     """
     Получает статистические данные по кошелькам из таблицы Mymtlwalletbot.
 
@@ -353,7 +375,7 @@ def get_wallet_stats(session: Session):
     return record
 
 
-def get_log_count(session, operation_type):
+def db_get_log_count(session, operation_type):
     """
     Получить количество записей в логе для заданного типа операции за последний день.
 
@@ -380,7 +402,7 @@ def get_log_count(session, operation_type):
     return log_count
 
 
-def get_wallet_info(session)-> List[MyMtlWalletBot]:
+def db_get_wallet_info(session) -> List[MyMtlWalletBot]:
     """
     Получает информацию об кошельках из таблицы mymtlwalletbot, где user_id больше 100 и need_delete равно 0.
 
@@ -400,12 +422,12 @@ def get_wallet_info(session)-> List[MyMtlWalletBot]:
     return result
 
 
-def save_exception(msg: str):
+def db_save_exception(msg: str):
     # msg = quote(msg)[:4000]
     # msg = msg.replace('<','[').replace('>',']')[:4000]
     # execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (84131737, msg, 0))
     from quik_pool import quik_pool
-    send_admin_message(quik_pool(), f'Exception was {argv} ({type(msg)})')
+    db_send_admin_message(quik_pool(), f'Exception was {argv} ({type(msg)})')
     # add text to file error.txt
     with open('error.txt', 'a') as f:
         f.write(f"{argv} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -414,12 +436,111 @@ def save_exception(msg: str):
         f.write('******************************************************************************\n')
 
 
+def db_save_message(session: Session, user_id: int, username: str, chat_id: int, thread_id: int, text: str,
+                    summary_id: int = None) -> None:
+    """
+    Insert a new message into the t_saved_messages table.
+
+    :param session: SQLAlchemy DB session
+    :param user_id: The ID of the user
+    :param username: The username
+    :param chat_id: The ID of the chat
+    :param thread_id: The ID of the thread
+    :param text: The message text
+    :param summary_id: The ID of the summary
+    """
+    new_message = TSavedMessages(user_id=user_id, username=username, chat_id=chat_id,
+                                 thread_id=thread_id, text=text[:4000], summary_id=summary_id)
+    session.add(new_message)
+    session.commit()
+
+
+def db_get_messages_without_summary(session, chat_id: int, thread_id: int, dt: datetime = None) -> List[TSavedMessages]:
+    """
+    Получает записи из таблицы TSavedMessages, где summary_id равно None,
+    и переданные параметры chat_id и thread_id равны значениям в записях.
+
+    Args:
+        session: SQLAlchemy session object
+        chat_id: Идентификатор чата
+        thread_id: Идентификатор тренда
+        dt: Дата, по умолчанию сегодня
+
+    Returns:
+        result: Список объектов TSavedMessages, удовлетворяющих заданным условиям.
+    """
+    if dt is None:
+        dt = datetime.today()
+
+    result = session.query(
+        TSavedMessages
+    ).filter(
+        TSavedMessages.chat_id == chat_id,
+        TSavedMessages.thread_id == thread_id,
+        TSavedMessages.dt.between(dt.date(), dt.date() + timedelta(days=1)),
+        TSavedMessages.summary_id.is_(None)
+    )
+
+    return result.all()
+
+
+def db_add_summary(session, text: str, summary_id: int = None) -> TSummary:
+    """
+    Insert a new record in the TSummary table.
+
+    :param session: SQLAlchemy DB session
+    :param text: The text of the record
+    :param summary_id: The summary_id of the record
+    """
+    # Create a new record
+    new_record = TSummary(text=text, summary_id=summary_id)
+    session.add(new_record)
+
+    return new_record
+
+
+def db_get_summary(session, chat_id: int, thread_id: int, dt: datetime = None) -> List[TSummary]:
+    """
+    Находит summary_id в таблице TSavedMessages по заданным параметрам chat_id, thread_id, и dt,
+    и возвращает все соответствующие записи из таблицы TSummary.
+
+    Args:
+        session: SQLAlchemy session object
+        chat_id: Идентификатор чата
+        thread_id: Идентификатор тренда
+        dt: Дата, по умолчанию сегодня
+
+    Returns:
+        result: Список объектов TSummary, удовлетворяющих заданным условиям.
+    """
+    if dt is None:
+        dt = datetime.today()
+
+    summary_ids = session.query(
+        TSavedMessages.summary_id
+    ).filter(
+        TSavedMessages.chat_id == chat_id,
+        TSavedMessages.thread_id == thread_id,
+        TSavedMessages.dt.between(dt.date(), dt.date() + timedelta(days=1))
+    ).distinct().all()
+
+    summary_ids = [id[0] for id in summary_ids if id[0] is not None]  # unpack the ids and remove None
+
+    summaries = session.query(
+        TSummary
+    ).filter(
+        TSummary.id.in_(summary_ids)
+    )
+
+    return summaries.all()
+
+
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(get_wallet_stats(quik_pool()))
+    print(db_get_wallet_stats(quik_pool()))
 
-    # print(get_new_effects_for_token(session=quik_pool(),
+    # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',
     #                                last_id='1',
     #                               amount=1))

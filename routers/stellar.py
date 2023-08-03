@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from scripts.update_report import update_airdrop
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
-from utils.global_data import MTLChats, is_skynet_admin
+from utils.global_data import MTLChats, is_skynet_admin, global_data
 from utils.gspread_tools import check_bim
 from utils.stellar_utils import cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances, \
     MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id, cmd_calc_divs, \
@@ -29,9 +29,9 @@ async def cmd_decode(message: Message):
     try:
         # logger.info(f'decode {message}')
         if message.text.find('eurmtl.me/sign_tools') > -1:
-            msg = check_url_xdr(message.text.split()[1])
+            msg = check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.listen)
         else:
-            msg = decode_xdr(message.text.split()[1])
+            msg = decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.listen)
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
     except Exception as e:
@@ -242,9 +242,9 @@ async def cmd_get_defi_xdr(message: Message):
 
 
 @router.message(Command(commands=["get_usdm_xdr"]))
-async def cmd_get_usdm_xdr(message: Message):
+async def cmd_get_usdm_xdr_(message: Message):
     if len(message.text.split()) > 1:
-        xdr = await cmd_get_damircoin_xdr(int(message.text.split()[1]))
+        xdr = await get_usdm_xdr(int(message.text.split()[1]))
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
     else:

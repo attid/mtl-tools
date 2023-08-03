@@ -6,8 +6,8 @@ from scripts.mtl_exchange import check_fire
 
 # https://docs.gspread.org/en/latest/
 
-CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', ]
-MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', ]
+CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', 'TOR' ]
+MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', 'TIC', 'USDMM', 'DamirCoin']
 DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT']
 ISSUER_ASSETS = ['XLM', ]
 
@@ -134,7 +134,7 @@ async def update_main_report():
         await wks.update('E4', int(defi_balance))
     else:
         logger.warning(f'debank error - {debank}')
-        # send_admin_message(session, 'debank error')
+        # db_send_admin_message(session, 'debank error')
 
     # amount
     rq = requests.get(
@@ -167,7 +167,7 @@ async def update_fire(session: Session):
     ss = await agc.open("MTL Report")
     wks = await ss.worksheet("AutoData")
     if 'book value of 1 token' != (await wks.cell(36, 2)).value:
-        send_admin_message(session, 'bad fire value')
+        db_send_admin_message(session, 'bad fire value')
         raise Exception('bad fire value')
     cost_fire = (await wks.cell(36, 4)).value
     logger.info(f'cost_fire {cost_fire}')
@@ -290,7 +290,7 @@ async def update_top_holders_report(session: Session):
     for record in records:
         if record[0] != '0':
             text = f'You need update votes <a href="{gd_link}">more info</a>'
-            cmd_add_message(session, MTLChats.SignGroup, text, True)
+            db_cmd_add_message(session, MTLChats.SignGroup, text, True)
             break
 
     logger.info(f'report topholders all done {now}')
@@ -389,7 +389,7 @@ async def update_mmwb_report(session: Session):
     for record in records:
         value = float(record[0].replace(',', '.'))
         if value < 0.2 or value > 0.8:
-            send_admin_message(session, f'update_mmwb_report balance error {value}')
+            db_send_admin_message(session, f'update_mmwb_report balance error {value}')
 
     await wks.update('J1', now.strftime('%d.%m.%Y %H:%M:%S'))
     logger.info(f'update mmwb_report all done {now}')
@@ -568,7 +568,7 @@ async def update_wallet_report(session: Session):
     # Update a range of cells using the top left corner address
     now = datetime.now()
 
-    list_wallet = get_wallet_info(session)
+    list_wallet = db_get_wallet_info(session)
 
     update_list = []
 
@@ -600,14 +600,14 @@ async def update_wallet_report2(session: Session):
 
     update_data = [(now - timedelta(days=1)).strftime('%d.%m.%Y')]
 
-    for record in get_wallet_stats(session):
+    for record in db_get_wallet_stats(session):
         update_data.append(record)
         # update_data.append(record[1])
         # update_data.append(record[2])
         # update_data.append(record[3])
 
-    update_data.append(get_log_count(session, 'callback'))
-    update_data.append(get_log_count(session, 'sign'))
+    update_data.append(db_get_log_count(session, 'callback'))
+    update_data.append(db_get_log_count(session, 'sign'))
 
     update_data = [update_data, ['LAST']]
 
@@ -636,7 +636,7 @@ async def update_export(session: Session):
     last_row = (await wks.find('LAST', in_column=1)).row
     last_id = (await wks.get_values(f'A{last_row - 1}'))[0][0]
 
-    list_operation = get_operations(session, last_id)
+    list_operation = db_get_operations(session, last_id)
     ##fb.execsql("select first 3000 o.id, o.dt, o.operation, o.amount1, o.code1, o.amount2, o.code2, "
     #                        "o.from_account, o.for_account, o.ledger from t_operations o "
     #                        "where o.id > ? order by o.id", (last_id,))

@@ -64,12 +64,12 @@
 #     return
 #
 #
-# def send_admin_message(msg: str):
+# def db_send_admin_message(msg: str):
 #     execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)',
 #             (84131737, msg, 0))
 #
 #
-# def save_exception(msg: str):
+# def db_save_exception(msg: str):
 #     # msg = quote(msg)[:4000]
 #     # msg = msg.replace('<','[').replace('>',']')[:4000]
 #     # execsql('insert into t_message (user_id, text, use_alarm) values (?,?,?)', (84131737, msg, 0))
@@ -83,10 +83,10 @@
 #         f.write('******************************************************************************\n')
 #
 #
-# logger.add(save_exception, level='WARNING', format="{time} {level} {message}")
+# logger.add(db_save_exception, level='WARNING', format="{time} {level} {message}")
 #
 #
-# def get_watch_list():
+# def db_get_watch_list():
 #     result = ()
 #     for record in execsql('select account from t_watch_list'):
 #         result += (record[0],)
@@ -108,5 +108,5 @@
 #
 #
 # if __name__ == "__main__":
-#     print(get_new_effects_for_token('EURMTL', '', '190205555871641601-10', 900))
+#     print(db_get_new_effects_for_token('EURMTL', '', '190205555871641601-10', 900))
 #     pass

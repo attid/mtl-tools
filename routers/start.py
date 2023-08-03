@@ -6,7 +6,7 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_save_bot_user
+from db.requests import db_save_bot_user
 from utils.global_data import MTLChats
 from utils.stellar_utils import MTLAddresses
 
@@ -49,7 +49,7 @@ links_msg = f"""
 @router.message(Command(commands=["start"]))
 async def cmd_start(message: Message, state: FSMContext, session: Session):
     await state.clear()
-    cmd_save_bot_user(session, message.from_user.id, message.from_user.username)
+    db_save_bot_user(session, message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
 
 
@@ -74,7 +74,7 @@ async def cmd_show_id(message: Message):
 
 @router.message(Command(commands=["me"]))
 async def cmd_me(message: Message):
-    msg = message.get_args()
+    msg = ' '.join(message.text.split(' ')[1:])
     await message.answer(f'<i><b>{message.from_user.username}</b> {msg}</i>', parse_mode=ParseMode.HTML)
     try:
         await message.delete()

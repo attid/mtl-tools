@@ -1,6 +1,6 @@
 import asyncio
 
-from db.requests import cmd_add_message
+from db.requests import db_cmd_add_message
 from utils.global_data import *
 from utils.stellar_utils import *
 import sys
@@ -27,31 +27,31 @@ def cmd_check_cron_transaction(session: Session):
             msg = f"Обнаружены новые операции для {assets[0]}\n"
             msg = msg + f'\n'.join(result)
             if len(msg) > 4096:
-                cmd_add_message(session, assets[2], "Слишком много операций показаны первые ")
-            cmd_add_message(session, assets[2], msg[0:4000])
+                db_cmd_add_message(session, assets[2], "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, assets[2], msg[0:4000])
     # FUND
     result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
                                        stellar_address=MTLAddresses.public_issuer,
                                        value_id=BotValueTypes.LastFondTransaction)
     if len(result) > 0:
-        cmd_add_message(session, MTLChats.SignGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.SignGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                cmd_add_message(session, MTLChats.SignGroup, "Слишком много операций показаны первые ")
-            cmd_add_message(session, MTLChats.SignGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.SignGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.SignGroup, msg[0:4000])
     # DEFI
     asyncio.run(asyncio.sleep(10))
     result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
                                        stellar_address=MTLAddresses.public_defi,
                                        value_id=BotValueTypes.LastDefiTransaction)
     if len(result) > 0:
-        cmd_add_message(session, MTLChats.DefiGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.DefiGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                cmd_add_message(session, MTLChats.DefiGroup, "Слишком много операций показаны первые ")
-            cmd_add_message(session, MTLChats.DefiGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.DefiGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.DefiGroup, msg[0:4000])
 
     # USDM
     asyncio.run(asyncio.sleep(10))
@@ -59,12 +59,12 @@ def cmd_check_cron_transaction(session: Session):
                                        stellar_address=MTLAddresses.public_usdm,
                                        value_id=BotValueTypes.LastUSDMFundTransaction)
     if len(result) > 0:
-        cmd_add_message(session, MTLChats.USDMMGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.USDMMGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                cmd_add_message(session, MTLChats.USDMMGroup, "Слишком много операций показаны первые ")
-            cmd_add_message(session, MTLChats.USDMMGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.USDMMGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.USDMMGroup, msg[0:4000])
 
     # FIN
     asyncio.run(asyncio.sleep(10))
@@ -72,24 +72,24 @@ def cmd_check_cron_transaction(session: Session):
                                        stellar_address=MTLAddresses.public_fin,
                                        value_id=BotValueTypes.LastFINFundTransaction)
     if len(result) > 0:
-        cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
-            cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
     # TFM
     asyncio.run(asyncio.sleep(10))
     result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
                                        stellar_address=MTLAddresses.public_tfm,
                                        value_id=BotValueTypes.LastTFMFundTransaction)
     if len(result) > 0:
-        cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
-            cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
 
 
 @logger.catch
@@ -97,7 +97,7 @@ async def cmd_check_bot(session: Session):
     # balance Wallet
     balance = await get_balances(MTLAddresses.public_wallet)
     if int(balance['XLM']) < 100:
-        cmd_add_message(session, MTLChats.SignGroup, 'Внимание Баланс MyMTLWallet меньше 100 !')
+        db_cmd_add_message(session, MTLChats.SignGroup, 'Внимание Баланс MyMTLWallet меньше 100 !')
 
     # bot1
     now = datetime.now()
@@ -106,19 +106,19 @@ async def cmd_check_bot(session: Session):
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 15:
-                cmd_add_message(session, MTLChats.SignGroup,
+                db_cmd_add_message(session, MTLChats.SignGroup,
                                 f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
         elif bot_address == MTLAddresses.public_exchange_eurmtl_usdc:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 3:
-                cmd_add_message(session, MTLChats.SignGroup,
+                db_cmd_add_message(session, MTLChats.SignGroup,
                                 f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
         else:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 0:
-                cmd_add_message(session, MTLChats.SignGroup,
+                db_cmd_add_message(session, MTLChats.SignGroup,
                                 f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
 
     # key rate
@@ -127,7 +127,7 @@ async def cmd_check_bot(session: Session):
     # now = datetime.now()
     # delta = now - dt
     # if delta.days > 0:
-    #    cmd_add_message(MTLChats.SignGroup, 'Внимание начислению key rate нет операций больше суток !')
+    #    db_cmd_add_message(MTLChats.SignGroup, 'Внимание начислению key rate нет операций больше суток !')
 
 
 @logger.catch
@@ -156,7 +156,7 @@ async def cmd_check_price(session: Session):
     # print('\n'.join(msg))
     # print(bt)
 
-    cmd_add_message(session, MTLChats.EURMTLClubGroup, '\n'.join(msg), False, 6568, json.dumps(bt))
+    db_cmd_add_message(session, MTLChats.EURMTLClubGroup, '\n'.join(msg), False, 6568, json.dumps(bt))
 
 
 if __name__ == "__main__":

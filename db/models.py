@@ -13,7 +13,7 @@ class BotTable(Base):
     id = Column(Integer, primary_key=True)
     chat_id = Column(BigInteger)
     chat_key = Column(BigInteger)
-    chat_value = Column(String(32000))
+    chat_value = Column(String(8000))
 
 
 class BotUsers(Base):
@@ -33,6 +33,7 @@ class TMessage(Base):
     update_id = Column(BigInteger, default=0)
     button_json = Column(String(4000))
 
+
 class TDivList(Base):
     __tablename__ = 'T_DIV_LIST'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -42,12 +43,14 @@ class TDivList(Base):
 
     transactions = relationship("TTransaction", back_populates="div_list")
 
+
 class TLedgers(Base):
     __tablename__ = 'T_LEDGERS'
     ledger = Column(BigInteger, primary_key=True)
 
     def __init__(self, ledger_value):
         self.ledger = ledger_value
+
 
 class TOperations(Base):
     __tablename__ = 'T_OPERATIONS'
@@ -74,6 +77,7 @@ class TPayments(Base):
     user_div = Column(Float)
     id_div_list = Column(Integer, ForeignKey('T_DIV_LIST.id'))
     was_packed = Column(SmallInteger, default=0, nullable=False)
+
 
 class TWatchList(Base):
     __tablename__ = 'T_WATCH_LIST'
@@ -117,6 +121,28 @@ class MyMtlWalletBotLog(Base):
     log_dt = Column('LOG_DT', DateTime)
     log_operation = Column('LOG_OPERATION', String(32))
     log_operation_info = Column('LOG_OPERATION_INFO', String(32))
+
+
+class TSummary(Base):
+    __tablename__ = 'T_SUMMARY'
+    id = Column(Integer, primary_key=True)
+    text = Column(String(4000))
+    summary_id = Column(Integer, ForeignKey('T_SUMMARY.id'))
+    summary = relationship("TSummary", remote_side=[id])
+    messages = relationship("TSavedMessages", back_populates="summary")
+
+
+class TSavedMessages(Base):
+    __tablename__ = 'T_SAVED_MESSAGES'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger)
+    username = Column(String(60))
+    chat_id = Column(BigInteger)
+    thread_id = Column(Integer)
+    text = Column(String(4000))
+    dt = Column(DateTime, default=func.now())
+    summary_id = Column(Integer, ForeignKey('T_SUMMARY.id'))
+    summary = relationship("TSummary", back_populates="messages")
 
 
 # def update_db():

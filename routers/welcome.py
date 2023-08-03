@@ -11,7 +11,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_save_bot_user, cmd_save_bot_value, cmd_load_bot_value, send_admin_message
+from db.requests import db_save_bot_user, db_save_bot_value, db_load_bot_value, db_send_admin_message
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.global_data import MTLChats, global_data, BotValueTypes, is_skynet_admin
 from utils.stellar_utils import stellar_stop_all_exchange
@@ -31,14 +31,14 @@ async def cmd_delete_income(message: Message, session: Session):
 
     if message.chat.id in global_data.delete_income:
         global_data.delete_income[message.chat.id] = None
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, None)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, None)
         await message.reply('Removed')
     else:
         type_delete = 1
         if len(message.text.split()) > 1:
             global_data.delete_income[message.chat.id] = message.text.split()[1]
         global_data.delete_income[message.chat.id] = 1
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, type_delete)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, type_delete)
         await message.reply('Added')
 
 
@@ -50,7 +50,7 @@ async def cmd_delete_welcome(message: Message, session: Session):
 
     if message.chat.id in global_data.welcome_messages:
         global_data.welcome_messages[message.chat.id] = None
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeMessage, None)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeMessage, None)
 
     msg = await message.reply('Removed')
     cmd_delete_later(msg, 1)
@@ -65,7 +65,7 @@ async def cmd_set_welcome(message: Message, session: Session):
 
     if len(message.text.split()) > 1:
         global_data.welcome_messages[message.chat.id] = message.html_text[13:]
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeMessage, message.html_text[13:])
+        db_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeMessage, message.html_text[13:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -80,17 +80,13 @@ async def cmd_set_reply_only(message: Message, session: Session):
         await message.reply('You are not admin.')
         return False
 
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
     if message.chat.id in global_data.reply_only:
         global_data.reply_only.remove(message.chat.id)
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, None)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, None)
         await message.reply('Removed')
     else:
         global_data.reply_only.append(message.chat.id)
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, 1)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, 1)
         await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -104,7 +100,7 @@ async def cmd_set_welcome(message: Message, session: Session):
 
     if len(message.text.split()) > 1:
         global_data.welcome_button[message.chat.id] = message.text[19:]
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
+        db_save_bot_value(session, message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -122,12 +118,12 @@ async def cmd_set_captcha(message: Message, session: Session):
 
     if message.text.split()[1] == 'on':
         global_data.captcha.append(message.chat.id)
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.Captcha, 1)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.Captcha, 1)
         msg = await message.reply('captcha on')
         cmd_delete_later(msg, 1)
     elif message.text.split()[1] == 'off':
         global_data.captcha.remove(message.chat.id)
-        cmd_save_bot_value(session, message.chat.id, BotValueTypes.Captcha, None)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.Captcha, None)
         msg = await message.reply('captcha off')
         cmd_delete_later(msg, 1)
     cmd_delete_later(message, 1)
@@ -139,7 +135,7 @@ async def cmd_stop_exchange(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    cmd_save_bot_value(session, 0, BotValueTypes.StopExchange, 1)
+    db_save_bot_value(session, 0, BotValueTypes.StopExchange, 1)
     stellar_stop_all_exchange()
 
     await message.reply('Was stop')
@@ -151,7 +147,7 @@ async def cmd_start_exchange(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    cmd_save_bot_value(session, 0, BotValueTypes.StopExchange, None)
+    db_save_bot_value(session, 0, BotValueTypes.StopExchange, None)
 
     await message.reply('Was start')
 
@@ -181,7 +177,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
                 except Exception as e:
-                    send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.json()}')
+                    db_send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.json()}')
 
             answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
@@ -189,22 +185,22 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
             cmd_delete_later(answer)
 
     if event.chat.id in global_data.auto_all:
-        members = json.loads(cmd_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(db_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
         if event.new_chat_member.user.username:
             members.append('@' + event.new_chat_member.user.username)
         else:
             await bot.send_message(event.chat.id,
                                    f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
-        cmd_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
+        db_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.chat.id in global_data.auto_all:
-        members = json.loads(cmd_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(db_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
         if event.from_user.username:
             members.remove('@' + event.from_user.username)
-            cmd_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
+            db_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
 
 
 def contains_emoji(s: str) -> bool:

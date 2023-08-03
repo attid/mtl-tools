@@ -15,11 +15,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from config_reader import config
-from db.requests import cmd_load_bot_value, get_chat_ids_by_key, get_chat_dict_by_key
+from db.requests import db_load_bot_value, db_get_chat_ids_by_key, db_get_chat_dict_by_key
 from middlewares.db import DbSessionMiddleware
 
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
+from utils.gspread_tools import gs_get_namelist, gs_update_watchlist
 from utils.support_tools import work_with_support
 
 
@@ -58,24 +59,29 @@ async def set_commands(bot):
 
 
 def load_globals(session: Session):
-    global_data.skynet_admins = json.loads(cmd_load_bot_value(session, 0, BotValueTypes.SkynetAdmins, '[]'))
-    global_data.votes = json.loads(cmd_load_bot_value(session, 0, BotValueTypes.Votes, '{}'))
-    global_data.auto_all = get_chat_ids_by_key(session, BotValueTypes.AutoAll)
-    global_data.reply_only = get_chat_ids_by_key(session, BotValueTypes.ReplyOnly)
-    global_data.captcha = get_chat_ids_by_key(session, BotValueTypes.Captcha)
+    global_data.skynet_admins = json.loads(db_load_bot_value(session, 0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.votes = json.loads(db_load_bot_value(session, 0, BotValueTypes.Votes, '{}'))
+    global_data.auto_all = db_get_chat_ids_by_key(session, BotValueTypes.AutoAll)
+    global_data.reply_only = db_get_chat_ids_by_key(session, BotValueTypes.ReplyOnly)
+    global_data.captcha = db_get_chat_ids_by_key(session, BotValueTypes.Captcha)
+    global_data.listen = db_get_chat_ids_by_key(session, BotValueTypes.Listen)
+    global_data.full_data = db_get_chat_ids_by_key(session, BotValueTypes.FullData)
 
-    global_data.welcome_messages = get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
-    global_data.welcome_button = get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
-    global_data.delete_income = get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
+    global_data.welcome_messages = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
+    global_data.welcome_button = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
+    global_data.delete_income = db_get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
 
 
-async def on_startup(bot: Bot):
+async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
     global_tasks.append(asyncio.create_task(work_with_support()))
+    global_data.name_list = await gs_get_namelist()
+    await gs_update_watchlist(dispatcher['session'])
+
 
 
 async def on_shutdown(bot: Bot):
@@ -125,6 +131,7 @@ async def main():
     aiogram_utils.scheduler = scheduler
     scheduler.start()
     time_handlers.scheduler_jobs(scheduler, bot, db_pool())
+    dp['session'] = db_pool()
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 

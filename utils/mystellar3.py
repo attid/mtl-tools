@@ -4,7 +4,7 @@
 #
 # import jsonpickle
 #
-# from fb import get_watch_list
+# from fb import db_get_watch_list
 # from mystellar import *
 #
 #
@@ -190,7 +190,7 @@
 # def get_ledger0(ledger):
 #     operations = Server(horizon_url="https://horizon.stellar.org").operations().for_ledger(ledger).limit(200).call()
 #     effects = Server(horizon_url="https://horizon.stellar.org").effects().for_ledger(ledger).limit(200).call()
-#     watch_list = get_watch_list()
+#     watch_list = db_get_watch_list()
 #     my_data = []
 #     print(watch_list)
 #     for record in operations['_embedded']['records']:
@@ -218,7 +218,7 @@
 #     print(my_data)
 #
 #
-# watch_list = get_watch_list()
+# watch_list = db_get_watch_list()
 #
 #
 # async def worker_get_ledger(name, queue):

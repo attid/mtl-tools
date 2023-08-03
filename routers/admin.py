@@ -10,10 +10,11 @@ from aiogram.types import Message, FSInputFile, ChatPermissions
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_save_bot_value
-from utils.aiogram_utils import is_admin
+from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
+from utils.aiogram_utils import is_admin, cmd_delete_later
+from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes
-from utils.gspread_tools import cmd_find_user
+from utils.gspread_tools import gs_find_user
 from utils.stellar_utils import send_by_list
 from aiogram.exceptions import TelegramBadRequest
 
@@ -71,7 +72,7 @@ async def cmd_add_skynet_admin(message: Message, session: Session):
     if len(message.text.split()) > 1:
         arg = message.text.split()
         global_data.skynet_admins.extend(arg[1:])
-        cmd_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
+        db_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
 
         await message.reply('Done')
     else:
@@ -92,7 +93,7 @@ async def cmd_del_skynet_admin(message: Message, session: Session):
         for member in arg:
             if member in global_data.skynet_admins:
                 global_data.skynet_admins.remove(member)
-        cmd_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
+        db_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
         await message.reply('Done')
     else:
         await message.reply('не указаны параметры кого добавить')
@@ -203,7 +204,7 @@ async def cmd_get_info(message: Message, bot: Bot):
     else:
         messages.append("Пользователь не подписан на канал")
 
-    messages.extend(await cmd_find_user(user_id))
+    messages.extend(await gs_find_user(user_id))
 
     await message.reply('\n'.join(messages))
 
@@ -227,3 +228,83 @@ async def cmd_set_ro(message: Message):
 
     user = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username else message.reply_to_message.from_user.full_name
     await message.reply(f'{user} was set ro for {delta}')
+
+
+@router.message(Command(commands=["listen"]))
+async def cmd_set_listen(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if message.chat.id in global_data.listen:
+        global_data.listen.remove(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.Listen, None)
+        msg = await message.reply('Removed')
+    else:
+        global_data.listen.append(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.Listen, 1)
+        msg = await message.reply('Added')
+
+    cmd_delete_later(message, 1)
+    cmd_delete_later(msg, 1)
+
+
+@router.message(Command(commands=["full_data"]))
+async def cmd_set_listen(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if message.chat.id in global_data.full_data:
+        global_data.full_data.remove(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.FullData, None)
+        msg = await message.reply('Removed')
+    else:
+        global_data.full_data.append(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.FullData, 1)
+        msg = await message.reply('Added')
+
+    cmd_delete_later(message, 1)
+    cmd_delete_later(msg, 1)
+
+
+@router.message(Command(commands=["summary"]))
+async def cmd_get_summary(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+
+    if not (message.chat.id in global_data.listen):
+        await message.reply('No messages 1')
+        return
+
+    data = db_get_messages_without_summary(session, chat_id=message.chat.id,
+                                           thread_id=message.message_thread_id if message.is_topic_message else None)
+
+    if len(data) > 0:
+        text = ''
+        summary = db_add_summary(session=session, text=text)
+        session.flush()  # обновляем базу данных, чтобы получить ID для summary
+
+        for record in data:
+            new_text = text +  f'{record.username}: {record.text} \n\n'
+            if len(new_text) < 16000:
+                text = new_text
+                record.summary_id = summary.id
+                session.flush()  # обновляем базу данных с новым summary_id
+            else:
+                summary.text = await talk_get_summary(text)
+                session.flush()  # обновляем базу данных с новым текстом для summary
+                summary = db_add_summary(session=session, text='')
+                session.flush()  # обновляем базу данных, чтобы получить новый ID для summary
+                text = record.username + ': ' + record.text + '\n\n'
+                record.summary_id = summary.id
+                session.flush()  # обновляем базу данных с новым summary_id
+        summary.text = await talk_get_summary(text)
+        session.flush()  # обновляем базу данных с последним текстом для summary
+
+    for record in db_get_summary(session=session, chat_id=message.chat.id,
+                                 thread_id=message.message_thread_id if message.is_topic_message else None):
+        await message.reply(record.text[:4000])
+
+    session.commit()  # завершаем транзакцию

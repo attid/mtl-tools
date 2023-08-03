@@ -250,14 +250,19 @@ async def check_fire(cost_fire):
 
 def move_usdc():
     # swap usdc - xlm
-    account = server.load_account(MTLAddresses.public_exchange_eurmtl_usdc)
+    account = server.load_account(MTLAddresses.public_exchange_eurmtl_xlm)
     stellar_transaction = TransactionBuilder(source_account=account,
                                              network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                              base_fee=base_fee)
 
-    stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
-                                          asset=MTLAssets.eurmtl_asset,
-                                          amount='10000',
+    # stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_usdc,
+    #                                       asset=MTLAssets.eurmtl_asset,
+    #                                       amount='10000',
+    #                                       source=MTLAddresses.public_exchange_eurmtl_xlm)
+
+    stellar_transaction.append_payment_op(destination=MTLAddresses.public_itolstov,
+                                          asset=MTLAssets.usdc_asset,
+                                          amount='28170',
                                           source=MTLAddresses.public_exchange_eurmtl_usdc)
 
     #stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
@@ -282,7 +287,7 @@ if __name__ == "__main__":
     #move_usdc()
     #exit()
     logger.add("mtl_exchange.log", rotation="1 MB")
-    if cmd_load_bot_value(quik_pool(), 0, BotValueTypes.StopExchange, None):
+    if db_load_bot_value(quik_pool(), 0, BotValueTypes.StopExchange, None):
         exit()
     asyncio.run(check_exchange())
     # check_fire(1.5)

@@ -5,7 +5,7 @@ from datetime import datetime
 from aioredis import Redis
 
 from utils.global_data import MTLChats
-from utils.gspread_tools import cmd_save_new_support
+from utils.gspread_tools import gs_save_new_support
 
 redis = Redis(host='localhost', port=6379, db=7)
 
@@ -42,6 +42,6 @@ async def work_with_support():
                     pass
                 else:
                     # отправляем
-                    await cmd_save_new_support(user_id=msg[1]['user_id'], username=msg[1]['username'],
-                                               agent_username=msg[1]['agent_username'], url=msg[1]['url'])
+                    await gs_save_new_support(user_id=msg[1]['user_id'], username=msg[1]['username'],
+                                              agent_username=msg[1]['agent_username'], url=msg[1]['url'])
                 await redis.delete(msg[2])

@@ -7,8 +7,11 @@ import gspread_asyncio
 
 # from google-auth package
 from google.oauth2.service_account import Credentials
+from sqlalchemy.orm import Session
 
+from db.requests import add_to_watchlist
 from utils.global_data import float2str
+from itertools import zip_longest
 
 
 # https://gspread-asyncio.readthedocs.io/en/latest/index.html#
@@ -94,7 +97,7 @@ async def check_bim(user_id=None, user_name=None):
 
 
 # получить ID
-async def cmd_get_last_task_id():
+async def gs_get_last_task_id():
     agc = await agcm.authorize()
     ss = await agc.open("MTL_TASKS_register")
     ws = await ss.worksheet("Term")
@@ -103,8 +106,8 @@ async def cmd_get_last_task_id():
     return int(record[-1]), len(record)
 
 
-async def cmd_save_new_task(task_name, customer, manager, executor, contract_url):
-    last_task_number, last_col = await cmd_get_last_task_id()
+async def gs_save_new_task(task_name, customer, manager, executor, contract_url):
+    last_task_number, last_col = await gs_get_last_task_id()
     agc = await agcm.authorize()
     ss = await agc.open("MTL_TASKS_register")
     ws = await ss.worksheet("Term")
@@ -116,7 +119,7 @@ async def cmd_save_new_task(task_name, customer, manager, executor, contract_url
                        })
 
 
-async def cmd_get_last_support_id():
+async def gs_get_last_support_id():
     agc = await agcm.authorize()
     ss = await agc.open("MTL_support_register")
     ws = await ss.worksheet("ALL")
@@ -125,16 +128,18 @@ async def cmd_get_last_support_id():
     return int(record[-1]), len(record)
 
 
-async def cmd_save_new_support(user_id, username, agent_username, url):
-    last_number, last_col = await cmd_get_last_support_id()
+async def gs_save_new_support(user_id, username, agent_username, url):
+    last_number, last_col = await gs_get_last_support_id()
     agc = await agcm.authorize()
     ss = await agc.open("MTL_support_register")
     ws = await ss.worksheet("ALL")
     # n	date_in	username	ID	ticket	request	status	1	2	3	4	5	6	notes	agent
     await ws.update(f'A{last_col + 1}', [[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
-                                          None, None, None, None, None, None, None, None, None, agent_username]])
+                                          None, None, None, None, None, None, None, None, None, agent_username]], value_input_option='USER_ENTERED')
+    #await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    #await wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
 
-async def cmd_close_support(url):
+async def gs_close_support(url):
     agc = await agcm.authorize()
     ss = await agc.open("MTL_support_register")
     ws = await ss.worksheet("ALL")
@@ -146,7 +151,7 @@ async def cmd_close_support(url):
         user_id = record[3]
 
 
-async def cmd_find_user(user_id):
+async def gs_find_user(user_id):
     result = []
     agc = await agcm.authorize()
     ss = await agc.open("MTL_ID_register")
@@ -169,8 +174,76 @@ async def cmd_find_user(user_id):
     return result
 
 
+async def gs_update_watchlist(session: Session):
+    # Open the MTL_assets worksheet
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_assets")
+
+    # Check and process the ACCOUNTS worksheet
+    ws_accounts = await ss.worksheet("ACCOUNTS")
+    if (await ws_accounts.acell('G1')).value == 'pub_key':
+        keys_accounts = [cell for cell in (await ws_accounts.col_values(7)) if len(cell) == 56]
+    else:
+        raise ValueError("Expected 'pub_key' in cell G1 of the ACCOUNTS worksheet")
+
+    # Check and process the ASSETS worksheet
+    ws_assets = await ss.worksheet("ASSETS")
+    if (await ws_assets.acell('F1')).value == 'issuer':
+        keys_assets = [cell for cell in (await ws_assets.col_values(6)) if len(cell) == 56]
+    else:
+        raise ValueError("Expected 'issuer' in cell F1 of the ASSETS worksheet")
+
+    # Combine the keys and add to watchlist
+    combined_keys = keys_accounts + keys_assets
+
+    # Remove duplicates from the combined keys list
+    combined_keys = list(set(combined_keys))
+
+    add_to_watchlist(session, combined_keys)
+
+async def gs_get_namelist():
+    # Open the MTL_assets worksheet
+    agc = await agcm.authorize()
+    ss = await agc.open("MTL_assets")
+
+    # Select the ACCOUNTS worksheet
+    ws_accounts = await ss.worksheet("ACCOUNTS")
+    if (await ws_accounts.acell('G1')).value == 'pub_key' and (await ws_accounts.acell('C1')).value == 'descr':
+        keys = await ws_accounts.col_values(7)
+        descs = await ws_accounts.col_values(3)
+        key_to_desc = {}
+        for key, desc in zip_longest(keys, descs, fillvalue=''):
+            if len(key) == 56:
+                if desc:
+                    key_to_desc[key] = desc
+                else:
+                    key_to_desc[key] = key[:4] + '__' + key[-4:]
+
+    else:
+        raise ValueError("Expected 'pub_key' in cell G1 and 'descr' in cell C1 of the ACCOUNTS worksheet")
+
+    # Open the MTL_ID_register worksheet
+    ss_id_register = await agc.open("MTL_ID_register")
+
+    # Select the List worksheet
+    ws_list = await ss_id_register.worksheet("List")
+    if (await ws_list.acell('F2')).value == 'stellar_key' and (await ws_list.acell('D2')).value == 'tg_username':
+        keys = await ws_list.col_values(6)
+        usernames = await ws_list.col_values(4)
+        for key, username in zip_longest(keys, usernames, fillvalue=''):
+            if len(key) == 56:
+                if username:
+                    key_to_desc[key] = username
+                else:
+                    key_to_desc[key] = key[:4] + '__' + key[-4:]
+        return key_to_desc
+    else:
+        raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
+
 
 if __name__ == "__main__":
-    # a = asyncio.run(check_bim(user_name='itolstov'))
-    a = asyncio.run(cmd_find_user('710700915'))
+    #a = asyncio.run(check_bim(user_name='itolstov'))
+    #a = asyncio.run(gs_find_user('710700915'))
+    from db.quik_pool import quik_pool
+    a = asyncio.run(gs_get_namelist())
     print(a)

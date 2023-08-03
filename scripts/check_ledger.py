@@ -39,7 +39,7 @@ async def extra_run():
 async def master_update_list(name, session: Session):
     while True:
         global watch_list
-        watch_list = get_watch_list(session)
+        watch_list = db_get_watch_list(session)
         logger.info(f'{name} watch_list was update {len(watch_list)}')
         await asyncio.sleep(60 * 60 * 1)
 
@@ -58,7 +58,7 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session: Session):
     while True:
         if queue.empty():
             # put data
-            resend_data = get_first_100_ledgers(session)
+            resend_data = db_get_first_100_ledgers(session)
             if len(resend_data) > 0:
                 logger.info(f'{name} load {len(resend_data)} from old')
             for record in resend_data:
@@ -74,7 +74,7 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session: Session):
 
 
 async def load_from_stellar(name, queue, session):
-    saved_ledger = int(cmd_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+    saved_ledger = int(db_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
     async with aiohttp.ClientSession() as httpsession:
         async with httpsession.get(f'https://horizon.stellar.org') as resp:
             json_resp = await resp.json()
@@ -87,7 +87,7 @@ async def load_from_stellar(name, queue, session):
                     queue.put_nowait(ledger.ledger)
                     session.commit()
 
-                cmd_save_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, core_latest_ledger)
+                db_save_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, core_latest_ledger)
 
 
 ########################################################################################################################
@@ -101,7 +101,7 @@ async def worker_get_ledger(name, queue: asyncio.Queue, session: Session):
 
         try:
             # check ledger
-            ledger = get_ledger(session, ledger_id)
+            ledger = db_get_ledger(session, ledger_id)
             await asyncio.wait_for(
                 cmd_check_ledger(start_ledger_id=ledger_id, session=session), timeout=60)
             # fb.execsql('delete from t_ledgers where ledger = ?', (ledger,))
@@ -113,6 +113,7 @@ async def worker_get_ledger(name, queue: asyncio.Queue, session: Session):
         except Exception as e:
             logger.warning(f'{name} {ledger_id} failed {type(e)}')
             logger.error(e)
+            session.rollback()
 
         # Сообщение очереди, для обработки "рабочего элемента".
         queue.task_done()
@@ -125,7 +126,7 @@ async def cmd_check_ledger(start_ledger_id=None, session: Session = None):
     if start_ledger_id:
         ledger_id = start_ledger_id
     else:
-        ledger_id = int(cmd_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+        ledger_id = int(db_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
     max_ledger_id = ledger_id + 17
 
     while max_ledger_id > ledger_id:

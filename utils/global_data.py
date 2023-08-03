@@ -51,6 +51,8 @@ class BotValueTypes:
     Captcha = 23
     StopExchange = 24
     LastTFMFundTransaction = 25
+    Listen = 26
+    FullData = 27
 
 
 class LogQuery:
@@ -70,6 +72,9 @@ class GlobalData:
     auto_all = []
     reply_only = []
     captcha = []
+    listen = []
+    full_data = []
+    name_list = {}
 
 
 global_data = GlobalData()

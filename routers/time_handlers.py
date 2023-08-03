@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_load_new_message
+from db.requests import db_load_new_message
 from utils.global_data import MTLChats
 
 
@@ -37,7 +37,7 @@ async def cmd_send_message_start_month(bot: Bot):
 
 @logger.catch
 async def cmd_send_message_1m(bot: Bot, session: Session):
-    for record in cmd_load_new_message(session):
+    for record in db_load_new_message(session):
         try:
             #    for record in fb.execsql('select first 10 m.id, m.user_id, m.text, m.use_alarm, m.update_id, m.button_json '
             if record.user_id == MTLChats.SignGroup:

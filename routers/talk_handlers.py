@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ChatPermissions
 from sqlalchemy.orm import Session
 
-from db.requests import cmd_load_bot_value, cmd_save_url, extract_url
+from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from utils import dialog
@@ -41,23 +41,23 @@ async def cmd_employment(message: Message, bot: Bot):
 @router.message(Text(contains='eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
-        msg_id = cmd_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
+        msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
         try:
             await bot.unpin_chat_message(message.chat.id, msg_id)
         except:
             pass
-        cmd_save_url(session, message.chat.id, message.message_id, message.text)
+        db_save_url(session, message.chat.id, message.message_id, message.text)
         await message.pin()
         if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup,
                                MTLChats.DefiGroup, MTLChats.LandLordGroup,
                                MTLChats.SignGroupForChanel):
             msg = check_url_xdr(
-                cmd_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
+                db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
             msg = f'\n'.join(msg)
             await multi_reply(message, msg)
 
-        #if message.chat.id in (MTLChats.SignGroup, MTLChats.SignGroupForChanel,):
-        #    msg = cmd_load_bot_value(session, message.chat.id,
+        # if message.chat.id in (MTLChats.SignGroup, MTLChats.SignGroupForChanel,):
+        #    msg = db_load_bot_value(session, message.chat.id,
         #                             BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
         #    await message.reply(msg)
 
@@ -92,9 +92,9 @@ async def remind(message: Message, session: Session, bot: Bot):
                 await send_by_list(bot=bot, all_users=all_users, message=message, url=url, session=session)
 
     else:
-        msg_id = cmd_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
-        msg = cmd_load_bot_value(session, message.chat.id,
-                                 BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+        msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
+        msg = db_load_bot_value(session, message.chat.id,
+                                BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
@@ -127,7 +127,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
             await message.reply('Ссылка не найдена')
     else:
         msg = check_url_xdr(
-            cmd_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
+            db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg[:4000])
 
@@ -202,12 +202,21 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
 
-@router.message(F.chat.id.in_(global_data.reply_only))
-async def cmd_check_reply_only(message: Message):
+@router.message(F.chat.id.in_(global_data.reply_only), F.text)
+async def cmd_check_reply_only(message: Message, session: Session):
     if message.reply_to_message or message.forward_from_chat:
-        pass
+        db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
+                        thread_id=message.message_thread_id if message.is_topic_message else None,
+                        text=message.text, chat_id=message.chat.id)
     else:
         await message.reply('Осуждаю ! Это сообщения не увидят в комментариях. Я удалю сообщение через 5 минут ! '
                             'Рекомендую удалить его, и повторить его с использованием функции «ответ». \n'
                             'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
         return
+
+
+@router.message(F.chat.id.in_(global_data.listen), F.text)
+async def cmd_save_msg(message: Message, session: Session):
+    db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
+                    thread_id=message.message_thread_id if message.is_topic_message else None,
+                    text=message.text, chat_id=message.chat.id)

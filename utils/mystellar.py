@@ -175,7 +175,7 @@
 #
 #
 # def cmd_alarm_pin_url(chat_id):
-#     url = cmd_load_bot_value(BotValueTypes.PinnedUrl, chat_id)
+#     url = db_load_bot_value(BotValueTypes.PinnedUrl, chat_id)
 #     return cmd_alarm_url_(url)
 #
 #
@@ -193,7 +193,7 @@
 #         filter_operation = []
 #     result = []
 #     transactions = {}
-#     last_id = int(cmd_load_bot_value(save_id, 0, '0'))
+#     last_id = int(db_load_bot_value(save_id, 0, '0'))
 #     max_id = last_id
 #     rq = requests.get(
 #         f"https://api.stellar.expert/explorer/public/asset/{asset_name}-{issuer}/history/all?limit=10&order=desc&sort=id").json()
@@ -221,7 +221,7 @@
 #             result.append(xdr_result)
 #         # print(decode_xdr(transaction["envelope_xdr"]))
 #
-#     cmd_save_bot_value(save_id, 0, max_id)
+#     db_save_bot_value(save_id, 0, max_id)
 #     return result
 #
 #
