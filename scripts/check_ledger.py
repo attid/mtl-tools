@@ -169,13 +169,12 @@ def decode_effects_records(records, ledger):
     result = []
     for record in records:
         if record['type'] in ('liquidity_pool_trade', 'account_created', 'claimable_balance_sponsorship_removed',
-                              'trustline_created', 'trustline_removed', 'claimable_balance_created',
+                              'claimable_balance_created', 'signer_updated', 'account_thresholds_updated',
                               'signer_created', 'signer_removed', 'trustline_flags_updated', 'trustline_authorized',
                               'trustline_authorized_to_maintain_liabilities', 'trustline_sponsorship_created',
                               'claimable_balance_claimant_created', 'claimable_balance_sponsorship_created',
-                              'data_updated', 'trustline_updated', 'signer_updated', 'account_thresholds_updated',
                               'trustline_deauthorized', 'account_flags_updated', 'liquidity_pool_deposited',
-                              'data_created', 'data_removed', 'account_removed', 'account_sponsorship_created',
+                              'account_removed', 'account_sponsorship_created', 'data_sponsorship_created',
                               'signer_sponsorship_created', 'account_home_domain_updated', 'liquidity_pool_removed',
                               'trustline_sponsorship_removed', 'liquidity_pool_withdrew', 'liquidity_pool_created',
                               'account_inflation_destination_updated', 'sequence_bumped', 'signer_sponsorship_removed',
@@ -234,9 +233,37 @@ def decode_effects_records(records, ledger):
                 result.append([op_date, record['type'], record['amount'],
                                record['asset'].split(':')[0], None, None, None, record.get('account'), None, '',
                                record['paging_token'], ledger])
-
             continue
-        print(record['type'], record)
+        if record['type'] in ('trustline_created', 'trustline_removed', 'trustline_updated'):
+            if record['account'] in watch_list or record.get('asset_issuer') in watch_list:
+                #
+                #                 'id': '0204586519423287297-0000000001', 'paging_token': '204586519423287297-1',
+                #                 'account': 'GAD5AXOFSGNY2RXBML3GM3F5KVNPD23GVOETGPZ4SDG3YUGUS6VHFTYN', 'type': '',
+                #                 'type_i': 20, 'created_at': '2023-08-13T09:01:33Z', 'asset_type': 'credit_alphanum4',
+                #                 'asset_code': 'USDT', 'asset_issuer': 'GDH5GBPOIFMNH3IMTVINEPTPCNF6MI4CXRSZNA2S3BEUY7KPBIPST6VU',
+                # 'limit': '922337203685.4775807'}
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                result.append([op_date, record['type'], record['limit'],
+                               record.get('asset_code', 'XLM'), None, None, None, record.get('account'), None, '',
+                               record['paging_token'], ledger])
+            continue
+        if record['type'] in ('data_created', 'data_removed', 'data_updated'):
+            if record['account'] in watch_list:
+                #          'id': '0204588950375407617-0000000001', 'paging_token': '204588950375407617-1',
+                #          'account': 'GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI', 'type': 'data_created', 'type_i': 40,
+                #          'created_at': '2023-08-13T10:00:30Z', 'name': 'mtl_delegate',
+                #          'value': 'R0RMVEg0S0tNQTRSMkpHS0E3WEtJNURMSEpCVVQ0MkQ1UkhWSzZTUzZZSFpaTEhWTENXSkFZWEk='
+                op_date = datetime.strptime(record['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token']]
+                data_value = decode_data_value(record['value']) if record.get('value') else None
+                result.append([op_date, record['type'], None,
+                               record.get('name'), None, data_value, None, record.get('account'), None, '',
+                               record['paging_token'], ledger])
+            continue
+
+        logger.info(f"{record['type']}, {record}")  ##
+
     return result
 
 

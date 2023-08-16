@@ -108,7 +108,7 @@ async def cmd_check_bot(session: Session):
             if delta.days > 15:
                 db_cmd_add_message(session, MTLChats.SignGroup,
                                 f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
-        elif bot_address == MTLAddresses.public_exchange_eurmtl_usdc:
+        elif bot_address == MTLAddresses.public_exchange_eurmtl_usdm:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 3:

@@ -20,7 +20,7 @@ from middlewares.db import DbSessionMiddleware
 
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
-from utils.gspread_tools import gs_get_namelist, gs_update_watchlist
+from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
 from utils.support_tools import work_with_support
 
 
@@ -79,8 +79,9 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
     global_tasks.append(asyncio.create_task(work_with_support()))
-    global_data.name_list = await gs_get_namelist()
-    await gs_update_watchlist(dispatcher['session'])
+    asyncio.create_task(gs_update_namelist())
+    asyncio.create_task(gs_update_watchlist(dispatcher['session']))
+
 
 
 

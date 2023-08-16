@@ -15,7 +15,7 @@ COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST',
 
 
 @logger.catch
-async def update_main_report():
+async def update_main_report(session: Session):
     agc = await agcm.authorize()
 
     # Open a sheet from a spreadsheet in one go
@@ -114,6 +114,8 @@ async def update_main_report():
     div_sum = await cmd_show_data(MTLAddresses.public_div, 'LAST_DIVS', True)
     await wks.update('B11', int(float(div_sum[0])))
 
+    await wks.update('B12', db_get_last_trade_operation(session=session))
+
     # defi
     defi_balance = 0
     debank = requests.get("https://api.debank.com/token/balance_list"
@@ -166,10 +168,25 @@ async def update_fire(session: Session):
     agc = await agcm.authorize()
     ss = await agc.open("MTL Report")
     wks = await ss.worksheet("AutoData")
-    if 'book value of 1 token' != (await wks.cell(36, 2)).value:
+
+    # Получаем все значения из столбцов B и D
+    column_B = await wks.get('B1:B100')
+    column_D = await wks.get('D1:D100')
+
+    # Ищем строку 'book value of 1 token' в столбце B
+    for i, row in enumerate(column_B):
+        for cell in row:
+            if cell == 'book value of 1 token':
+                # Нашли нужную строку, получаем соответствующее значение из столбца D
+                cost_fire = column_D[i][0]
+                break
+        else:
+            continue
+        break
+    else:
         db_send_admin_message(session, 'bad fire value')
         raise Exception('bad fire value')
-    cost_fire = (await wks.cell(36, 4)).value
+
     logger.info(f'cost_fire {cost_fire}')
     cost_fire = float(cost_fire.replace(',', '.')) * 0.8
     await check_fire(cost_fire)
@@ -359,8 +376,8 @@ async def update_mmwb_report(session: Session):
     wks = await ss.worksheet("DATA")
 
     # check structure
-    records = await wks.get_values('D1:E1')
-    if records != [['EURMTL', 'валюта2']]:
+    records = await wks.get_values('L1')
+    if records != [['Баланс %']]:
         # print(records)
         raise Exception('wrong structure')
     records = await wks.get_values('B2:B6')
@@ -368,30 +385,35 @@ async def update_mmwb_report(session: Session):
         # print(records)
         raise Exception('wrong structure')
 
-    # update data
+    # update data EURMTL	USDM	USDC	XLM BTC*
     update_data = []
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_xlm)
-    update_data.append([balances.get('EURMTL', 0), balances.get('XLM', 0)])
-    balances = await get_balances(MTLAddresses.public_exchange_eurmtl_usdc)
-    update_data.append([balances.get('EURMTL', 0), balances.get('USDC', 0)])
+    update_data.append([balances.get('EURMTL', 0), None, None, balances.get('XLM', 0)])
+    balances = await get_balances(MTLAddresses.public_exchange_eurmtl_usdm)
+    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), balances.get('USDC', 0)])
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_sats)
-    update_data.append([balances.get('EURMTL', 0), balances.get('SATSMTL', 0)])
+    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('SATSMTL', 0)])
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_btc)
-    update_data.append([balances.get('EURMTL', 0), balances.get('BTCMTL', 0)])
+    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('BTCMTL', 0)])
+    balances = await get_balances(MTLAddresses.public_exchange_usdm_xlm)
+    update_data.append([None, balances.get('USDM', 0), None, balances.get('XLM', 0)])
+    balances = await get_balances(MTLAddresses.public_exchange_usdm_usdc)
+    update_data.append([None, balances.get('USDM', 0), balances.get('USDC', 0)])
+
     balances = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
-    update_data.append([balances.get('MTL', 0), balances.get('XLM', 0)])
+    update_data.append([balances.get('MTL', 0), None, None, balances.get('XLM', 0)])
     balances = await get_balances(MTLAddresses.public_fire)
-    update_data.append([balances.get('EURMTL', 0), balances.get('MTL', 0)])
+    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('MTL', 0)])
 
     await wks.update('D2', update_data)
 
-    records = await wks.get_values('H2:H5')
+    records = await wks.get_values('L2:L6')
     for record in records:
         value = float(record[0].replace(',', '.'))
         if value < 0.2 or value > 0.8:
             db_send_admin_message(session, f'update_mmwb_report balance error {value}')
 
-    await wks.update('J1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update('N1', now.strftime('%d.%m.%Y %H:%M:%S'))
     logger.info(f'update mmwb_report all done {now}')
 
 
@@ -659,7 +681,7 @@ async def main():
     logger.add("update_report.log", rotation="1 MB")
 
     await asyncio.gather(
-        update_main_report(),
+        update_main_report(quik_pool()),
         update_guarantors_report(),
         update_bim_data(quik_pool()),
         update_top_holders_report(quik_pool()),

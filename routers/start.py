@@ -34,7 +34,7 @@ links_msg = f"""
 Стакан на [мульки](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/XLM) [mtl](https://stellar.expert/explorer/public/market/EURMTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V/MTL-GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V)
 Списки [черный]({link_json}blacklist.json) / [BL for DG]({link_json}dg_blacklist.json) 
 Боты [Обмен eurmtl_xlm]({link_stellar}{MTLAddresses.public_exchange_eurmtl_xlm}) / \
-[Обмен eurmtl_usdc]({link_stellar}{MTLAddresses.public_exchange_eurmtl_usdc}) / \
+[Обмен eurmtl_usdc]({link_stellar}{MTLAddresses.public_exchange_eurmtl_usdm}) / \
 [Обмен eurmtl_sats]({link_stellar}{MTLAddresses.public_exchange_eurmtl_sats}) / \
 [Обмен eurmtl_btc]({link_stellar}{MTLAddresses.public_exchange_eurmtl_btc}) / \
 [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \

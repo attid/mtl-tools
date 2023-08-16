@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     currencylayer_id: str
     coinlayer_id: str
     debank: SecretStr
+    eurmtl_key: str
 
     class Config:
         env_file = dotenv_path

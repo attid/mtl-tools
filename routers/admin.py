@@ -1,9 +1,12 @@
+import base64
+import hashlib
 import json
 import os
 import re
+from typing import BinaryIO
 
-from aiogram import Router, Bot
-from aiogram.enums import ChatMemberStatus
+from aiogram import Router, Bot, F
+from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.filters import Command, Text
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions
@@ -287,7 +290,7 @@ async def cmd_get_summary(message: Message, session: Session):
         session.flush()  # обновляем базу данных, чтобы получить ID для summary
 
         for record in data:
-            new_text = text +  f'{record.username}: {record.text} \n\n'
+            new_text = text + f'{record.username}: {record.text} \n\n'
             if len(new_text) < 16000:
                 text = new_text
                 record.summary_id = summary.id
@@ -308,3 +311,27 @@ async def cmd_get_summary(message: Message, session: Session):
         await message.reply(record.text[:4000])
 
     session.commit()  # завершаем транзакцию
+
+
+@router.message(F.document, F.chat.type == ChatType.PRIVATE)
+async def cmd_get_sha1(message: Message, bot: Bot):
+    document = message.document
+    file_data = await bot.download(document)
+
+    print(type(file_data), file_data)
+
+    hasher = hashlib.sha1()
+    hasher.update(file_data.read())
+
+    # Get the SHA-1 hash and convert it into bytes
+    sha1_hash = hasher.hexdigest()#.encode('utf-8')
+    print(sha1_hash, sha1_hash)
+
+    # Encode the bytes to BASE64
+    base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
+    print(sha1_hash, base64_hash)
+
+    await message.reply(f' SHA-1: <code>{sha1_hash}</code>\nBASE64: <code>{base64_hash}</code>')
+    #hex: 679cd49aec59cf2ccaf843ea4c484975d33dd18a
+    #base64: Z5zUmuxZzyzK+EPqTEhJddM90Yo=
+

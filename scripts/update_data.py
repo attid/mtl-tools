@@ -1,3 +1,4 @@
+from utils.gspread_tools import get_assets_dict, get_accounts_dict
 from utils.stellar_utils import *
 
 
@@ -85,7 +86,7 @@ async def update_tg_id_bim():
     update_list = []
 
     for record_id in data_id[1:]:
-        #tg_name = None
+        # tg_name = None
         if len(record_id[0]) > 1 and record_id[0][0] == '@':
             tg_name = record_id[0][1:]
         else:
@@ -107,7 +108,7 @@ async def update_id_in_bim():
     data_bim = wks_bim.get_all_values()
     data_id = wks_id.get_all_values()
 
-    #list_id = []
+    # list_id = []
 
     for idx, record_bim in enumerate(data_bim[2:]):
         if len(record_bim[2]) > 0 and len(record_bim[3]) > 0:
@@ -139,7 +140,23 @@ async def update_memo():
     logger.info(f'all done {now}')
 
 
+async def update_lab():
+    headers = {
+        "Authorization": f"Bearer {config.eurmtl_key}",
+        "Content-Type": "application/json"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://eurmtl.me/mtl_accounts", headers=headers,
+                                data=json.dumps(await get_accounts_dict())) as response:
+            #print(response.status)
+            logger.info(await response.text())
+
+        async with session.post("https://eurmtl.me/mtl_assets", headers=headers,
+                                data=json.dumps(await get_assets_dict())) as response:
+            logger.info(await response.text())
+
+
 if __name__ == "__main__":
     logger.add("update_report.log", rotation="1 MB")
     logger.info(datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
-    # asyncio.run(update_memo())
+    asyncio.run(update_lab())

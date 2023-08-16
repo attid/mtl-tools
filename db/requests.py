@@ -2,7 +2,7 @@ import re
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast
-from sqlalchemy import select, and_, case, distinct, Date, extract
+from sqlalchemy import select, and_, case, distinct, Date, extract, desc, cast as sql_cast
 from sqlalchemy.orm import Session
 from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
@@ -215,7 +215,7 @@ def db_get_watch_list(session: Session):
     :return: Tuple of accounts
     """
     from_watch_list = session.query(TWatchList.account).all()
-    from_mymtlwalletbot = session.query(MyMtlWalletBot.public_key).all()
+    from_mymtlwalletbot = session.query(MyMtlWalletBot.public_key).where(MyMtlWalletBot.need_delete == 0).all()
 
     result = tuple(record[0] for record in from_watch_list + from_mymtlwalletbot)
     return result
@@ -535,10 +535,37 @@ def db_get_summary(session, chat_id: int, thread_id: int, dt: datetime = None) -
     return summaries.all()
 
 
+def db_get_last_trade_operation(session: Session) -> float:
+    stmt = (
+        select(TOperations)
+        .where(
+            (TOperations.operation == 'trade') &
+            (
+                    and_((TOperations.code1 == 'MTL'), (TOperations.code2 == 'EURMTL'),
+                         (sql_cast(TOperations.amount1, Float).__gt__(1))) |
+                    and_((TOperations.code1 == 'EURMTL'), (TOperations.code2 == 'MTL'),
+                         (sql_cast(TOperations.amount2, Float).__gt__(1)))
+            )
+        )
+        .order_by(desc(TOperations.dt))
+        .limit(1)
+    )
+
+    result = session.execute(stmt)
+    operation = result.scalar_one()
+
+    if operation.code2 == 'MTL':
+        rate = float(operation.amount1) / float(operation.amount2)
+    else:
+        rate = float(operation.amount2) / float(operation.amount1)
+
+    return round(rate, 2)
+
+
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(db_get_wallet_stats(quik_pool()))
+    print(len(db_get_watch_list(quik_pool())))
 
     # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',

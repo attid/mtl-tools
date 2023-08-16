@@ -17,6 +17,7 @@ from utils.aiogram_utils import multi_reply, HasText, has_words
 from utils.dialog import talk_check_spam, add_task_to_google
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
+from scripts.update_data import update_lab
 
 router = Router()
 
@@ -181,7 +182,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
     if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        await update_main_report()
+        await update_main_report(session)
         await update_fire(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['donate', 'donates', 'donated']):
@@ -189,6 +190,12 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_donate_report(session)
         await msg.reply('Обновление завершено')
+    if has_words(message.text, ['лабу', 'тулзу']):
+        msg = await message.reply('Зай, я запустила обновление')
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+        await update_lab()
+        await msg.reply('Обновление завершено')
+
 
 
 @router.message(F.chat.type == ChatType.PRIVATE)

@@ -29,9 +29,9 @@ async def cmd_decode(message: Message):
     try:
         # logger.info(f'decode {message}')
         if message.text.find('eurmtl.me/sign_tools') > -1:
-            msg = check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.listen)
+            msg = check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         else:
-            msg = decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.listen)
+            msg = decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
     except Exception as e:
@@ -255,7 +255,8 @@ async def cmd_get_usdm_xdr_(message: Message):
 async def cmd_get_defi_xdr_(message: Message):
     arg = message.text.split()
     if len(arg) > 1:
-        xdr = await get_btcmtl_xdr(float2str(arg[1]), arg[2])
+        memo = None if len(arg) < 3 else ' '.join(arg[3:])
+        xdr = await get_btcmtl_xdr(float2str(arg[1]), arg[2], memo)
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
     else:

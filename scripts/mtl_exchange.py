@@ -1,13 +1,14 @@
 import asyncio
 from utils.stellar_utils import *
 from db.quik_pool import quik_pool
+from collections import namedtuple
 
 max_eurmtl = 10000.0  # max offer
-max_btcmtl = 0.1  # max offer
-max_satsmtl = 1000000  # max offer
+# max_btcmtl = 0.1  # max offer
+# max_satsmtl = 1000000  # max offer
 sats_cost = 100000000
 
-min_xlm = 50.0
+# min_xlm = 50.0
 persent_eurmtl = 1.03  # 1.03 =  5% наценки
 persent_btc = 1.01  #
 persent_xlm = 1.002  #
@@ -15,11 +16,15 @@ persent_usdc = 1.002  # 0.975 for fund exchange
 persent_cost = 1.01  # 1% изменения цены для обновления
 persent_btc_cost = 1.001  # 0,1% изменения цены для обновления
 
-server = Server(horizon_url="https://horizon.stellar.org")
-
+# Создаем кортеж для хранения параметров
+AddressConfig = namedtuple('AddressConfig', [
+    'address', 'asset_a', 'asset_b', 'price_min', 'price_max',
+    'price_a', 'price_b', 'check_persent', 'max_a', 'max_b'
+])
 
 # server = Server(horizon_url="http://158.58.231.224:8000/")
 # server = Server(horizon_url="https://horizon.publicnode.org")
+server = Server(horizon_url="https://horizon.stellar.org")
 
 
 def get_offers(address: str):
@@ -32,6 +37,117 @@ def get_offers(address: str):
         records[f'{selling_name}-{buying_name}'] = record
 
     return records
+
+
+def get_sum(amount, max_value):
+    return int(amount) if amount < max_value else max_value
+
+
+async def update_offers(update_config):
+    offers = get_offers(update_config.address)
+    balances = await get_balances(update_config.address)
+    balances['XLM'] = float(balances['XLM']) - 50  # оставляем минимум 50
+    amount_a = get_sum(float(balances[update_config.asset_a.code]), update_config.max_a)
+    amount_b = get_sum(float(balances[update_config.asset_b.code]), update_config.max_b)
+    await update_offer(account_key=update_config.address, price_min=update_config.price_min,
+                       price_max=update_config.price_max,
+                       price=update_config.price_a, selling_asset=update_config.asset_a,
+                       buying_asset=update_config.asset_b,
+                       amount=amount_a, check_persent=update_config.check_persent,
+                       record=offers.get(f'{update_config.asset_a.code}-{update_config.asset_b.code}'))
+
+    await update_offer(account_key=update_config.address, price_min=1 / update_config.price_max,
+                       price_max=1 / update_config.price_min,
+                       price=update_config.price_b, selling_asset=update_config.asset_b,
+                       buying_asset=update_config.asset_a,
+                       amount=amount_b, check_persent=update_config.check_persent,
+                       record=offers.get(f'{update_config.asset_b.code}-{update_config.asset_a.code}'))
+
+
+async def check_exchange():
+    # EUR cost
+    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').json()
+    usdt_eur_cost = 1 / float(rq['price'])
+
+    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT').json()
+    stl = 1 / float(rq['price'])
+    usd_xlm_cost = stl
+    eurmtl_xlm_cost = stl / usdt_eur_cost
+
+    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()
+    btc_eur_cost = float(rq['price']) * usdt_eur_cost
+    logger.info(['eur_cost', usdt_eur_cost, 'eurmtl_xlm_cost', eurmtl_xlm_cost, eurmtl_xlm_cost * persent_eurmtl,
+                 'usd_xlm_cost', usd_xlm_cost, 'btc_eur_cost', btc_eur_cost])
+
+    configs = [
+        # EURMTL - XLM
+        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_xlm,
+                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.xlm_asset,
+                      price_min=5, price_max=15,
+                      price_a=eurmtl_xlm_cost * persent_eurmtl,
+                      price_b=round((1 / eurmtl_xlm_cost) * persent_xlm, 5),
+                      check_persent=persent_cost,
+                      max_a=max_eurmtl, max_b=round(max_eurmtl * eurmtl_xlm_cost)
+                      ),
+        # MTL - XLM
+        AddressConfig(address=MTLAddresses.public_exchange_mtl_xlm,
+                      asset_a=MTLAssets.mtl_asset, asset_b=MTLAssets.xlm_asset,
+                      price_min=5 * 4, price_max=15 * 4,
+                      price_a=eurmtl_xlm_cost * persent_eurmtl * 4,
+                      price_b=round((1 / eurmtl_xlm_cost / 3) * persent_xlm, 5),
+                      check_persent=persent_cost,
+                      max_a=max_eurmtl, max_b=max_eurmtl
+                      ),
+        # EURMTL - BTC
+        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_btc,
+                      asset_a=MTLAssets.btcmtl_asset, asset_b=MTLAssets.eurmtl_asset,
+                      price_min=15000, price_max=30000,
+                      price_a=round(btc_eur_cost * persent_btc),
+                      price_b=round((1 / btc_eur_cost) * persent_btc, 7),
+                      check_persent=persent_btc_cost,
+                      max_a=round(max_eurmtl / btc_eur_cost, 5), max_b=max_eurmtl
+                      ),
+        # EURMTL - SATS
+        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_sats,
+                      asset_a=MTLAssets.satsmtl_asset, asset_b=MTLAssets.eurmtl_asset,
+                      price_min=15000 / sats_cost, price_max=30000 / sats_cost,
+                      price_a=round(btc_eur_cost * persent_btc / sats_cost, 8),
+                      price_b=round(1 / btc_eur_cost * sats_cost * persent_btc),
+                      check_persent=persent_cost,
+                      max_a=round(max_eurmtl / btc_eur_cost, 5) * sats_cost, max_b=max_eurmtl
+                      ),
+        # EURMTL - USDM
+        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_usdm,
+                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.usdm_asset,
+                      price_min=0.8, price_max=1.3,
+                      price_a=round(1 / usdt_eur_cost * persent_eurmtl, 4),
+                      price_b=round(usdt_eur_cost * persent_usdc, 4),
+                      check_persent=persent_cost,
+                      max_a=max_eurmtl, max_b=round(max_eurmtl * (1 / usdt_eur_cost))
+                      ),
+        # USDM - USDC
+        AddressConfig(address=MTLAddresses.public_exchange_usdm_usdc,
+                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.usdc_asset,
+                      price_min=0.9, price_max=1.1,
+                      price_a=round(0.999999, 7),
+                      price_b=round(1.01, 4),
+                      check_persent=persent_cost,
+                      max_a=max_eurmtl, max_b=max_eurmtl
+                      ),
+        # USDM - XLM
+        AddressConfig(address=MTLAddresses.public_exchange_usdm_xlm,
+                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
+                      price_min=5, price_max=15,
+                      price_a=usd_xlm_cost * 1.01,
+                      price_b=round((1 / usd_xlm_cost) * 1.01, 5),
+                      check_persent=persent_cost,
+                      max_a=max_eurmtl, max_b=round(max_eurmtl * usd_xlm_cost)
+                      ),
+
+    ]
+
+    for update_config in configs:
+        await update_offers(update_config)
 
 
 @logger.catch
@@ -95,131 +211,6 @@ def fire_mtl(account, amount):
 
 
 @logger.catch
-async def check_exchange():
-    # account_exchange = server.load_account(public_exchange)
-    # get balance
-    balances_eurmtl_xlm = await get_balances(MTLAddresses.public_exchange_eurmtl_xlm)
-    balances_eurmtl_btc = await get_balances(MTLAddresses.public_exchange_eurmtl_btc)
-    balances_eurmtl_sats = await get_balances(MTLAddresses.public_exchange_eurmtl_sats)
-    balances_eurmtl_usdc = await get_balances(MTLAddresses.public_exchange_eurmtl_usdc)
-    balances_mtl_xlm = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
-
-    sum_eurmtl_xlm = float(balances_eurmtl_xlm['EURMTL'])
-    sum_xlm = float(balances_eurmtl_xlm['XLM'])
-    sum_btcmtl = float(balances_eurmtl_btc['BTCMTL'])
-    sum_eurmtl_btc = float(balances_eurmtl_btc['EURMTL'])
-    sum_satsmtl_eur = float(balances_eurmtl_sats['SATSMTL'])
-    sum_eurmtl_sats = float(balances_eurmtl_sats['EURMTL'])
-    sum_eurmtl_usdc = float(balances_eurmtl_usdc['EURMTL'])
-    sum_usdc = float(balances_eurmtl_usdc['USDC'])
-    sum_mtl_xlm = float(balances_mtl_xlm['XLM'])
-    sum_mtl = float(balances_mtl_xlm['MTL'])
-
-    # get offers
-    offers_eurmtl_xlm = get_offers(MTLAddresses.public_exchange_eurmtl_xlm)
-    offers_mtl_xlm = get_offers(MTLAddresses.public_exchange_mtl_xlm)
-    offers_eurmtl_btc = get_offers(MTLAddresses.public_exchange_eurmtl_btc)
-    offers_eurmtl_sats = get_offers(MTLAddresses.public_exchange_eurmtl_sats)
-    offers_eurmtl_usdc = get_offers(MTLAddresses.public_exchange_eurmtl_usdc)
-
-    # EUR cost
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').json()
-    eur_cost = 1 / float(rq['price'])
-
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT').json()
-    stl = 1 / float(rq['price'])
-    cost_eurmtl = stl / eur_cost
-
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()
-    cost_btc = float(rq['price']) * eur_cost
-    logger.info(['eur_cost', eur_cost, 'xlm_cost', cost_eurmtl, cost_eurmtl * persent_eurmtl, 'btc_cost', cost_btc])
-
-    sum_eurmtl_xlm = int(sum_eurmtl_xlm) if sum_eurmtl_xlm < max_eurmtl else max_eurmtl
-    sum_eurmtl_btc = int(sum_eurmtl_btc) if sum_eurmtl_btc < max_eurmtl else max_eurmtl
-
-    sum_mtl_xlm = sum_mtl_xlm - min_xlm
-
-    sum_btcmtl = sum_btcmtl if sum_btcmtl < max_btcmtl else max_btcmtl
-    max_xlm = int(max_eurmtl * cost_eurmtl / 1000) * 1000
-    sum_xlm = int(sum_xlm) if sum_xlm < max_xlm else max_xlm
-    sum_xlm -= min_xlm
-
-    sum_satsmtl_eur = int(sum_satsmtl_eur) if sum_satsmtl_eur < max_satsmtl else max_satsmtl
-    sum_eurmtl_sats = int(sum_eurmtl_sats) if sum_eurmtl_sats < max_eurmtl else max_eurmtl
-    sum_eurmtl_usdc = int(sum_eurmtl_usdc) if sum_eurmtl_usdc < max_eurmtl else max_eurmtl
-    sum_usdc = int(sum_usdc) if sum_usdc < max_eurmtl else max_eurmtl
-
-    #eurmtl-xlm
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_xlm, price_min=5, price_max=15,
-                       price=cost_eurmtl * persent_eurmtl,
-                       selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.xlm_asset, amount=sum_eurmtl_xlm,
-                       check_persent=persent_cost,
-                       record=offers_eurmtl_xlm.get('EURMTL-XLM'))
-
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_xlm, price_min=1 / 15, price_max=1 / 5,
-                       price=round((1 / cost_eurmtl) * persent_xlm, 5),
-                       selling_asset=MTLAssets.xlm_asset, buying_asset=MTLAssets.eurmtl_asset, amount=sum_xlm,
-                       check_persent=persent_cost,
-                       record=offers_eurmtl_xlm.get('XLM-EURMTL'))
-
-    #mtl-xlm
-    await update_offer(account_key=MTLAddresses.public_exchange_mtl_xlm, price_min=5*4, price_max=15*4,
-                       price=cost_eurmtl * persent_eurmtl * 4,
-                       selling_asset=MTLAssets.mtl_asset, buying_asset=MTLAssets.xlm_asset, amount=sum_mtl,
-                       check_persent=persent_cost,
-                       record=offers_mtl_xlm.get('MTL-XLM'))
-
-    await update_offer(account_key=MTLAddresses.public_exchange_mtl_xlm, price_min=1 / 15 / 3, price_max=1 / 5 / 3,
-                       price=round((1 / cost_eurmtl / 3) * persent_xlm, 5),
-                       selling_asset=MTLAssets.xlm_asset, buying_asset=MTLAssets.mtl_asset, amount=sum_mtl_xlm,
-                       check_persent=persent_cost,
-                       record=offers_mtl_xlm.get('XLM-MTL'))
-
-    # btc
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_btc, price_min=15000, price_max=30000,
-                       price=round(cost_btc * persent_btc),
-                       selling_asset=MTLAssets.btcmtl_asset, buying_asset=MTLAssets.eurmtl_asset, amount=sum_btcmtl,
-                       check_persent=persent_btc_cost, record=offers_eurmtl_btc.get('BTCMTL-EURMTL'))
-
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_btc, price_min=1 / 30000, price_max=1 / 15000,
-                       price=round((1 / cost_btc) * persent_btc, 7),
-                       selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.btcmtl_asset, amount=sum_eurmtl_btc,
-                       check_persent=persent_btc_cost, record=offers_eurmtl_btc.get('EURMTL-BTCMTL'))
-
-    # sats
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_sats, price_min=15000 / sats_cost,
-                       price_max=30000 / sats_cost,
-                       price=round(cost_btc * persent_btc / sats_cost, 8),
-                       selling_asset=MTLAssets.satsmtl_asset, buying_asset=MTLAssets.eurmtl_asset,
-                       amount=sum_satsmtl_eur,
-                       check_persent=persent_btc_cost, record=offers_eurmtl_sats.get('SATSMTL-EURMTL'))
-
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_sats, price_min=1 / 30000 * sats_cost,
-                       price_max=1 / 15000 * sats_cost,
-                       price=round(1 / cost_btc * sats_cost * persent_btc),
-                       selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.satsmtl_asset,
-                       amount=sum_eurmtl_sats,
-                       check_persent=persent_btc_cost, record=offers_eurmtl_sats.get('EURMTL-SATSMTL'))
-
-    # eurmtl 2 usdc
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
-                       price=round(1 / eur_cost * persent_eurmtl, 4),
-                       selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.usdc_asset, amount=sum_eurmtl_usdc,
-                       check_persent=persent_cost,
-                       record=offers_eurmtl_usdc.get('EURMTL-USDC'))
-    await update_offer(account_key=MTLAddresses.public_exchange_eurmtl_usdc, price_min=0.8, price_max=1.3,
-                       price=round(eur_cost * persent_usdc, 4),
-                       selling_asset=MTLAssets.usdc_asset, buying_asset=MTLAssets.eurmtl_asset, amount=sum_usdc,
-                       check_persent=persent_cost,
-                       record=offers_eurmtl_usdc.get('USDC-EURMTL'))
-
-    # # update_offer(account=account_exchange, price_min=15000 * cost_eurmtl, price_max=1 * cost_eurmtl,
-    # #             price=round(cost_btc * cost_eurmtl * persent_btc),
-    # #             selling_asset=asset_btcmtl, buying_asset=asset_xlm, amount=sum_btcmtl, check_persent=persent_cost,
-    # #             record=records.get('BTCMTL-XLM'))
-
-
-@logger.catch
 async def check_fire(cost_fire):
     account_fire = server.load_account(MTLAddresses.public_fire)
     # get balance
@@ -255,17 +246,17 @@ def move_usdc():
                                              network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                              base_fee=base_fee)
 
-    # stellar_transaction.append_payment_op(destination=MTLAddresses.public_exchange_eurmtl_usdc,
-    #                                       asset=MTLAssets.eurmtl_asset,
-    #                                       amount='10000',
-    #                                       source=MTLAddresses.public_exchange_eurmtl_xlm)
+    stellar_transaction.append_payment_op(source=MTLAddresses.public_exchange_eurmtl_usdm,
+                                          asset=MTLAssets.eurmtl_asset,
+                                          amount='20000',
+                                          destination=MTLAddresses.public_exchange_eurmtl_xlm)
 
-    stellar_transaction.append_payment_op(destination=MTLAddresses.public_itolstov,
-                                          asset=MTLAssets.usdc_asset,
-                                          amount='28170',
-                                          source=MTLAddresses.public_exchange_eurmtl_usdc)
+    # stellar_transaction.append_payment_op(destination=MTLAddresses.public_itolstov,
+    #                                       asset=MTLAssets.usdc_asset,
+    #                                       amount='28170',
+    #                                       source=MTLAddresses.public_exchange_eurmtl_usdc)
 
-    #stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
+    # stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
     #                                                       send_asset=MTLAssets.usdc_asset,
     #                                                       send_amount='15000',
     #                                                       source=MTLAddresses.public_exchange_eurmtl_usdc,

@@ -45,8 +45,10 @@ class MTLAddresses:
     public_exchange_eurmtl_xlm = "GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT"
     public_exchange_eurmtl_btc = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
     public_exchange_eurmtl_sats = "GAEO4HE7DJAJPOEE4KU375WEGB2IWO42KVTG3PLBTXL7TSWDSPHPZBOT"
-    public_exchange_eurmtl_usdc = "GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT"
+    public_exchange_eurmtl_usdm = "GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT"
+    public_exchange_usdm_usdc = "GDFBQS4TSDNSVGSR62VYGQAJHYKC3K3WIPBKMODNU6J3DKMSKMN3GBOT"
     public_exchange_mtl_xlm = "GDLIKJG7G3DDGK53TCWMXIEJF3D2U4MBUGINZJFPLHI2JLJBNBE3GBOT"
+    public_exchange_usdm_xlm = "GARRQAITJSDKJ7QXVHTHGQX4FMQRJJBQ5ZXKZK57AVIMHMPS5FDRZBOT"
 
     # user
     public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
@@ -75,7 +77,7 @@ class MTLAssets:
 pack_count = 70  # for select first pack_count - to pack to xdr
 
 exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_eurmtl_btc,
-                 MTLAddresses.public_exchange_eurmtl_usdc, MTLAddresses.public_fire)
+                 MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire)
 
 
 def check_url_xdr(url, full_data=True):
@@ -253,8 +255,8 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
 
 
 def address_id_to_username(key, full_data=False) -> str:
-    if full_data and key in global_data.full_data:
-        return global_data.full_data[key]
+    if full_data and key in global_data.name_list:
+        return global_data.name_list[key]
     return key[:4] + '..' + key[-4:]
 
 
@@ -902,7 +904,7 @@ async def get_damircoin_xdr(div_sum: int):
     return xdr
 
 
-async def get_btcmtl_xdr(btc_sum, address: str):
+async def get_btcmtl_xdr(btc_sum, address: str, memo = None):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
@@ -910,6 +912,8 @@ async def get_btcmtl_xdr(btc_sum, address: str):
     transaction.append_payment_op(destination=MTLAddresses.public_btc_guards, asset=MTLAssets.btcdebt_asset,
                                   amount=btc_sum)
     transaction.append_payment_op(destination=address, asset=MTLAssets.btcmtl_asset, amount=btc_sum)
+    if memo:
+        transaction.add_text_memo(memo)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 
@@ -1510,11 +1514,10 @@ async def cmd_get_new_vote_all_tfm():
     # print(gen_vote_xdr(public_new,vote_list2))
     return xdr
 
-
 if __name__ == '__main__':
     pass
     # gen new
-    # print(gen_new('BOT'))
+    print(gen_new('BOT'))
 
     # open and send
     # stellar_sync_submit(

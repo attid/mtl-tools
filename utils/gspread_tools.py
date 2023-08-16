@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
 
 from db.requests import add_to_watchlist
-from utils.global_data import float2str
+from utils.global_data import float2str, global_data
 from itertools import zip_longest
 
 
@@ -201,7 +201,7 @@ async def gs_update_watchlist(session: Session):
 
     add_to_watchlist(session, combined_keys)
 
-async def gs_get_namelist():
+async def gs_update_namelist():
     # Open the MTL_assets worksheet
     agc = await agcm.authorize()
     ss = await agc.open("MTL_assets")
@@ -236,14 +236,76 @@ async def gs_get_namelist():
                     key_to_desc[key] = username
                 else:
                     key_to_desc[key] = key[:4] + '__' + key[-4:]
-        return key_to_desc
+        global_data.name_list = key_to_desc
     else:
         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
+
+
+async def get_assets_dict():
+    agc = await agcm.authorize()
+
+    # Откройте таблицу и получите лист
+    ss = await agc.open("MTL_assets")
+    wks = await ss.worksheet("ASSETS")
+
+    # Получите данные из листа
+    data = await wks.get_all_values()
+
+    # Проверьте заголовки
+    if data[0][0] != 'code' or data[0][5] != 'issuer' or data[0][13] != 'eurmtl.me':
+        return {}
+
+    # Создайте словарь
+    assets_dict = {}
+    for row in data[1:]:
+        code = row[0]
+        issuer = row[5]
+        eurmtl = row[13]
+
+        # Проверьте условия
+        if eurmtl != 'TRUE' or len(issuer) < 56 or len(code) < 3:
+            continue
+
+        # Добавьте в словарь
+        assets_dict[code] = issuer
+
+    return assets_dict
+
+
+async def get_accounts_dict():
+    agc = await agcm.authorize()
+
+    # Откройте таблицу и получите лист
+    ss = await agc.open("MTL_assets")
+    wks = await ss.worksheet("ACCOUNTS")
+
+    # Получите данные из листа
+    data = await wks.get_all_values()
+
+    # Проверьте заголовки
+    if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][7] != 'eurmtl.me':
+        return None
+
+    # Создайте словарь
+    accounts_dict = {}
+    for row in data[1:]:
+        descr = row[2]
+        pub_key = row[6]
+        eurmtl = row[7]
+
+        # Проверьте условия
+        if eurmtl != 'TRUE' or len(pub_key) != 56 or len(descr) < 3:
+            continue
+
+        # Добавьте в словарь
+        accounts_dict[descr] = pub_key
+
+    return accounts_dict
 
 
 if __name__ == "__main__":
     #a = asyncio.run(check_bim(user_name='itolstov'))
     #a = asyncio.run(gs_find_user('710700915'))
     from db.quik_pool import quik_pool
-    a = asyncio.run(gs_get_namelist())
+    a = asyncio.run(gs_update_namelist())
     print(a)
