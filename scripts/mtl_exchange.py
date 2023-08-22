@@ -138,7 +138,7 @@ async def check_exchange():
         AddressConfig(address=MTLAddresses.public_exchange_usdm_xlm,
                       asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
                       price_min=5, price_max=15,
-                      price_a=usd_xlm_cost * 1.01,
+                      price_a=usd_xlm_cost * 1.02,
                       price_b=round((1 / usd_xlm_cost) * 1.01, 5),
                       check_persent=persent_cost,
                       max_a=max_eurmtl, max_b=round(max_eurmtl * usd_xlm_cost)
@@ -239,44 +239,7 @@ async def check_fire(cost_fire):
         fire_mtl(account_fire, sum_mtl)
 
 
-def move_usdc():
-    # swap usdc - xlm
-    account = server.load_account(MTLAddresses.public_exchange_eurmtl_xlm)
-    stellar_transaction = TransactionBuilder(source_account=account,
-                                             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                             base_fee=base_fee)
-
-    stellar_transaction.append_payment_op(source=MTLAddresses.public_exchange_eurmtl_usdm,
-                                          asset=MTLAssets.eurmtl_asset,
-                                          amount='20000',
-                                          destination=MTLAddresses.public_exchange_eurmtl_xlm)
-
-    # stellar_transaction.append_payment_op(destination=MTLAddresses.public_itolstov,
-    #                                       asset=MTLAssets.usdc_asset,
-    #                                       amount='28170',
-    #                                       source=MTLAddresses.public_exchange_eurmtl_usdc)
-
-    # stellar_transaction.append_path_payment_strict_send_op(destination=MTLAddresses.public_exchange_eurmtl_xlm,
-    #                                                       send_asset=MTLAssets.usdc_asset,
-    #                                                       send_amount='15000',
-    #                                                       source=MTLAddresses.public_exchange_eurmtl_usdc,
-    #                                                       dest_asset=MTLAssets.xlm_asset,
-    #                                                       dest_min='15000',
-    #                                                       path=stellar_get_receive_path(MTLAssets.usdc_asset, '15000',
-    #                                                                                     MTLAssets.xlm_asset))
-
-    stellar_transaction.set_timeout(250)
-    stellar_transaction = stellar_transaction.build()
-    stellar_transaction.sign(get_private_sign())
-    xdr = stellar_transaction.to_xdr()
-    logger.info(f"xdr: {xdr}")
-
-    server.submit_transaction(stellar_transaction)
-
-
 if __name__ == "__main__":
-    #move_usdc()
-    #exit()
     logger.add("mtl_exchange.log", rotation="1 MB")
     if db_load_bot_value(quik_pool(), 0, BotValueTypes.StopExchange, None):
         exit()

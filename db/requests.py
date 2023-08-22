@@ -1,7 +1,7 @@
 import re
 from datetime import timedelta
 from sys import argv
-from typing import List, Dict, cast
+from typing import List, Dict, cast, Optional
 from sqlalchemy import select, and_, case, distinct, Date, extract, desc, cast as sql_cast
 from sqlalchemy.orm import Session
 from db.models import *
@@ -313,18 +313,24 @@ def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amo
     return cast(list[TOperations], result)
 
 
-def db_get_operations(session, last_id, limit=3000) -> List[TOperations]:
+def db_get_operations(session: Session, last_id: Optional[str]=None, limit: int=3000) -> List[TOperations]:
     """
     Получает записи из таблицы t_operations, где id больше заданного значения.
+    Если last_id равно None, возвращает последнюю по дате операцию.
 
     Args:
         session: SQLAlchemy session object
-        last_id (int): значение id, от которого нужно начать выборку.
+        last_id (Optional[str]): значение id, от которого нужно начать выборку.
         limit (int): максимальное количество возвращаемых записей. По умолчанию 3000.
 
     Returns:
         List[TOperations]: список объектов TOperations, представляющих записи в базе данных.
     """
+    if last_id is None:
+        # Если last_id None, ищем последнюю запись по дате.
+        last_record = session.query(TOperations).order_by(TOperations.dt.desc()).first()
+        return [last_record] if last_record else []
+
     query = session.query(TOperations). \
         filter(TOperations.id > last_id). \
         order_by(TOperations.id). \

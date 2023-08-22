@@ -1,14 +1,15 @@
 import json
 from datetime import datetime
 import random
+import aiohttp
 from aiogram import Dispatcher, types, Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 from sqlalchemy.orm import Session
-
-from db.requests import db_load_new_message
-from utils.global_data import MTLChats
+from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value
+from scripts.mtl_exchange2 import check_mm
+from utils.global_data import MTLChats, BotValueTypes
 
 
 @logger.catch
@@ -70,9 +71,27 @@ async def cmd_send_message_1m(bot: Bot, session: Session):
 
 
 @logger.catch
+async def time_check_ledger(bot: Bot, session: Session):
+    saved_ledger = int(db_load_bot_value(session, 0, BotValueTypes.LastLedger, '45407700'))
+    async with aiohttp.ClientSession() as httpsession:
+        async with httpsession.get(f'https://horizon.stellar.org') as resp:
+            json_resp = await resp.json()
+            core_latest_ledger = int(json_resp['history_latest_ledger'])
+            if core_latest_ledger > saved_ledger + 10:
+                db_send_admin_message(session, f'Отставание больше чем {core_latest_ledger - saved_ledger}')
+
+@logger.catch
+async def time_check_mm(bot: Bot, session: Session):
+    await check_mm(session)
+
+
+@logger.catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session: Session):
-    pass
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session), misfire_grace_time=360)
+    scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session), misfire_grace_time=360,
+                      jitter=5 * 60)
+    scheduler.add_job(time_check_mm, "interval", hours=1, args=(bot, session), misfire_grace_time=360, jitter=10 * 60)
+
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
                       misfire_grace_time=360)
     ##scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(bot,), id='test')
