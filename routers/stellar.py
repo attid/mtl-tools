@@ -1,20 +1,20 @@
 from datetime import datetime
-
-import gspread
 from aiogram import Router, Bot
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from config_reader import start_path
 from scripts.update_report import update_airdrop
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
 from utils.global_data import MTLChats, is_skynet_admin, global_data
-from utils.gspread_tools import check_bim
+from utils.gspread_tools import check_bim, agcm
+from utils.img_tools import create_image_with_text
 from utils.stellar_utils import cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances, \
     MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id, cmd_calc_divs, \
     cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr, get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, \
-    get_damircoin_xdr
+    get_damircoin_xdr, cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap
 
 router = Router()
 
@@ -46,7 +46,8 @@ async def rt_show_bim_msg(message: Message, session: Session):
 @router.message(Command(commands=["balance"]))
 async def cmd_show_balance(message: Message):
     result = await get_cash_balance(message.chat.id)
-    await message.answer(result)
+    create_image_with_text(result, image_size=(550, 500))
+    await message.answer_photo(FSInputFile(start_path + 'output_image.png'))
 
 
 @router.message(Command(commands=["do_bim"]))
@@ -219,6 +220,46 @@ async def cmd_do_sats_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
 
 
+@router.message(Command(commands=["do_usdm_div"]))
+async def cmd_do_usdm_div(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    balance = await get_balances(MTLAddresses.public_div)
+    if int(balance.get('USDM', 0)) < 10:
+        await message.reply(f'Low usdm balance at {MTLAddresses.public_div} can`t pay divs')
+        return
+
+    # новая запись
+    # ('mtl div 17/12/2021')
+    div_list_id = cmd_create_list(session, datetime.now().strftime('mtl div %d/%m/%Y'), 5)
+    lines = []
+    msg = await message.answer(
+        add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+    result = await cmd_calc_usdm_divs(session, div_list_id)
+    await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    i = 1
+
+    while i > 0:
+        i = cmd_gen_xdr(session, div_list_id)
+        await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
+
+    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    i = 1
+    e = 1
+    while i > 0:
+        try:
+            i = await cmd_send_by_list_id(session, div_list_id)
+            await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/12)"))
+        except Exception as err:
+            logger.info(str(err))
+            await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
+
+
 @router.message(Command(commands=["get_vote_fund_xdr"]))
 async def cmd_get_vote_fund_xdr(message: Message):
     if len(message.text.split()) > 1:
@@ -276,6 +317,18 @@ async def cmd_get_damircoin_xdr(message: Message):
                            'use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL')
 
 
+@router.message(Command(commands=["get_toc_xdr"]))
+async def cmd_get_toc_xdr(message: Message):
+    arg = message.text.split()
+    if len(arg) > 1:
+        xdr = await get_toc_xdr(int(arg[1]))
+        await multi_answer(message, xdr)
+        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+    else:
+        await multi_answer(message,
+                           'use -  /get_toc_xdr 123 \n where 123 sum in EURMTL')
+
+
 @router.message(Command(commands=["update_airdrops"]))
 async def cmd_update_airdrops(message: Message):
     if not is_skynet_admin(message):
@@ -309,9 +362,9 @@ async def cmd_update_bim1(message: Message, bot: Bot):
 
     agc = await agcm.authorize()
 
-    wks = gc.open("MTL_BIM_register").worksheet("List")
+    wks = await agc.open("MTL_BIM_register").worksheet("List")
     update_list = []
-    data = wks.get_all_values()
+    data = await wks.get_all_values()
     for record in data[2:]:
         new_data = None
         if record[3]:
@@ -322,7 +375,7 @@ async def cmd_update_bim1(message: Message, bot: Bot):
                 new_data = False
         update_list.append([new_data])
 
-    wks.update('S3', update_list)
+    await wks.update('S3', update_list)
     await message.reply('Done')
 
 
@@ -338,3 +391,20 @@ async def cmd_check_bim(message: Message):
         msg = await check_bim(message.from_user.id)
 
     await message.reply(msg)
+
+@router.message(Command(commands=["check_mtlap"]))
+async def cmd_check_bim(message: Message):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+    key = find_stellar_public_key(message.text)
+    if key is None and message.reply_to_message:
+        key = find_stellar_public_key(message.reply_to_message.text)
+
+    if key is None:
+        await message.reply('Wrong format. Use: /check_mtlap public_key')
+        return
+
+    msg = await check_mtlap(key)
+    await message.reply(msg)
+

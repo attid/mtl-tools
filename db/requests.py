@@ -2,7 +2,7 @@ import re
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast, Optional
-from sqlalchemy import select, and_, case, distinct, Date, extract, desc, cast as sql_cast
+from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast
 from sqlalchemy.orm import Session
 from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
@@ -301,6 +301,7 @@ def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amo
     result = (
         session.query(TOperations)
         .filter(TOperations.id > last_id)
+        .filter(TOperations.operation != 'trustline_created')
         .filter(
             (TOperations.code1 == token) & (func.cast(TOperations.amount1, Float) > amount) |
             (TOperations.code2 == token) & (func.cast(TOperations.amount2, Float) > amount)

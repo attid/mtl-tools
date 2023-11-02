@@ -58,6 +58,12 @@ def has_words(master, words_array):
             return True
     return False
 
+def start_words(master, words_array):
+    if master:
+        for word in words_array:
+            if master.upper().startswith(word.upper()):
+                return True
+    return False
 
 class HasText(Filter):
     def __init__(self, my_arr: tuple) -> None:
@@ -65,3 +71,10 @@ class HasText(Filter):
 
     async def __call__(self, message: Message) -> bool:
         return has_words(message.text, self.my_arr)
+
+class StartText(Filter):
+    def __init__(self, my_arr: tuple) -> None:
+        self.my_arr = my_arr
+
+    async def __call__(self, message: Message) -> bool:
+        return start_words(message.text, self.my_arr)

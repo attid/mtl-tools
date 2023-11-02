@@ -1,5 +1,3 @@
-import asyncio
-
 from utils.stellar_utils import *
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EURDEBT', 'EURMTL', 'GRAFDRON',

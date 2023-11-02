@@ -1,7 +1,3 @@
-import asyncio
-
-from db.requests import db_cmd_add_message
-from utils.global_data import *
 from utils.stellar_utils import *
 import sys
 from db.quik_pool import quik_pool

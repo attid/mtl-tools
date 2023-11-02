@@ -1,15 +1,13 @@
 import copy
 import json
-
-import asyncio
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
+from utils.gspread_tools import gs_update_namelist
 from utils.stellar_utils import MTLAddresses, get_balances, address_id_to_username
 
 router = Router()
@@ -126,7 +124,7 @@ async def cmd_poll_check(message: Message, session: Session):
 @router.callback_query(PollCallbackData.filter())
 async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, session: Session):
     answer = callback_data.answer
-    user = '@' + query.from_user.username if query.from_user.username else query.from_user.id
+    user = '@' + query.from_user.username.lower() if query.from_user.username else query.from_user.id
     my_poll = json.loads(
         db_load_bot_value(session, query.message.chat.id, -1 * query.message.message_id, empty_poll))
 
@@ -164,6 +162,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
 
 
 async def cmd_save_votes(session: Session):
+    await gs_update_namelist()
     vote_list = {}
     for chat_id in chat_to_address:
         if chat_to_address[chat_id] in vote_list:
@@ -175,7 +174,7 @@ async def cmd_save_votes(session: Session):
             for signer in signers:
                 if signer['weight'] > 0:
                     total += signer['weight']
-                    vote_list[chat_to_address[chat_id]][address_id_to_username(signer['key'])] = signer['weight']
+                    vote_list[chat_to_address[chat_id]][address_id_to_username(signer['key'], full_data=True).lower()] = signer['weight']
             vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1, '75': total // 3 * 2 + 1,
                                                            '100': total}
     db_save_bot_value(session, 0, BotValueTypes.Votes, json.dumps(vote_list))

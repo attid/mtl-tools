@@ -1,11 +1,7 @@
-from aiogram import types, F, Bot
-import re, random
-
+from aiogram import F, Bot
 from aiogram.enums import ChatType, ParseMode, ChatAction
-from loguru import logger
 from aiogram import Router
-from aiogram.filters import Command, Text
-from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command
 from aiogram.types import Message, ChatPermissions
 from sqlalchemy.orm import Session
 
@@ -13,7 +9,7 @@ from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_mes
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from utils import dialog
-from utils.aiogram_utils import multi_reply, HasText, has_words
+from utils.aiogram_utils import multi_reply, HasText, has_words, StartText
 from utils.dialog import talk_check_spam, add_task_to_google
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
@@ -39,7 +35,7 @@ async def cmd_employment(message: Message, bot: Bot):
         await bot.send_message(chat_id=MTLChats.TestGroup, text=f'Спам {spam_persent}% check please')
 
 
-@router.message(Text(contains='eurmtl.me/sign_tools'))
+@router.message(F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
         msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
@@ -110,13 +106,13 @@ async def cmd_last_check1(message: Message, session: Session, bot: Bot):
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('УБИТЬ', 'убей', 'kill')))
 async def cmd_last_check_nap(message: Message):
     await message.answer('Нельзя убивать. NAP NAP NAP')
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ДЕКОДИРУЙ', 'decode')))
 async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
     if message.reply_to_message:
@@ -133,14 +129,14 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
         await multi_reply(message, msg[:4000])
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
-                Text(contains=('НАПОМНИ',), ignore_case=True))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
+                HasText(('НАПОМНИ',)))
 async def cmd_last_check_remind(message: Message, session: Session, bot: Bot):
     await remind(message, session, bot)
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
-                Text(contains=('задач',), ignore_case=True))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
+                HasText(('задач',)))
 async def cmd_last_check_task(message: Message, session: Session, bot: Bot):
     msg = message.text
     msg += f'\nсообщение от {message.from_user.username} ссылка на это сообщение {message.get_url()}'
@@ -152,14 +148,14 @@ async def cmd_last_check_task(message: Message, session: Session, bot: Bot):
     await message.reply(msg)
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
-                Text(contains=('гороскоп',), ignore_case=True))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
+                HasText(('гороскоп',)))
 async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot):
     await message.answer('\n'.join(dialog.get_horoscope()), parse_mode=ParseMode.MARKDOWN)
 
 
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True),
-                Text(contains=('ОБНОВИ',), ignore_case=True))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
+                HasText(('ОБНОВИ',)))
 async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
@@ -199,7 +195,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
 
 
 @router.message(F.chat.type == ChatType.PRIVATE)
-@router.message(Text(startswith=('SKYNET', 'СКАЙНЕТ'), ignore_case=True))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ')))
 @router.message(Command(commands=["skynet"]))
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     msg = await dialog.talk(message.chat.id, message.text)

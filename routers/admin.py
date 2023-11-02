@@ -3,16 +3,12 @@ import hashlib
 import json
 import os
 import re
-from typing import BinaryIO
-
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
-from aiogram.filters import Command, Text
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions
-from loguru import logger
 from sqlalchemy.orm import Session
-
 from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.dialog import talk_get_summary
@@ -212,7 +208,7 @@ async def cmd_get_info(message: Message, bot: Bot):
     await message.reply('\n'.join(messages))
 
 
-@router.message(Text(startswith="!ro"))
+@router.message(F.text.startswith("!ro"))
 async def cmd_set_ro(message: Message):
     if not is_admin(message):
         await message.reply('You are not admin.')
@@ -317,11 +313,12 @@ async def cmd_get_summary(message: Message, session: Session):
 async def cmd_get_sha1(message: Message, bot: Bot):
     document = message.document
     file_data = await bot.download(document)
+    file_bytes = file_data.read()
 
     print(type(file_data), file_data)
 
     hasher = hashlib.sha1()
-    hasher.update(file_data.read())
+    hasher.update(file_bytes)
 
     # Get the SHA-1 hash and convert it into bytes
     sha1_hash = hasher.hexdigest()#.encode('utf-8')
@@ -331,7 +328,32 @@ async def cmd_get_sha1(message: Message, bot: Bot):
     base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
     print(sha1_hash, base64_hash)
 
-    await message.reply(f' SHA-1: <code>{sha1_hash}</code>\nBASE64: <code>{base64_hash}</code>')
+    #sha256
+    sha256_hasher = hashlib.sha256()
+    sha256_hasher.update(file_bytes)
+    sha256_hash = sha256_hasher.hexdigest()
+
+    print(f"SHA-256: {sha256_hash}")
+
+
+    await message.reply(f'SHA-1: <code>{sha1_hash}</code>\n'
+                        f'BASE64: <code>{base64_hash}</code>\n\n'
+                        f'SHA-256: <code>{sha256_hash}</code>')
     #hex: 679cd49aec59cf2ccaf843ea4c484975d33dd18a
     #base64: Z5zUmuxZzyzK+EPqTEhJddM90Yo=
 
+
+
+@router.message(Command(commands=["s"]))
+@router.message(Command(commands=["send_me"]))
+async def cmd_get_info(message: Message, bot: Bot):
+    if not is_admin(message):
+        await message.reply('You are not admin.')
+        return
+
+    if message.reply_to_message is None:
+        await message.reply('Please send for reply message to get it')
+        return
+
+    if message.reply_to_message :
+        await bot.send_message(chat_id=message.from_user.id, text=message.reply_to_message.html_text)

@@ -135,9 +135,11 @@ async def gs_save_new_support(user_id, username, agent_username, url):
     ws = await ss.worksheet("ALL")
     # n	date_in	username	ID	ticket	request	status	1	2	3	4	5	6	notes	agent
     await ws.update(f'A{last_col + 1}', [[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
-                                          None, None, None, None, None, None, None, None, None, agent_username]], value_input_option='USER_ENTERED')
-    #await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
-    #await wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
+                                          None, None, None, None, None, None, None, None, None, agent_username]],
+                    value_input_option='USER_ENTERED')
+    # await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    # await wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
+
 
 async def gs_close_support(url):
     agc = await agcm.authorize()
@@ -174,7 +176,7 @@ async def gs_find_user(user_id):
     return result
 
 
-async def gs_update_watchlist(session: Session):
+async def gs_update_watchlist(session_pool):
     # Open the MTL_assets worksheet
     agc = await agcm.authorize()
     ss = await agc.open("MTL_assets")
@@ -199,7 +201,9 @@ async def gs_update_watchlist(session: Session):
     # Remove duplicates from the combined keys list
     combined_keys = list(set(combined_keys))
 
-    add_to_watchlist(session, combined_keys)
+    with session_pool() as session:
+        add_to_watchlist(session, combined_keys)
+
 
 async def gs_update_namelist():
     # Open the MTL_assets worksheet
@@ -304,8 +308,8 @@ async def get_accounts_dict():
 
 
 if __name__ == "__main__":
-    #a = asyncio.run(check_bim(user_name='itolstov'))
-    #a = asyncio.run(gs_find_user('710700915'))
-    from db.quik_pool import quik_pool
+    # a = asyncio.run(check_bim(user_name='itolstov'))
+    # a = asyncio.run(gs_find_user('710700915'))
+    # from db.quik_pool import quik_pool
     a = asyncio.run(gs_update_namelist())
     print(a)

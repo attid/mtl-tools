@@ -1,6 +1,6 @@
 from scripts.mtl_exchange import *
 
-from stellar_sdk import TransactionBuilder, Network, TransactionEnvelope
+from stellar_sdk import TransactionBuilder, Network
 
 from scripts.update_report import update_mmwb_report
 
@@ -88,13 +88,12 @@ async def check_mm(session: Session):
         db_send_admin_message(session, f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
         logger.info(f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
     amount = float(balances.get('USDC', 0))
-    if amount > 11000:
+    if amount > 12000:
         amount = str(round(amount - 11000))
         await exchange_token(MTLAddresses.public_exchange_usdm_usdc, MTLAddresses.public_exchange_usdm_xlm,
-                         amount, MTLAssets.usdc_asset, MTLAssets.xlm_asset)
+                             amount, MTLAssets.usdc_asset, MTLAssets.xlm_asset)
         db_send_admin_message(session, f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
         logger.info(f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
-
 
     await update_mmwb_report(session)
 
@@ -102,5 +101,33 @@ async def check_mm(session: Session):
 if __name__ == "__main__":
     from db.quik_pool import quik_pool
 
-    asyncio.run(check_mm(quik_pool()))
-    # move_token()
+    # remove orders
+    # xdr = stellar_remove_orders(MTLAddresses.public_exchange_usdm_xlm, None)
+    # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
+
+
+    # asyncio.run(move_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
+    #                      destination_account=MTLAddresses.public_exchange_eurmtl_xlm,
+    #                      amount='22000', asset=MTLAssets.xlm_asset,
+    #                      ))
+
+    asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_eurmtl_btc,
+                                destination_account=MTLAddresses.public_exchange_usdm_xlm,
+                                amount='0.02', source_asset=MTLAssets.btcmtl_asset,
+                                destination_asset=MTLAssets.xlm_asset))
+
+
+    # asyncio.run(update_main_report(quik_pool()))
+    # for x in [MTLAddresses.public_exchange_eurmtl_xlm,
+    #           MTLAddresses.public_exchange_eurmtl_btc,
+    #           MTLAddresses.public_exchange_eurmtl_sats,
+    #           MTLAddresses.public_exchange_eurmtl_usdm,
+    #           MTLAddresses.public_exchange_usdm_usdc,
+    #           MTLAddresses.public_exchange_mtl_xlm,
+    #           MTLAddresses.public_exchange_usdm_xlm
+    #           ]:
+    #     stellar_sync_submit(stellar_sign(
+    #         stellar_add_trustline(x,
+    #                               asset_code=MTLAssets.aqua_asset.code,
+    #                               asset_issuer=MTLAssets.aqua_asset.issuer),
+    #         get_private_sign()))

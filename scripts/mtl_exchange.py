@@ -1,4 +1,3 @@
-import asyncio
 from utils.stellar_utils import *
 from db.quik_pool import quik_pool
 from collections import namedtuple
@@ -11,7 +10,7 @@ sats_cost = 100000000
 # min_xlm = 50.0
 persent_eurmtl = 1.03  # 1.03 =  5% наценки
 persent_btc = 1.01  #
-persent_xlm = 1.002  #
+persent_xlm = 1.03  #
 persent_usdc = 1.002  # 0.975 for fund exchange
 persent_cost = 1.01  # 1% изменения цены для обновления
 persent_btc_cost = 1.001  # 0,1% изменения цены для обновления
@@ -101,18 +100,18 @@ async def check_exchange():
         # EURMTL - BTC
         AddressConfig(address=MTLAddresses.public_exchange_eurmtl_btc,
                       asset_a=MTLAssets.btcmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-                      price_min=15000, price_max=30000,
-                      price_a=round(btc_eur_cost * persent_btc),
-                      price_b=round((1 / btc_eur_cost) * persent_btc, 7),
+                      price_min=20000, price_max=40000,
+                      price_a=round(btc_eur_cost * 1.01),
+                      price_b=round((1 / btc_eur_cost) * 1.03, 7),
                       check_persent=persent_btc_cost,
                       max_a=round(max_eurmtl / btc_eur_cost, 5), max_b=max_eurmtl
                       ),
         # EURMTL - SATS
         AddressConfig(address=MTLAddresses.public_exchange_eurmtl_sats,
                       asset_a=MTLAssets.satsmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-                      price_min=15000 / sats_cost, price_max=30000 / sats_cost,
-                      price_a=round(btc_eur_cost * persent_btc / sats_cost, 8),
-                      price_b=round(1 / btc_eur_cost * sats_cost * persent_btc),
+                      price_min=20000 / sats_cost, price_max=40000 / sats_cost,
+                      price_a=round(btc_eur_cost * 1.01 / sats_cost, 8),
+                      price_b=round(1 / btc_eur_cost * sats_cost * 1.03),
                       check_persent=persent_cost,
                       max_a=round(max_eurmtl / btc_eur_cost, 5) * sats_cost, max_b=max_eurmtl
                       ),
@@ -139,7 +138,7 @@ async def check_exchange():
                       asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
                       price_min=5, price_max=15,
                       price_a=usd_xlm_cost * 1.02,
-                      price_b=round((1 / usd_xlm_cost) * 1.01, 5),
+                      price_b=round((1 / usd_xlm_cost) * 1.03, 5),
                       check_persent=persent_cost,
                       max_a=max_eurmtl, max_b=round(max_eurmtl * usd_xlm_cost)
                       ),

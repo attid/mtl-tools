@@ -2,9 +2,8 @@ import asyncio
 import json
 import sys
 from contextlib import suppress
-
 import tzlocal
-from aiogram import types, Bot, Dispatcher
+from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
@@ -13,11 +12,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-
 from config_reader import config
 from db.requests import db_load_bot_value, db_get_chat_ids_by_key, db_get_chat_dict_by_key
 from middlewares.db import DbSessionMiddleware
-
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
 from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
@@ -79,10 +76,14 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
     global_tasks.append(asyncio.create_task(work_with_support()))
-    asyncio.create_task(gs_update_namelist())
-    asyncio.create_task(gs_update_watchlist(dispatcher['session']))
+    asyncio.create_task(startup_update_namelist(bot))
+    asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
 
 
+async def startup_update_namelist(bot: Bot):
+    await gs_update_namelist()
+    with suppress(TelegramBadRequest):
+        await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
 
 
 async def on_shutdown(bot: Bot):
@@ -131,8 +132,8 @@ async def main():
     scheduler = AsyncIOScheduler(timezone=str(tzlocal.get_localzone()))
     aiogram_utils.scheduler = scheduler
     scheduler.start()
-    time_handlers.scheduler_jobs(scheduler, bot, db_pool())
-    dp['session'] = db_pool()
+    time_handlers.scheduler_jobs(scheduler, bot, db_pool)
+    dp['dbsession_pool'] = db_pool
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 

@@ -72,6 +72,8 @@ class MTLAssets:
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
     damircoin_asset = Asset("DamirCoin", MTLAddresses.public_damir)
+    toc_asset = Asset("TOC", 'GBJ3HT6EDPWOUS3CUSIJW5A4M7ASIKNW4WFTLG76AAT5IE6VGVN47TIC')
+    aqua_asset = Asset("AQUA", 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA')
 
 
 pack_count = 70  # for select first pack_count - to pack to xdr
@@ -161,6 +163,9 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             if operation.med_threshold:
                 data_exist = True
                 result.append(f"Установка нового требования. Нужно будет {operation.med_threshold} голосов")
+            if operation.home_domain:
+                data_exist = True
+                result.append(f"Установка нового домена {operation.home_domain}")
             continue
         if good_operation(operation, "ChangeTrust", filter_operation, ignore_operation):
             data_exist = True
@@ -214,6 +219,15 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             result.append(
                 f"    ManageData {operation.data_name} = {operation.data_value} ")
             continue
+        if good_operation(operation, "SetTrustLineFlags", filter_operation, ignore_operation):
+            data_exist = True
+            result.append(
+                f"    Trustor {address_id_to_username(operation.trustor, full_data=full_data)} for asset {operation.asset.code}")
+            if operation.clear_flags is not None:
+                result.append(f"    Clear flags: {operation.clear_flags}")
+            if operation.set_flags is not None:
+                result.append(f"    Set flags: {operation.set_flags}")
+            continue
         if good_operation(operation, "CreateAccount", filter_operation, ignore_operation):
             data_exist = True
             result.append(
@@ -238,6 +252,16 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             data_exist = True
             result.append(f"    EndSponsoringFutureReserves")
             continue
+        if type(operation).__name__ == "Clawback":
+            data_exist = True
+            #bad xdr 14 <Clawback [
+            # asset=<Asset [code=MTLAP, issuer=GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA, type=credit_alphanum12]>,
+            # from_=<MuxedAccount [account_id=GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR, account_muxed_id=None]>,
+            # amount=1, source=None]>
+            result.append(
+                f"    Возврат {operation.amount} {operation.asset.code} с аккаунта {address_id_to_username(operation.from_.account_id)}")
+            continue
+
         if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
                                         "PathPaymentStrictReceive", "ClaimClaimableBalance", "CreateAccount",
                                         "CreateClaimableBalance", "ChangeTrust", "SetOptions", "Payment", "ManageData",
@@ -256,7 +280,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
 
 def address_id_to_username(key, full_data=False) -> str:
     if full_data and key in global_data.name_list:
-        return global_data.name_list[key]
+        return '@' + global_data.name_list[key]
     return key[:4] + '..' + key[-4:]
 
 
@@ -399,32 +423,52 @@ async def cmd_show_bim(session: Session):
 async def get_cash_balance(chat_id):
     total_cash = 0
     total_eurmtl = 0
-    result = ''
+    result = '============================\n'
+    result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = [
         ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
-        ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
         ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
         ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
         ['GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ', 'Егора'],
         ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
         ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
+        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
+        ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
 
     ]
+
+    t = """
+    ==============================
+    |Кубышка | Наличных | EURMTL |
+    |Игоря   |      500 |  49500 | 
+    =========================+====
+    |Итого в !     23749! 111535 !
+    ========================+=====
+    """
 
     for treasure in treasure_list:
         assets = await get_balances(treasure[0])
         diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-        name = treasure[1] if chat_id == -1001169382324 else treasure[1][0]
-        result += f"Сейчас в кубышке {name} {diff} наличных и {int(assets['EURMTL'])} EURMTL \n"
+        name = treasure[1] if chat_id == MTLChats.GuarantorGroup else treasure[1][0]
+        s_cash = f'{diff} '.rjust(8)
+        s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
+        result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
         total_cash += diff
         total_eurmtl += int(assets['EURMTL'])
 
     assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
-    result += f"А у Skynet {int(assets['USDC'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
+    # result += f"А у Skynet {int(assets['USDM'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
+    s_cash = f'*{int(assets["USDM"])} '.rjust(8)
+    s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
+    result += f"|{'SkyNet'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
 
-    result += f"\n"
-    result += f"Итого в кубышках {total_cash} наличных и {total_eurmtl} EURMTL \n"
+    result += '============================\n'
+    s_cash = f'{total_cash} '.rjust(8)
+    s_eurmtl = f'{total_eurmtl} '.rjust(8)
+    result += f"|{'Итого'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
+
+    result += '============================\n'
 
     return result
 
@@ -501,9 +545,13 @@ def cmd_gen_xdr(session: Session, list_id: int):
         div_account = server.load_account(MTLAddresses.public_div)
         asset = MTLAssets.satsmtl_asset
 
+    if pay_type == 5:
+        div_account = server.load_account(MTLAddresses.public_div)
+        asset = MTLAssets.usdm_asset
+
     transaction = TransactionBuilder(source_account=div_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
+    transaction.set_timeout(60 * 60 * 24 * 7)
 
     for payment in db_get_payments(session, list_id, pack_count):
         if round(payment.user_div, 7) > 0:
@@ -673,7 +721,7 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                          base_fee=base_fee)
-        transaction.set_timeout(60 * 60)
+        transaction.set_timeout(60 * 60 * 24 * 7)
     data = data.split(':')
     data_name = data[0]
     data_value = data[1]
@@ -754,6 +802,72 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
     # print(*mtl_accounts, sep='\n')
 
 
+async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
+    # MTL
+    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
+    mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
+    rq = requests.get(
+        f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
+    mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
+    # FOND
+    fund_balance = await get_balances(MTLAddresses.public_issuer)
+    mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+
+    div_accounts = []
+    donates = []
+    if test_sum > 0:
+        div_sum = test_sum
+    else:
+        # get balance
+        div_sum = await get_balances(MTLAddresses.public_div)
+        div_sum = float(div_sum['USDM'])
+        logger.info(f"div_sum = {div_sum}")
+
+    # print(json.dumps(response, indent=4))
+    accounts = await stellar_get_mtl_holders()
+    for account in accounts:
+        # print(json.dumps(account,indent=4))
+        # print('***')
+        balances = account["balances"]
+        balance_mtl = 0
+        balance_rect = 0
+        usdm_open = 0
+        # check all balance
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_code"] == "MTL":
+                    balance_mtl = round(float(balance["balance"]), 7)
+                if balance["asset_code"] == "MTLRECT":
+                    balance_rect = round(float(balance["balance"]), 7)
+                if balance["asset_code"] == "USDM":
+                    usdm_open = 1
+        div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
+        # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
+        # check sponsor
+        donates.extend(get_donate_list(account))
+
+        if (usdm_open > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
+                and (account["account_id"] != MTLAddresses.public_pawnshop):
+            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
+
+    div_accounts.sort(key=get_key_1, reverse=True)
+    payments = [
+        TPayments(
+            user_key=item[0],
+            mtl_sum=item[1],
+            user_calc=item[2],
+            user_div=item[3],
+            id_div_list=item[4]
+        )
+        for item in div_accounts
+    ]
+    session.add_all(payments)
+    session.commit()
+
+    return div_accounts
+    # print(*mtl_accounts, sep='\n')
+
+
 async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     if len(public_key) > 10:
         vote_list = await cmd_gen_mtl_vote_list()
@@ -783,7 +897,7 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
                            remove_master=True)
         # return sequence because every build inc number
         transaction.source_account.sequence = sequence
-        transaction.set_timeout(60 * 60 * 48)
+        transaction.set_timeout(60 * 60 * 24 * 7)
         xdr = gen_vote_xdr(MTLAddresses.public_pawnshop, vote_list6, transaction, MTLAddresses.public_pawnshop, )
         result.append(xdr)
 
@@ -821,7 +935,7 @@ async def get_defi_xdr(div_sum: int):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_defi)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 12)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     for account in accounts_list:
         if account[2] > 0.0001:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.satsmtl_asset,
@@ -857,7 +971,7 @@ async def get_usdm_xdr(div_sum: int):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_usdm)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 12)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     for account in accounts_list:
         if account[2] > 0.0001:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.usdm_asset,
@@ -893,7 +1007,7 @@ async def get_damircoin_xdr(div_sum: int):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_damir)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 12)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     for account in accounts_list:
         if account[2] > 0.0001:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.eurmtl_asset,
@@ -904,11 +1018,48 @@ async def get_damircoin_xdr(div_sum: int):
     return xdr
 
 
-async def get_btcmtl_xdr(btc_sum, address: str, memo = None):
+async def get_toc_xdr(div_sum: int):
+    accounts = await stellar_get_mtl_holders(MTLAssets.toc_asset)
+    accounts_list = []
+    total_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if (balance["asset_code"] == MTLAssets.toc_asset.code and
+                        balance["asset_issuer"] == MTLAssets.toc_asset.issuer):
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        if account["account_id"] != "GDEF73CXYOZXQ6XLUN55UBCW5YTIU4KVZEPOI6WJSREN3DMOBLVLZTOP":
+            accounts_list.append([account["account_id"], token_balance, 0])
+            total_sum += token_balance
+
+    persent = div_sum / total_sum
+
+    for account in accounts_list:
+        account[2] = account[1] * persent
+
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAssets.toc_asset.issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 24 * 7)
+    for account in accounts_list:
+        if account[2] > 0.0001:
+            transaction.append_payment_op(destination=account[0], asset=MTLAssets.eurmtl_asset,
+                                          amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+async def get_btcmtl_xdr(btc_sum, address: str, memo=None):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 12)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.append_payment_op(destination=MTLAddresses.public_btc_guards, asset=MTLAssets.btcdebt_asset,
                                   amount=btc_sum)
     transaction.append_payment_op(destination=address, asset=MTLAssets.btcmtl_asset, amount=btc_sum)
@@ -1203,7 +1354,7 @@ def stellar_remove_orders(public_key, xdr):
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                          base_fee=base_fee)
-        transaction.set_timeout(60 * 60)
+        transaction.set_timeout(60 * 60 * 24 * 7)
 
     call = Server(horizon_url="https://horizon.stellar.org").offers().for_account(public_key).limit(200).call()
 
@@ -1274,7 +1425,7 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
     if transaction is None:
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
-        transaction.set_timeout(60 * 60 * 48)
+        transaction.set_timeout(60 * 60 * 24 * 7)
     threshold = 0
 
     for arr in vote_list:
@@ -1456,11 +1607,11 @@ def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive
     source_account = server.load_account(from_account)
     transaction = TransactionBuilder(source_account=source_account,
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.append_path_payment_strict_send_op(from_account, send_asset, send_amount, receive_asset,
                                                    receive_amount,
                                                    stellar_get_receive_path(send_asset, send_amount, receive_asset))
-    transaction.set_timeout(60 * 60)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     full_transaction = transaction.build()
     logger.info(full_transaction.to_xdr())
     return full_transaction.to_xdr()
@@ -1485,7 +1636,7 @@ def stellar_add_trustline(address_id, asset_code, asset_issuer):
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(address_id)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
-    transaction.set_timeout(60 * 60)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.append_change_trust_op(Asset(asset_code, asset_issuer))
     transaction = transaction.build()
 
@@ -1502,7 +1653,7 @@ async def cmd_get_new_vote_all_tfm():
         source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_fin),
         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
     sequence = transaction.source_account.sequence
-    transaction.set_timeout(60 * 60 * 48)
+    transaction.set_timeout(60 * 60 * 24 * 7)
     xdr = gen_vote_xdr(public_key=MTLAddresses.public_fin, vote_list=vote_list,
                        threshold_style=1, transaction=transaction)
 
@@ -1514,10 +1665,43 @@ async def cmd_get_new_vote_all_tfm():
     # print(gen_vote_xdr(public_new,vote_list2))
     return xdr
 
+
+def find_stellar_public_key(text):
+    # Stellar публичные ключи начинаются с 'G' и содержат 56 символов
+    stellar_public_key_pattern = r'G[A-Za-z0-9]{55}'
+    match = re.search(stellar_public_key_pattern, text)
+    return match.group(0) if match else None
+
+
+def find_stellar_federation_address(text):
+    # Stellar федеральные адреса имеют формат 'username*domain.com'
+    stellar_federation_address_pattern = r'[a-z0-9]+[\._]?[a-z0-9]+[*][a-z0-9\-]+[\.][a-z0-9\.]+'
+    match = re.search(stellar_federation_address_pattern, text)
+    return match.group(0) if match else None
+
+
+async def check_mtlap(key):
+    balances = await get_balances(address=key)
+
+    if 'MTLAP' in balances:
+        return f'Баланс MTLAP: {balances["MTLAP"]}'
+
+    return 'MTLAP не найден'
+
+
+
 if __name__ == '__main__':
     pass
+
     # gen new
-    print(gen_new('BOT'))
+    #print(gen_new('GANG'))
+
+    #print(asyncio.run(check_mtlap('GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI')))
+
+    # stellar_sync_submit(
+    #    stellar_sign(
+    #        '',
+    #        get_private_sign()))
 
     # open and send
     # stellar_sync_submit(

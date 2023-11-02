@@ -3,17 +3,14 @@ import re
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, Text, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
+from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
 from aiogram.filters.callback_data import CallbackData
-from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
     ChatMemberUpdated, ChatMemberMember
-from loguru import logger
 from sqlalchemy.orm import Session
-
-from db.requests import db_save_bot_user, db_save_bot_value, db_load_bot_value, db_send_admin_message
+from db.requests import db_save_bot_value, db_load_bot_value, db_send_admin_message
 from utils.aiogram_utils import is_admin, cmd_delete_later
-from utils.global_data import MTLChats, global_data, BotValueTypes, is_skynet_admin
+from utils.global_data import global_data, BotValueTypes, is_skynet_admin
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -268,7 +265,7 @@ async def cmd_recaptcha(message: Message, session: Session):
     await message.delete()
 
 
-@router.callback_query(Text(text=["ReCaptcha"]))
+@router.callback_query(F.data=="ReCaptcha")
 async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot):
     await new_chat_member(ChatMemberUpdated(chat=query.message.chat,
                                             from_user=query.from_user,

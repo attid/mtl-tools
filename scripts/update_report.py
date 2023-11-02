@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 from utils.stellar_utils import *
@@ -6,12 +5,15 @@ from scripts.mtl_exchange import check_fire
 
 # https://docs.gspread.org/en/latest/
 
-CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', 'TOR' ]
-MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', 'TIC', 'USDMM', 'DamirCoin']
-DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT']
+CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', 'TOR', 'HOT',
+               'MTLCITYV33', 'MTLCITYAH11']
+MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', 'TIC', 'USDMM', 'DamirCoin', 'REITM', 'TOC']
+DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT', 'USDM']
 ISSUER_ASSETS = ['XLM', ]
 
-COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', ]
+COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', 'TIC_COST', 'REITM_COST']
+
+USDM_ASSETS = ['EURMTL', 'USDC', 'yUSDC', 'USDDEFI', 'MTLDefi', 'XLM', 'SATSMTL']
 
 
 @logger.catch
@@ -57,7 +59,7 @@ async def update_main_report(session: Session):
 
     good_assets = []
     for ms in DEFI_ASSETS:
-        good_assets.append([ms, float(assets.get(ms))])
+        good_assets.append([ms, float(assets.get(ms, 0))])
     await wks.update('A16', good_assets)
 
     # CITY
@@ -66,7 +68,7 @@ async def update_main_report(session: Session):
 
     good_assets = []
     for ms in CITY_ASSETS:
-        good_assets.append([ms, float(assets.get(ms))])
+        good_assets.append([ms, float(assets.get(ms, 0))])
     await wks.update('C16', good_assets)
 
     # mabiz
@@ -75,7 +77,7 @@ async def update_main_report(session: Session):
 
     good_assets = []
     for ms in MABIZ_ASSETS:
-        good_assets.append([ms, float(assets.get(ms))])
+        good_assets.append([ms, float(assets.get(ms, 0))])
     await wks.update('E16', good_assets)
 
     # mabiz
@@ -84,7 +86,7 @@ async def update_main_report(session: Session):
 
     good_assets = []
     for ms in ISSUER_ASSETS:
-        good_assets.append([ms, float(assets.get(ms))])
+        good_assets.append([ms, float(assets.get(ms, 0))])
     await wks.update('I16', good_assets)
 
     # FOND safe desk
@@ -118,6 +120,7 @@ async def update_main_report(session: Session):
 
     # defi
     defi_balance = 0
+    requests.get('https://debank.com/profile/0x0358D265874b5Cf002d1801949F1cEE3B08Fa2E9')
     debank = requests.get("https://api.debank.com/token/balance_list"
                           "?user_addr=0x0358d265874b5cf002d1801949f1cee3b08fa2e9&chain=bsc")
     if debank:
@@ -157,6 +160,35 @@ async def update_main_report(session: Session):
         else:
             update_data.append([ms, 0])
     await wks.update('G16', update_data)
+
+    await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
+
+    logger.info(f'all done {now}')
+
+
+@logger.catch
+async def update_usdm_report(session: Session):
+    agc = await agcm.authorize()
+
+    # Open a sheet from a spreadsheet in one go
+    ss = await agc.open("USDMM report")
+    wks = await ss.worksheet("autodata")
+
+    # Update a range of cells using the top left corner address
+    now = datetime.now()
+    # print(now.strftime('%d.%m.%Y %H:%M:%S'))
+
+    # USDM count
+    rq = requests.get(
+        'https://horizon.stellar.org/assets?asset_code=USDM&asset_issuer=GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM')
+    await wks.update('B4', float(rq.json()['_embedded']['records'][0]['amount']))
+
+    assets, data = await get_balances(MTLAddresses.public_usdm, return_data=True)
+
+    good_assets = []
+    for ms in USDM_ASSETS:
+        good_assets.append([ms, float(assets.get(ms, 0))])
+    await wks.update('A13', good_assets)
 
     await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 
@@ -427,7 +459,7 @@ async def update_airdrop():
     client = AiohttpClient()
 
     # Open a sheet from a spreadsheet in one go
-    ss = await agc.open("MTL_reestr")
+    ss = await agc.open("MTL_Airdrop_register")
     wks = await ss.worksheet("EUR_GNRL")
 
     # Update a range of cells using the top left corner address
@@ -682,6 +714,7 @@ async def main():
 
     await asyncio.gather(
         update_main_report(quik_pool()),
+        update_usdm_report(quik_pool()),
         update_guarantors_report(),
         update_bim_data(quik_pool()),
         update_top_holders_report(quik_pool()),

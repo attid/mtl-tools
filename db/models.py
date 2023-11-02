@@ -39,7 +39,7 @@ class TDivList(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     dt_pay = Column(DateTime, default=func.current_timestamp(), nullable=False)
     memo = Column(String(60))
-    pay_type = Column(SmallInteger, default=0, nullable=False)
+    pay_type = Column(SmallInteger, default=0, nullable=False) # 0 - div, 1 - bod 4 - sats 5 - usdm
 
     transactions = relationship("TTransaction", back_populates="div_list")
 

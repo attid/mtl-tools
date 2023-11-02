@@ -1,8 +1,3 @@
-import asyncio
-from typing import Tuple, Any
-
-from sqlalchemy import ColumnElement
-
 from utils.stellar_utils import *
 from db.models import TLedgers, TOperations
 from db.quik_pool import quik_pool
@@ -19,14 +14,14 @@ async def extra_run():
     queue = asyncio.Queue()
 
     # create task
-    master1_task = asyncio.create_task(master_update_list(f'master1', quik_pool()))
-    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, quik_pool()))
+    master1_task = asyncio.create_task(master_update_list(f'master1', quik_pool))
+    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, quik_pool))
     # wait for a little while to allow master_get_new_ledgers to populate the queue
     # await asyncio.sleep(15)
 
     tasks = [master1_task, master2_task]
     for i in range(10):
-        task = asyncio.create_task(worker_get_ledger(f'worker-{i}', queue, quik_pool()))
+        task = asyncio.create_task(worker_get_ledger(f'worker-{i}', queue, quik_pool))
         tasks.append(task)
 
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -36,10 +31,11 @@ async def extra_run():
 ########################################################################################################################
 ########################################################################################################################
 
-async def master_update_list(name, session: Session):
+async def master_update_list(name, session_pool):
     while True:
         global watch_list
-        watch_list = db_get_watch_list(session)
+        with session_pool() as session:
+            watch_list = db_get_watch_list(session)
         logger.info(f'{name} watch_list was update {len(watch_list)}')
         await asyncio.sleep(60 * 60 * 1)
 
@@ -48,7 +44,7 @@ async def master_update_list(name, session: Session):
 ########################################################################################################################
 ########################################################################################################################
 
-async def master_get_new_ledgers(name, queue: asyncio.Queue, session: Session):
+async def master_get_new_ledgers(name, queue: asyncio.Queue, session_pool):
     global watch_list
     # load old ledger
     while len(watch_list) == 0:
@@ -58,14 +54,16 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session: Session):
     while True:
         if queue.empty():
             # put data
-            resend_data = db_get_first_100_ledgers(session)
+            with session_pool() as session:
+                resend_data = db_get_first_100_ledgers(session)
             if len(resend_data) > 0:
                 logger.info(f'{name} load {len(resend_data)} from old')
             for record in resend_data:
                 queue.put_nowait(record.ledger)
         # find new ledgers
         try:
-            await asyncio.wait_for(load_from_stellar(name, queue, session), timeout=60)
+            with session_pool() as session:
+                await asyncio.wait_for(load_from_stellar(name, queue, session), timeout=60)
         except asyncio.exceptions.TimeoutError:
             pass
         except Exception as e:
@@ -94,26 +92,26 @@ async def load_from_stellar(name, queue, session):
 ########################################################################################################################
 ########################################################################################################################
 
-async def worker_get_ledger(name, queue: asyncio.Queue, session: Session):
+async def worker_get_ledger(name, queue: asyncio.Queue, session_pool):
     while True:  # not queue.empty():
         ledger_id: int = await queue.get()
         logger.info(f'{name} {ledger_id} start')
 
         try:
             # check ledger
-            ledger = db_get_ledger(session, ledger_id)
-            await asyncio.wait_for(
-                cmd_check_ledger(start_ledger_id=ledger_id, session=session), timeout=60)
-            # fb.execsql('delete from t_ledgers where ledger = ?', (ledger,))
-            session.delete(ledger)
-            session.commit()
-            logger.info(f'{name} {ledger_id} checked')
+            with session_pool() as session:
+                ledger = db_get_ledger(session, ledger_id)
+                await asyncio.wait_for(
+                    cmd_check_ledger(start_ledger_id=ledger_id, session=session), timeout=60)
+                # fb.execsql('delete from t_ledgers where ledger = ?', (ledger,))
+                session.delete(ledger)
+                session.commit()
+                logger.info(f'{name} {ledger_id} checked')
         except asyncio.exceptions.TimeoutError:
             pass
         except Exception as e:
             logger.warning(f'{name} {ledger_id} failed {type(e)}')
             logger.error(e)
-            session.rollback()
 
         # Сообщение очереди, для обработки "рабочего элемента".
         queue.task_done()

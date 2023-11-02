@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Router, Bot
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -73,9 +73,12 @@ async def cmd_show_id(message: Message):
                          f"is_topic_message  = {message.is_topic_message}")
 
 @router.message(Command(commands=["me"]))
-async def cmd_me(message: Message):
+async def cmd_me(message: Message, bot: Bot):
     msg = ' '.join(message.text.split(' ')[1:])
-    await message.answer(f'<i><b>{message.from_user.username}</b> {msg}</i>', parse_mode=ParseMode.HTML)
+    msg = f'<i><b>{message.from_user.username}</b> {msg}</i>'
+    await bot.send_message(chat_id=message.chat.id, text=msg, parse_mode=ParseMode.HTML,
+                           reply_to_message_id=message.reply_to_message.message_id if message.reply_to_message else None,
+                           message_thread_id=None if message.reply_to_message else message.message_thread_id)
     try:
         await message.delete()
     except:
