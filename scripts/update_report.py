@@ -708,6 +708,51 @@ async def update_export(session: Session):
     logger.info(f'all done {now}')
 
 
+async def update_fest(session: Session):
+    # Авторизация и открытие таблицы
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1m4NcL3Dqo1UnF4LEGjNO6ZYxSnhykN1HT_2Uts8HpaU")
+    # get date
+    wks = await ss.worksheet("config")
+    date_1 = datetime.strptime((await wks.get_values('B1'))[0][0], '%d.%m.%Y').date()
+    date_2 = datetime.strptime((await wks.get_values('B2'))[0][0], '%d.%m.%Y').date()
+
+    wks = await ss.worksheet("data")
+
+    # Получение данных из таблицы
+    data = await wks.get_all_values()
+
+    # Проверка структуры данных
+    headers = data[0]
+    if headers[4] != "Итого выручка лавки":
+        raise ValueError("Неверный формат таблицы")
+
+    # Обработка данных
+    update_list = []
+    for row in data[1:]:  # Пропускаем заголовки
+        address = row[1]
+        if len(address) == 56:  # Проверяем, что адрес состоит из 56 символов
+            transactions = await stellar_get_transactions(address, date_1, date_2)
+            # total_amount = sum(transaction.amount for transaction in transactions if transaction)
+            total_amount = 0
+            for transaction in transactions:
+                # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
+                if (transaction['asset_code'] == MTLAssets.eurmtl_asset.code
+                        and transaction['asset_issuer'] == MTLAssets.eurmtl_asset.issuer):
+                    total_amount += float(transaction['amount'])
+
+            update_list.append([total_amount])
+        else:
+            update_list.append([0])
+
+    # Обновление таблицы
+    await wks.update('E2', update_list, value_input_option='USER_ENTERED')
+
+    wks = await ss.worksheet("config")
+    await wks.update('B4', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+    logger.info(f'update_fest completed successfully')
+
+
 async def main():
     from db.quik_pool import quik_pool
 
@@ -731,10 +776,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    # asyncio.run(update_airdrop())  # only from skynet
     # from db.quik_pool import quik_pool
-    # asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
+    # asyncio.run(update_fest(quik_pool()))  # only from skynet
     # exit()
-    # from db.quik_pool import quik_pool
-    # asyncio.run(update_usdm_report(quik_pool()))
+
     asyncio.run(main())

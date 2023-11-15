@@ -6,7 +6,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from config_reader import start_path
-from scripts.update_report import update_airdrop
+from scripts.update_report import update_airdrop, update_fest
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
 from utils.global_data import MTLChats, is_skynet_admin, global_data
 from utils.gspread_tools import gs_check_bim, agcm
@@ -325,7 +325,10 @@ async def cmd_get_damircoin_xdr(message: Message):
     await multi_answer(message, xdr)
     await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
 
+
 global_data.info_cmd['/get_chicago_xdr'] = 'Делает транзакцию кешбека для chicago'
+
+
 @router.message(Command(commands=["get_chicago_xdr"]))
 async def cmd_get_damircoin_xdr(message: Message):
     result = await get_chicago_xdr()
@@ -355,6 +358,13 @@ async def cmd_update_airdrops(message: Message):
 
     await message.answer('Запускаю полное обновление')
     await update_airdrop()
+    await message.answer('Обновление завершено')
+
+
+@router.message(Command(commands=["update_fest"]))
+async def cmd_update_fest(message: Message, session: Session):
+    await message.answer('Запускаю полное обновление')
+    await update_fest(session)
     await message.answer('Обновление завершено')
 
 

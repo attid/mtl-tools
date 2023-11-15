@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import math
+from datetime import date
 
 from stellar_sdk.xdr import account_id
 
@@ -1761,11 +1762,11 @@ async def stellar_get_transactions(address, start_range, end_range):
         while page_records["_embedded"]["records"]:
             # Проверяем каждую транзакцию на соответствие диапазону
             for record in page_records["_embedded"]["records"]:
-                tx_datetime = datetime.strptime(record['created_at'], "%Y-%m-%dT%H:%M:%SZ")
-                if tx_datetime < start_range:
+                tx_date = datetime.strptime(record['created_at'], "%Y-%m-%dT%H:%M:%SZ")
+                if tx_date < start_range:
                     # Если дата транзакции выходит за пределы начала диапазона, прекращаем получение данных
                     return transactions
-                if start_range <= tx_datetime <= end_range:
+                if start_range.date() <= tx_date.date() <= end_range.date():
                     transactions.append(record)
             # Получаем следующую страницу записей
             page_records = await payments_call_builder.next()
@@ -1777,7 +1778,7 @@ async def get_chicago_xdr():
     # Определяем рабочий диапазон
     result = []
     start_range, end_range = determine_working_range()
-    # start_range, end_range = datetime(2023, 10, 26), datetime(2023, 10, 31)
+    # start_range, end_range = datetime(2023, 11, 14), datetime(2023, 11, 14)
 
     result.append(f'Ищем транзакции с {start_range.strftime("%Y-%m-%d")} по {end_range.strftime("%Y-%m-%d")}')
     accounts_dict = {}
