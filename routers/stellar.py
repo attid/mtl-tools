@@ -9,12 +9,14 @@ from config_reader import start_path
 from scripts.update_report import update_airdrop
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
 from utils.global_data import MTLChats, is_skynet_admin, global_data
-from utils.gspread_tools import check_bim, agcm
+from utils.gspread_tools import gs_check_bim, agcm
 from utils.img_tools import create_image_with_text
-from utils.stellar_utils import cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances, \
-    MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id, cmd_calc_divs, \
-    cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr, get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, \
-    get_damircoin_xdr, cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap
+from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
+                                 MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id,
+                                 cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr,
+                                 get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, get_damircoin_xdr,
+                                 cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap, get_agora_xdr,
+                                 get_chicago_xdr)
 
 router = Router()
 
@@ -317,6 +319,22 @@ async def cmd_get_damircoin_xdr(message: Message):
                            'use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL')
 
 
+@router.message(Command(commands=["get_agora_xdr"]))
+async def cmd_get_damircoin_xdr(message: Message):
+    xdr = await get_agora_xdr()
+    await multi_answer(message, xdr)
+    await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+
+global_data.info_cmd['/get_chicago_xdr'] = 'Делает транзакцию кешбека для chicago'
+@router.message(Command(commands=["get_chicago_xdr"]))
+async def cmd_get_damircoin_xdr(message: Message):
+    result = await get_chicago_xdr()
+    xdr = result[-1]
+    await multi_answer(message, '\n'.join(result[:-1]))
+    await multi_answer(message, xdr)
+    await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+
+
 @router.message(Command(commands=["get_toc_xdr"]))
 async def cmd_get_toc_xdr(message: Message):
     arg = message.text.split()
@@ -386,11 +404,12 @@ async def cmd_check_bim(message: Message):
         if not is_skynet_admin(message):
             await message.reply('You are not my admin.')
             return
-        msg = await check_bim(user_name=cmd[1][1:])
+        msg = await gs_check_bim(user_name=cmd[1][1:])
     else:
-        msg = await check_bim(message.from_user.id)
+        msg = await gs_check_bim(message.from_user.id)
 
     await message.reply(msg)
+
 
 @router.message(Command(commands=["check_mtlap"]))
 async def cmd_check_bim(message: Message):
@@ -407,4 +426,3 @@ async def cmd_check_bim(message: Message):
 
     msg = await check_mtlap(key)
     await message.reply(msg)
-

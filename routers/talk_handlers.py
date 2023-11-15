@@ -2,14 +2,16 @@ from aiogram import F, Bot
 from aiogram.enums import ChatType, ParseMode, ChatAction
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message, ChatPermissions
+from aiogram.filters.callback_data import CallbackData
+from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from sqlalchemy.orm import Session
 
 from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
+from skynet_start import add_bot_users
 from utils import dialog
-from utils.aiogram_utils import multi_reply, HasText, has_words, StartText
+from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin
 from utils.dialog import talk_check_spam, add_task_to_google
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
@@ -18,6 +20,14 @@ from scripts.update_data import update_lab
 router = Router()
 
 my_talk_message = []
+
+
+class SpamCheckCallbackData(CallbackData, prefix="SpamCheck"):
+    message_id: int
+    chat_id: int
+    user_id: int
+    good: bool
+    new_message_id: int
 
 
 # @router.message(F.chat == MTLChats.Employment)
@@ -193,7 +203,6 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         await msg.reply('Обновление завершено')
 
 
-
 @router.message(F.chat.type == ChatType.PRIVATE)
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')))
 @router.message(Command(commands=["skynet"]))
@@ -223,3 +232,65 @@ async def cmd_save_msg(message: Message, session: Session):
     db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                     thread_id=message.message_thread_id if message.is_topic_message else None,
                     text=message.text, chat_id=message.chat.id)
+
+
+@router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
+async def cmd_save_good_user(message: Message, session: Session):
+    add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+    # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
+
+
+@router.message(F.entities, F.text)  # если текст с ссылками #точно не приватное, приватные выше остановились
+async def cmd_no_first_link(message: Message, session: Session):
+    if message.chat.id not in global_data.no_first_link:
+        return
+
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+        return
+
+    # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
+    for entity in message.entities:
+        if entity.type in ('url', 'text_link', 'mention'):
+            await message.chat.restrict(message.from_user.id,
+                                        permissions=ChatPermissions(can_send_messages=False,
+                                                                    can_send_media_messages=False,
+                                                                    can_send_other_messages=False))
+            msg = await message.forward(MTLChats.SpamGroup)
+            chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
+            await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}',
+                            reply_markup=InlineKeyboardMarkup(
+                                inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
+                                                                       callback_data=SpamCheckCallbackData(
+                                                                           message_id=message.message_id,
+                                                                           chat_id=message.chat.id,
+                                                                           user_id=message.from_user.id,
+                                                                           new_message_id=msg.message_id,
+                                                                           good=True).pack())],
+                                                 [InlineKeyboardButton(text='Its spam! Kick him !',
+                                                                       callback_data=SpamCheckCallbackData(
+                                                                           message_id=message.message_id,
+                                                                           chat_id=message.chat.id,
+                                                                           user_id=message.from_user.id,
+                                                                           new_message_id=msg.message_id,
+                                                                           good=False).pack())]
+                                                 ]))
+            await message.delete()
+            break
+
+        global_data.users_list[message.from_user.id] = 1
+    add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+
+
+@router.callback_query(SpamCheckCallbackData.filter())
+async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session):
+    if not await is_admin(query.message):
+        await query.answer('You are not admin.', show_alert=True)
+        return False
+
+    if callback_data.good:
+        chat = await bot.get_chat(callback_data.chat_id)
+        await bot.forward_message(callback_data.chat_id, query.message.chat.id, callback_data.new_message_id)
+        await query.message.chat.restrict(callback_data.user_id, permissions=chat.permissions)
+        await query.answer("Oops, bringing the message back!", show_alert=True)
+    else:
+        await query.answer("Сорьки, пока не умею !", show_alert=True)

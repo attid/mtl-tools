@@ -2,6 +2,9 @@ import asyncio
 import base64
 import json
 import math
+
+from stellar_sdk.xdr import account_id
+
 from db.requests import *
 from copy import deepcopy
 
@@ -16,7 +19,7 @@ from stellar_sdk.sep.federation import resolve_account_id_async
 
 from config_reader import config
 from utils.global_data import float2str, global_data
-from utils.gspread_tools import agcm
+from utils.gspread_tools import agcm, gs_get_chicago_premium
 
 base_fee = config.base_fee
 
@@ -72,8 +75,10 @@ class MTLAssets:
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
     damircoin_asset = Asset("DamirCoin", MTLAddresses.public_damir)
+    agora_asset = Asset("Agora", 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR')
     toc_asset = Asset("TOC", 'GBJ3HT6EDPWOUS3CUSIJW5A4M7ASIKNW4WFTLG76AAT5IE6VGVN47TIC')
     aqua_asset = Asset("AQUA", 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA')
+    mtlap_asset = Asset("MTLAP", 'GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA')
 
 
 pack_count = 70  # for select first pack_count - to pack to xdr
@@ -254,7 +259,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             continue
         if type(operation).__name__ == "Clawback":
             data_exist = True
-            #bad xdr 14 <Clawback [
+            # bad xdr 14 <Clawback [
             # asset=<Asset [code=MTLAP, issuer=GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA, type=credit_alphanum12]>,
             # from_=<MuxedAccount [account_id=GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR, account_muxed_id=None]>,
             # amount=1, source=None]>
@@ -1008,6 +1013,47 @@ async def get_damircoin_xdr(div_sum: int):
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
+    transaction.add_text_memo('damircoin divs')
+    for account in accounts_list:
+        if account[2] > 0.0001:
+            transaction.append_payment_op(destination=account[0], asset=MTLAssets.eurmtl_asset,
+                                          amount=str(round(account[2], 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+
+    return xdr
+
+
+async def get_agora_xdr():
+    accounts = await stellar_get_mtl_holders(MTLAssets.agora_asset)
+    accounts_list = []
+    total_sum = 0
+
+    # get total count
+    # total_sum = stellar_get_token_amount(MTLAssets.agora_asset)
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if (balance["asset_code"] == MTLAssets.agora_asset.code and
+                        balance["asset_issuer"] == MTLAssets.agora_asset.issuer):
+                    token_balance = balance["balance"]
+                    token_balance = int(token_balance[0:token_balance.find('.')])
+        accounts_list.append([account["account_id"], token_balance, 0])
+        total_sum += token_balance
+
+    persent = 0.02  # 2% div_sum / total_sum
+
+    for account in accounts_list:
+        account[2] = account[1] * persent
+
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAssets.agora_asset.issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 24 * 7)
+    transaction.add_text_memo('AGORA divs')
     for account in accounts_list:
         if account[2] > 0.0001:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.eurmtl_asset,
@@ -1164,6 +1210,12 @@ async def stellar_get_mtl_holders(asset=MTLAssets.mtl_asset, mini=False):
                 return accounts
         # print(json.dumps(response, indent=4))
         return accounts
+
+
+async def stellar_get_token_amount(asset=MTLAssets.mtl_asset):
+    async with ServerAsync(horizon_url="https://horizon.stellar.org") as server:
+        assets = await server.assets().for_code(asset.code).for_issuer(asset.issuer).call()
+        return assets['_embedded']['records'][0]['amount']
 
 
 async def cmd_show_guards_list():
@@ -1689,14 +1741,175 @@ async def check_mtlap(key):
     return 'MTLAP не найден'
 
 
+def determine_working_range():
+    today = datetime.now()
+    if 1 <= today.day <= 14:
+        start_range = datetime(today.year, today.month - 1, 15)
+        end_range = datetime(today.year, today.month, 1) - timedelta(days=1)
+    else:
+        start_range = datetime(today.year, today.month, 1)
+        end_range = datetime(today.year, today.month, 14)
+    return start_range, end_range
+
+
+async def stellar_get_transactions(address, start_range, end_range):
+    transactions = []
+    async with ServerAsync(horizon_url="https://horizon.stellar.org", client=AiohttpClient()) as server:
+        # Запускаем получение страниц транзакций
+        payments_call_builder = server.payments().for_account(account_id=address).limit(200).order()
+        page_records = await payments_call_builder.call()
+        while page_records["_embedded"]["records"]:
+            # Проверяем каждую транзакцию на соответствие диапазону
+            for record in page_records["_embedded"]["records"]:
+                tx_datetime = datetime.strptime(record['created_at'], "%Y-%m-%dT%H:%M:%SZ")
+                if tx_datetime < start_range:
+                    # Если дата транзакции выходит за пределы начала диапазона, прекращаем получение данных
+                    return transactions
+                if start_range <= tx_datetime <= end_range:
+                    transactions.append(record)
+            # Получаем следующую страницу записей
+            page_records = await payments_call_builder.next()
+
+    return transactions
+
+
+async def get_chicago_xdr():
+    # Определяем рабочий диапазон
+    result = []
+    start_range, end_range = determine_working_range()
+    # start_range, end_range = datetime(2023, 10, 26), datetime(2023, 10, 31)
+
+    result.append(f'Ищем транзакции с {start_range.strftime("%Y-%m-%d")} по {end_range.strftime("%Y-%m-%d")}')
+    accounts_dict = {}
+
+    # Ваш Stellar адрес
+    stellar_address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
+
+    premium_list = await gs_get_chicago_premium()
+    result.append(f'Получено премиум пользователей: {len(premium_list)}')
+
+    # Запускаем асинхронное получение транзакций
+    transactions = await stellar_get_transactions(stellar_address, start_range, end_range)
+    result.append(f'Получено транзакций в диапазоне: {len(transactions)}')
+
+    # Здесь может быть ваш код для обработки транзакций
+    for transaction in transactions:
+        # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
+        if transaction['asset_code'] == MTLAssets.eurmtl_asset.code and transaction[
+            'asset_issuer'] == MTLAssets.eurmtl_asset.issuer:
+            accounts_dict[transaction['from']] = float(transaction['amount']) + accounts_dict.get(transaction['from'],
+                                                                                                  0)
+
+    # print(accounts_dict)
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(stellar_address)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 24 * 7)
+    transaction.add_text_memo('cashback')
+    total_sum = 0
+    premium_sum = 0
+    for account in accounts_dict:
+        # 13 всем, премиум 26
+        if account in premium_list:
+            cashback_sum = accounts_dict[account] * 0.26
+            premium_sum += cashback_sum
+        else:
+            cashback_sum = accounts_dict[account] * 0.13
+        total_sum += cashback_sum
+
+        transaction.append_payment_op(destination=account, asset=MTLAssets.eurmtl_asset,
+                                      amount=str(round(cashback_sum, 7)))
+    transaction = transaction.build()
+    xdr = transaction.to_xdr()
+    result.append(f'За период - ')
+    num_premium_accounts = sum(account in premium_list for account in accounts_dict)
+    num_regular_accounts = len(accounts_dict) - num_premium_accounts
+    result.append(f'Премиум пользователей: {num_premium_accounts} обычных пользователей: {num_regular_accounts}')
+    result.append(f'Premium sum: {premium_sum} Total sum: {total_sum}')
+    result.append(xdr)
+
+    return result
+
+
+def check_mtla_delegate(account, result, delegated_list=None):
+    if delegated_list is None:
+        delegated_list = []
+    delegate_to_account = result[account]['delegate']
+    # убираем цикл на себя
+    if delegate_to_account and delegate_to_account == account:
+        result[account]['delegate'] = None
+        return
+
+    # убираем цикл побольше
+    if delegate_to_account and delegate_to_account in delegated_list:
+        result[account]['delegate'] = None
+        return
+
+    if delegate_to_account:
+        if result[account]['vote'] > 0:
+            delegated_list.append(account)
+        if result[delegate_to_account]['delegate']:
+            result[account]['was_delegate'] = check_mtla_delegate(delegate_to_account, result, delegated_list)
+        else:
+            if 'delegated_list' in result[delegate_to_account]:
+                result[delegate_to_account]['delegated_list'].extend(delegated_list)
+            else:
+                result[delegate_to_account]['delegated_list'] = delegated_list
+            result[account]['was_delegate'] = delegate_to_account
+            return delegate_to_account
+
+
+async def get_mtlap_votes():
+    result = {}
+    # составляем дерево по держателям
+    accounts = await stellar_get_mtl_holders(MTLAssets.mtlap_asset)
+    for account in accounts:
+        delegate = None
+        if account['data'] and account['data'].get('mtla_c_delegate'):
+            delegate = decode_data_value(account['data']['mtla_c_delegate'])
+        vote = 0
+        for balance in account['balances']:
+            if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
+                'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
+                vote = int(float(balance['balance']))
+                break
+        result[account['id']] = {'delegate': delegate, 'vote': vote}
+    # добавляем кого нет
+    find_new = True
+    while find_new:
+        find_new = False
+        for account in list(result):
+            if result[account]['delegate'] and result[account]['delegate'] not in result:
+                find_new = True
+                a = await stellar_get_account(result[account]['delegate'])
+                delegate = None
+                if a['data'] and a['data'].get('mtla_a_delegate'):
+                    delegate = decode_data_value(a['data']['mtla_a_delegate'])
+                vote = 0
+                for balance in a['balances']:
+                    if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
+                        'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
+                        vote = int(float(balance['balance']))
+                        break
+                result[a['id']] = {'delegate': delegate, 'vote': vote}
+
+    for account in list(result):
+        check_mtla_delegate(account, result)
+
+    return result
+    # print(json.dumps(result, indent=4))
+    # found_list = list(filter(lambda x: x[0] == mtl_account[0], donates))
+    # mtl_delegate
+
 
 if __name__ == '__main__':
     pass
 
     # gen new
-    #print(gen_new('GANG'))
+    # print(gen_new('GANG'))
+    # print(determine_working_range())
 
-    #print(asyncio.run(check_mtlap('GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI')))
+    print(asyncio.run(get_chicago_xdr()))
 
     # stellar_sync_submit(
     #    stellar_sign(

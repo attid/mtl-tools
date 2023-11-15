@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 from datetime import datetime
 
@@ -59,7 +60,7 @@ async def example(agcm1):
     print("All done!")
 
 
-async def check_bim(user_id=None, user_name=None):
+async def gs_check_bim(user_id=None, user_name=None):
     agc = await agcm.authorize()
     ss = await agc.open("MTL_BIM_register")
     ws = await ss.worksheet("List")
@@ -245,7 +246,7 @@ async def gs_update_namelist():
         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
 
 
-async def get_assets_dict():
+async def gs_get_assets_dict():
     agc = await agcm.authorize()
 
     # Откройте таблицу и получите лист
@@ -276,7 +277,7 @@ async def get_assets_dict():
     return assets_dict
 
 
-async def get_accounts_dict():
+async def gs_get_accounts_dict():
     agc = await agcm.authorize()
 
     # Откройте таблицу и получите лист
@@ -307,9 +308,195 @@ async def get_accounts_dict():
     return accounts_dict
 
 
+async def gs_get_chicago_premium():
+    # Авторизация для доступа к Google Sheets
+    agc = await agcm.authorize()
+
+    # Откройте таблицу и получите лист
+    ss = await agc.open("Chicago_cashback_table")
+    wks = await ss.worksheet("data")
+
+    # Получите данные из листа
+    data = await wks.get_all_values()
+
+    # Фильтруйте список, оставляя только строки с длиной 56 символов в первом столбце
+    premium_list = [row[0] for row in data if len(row[0]) == 56]
+
+    return premium_list
+
+
+async def gs_set_column_width(spreadsheet, worksheet_id, column_index, width):
+    # Формируем запрос для изменения ширины столбца
+    request = {
+        "requests": [
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": worksheet_id,
+                        "dimension": "COLUMNS",
+                        "startIndex": column_index - 1,
+                        "endIndex": column_index
+                    },
+                    "properties": {
+                        "pixelSize": width
+                    },
+                    "fields": "pixelSize"
+                }
+            }
+        ]
+    }
+
+    # Отправляем запрос
+
+    await spreadsheet.batch_update(request)
+
+
+async def gs_copy_a_table(new_name):
+    agc = await agcm.authorize()
+
+    # Получаем доступ к таблице, которую надо скопировать
+    ss = await agc.open("default_a_vote")
+
+    # Копируем таблицу
+    new_ss = await agc.create(new_name)
+    await agc.insert_permission(new_ss.id, None, perm_type="anyone", role="reader")
+
+    # Получаем список листов в существующем документе
+    worksheets = await ss.worksheets()
+
+    # Копируем каждый лист
+    for sheet in worksheets:
+        new_sheet = await new_ss.add_worksheet(title=sheet.title, rows=sheet.row_count, cols=sheet.col_count)
+
+    # Данные после чтоб ссылки работали
+    for sheet in worksheets:
+        new_sheet = await new_ss.worksheet(title=sheet.title)
+        # Получаем данные из исходного листа
+        # cells = await sheet.get_all_values()
+        cells = (await sheet.batch_get(['A1:D20'], value_render_option='FORMULA'))[0]
+
+        # Заполняем лист данными
+        await new_sheet.update('A1', cells, value_input_option='USER_ENTERED')
+
+    await new_ss.del_worksheet((await new_ss.worksheets())[0])
+
+    # Возвращаем ссылку на новую таблицу
+    new_ss_url = new_ss.url
+    return new_ss_url, new_ss.id
+
+
+async def gs_update_a_table_first(table_uuid, question, options, votes):
+    agc = await agcm.authorize()
+
+    ss = await agc.open_by_key(table_uuid)
+    wks = await ss.worksheet("Result")
+    await gs_set_column_width(ss, wks.id, 1, 200)
+    await gs_set_column_width(ss, wks.id, 2, 400)
+
+    update_data = [[question],
+                   [datetime.now().strftime('%d.%m.%Y %H:%M:%S')],
+                   [],
+                   [len(votes)],
+                   [math.ceil(len(votes) / 2)]
+                   ]
+    await wks.update('B1', update_data)
+    update_data = []
+    for option in options:
+        update_data.append([option])
+    await wks.update('A7', update_data)
+    update_data = [['']] * 10
+    await wks.update(f'B{7 + len(options)}', update_data)
+    # 2
+    wks = await ss.worksheet("Log")
+    await wks.delete_row(2)
+    await wks.update('C1', [options])
+    # 3
+    # {'GA5Q2PZWIHSCOHNIGJN4BX5P42B4EMGTYAS3XCMAHEHCFFKCQQ3ZX34A': {'delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 'vote': 1, 'was_delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7'}
+    update_data = []
+    for vote in votes:
+        update_data.append([vote, votes[vote].get('was_delegate')])
+
+    wks = await ss.worksheet("Members")
+    await wks.update('A2', update_data)
+
+
+async def gs_find_user_a(username):
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("17S_qKJuaWrYte7pCHkHtqwpAnJdJj24wjT2ulN6-BGk")
+    ws = await ss.worksheet("data")
+    data = await ws.find(str(username), in_column=2, case_sensitive=False)
+    if data:
+        result = await ws.row_values(data.row)
+        return result[0]
+
+
+async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, wks=None):
+    if wks is None:
+        agc = await agcm.authorize()
+        ss = await agc.open_by_key(table_uuid)
+        wks = await ss.worksheet("Log")
+
+    # Удаляем голос если был
+    data = await wks.find(str(address), in_column=1, case_sensitive=False)
+    if data and delegated:
+        return
+
+    # if data:
+    while data:
+        await wks.delete_row(data.row)
+        data = await wks.find(f'{address[:4]}..{address[-4:]}', case_sensitive=False)
+
+
+    # Если опции не пусты, то добавляем запись
+    if options:
+        record = await wks.col_values(1)
+        update_data = [address, datetime.now().strftime('%d.%m.%Y %H:%M:%S')]
+
+        # Создаем список для голосов
+        votes_list = [None] * (max(options) + 1)  # Предполагаем, что максимальное значение в options это конец списка
+        x = delegated if delegated else 'X'
+        for option in options:
+            votes_list[option] = x
+        update_data.extend(votes_list)  # Начинаем добавление данных с третьей колонки, пропускаем первые два элемента
+
+        # Записываем данные в таблицу, начиная с новой строки
+        await wks.update(f'A{len(record) + 1}', [update_data])
+
+        if delegated:
+            return
+        # теперь с делегаций
+        delegate_data = await (await ss.worksheet("Members")).get_all_values()
+        for record in delegate_data[1:]:
+            if record[1] == address:
+                await gs_update_a_table_vote(table_uuid, record[0], options,
+                                             delegated=f'{address[:4]}..{address[-4:]}', wks=wks)
+
+        #
+        wks = await ss.worksheet("Result")
+        data = await wks.get_all_values()
+
+        return data[4:]
+
+
+async def gs_test():
+    options = [1, 2, 3]
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1WuJqeDb0TVN5ABSxeTWH8BfOJ232LkjRAjkkJtLyKsU")
+    wks = await ss.worksheet("Result")
+    data = await wks.get_all_values()
+
+    print(data[4:])
+
+
 if __name__ == "__main__":
-    # a = asyncio.run(check_bim(user_name='itolstov'))
+    # a = asyncio.run(gs_check_bim(user_name='itolstov'))
     # a = asyncio.run(gs_find_user('710700915'))
     # from db.quik_pool import quik_pool
-    a = asyncio.run(gs_update_namelist())
+
+    # a = asyncio.run(gs_test())
+    # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
+    # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
+    #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
+    a = asyncio.run(gs_update_a_table_vote('1WuJqeDb0TVN5ABSxeTWH8BfOJ232LkjRAjkkJtLyKsU',
+                                           'GAKVQQD5HFSSXWN3E3K6QL573NQG5GJNFKW52RY6FPXH3CYVVADCDH4U', [0, 2]))
     print(a)

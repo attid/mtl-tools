@@ -1,10 +1,13 @@
+import json
 from datetime import datetime
 from aiogram.types import Message
+from requests import Session
 
 
 class MTLChats:
     System = 0  # системный "чат" храннение всего подряд
     Poll = 1  # под опросы
+    MTLA_Poll = -1  # под опросы MTLA
     Employment = -1001424237819  # чат поиска работы
     TestGroup = -1001767165598  # тестовая группа
     SignGroup = -1001239694752  # подписанты
@@ -23,6 +26,7 @@ class MTLChats:
     EURMTLClubGroup = -1001707489173
     MonteliberoChanel = -1001009485608
     HelperChat = -1001466779498
+    SpamGroup = -1002007280572
 
 
 class BotValueTypes:
@@ -53,6 +57,8 @@ class BotValueTypes:
     LastTFMFundTransaction = 25
     Listen = 26
     FullData = 27
+    NoFirstLink = 28
+    Admins = 29
 
 
 class LogQuery:
@@ -75,6 +81,9 @@ class GlobalData:
     listen = []
     full_data = []
     name_list = {}
+    no_first_link = []
+    users_list = {}
+    info_cmd = {}
 
 
 global_data = GlobalData()

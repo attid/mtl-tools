@@ -210,7 +210,7 @@ async def cmd_get_info(message: Message, bot: Bot):
 
 @router.message(F.text.startswith("!ro"))
 async def cmd_set_ro(message: Message):
-    if not is_admin(message):
+    if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
 
@@ -347,7 +347,7 @@ async def cmd_get_sha1(message: Message, bot: Bot):
 @router.message(Command(commands=["s"]))
 @router.message(Command(commands=["send_me"]))
 async def cmd_get_info(message: Message, bot: Bot):
-    if not is_admin(message):
+    if not await is_admin(message):
         await message.reply('You are not admin.')
         return
 
@@ -357,3 +357,23 @@ async def cmd_get_info(message: Message, bot: Bot):
 
     if message.reply_to_message :
         await bot.send_message(chat_id=message.from_user.id, text=message.reply_to_message.html_text)
+
+
+global_data.info_cmd["/no_first_link"] = "Включить защиту от спама первого сообщения с ссылкой"
+@router.message(Command(commands=["no_first_link"]))
+async def cmd_set_listen(message: Message, session: Session):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return False
+
+    if message.chat.id in global_data.no_first_link:
+        global_data.no_first_link.remove(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.NoFirstLink, None)
+        msg = await message.reply('Removed')
+    else:
+        global_data.no_first_link.append(message.chat.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.NoFirstLink, 1)
+        msg = await message.reply('Added')
+
+    cmd_delete_later(message, 1)
+    cmd_delete_later(msg, 1)

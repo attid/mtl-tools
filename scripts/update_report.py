@@ -11,9 +11,10 @@ MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', 'TIC', 'USDMM'
 DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT', 'USDM']
 ISSUER_ASSETS = ['XLM', ]
 
-COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', 'TIC_COST', 'REITM_COST']
+COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', 'TIC_COST',
+             'REITM_COST']
 
-USDM_ASSETS = ['EURMTL', 'USDC', 'yUSDC', 'USDDEFI', 'MTLDefi', 'XLM', 'SATSMTL']
+USDM_ASSETS = ['EURMTL', 'USDC', 'yUSDC', 'USDFARM', 'MTLFARM', 'XLM', 'SATSMTL']
 
 
 @logger.catch
@@ -735,5 +736,5 @@ if __name__ == "__main__":
     # asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
     # exit()
     # from db.quik_pool import quik_pool
-    # asyncio.run(update_mmwb_report(quik_pool()))
+    # asyncio.run(update_usdm_report(quik_pool()))
     asyncio.run(main())

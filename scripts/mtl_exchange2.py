@@ -106,15 +106,15 @@ if __name__ == "__main__":
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
 
-    # asyncio.run(move_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
-    #                      destination_account=MTLAddresses.public_exchange_eurmtl_xlm,
-    #                      amount='22000', asset=MTLAssets.xlm_asset,
-    #                      ))
+    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_usdm,
+                          destination_account=MTLAddresses.public_exchange_usdm_xlm,
+                          amount='12000', asset=MTLAssets.usdm_asset,
+                          ))
 
-    asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_eurmtl_btc,
-                                destination_account=MTLAddresses.public_exchange_usdm_xlm,
-                                amount='0.02', source_asset=MTLAssets.btcmtl_asset,
-                                destination_asset=MTLAssets.xlm_asset))
+    # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_eurmtl_btc,
+    #                             destination_account=MTLAddresses.public_exchange_usdm_xlm,
+    #                             amount='0.02', source_asset=MTLAssets.btcmtl_asset,
+    #                             destination_asset=MTLAssets.xlm_asset))
 
 
     # asyncio.run(update_main_report(quik_pool()))

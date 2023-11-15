@@ -1,9 +1,11 @@
 from aiogram import Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
+from utils.global_data import global_data
+
 router = Router()
 
-info_cmd = {
+global_data.info_cmd = {
     "/start": "начать все с чистого листа",
     "/links": "показать полезные ссылки",
 #    "/dron2": "открыть линию доверия дрону2",
@@ -75,7 +77,7 @@ info_cmd = {
 async def inline_handler(inline_query: InlineQuery):
     switch_text = "По Вашему запросу найдено :"
     answers = []
-    for key, value in info_cmd.items():
+    for key, value in global_data.info_cmd.items():
         if (key.upper().find(inline_query.query.upper()) > -1) or (value.upper().find(inline_query.query.upper()) > -1):
             answers.append(InlineQueryResultArticle(
                 id=str(len(answers)),

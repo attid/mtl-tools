@@ -72,22 +72,24 @@ def db_get_chat_dict_by_key(session: Session, chat_key: int) -> Dict[int, str]:
     return {row[0]: row[1] for row in result}
 
 
-def db_save_bot_user(session: Session, user_id: int, user_name: str):
+def db_save_bot_user(session: Session, user_id: int, user_name: str, user_type: int = 0):
     """
     Update or insert a user in the bot_users table.
 
     :param session: SQLAlchemy DB session
     :param user_id: The ID of the user
     :param user_name: The name of the user
+    :param user_type: The type of the user, default is 0
     """
     user = session.query(BotUsers).filter(BotUsers.user_id == user_id).first()
     if user is None:
         # Create a new user
-        new_user = BotUsers(user_id=user_id, user_name=user_name)
+        new_user = BotUsers(user_id=user_id, user_name=user_name, user_type=user_type)
         session.add(new_user)
     else:
         # Update existing user
         user.user_name = user_name
+        user.user_type = user_type
     session.commit()
 
 
@@ -101,6 +103,18 @@ def db_load_user_id(session, user_name: str) -> int:
     """
     result = session.query(BotUsers.user_id).filter(BotUsers.user_name == user_name).first()
     return result[0] if result else 0
+
+
+def db_load_bot_users(session: Session) -> List[BotUsers]:
+    """
+    Retrieve a list of BotUsers objects filtered by user_name from the bot_users table.
+
+    :param session: SQLAlchemy DB session
+    :param user_name: The name of the user to filter by
+    :return: A list of BotUsers objects
+    """
+    result = session.query(BotUsers).all()
+    return result
 
 
 def db_load_new_message(session: Session) -> list[TMessage]:
@@ -314,7 +328,7 @@ def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amo
     return cast(list[TOperations], result)
 
 
-def db_get_operations(session: Session, last_id: Optional[str]=None, limit: int=3000) -> List[TOperations]:
+def db_get_operations(session: Session, last_id: Optional[str] = None, limit: int = 3000) -> List[TOperations]:
     """
     Получает записи из таблицы t_operations, где id больше заданного значения.
     Если last_id равно None, возвращает последнюю по дате операцию.

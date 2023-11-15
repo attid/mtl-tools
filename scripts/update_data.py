@@ -1,4 +1,4 @@
-from utils.gspread_tools import get_assets_dict, get_accounts_dict
+from utils.gspread_tools import gs_get_assets_dict, gs_get_accounts_dict
 from utils.stellar_utils import *
 
 
@@ -145,15 +145,14 @@ async def update_lab():
         "Authorization": f"Bearer {config.eurmtl_key}",
         "Content-Type": "application/json"
     }
-    print(await get_accounts_dict())
     async with aiohttp.ClientSession() as session:
         async with session.post("https://eurmtl.me/lab/mtl_accounts", headers=headers,
-                                data=json.dumps(await get_accounts_dict())) as response:
+                                data=json.dumps(await gs_get_accounts_dict())) as response:
             #print(response.status)
             logger.info(await response.text())
 
         async with session.post("https://eurmtl.me/lab/mtl_assets", headers=headers,
-                                data=json.dumps(await get_assets_dict())) as response:
+                                data=json.dumps(await gs_get_assets_dict())) as response:
             logger.info(await response.text())
 
 

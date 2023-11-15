@@ -89,6 +89,7 @@ async def time_check_mm(bot: Bot, session_pool):
 
 @logger.catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
+
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
     scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
                       jitter=5 * 60)

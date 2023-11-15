@@ -20,6 +20,7 @@ class BotUsers(Base):
     __tablename__ = 'BOT_USERS'
     user_id = Column(BigInteger, primary_key=True)
     user_name = Column(String(60))
+    user_type = Column(SmallInteger, default=0)
 
 
 class TMessage(Base):
