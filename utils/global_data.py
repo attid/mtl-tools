@@ -105,3 +105,9 @@ def float2str(f) -> str:
         if l == '.':
             break
     return s
+
+def update_command_info(command_name, info):
+    def decorator(func):
+        global_data.info_cmd[command_name] = info
+        return func
+    return decorator

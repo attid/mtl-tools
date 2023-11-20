@@ -1,4 +1,6 @@
 import datetime
+
+from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 from utils.stellar_utils import *
 from scripts.mtl_exchange import check_fire
@@ -22,87 +24,31 @@ async def update_main_report(session: Session):
     agc = await agcm.authorize()
 
     # Open a sheet from a spreadsheet in one go
-    ss = await agc.open("MTL Report")
-    wks = await ss.worksheet("RawData")
+    ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
+    wks = await ss.worksheet("autodata_config")
 
-    # Update a range of cells using the top left corner address
-    now = datetime.now()
-    # print(now.strftime('%d.%m.%Y %H:%M:%S'))
-
+    # update main data
     # usd
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
-    await wks.update('B4', float(rq.json()['quotes']['USDEUR']))
+    await wks.update('D3', float(rq.json()['quotes']['USDEUR']))
 
     # BTC,XLM
     rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM')
-    await wks.update('B5', float(rq.json()['rates']['BTC']))
-    await wks.update('B6', float(rq.json()['rates']['XLM']))
+    await wks.update('D4', float(rq.json()['rates']['BTC']))
+    await wks.update('D5', float(rq.json()['rates']['XLM']))
 
-    # MTL
-    rq = requests.get(
-        'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
-    await wks.update('B9', float(rq.json()['_embedded']['records'][0]['amount']))
-    # MTLRECT
-    rq = requests.get(
-        'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
-    await wks.update('B10', float(rq.json()['_embedded']['records'][0]['amount']))
+    # # MTL
+    # rq = requests.get(
+    #     'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
+    # await wks.update('B9', float(rq.json()['_embedded']['records'][0]['amount']))
+    # # MTLRECT
+    # rq = requests.get(
+    #     'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
+    # await wks.update('B10', float(rq.json()['_embedded']['records'][0]['amount']))
     # MTLCITY
     # rq = requests.get(
     #    'https://horizon.stellar.org/assets?asset_code=MTLCITY&asset_issuer=GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3')
     # await wks.update('J9', float(rq.json()['_embedded']['records'][0]['amount']))
-
-    # cost data
-    cost_data = {}
-
-    # defi
-    assets, data = await get_balances(MTLAddresses.public_fund_defi, return_data=True)
-    cost_data.update(data)
-
-    good_assets = []
-    for ms in DEFI_ASSETS:
-        good_assets.append([ms, float(assets.get(ms, 0))])
-    await wks.update('A16', good_assets)
-
-    # CITY
-    assets, data = await get_balances(MTLAddresses.public_fund_city, return_data=True)
-    cost_data.update(data)
-
-    good_assets = []
-    for ms in CITY_ASSETS:
-        good_assets.append([ms, float(assets.get(ms, 0))])
-    await wks.update('C16', good_assets)
-
-    # mabiz
-    assets, data = await get_balances(MTLAddresses.public_fund_mabiz, return_data=True)
-    cost_data.update(data)
-
-    good_assets = []
-    for ms in MABIZ_ASSETS:
-        good_assets.append([ms, float(assets.get(ms, 0))])
-    await wks.update('E16', good_assets)
-
-    # mabiz
-    assets, data = await get_balances(MTLAddresses.public_issuer, return_data=True)
-    cost_data.update(data)
-
-    good_assets = []
-    for ms in ISSUER_ASSETS:
-        good_assets.append([ms, float(assets.get(ms, 0))])
-    await wks.update('I16', good_assets)
-
-    # FOND safe desk
-    # safe_desk_assets = {}
-    # debt_holders = await stellar_get_mtl_holders(eurdebt_asset)
-    # for record in debt_holders:
-    #    if record['id'] != public_fund:
-    #        found = list(filter(lambda x: x.get('asset_code') == 'EURDEBT', record['balances']))
-    #        if float(found[0]['balance']) > 0:
-    #            for balance in record['balances']:
-    #                if balance['asset_type'] == "native":
-    #                    safe_desk_assets['XLM'] = float(balance['balance'])
-    #                else:
-    #                    safe_desk_assets[balance['asset_code']] = float(balance['balance']) + \
-    #                                                              safe_desk_assets.get(balance['asset_code'], 0)
 
     # aum
     s = requests.get(
@@ -111,13 +57,9 @@ async def update_main_report(session: Session):
     # print(s)
     s = s[s.find('"price": "') + 10:]
     s = s[:s.find('"')]
-    await wks.update('B7', float(s))
+    await wks.update('D6', float(s))
 
-    # divs
-    div_sum = await cmd_show_data(MTLAddresses.public_div, 'LAST_DIVS', True)
-    await wks.update('B11', int(float(div_sum[0])))
-
-    await wks.update('B12', db_get_last_trade_operation(session=session))
+    await wks.update('D13', db_get_last_trade_operation(session=session))
 
     # defi
     defi_balance = 0
@@ -137,34 +79,41 @@ async def update_main_report(session: Session):
             for row2 in row['portfolio_item_list']:
                 for row3 in row2['asset_token_list']:
                     defi_balance += row3['amount'] * row3['price']
-        await wks.update('E4', int(defi_balance))
+        await wks.update('D8', int(defi_balance))
     else:
         logger.warning(f'debank error - {debank}')
         # db_send_admin_message(session, 'debank error')
 
-    # amount
-    rq = requests.get(
-        'https://horizon.stellar.org/assets?asset_code=MTLDefi&asset_issuer=GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI')
-    await wks.update('E5', float(rq.json()['_embedded']['records'][0]['amount']))
-    # buyback balance
-    bot_balances = await get_balances(MTLAddresses.public_defi)
-    defi_btc = float(bot_balances.get('BTCMTL', 0)) + float(bot_balances.get('SATSMTL', 0)) / 100000000
-    await wks.update('E6', defi_btc)
+    addresses = await wks.get_values('A2:A')
+    for address in addresses:
+        if address and address[0] and len(address[0]) == 56:
+            sheet_name = f'{address[0][:4]}..{address[0][-4:]}'
+            try:
+                address_sheet = await ss.worksheet(sheet_name)
+            except WorksheetNotFound:
+                address_sheet = await ss.add_worksheet(title=sheet_name, rows=100, cols=6)
 
-    # cost data
-    update_data = []
-    # print(cost_data)
-    for ms in COST_DATA:
-        # update_data.append([ms, float(assets[ms])])
-        if ms in cost_data:
-            update_data.append([ms, float(decode_data_value(cost_data[ms]))])
-        else:
-            update_data.append([ms, 0])
-    await wks.update('G16', update_data)
+            assets, data = await get_balances(address[0], return_data=True)
 
-    await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
+            update_data = [['DATA']]
+            for key in data:
+                update_data.append([key, float(decode_data_value(data[key]))])
+            await address_sheet.update('C1', update_data)
 
-    logger.info(f'all done {now}')
+            update_data = [['ASSETS']]
+            for key in assets:
+                update_data.append([key, float(assets.get(key, 0))])
+            await address_sheet.update('A1', update_data)
+
+            assets = await stellar_get_assets(address[0])
+            update_data = [['ISSUER']]
+            for key in assets:
+                update_data.append([key, float(assets.get(key, 0))])
+            await address_sheet.update('E1', update_data)
+
+    await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+
+    logger.info(f'Main report all done {datetime.now()}')
 
 
 @logger.catch
@@ -714,8 +663,8 @@ async def update_fest(session: Session):
     ss = await agc.open_by_key("1m4NcL3Dqo1UnF4LEGjNO6ZYxSnhykN1HT_2Uts8HpaU")
     # get date
     wks = await ss.worksheet("config")
-    date_1 = datetime.strptime((await wks.get_values('B1'))[0][0], '%d.%m.%Y').date()
-    date_2 = datetime.strptime((await wks.get_values('B2'))[0][0], '%d.%m.%Y').date()
+    date_1 = datetime.strptime((await wks.get_values('B1'))[0][0], '%d.%m.%Y')
+    date_2 = datetime.strptime((await wks.get_values('B2'))[0][0], '%d.%m.%Y')
 
     wks = await ss.worksheet("data")
 
@@ -724,7 +673,8 @@ async def update_fest(session: Session):
 
     # Проверка структуры данных
     headers = data[0]
-    if headers[4] != "Итого выручка лавки":
+    if headers[4] != "Итого выручка лавки (сумма входящих транз EURMTL)":
+        print(headers[4])
         raise ValueError("Неверный формат таблицы")
 
     # Обработка данных
@@ -737,8 +687,9 @@ async def update_fest(session: Session):
             total_amount = 0
             for transaction in transactions:
                 # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
-                if (transaction['asset_code'] == MTLAssets.eurmtl_asset.code
-                        and transaction['asset_issuer'] == MTLAssets.eurmtl_asset.issuer):
+                if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
+                        and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer
+                        and transaction.get('type') == 'payment' and transaction.get('to') == address):
                     total_amount += float(transaction['amount'])
 
             update_list.append([total_amount])

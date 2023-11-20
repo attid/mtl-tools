@@ -2,6 +2,7 @@ import asyncio
 import json
 import sys
 from contextlib import suppress
+import sentry_sdk
 import tzlocal
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramBadRequest
@@ -83,6 +84,11 @@ async def on_shutdown(bot: Bot):
 @logger.catch
 async def main():
     logger.add("skynet.log", rotation="1 MB", level='INFO')
+    sentry_sdk.init(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
 
     # Запуск бота
     engine = create_engine(config.db_dns, pool_pre_ping=True, max_overflow=50)

@@ -446,7 +446,6 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         await wks.delete_row(data.row)
         data = await wks.find(f'{address[:4]}..{address[-4:]}', case_sensitive=False)
 
-
     # Если опции не пусты, то добавляем запись
     if options:
         record = await wks.col_values(1)
@@ -475,7 +474,41 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         wks = await ss.worksheet("Result")
         data = await wks.get_all_values()
 
-        return data[4:]
+        return data[3:]
+
+
+async def gs_check_vote_table(table_uuid):
+    # Авторизация и получение данных из первой таблицы
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("17S_qKJuaWrYte7pCHkHtqwpAnJdJj24wjT2ulN6-BGk")
+    ws = await ss.worksheet("data")
+    data = await ws.get_all_values()
+
+    # Создание словаря для хранения адресов и соответствующих @username
+    address_dict = {row[0]: row[1] for row in data if len(row) >= 2}
+
+    # Открытие второй таблицы и получение списка участников
+    ss = await agc.open_by_key(table_uuid)
+    wks = await ss.worksheet("Members")
+    who_in = await wks.col_values(1)
+
+    # Фильтрация адресов, проверка их наличия в обеих таблицах
+    matched_addresses = {}
+    for address in who_in[1:]:
+        if address in address_dict:
+            matched_addresses[address] = address_dict[address]
+        else:
+            matched_addresses[address] = f"{address[:4]}..{address[-4:]}"
+
+    # проголосовали
+    wks = await ss.worksheet("Log")
+    who_vote = await wks.col_values(1)
+
+    for address in who_vote[1:]:
+        if address in matched_addresses:
+            matched_addresses.pop(address)
+
+    return matched_addresses.values()
 
 
 async def gs_test():
@@ -497,6 +530,5 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    a = asyncio.run(gs_update_a_table_vote('1WuJqeDb0TVN5ABSxeTWH8BfOJ232LkjRAjkkJtLyKsU',
-                                           'GAKVQQD5HFSSXWN3E3K6QL573NQG5GJNFKW52RY6FPXH3CYVVADCDH4U', [0, 2]))
+    a = asyncio.run(gs_check_vote_table('1nqzOSp3CFSav2qNgbdN1l4aAht8YmMHMZ0t6pr6-NsM'))
     print(a)

@@ -323,6 +323,19 @@ async def stellar_get_account(account_id) -> json:
             return await resp.json()
 
 
+async def stellar_get_assets(account_id) -> dict:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f'https://horizon.stellar.org/assets?asset_issuer={account_id}') as resp:
+            data = await resp.json()
+            assets = {}
+            if assets.get('type'):
+                return {}
+            else:
+                for balance in data['_embedded']['records']:
+                    assets[balance['asset_code']] = float(balance['amount'])
+                return assets
+
+
 async def get_balances(address: str, return_assets=False, return_data=False, return_signers=False):
     account = await stellar_get_account(address)
     assets = {}
@@ -1796,10 +1809,10 @@ async def get_chicago_xdr():
     # Здесь может быть ваш код для обработки транзакций
     for transaction in transactions:
         # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
-        if transaction['asset_code'] == MTLAssets.eurmtl_asset.code and transaction[
-            'asset_issuer'] == MTLAssets.eurmtl_asset.issuer:
-            accounts_dict[transaction['from']] = float(transaction['amount']) + accounts_dict.get(transaction['from'],
-                                                                                                  0)
+        if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
+                and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer):
+            accounts_dict[transaction['from']] = (float(transaction['amount']) +
+                                                  accounts_dict.get(transaction['from'], 0))
 
     # print(accounts_dict)
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(stellar_address)
@@ -1897,10 +1910,11 @@ async def get_mtlap_votes():
     for account in list(result):
         check_mtla_delegate(account, result)
 
+    for account in list(result):
+        if result[account]['vote'] == 0:
+            del result[account]
+
     return result
-    # print(json.dumps(result, indent=4))
-    # found_list = list(filter(lambda x: x[0] == mtl_account[0], donates))
-    # mtl_delegate
 
 
 if __name__ == '__main__':
@@ -1910,7 +1924,7 @@ if __name__ == '__main__':
     # print(gen_new('GANG'))
     # print(determine_working_range())
 
-    print(asyncio.run(get_chicago_xdr()))
+    print(asyncio.run(get_mtlap_votes()))
 
     # stellar_sync_submit(
     #    stellar_sign(

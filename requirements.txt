@@ -25,3 +25,4 @@ redis
 packaging
 sqlalchemy-stubs
 pydantic-settings
+sentry-sdk

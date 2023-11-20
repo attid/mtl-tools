@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     coinlayer_id: str
     debank: SecretStr
     eurmtl_key: str
+    sentry_dsn: str
 
     class Config:
         env_file = dotenv_path

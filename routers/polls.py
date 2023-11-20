@@ -10,9 +10,9 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value
-from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
+from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.gspread_tools import gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote, \
-    gs_update_a_table_first
+    gs_update_a_table_first, gs_check_vote_table
 from utils.stellar_utils import MTLAddresses, get_balances, address_id_to_username, get_mtlap_votes
 
 router = Router()
@@ -202,6 +202,7 @@ async def cmd_poll_reload_vote(message: Message, session: Session):
     await message.reply('reload complete')
 
 
+@update_command_info('/apoll', 'Создает голосование в Ассоциации')
 @router.message(Command(commands=["apoll"]))
 async def cmd_apoll(message: Message, session: Session):
     if message.reply_to_message and message.reply_to_message.poll:
@@ -223,7 +224,7 @@ async def cmd_apoll(message: Message, session: Session):
         my_poll["info_message_id"] = msg2.message_id
         my_poll["google_id"] = google_id
         my_poll["google_url"] = google_url
-        db_save_bot_value(session, -1, int(msg.poll.id), json.dumps(my_poll))
+        db_save_bot_value(session, MTLChats.MTLA_Poll, int(msg.poll.id), json.dumps(my_poll))
         await message.reply_to_message.delete()
         await message.delete()
     else:
@@ -242,7 +243,7 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
     # 2 poll_id='5341722582053815395' option_ids=[1] voter_chat=None user=User(id=84131737, is_bot=False, first_name='Igor', last_name='Tolstov', username='itolstov', language_code='ru', is_premium=True, added_to_attachment_menu=None, can_join_groups=None, can_read_all_group_messages=None, supports_inline_queries=None)
     # -1 id='5341722582053815395' question='test' options=[PollOption(text='a', voter_count=1), PollOption(text='b', voter_count=0), PollOption(text='c', voter_count=2)] total_voter_count=3 is_closed=False is_anonymous=False type='regular' allows_multiple_answers=False correct_option_id=None explanation=None explanation_entities=None open_period=None close_date=None
     # -2 poll_id='5341722582053815395' option_ids=[] voter_chat=None user=User(id=84131737, is_bot=False, first_name='Igor', last_name='Tolstov', username='itolstov', language_code='ru', is_premium=True, added_to_attachment_menu=None, can_join_groups=None, can_read_all_group_messages=None, supports_inline_queries=None)
-    my_poll = json.loads(db_load_bot_value(session, -1, int(poll.poll_id), empty_poll))
+    my_poll = json.loads(db_load_bot_value(session, MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
     # find user
     user_address = await gs_find_user_a(f'@{poll.user.username}')
     if not user_address:
@@ -260,6 +261,24 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
         with suppress(TelegramBadRequest):
             await bot.edit_message_text(chat_id=my_poll["info_chat_id"], message_id=my_poll["info_message_id"],
                                         text=msg_text, disable_web_page_preview=True)
+
+
+@update_command_info('/apoll_check', 'Проверка голосования в Ассоциации')
+@router.message(Command(commands=["apoll_check"]))
+async def cmd_poll_check(message: Message, session: Session):
+    if message.reply_to_message:
+        my_poll = json.loads(db_load_bot_value(session, MTLChats.MTLA_Poll,
+                                               int(message.reply_to_message.poll.id), empty_poll))
+
+        # update answer
+        # gs_update_a_table_vote(table_uuid, address, options):
+        result = await gs_check_vote_table(my_poll["google_id"])
+        msg_text = ' '.join(result)
+        if result:
+            with suppress(TelegramBadRequest):
+                await message.reply(msg_text)
+    else:
+        await message.answer('Требуется в ответ на голосование')
 
 
 if __name__ == "__main__":
