@@ -112,6 +112,7 @@ async def main():
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
+    dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
 
     dp.include_router(admin.router)
@@ -151,6 +152,9 @@ def load_globals(session: Session):
     global_data.welcome_messages = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
     global_data.welcome_button = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
     global_data.delete_income = db_get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
+    global_data.admins = db_get_chat_dict_by_key(session, BotValueTypes.Admins, True)
+    global_data.alert_me = db_get_chat_dict_by_key(session, BotValueTypes.AlertMe, True)
+    global_data.sync = db_get_chat_dict_by_key(session, BotValueTypes.Sync, True)
 
     for user in db_load_bot_users(session):
         global_data.users_list[user.user_id] = user.user_type

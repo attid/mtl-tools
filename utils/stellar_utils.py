@@ -1,12 +1,6 @@
 import asyncio
 import base64
-import json
 import math
-from datetime import date
-
-from stellar_sdk.xdr import account_id
-
-from db.requests import *
 from copy import deepcopy
 
 import aiohttp
@@ -19,6 +13,7 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from config_reader import config
+from db.requests import *
 from utils.global_data import float2str, global_data
 from utils.gspread_tools import agcm, gs_get_chicago_premium
 

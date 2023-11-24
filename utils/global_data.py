@@ -1,7 +1,6 @@
-import json
 from datetime import datetime
+
 from aiogram.types import Message
-from requests import Session
 
 
 class MTLChats:
@@ -59,6 +58,8 @@ class BotValueTypes:
     FullData = 27
     NoFirstLink = 28
     Admins = 29
+    AlertMe = 30
+    Sync = 31
 
 
 class LogQuery:
@@ -84,6 +85,9 @@ class GlobalData:
     no_first_link = []
     users_list = {}
     info_cmd = {}
+    admins = {}
+    alert_me = {}
+    sync = {}
 
 
 global_data = GlobalData()

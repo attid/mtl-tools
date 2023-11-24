@@ -3,16 +3,14 @@ import json
 import math
 import os
 from datetime import datetime
+from itertools import zip_longest
 
 import gspread_asyncio
-
 # from google-auth package
 from google.oauth2.service_account import Credentials
-from sqlalchemy.orm import Session
 
 from db.requests import add_to_watchlist
 from utils.global_data import float2str, global_data
-from itertools import zip_longest
 
 
 # https://gspread-asyncio.readthedocs.io/en/latest/index.html#
@@ -166,13 +164,13 @@ async def gs_find_user(user_id):
         result.append('Не найден в ID')
 
     agc = await agcm.authorize()
-    ss = await agc.open("MTL_BIM_register")
-    ws = await ss.worksheet("List")
-    data = await ws.find(str(user_id), in_column=4)
+    ss = await agc.open("MTL_Airdrop_register")
+    ws = await ss.worksheet("EUR_GNRL")
+    data = await ws.find(str(user_id), in_column=7)
     if data:
-        result.append('Найден в BIM')
+        result.append(f'Найден в Airdrop строка {data.row}')
     else:
-        result.append('Не найден в BIM')
+        result.append('ID пользователя не найдено в Airdrop')
 
     return result
 
@@ -530,5 +528,5 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    a = asyncio.run(gs_check_vote_table('1nqzOSp3CFSav2qNgbdN1l4aAht8YmMHMZ0t6pr6-NsM'))
+    a = asyncio.run(gs_find_user(25787713))
     print(a)

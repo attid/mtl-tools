@@ -1,7 +1,6 @@
 import copy
 import json
 from contextlib import suppress
-from typing import List
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -9,6 +8,7 @@ from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer
 from sqlalchemy.orm import Session
+
 from db.requests import db_save_bot_value, db_load_bot_value
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.gspread_tools import gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote, \
@@ -92,7 +92,12 @@ async def cmd_poll_rt(message: Message, session: Session):
 
 @router.message(Command(commands=["poll_close"]))
 @router.message(Command(commands=["poll_stop"]))
-async def cmd_poll_close(message: Message, session: Session):
+@router.message(Command(commands=["apoll_stop"]))
+async def cmd_poll_close(message: Message, session: Session, bot: Bot):
+    if message.reply_to_message and message.reply_to_message.poll:
+        await bot.stop_poll(message.chat.id, message.reply_to_message.message_id)
+        return
+
     # print(message)
     if message.reply_to_message:
         if message.reply_to_message.forward_from_chat and message.reply_to_message.forward_from_message_id:

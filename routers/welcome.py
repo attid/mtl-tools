@@ -3,7 +3,8 @@ import re
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER
+from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER, \
+    ADMINISTRATOR
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
     ChatMemberUpdated, ChatMemberMember
@@ -265,7 +266,7 @@ async def cmd_recaptcha(message: Message, session: Session):
     await message.delete()
 
 
-@router.callback_query(F.data=="ReCaptcha")
+@router.callback_query(F.data == "ReCaptcha")
 async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot):
     await new_chat_member(ChatMemberUpdated(chat=query.message.chat,
                                             from_user=query.from_user,
@@ -274,3 +275,15 @@ async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot):
                                             date=query.message.date
                                             ), session, bot)
     await query.answer()
+
+
+@router.chat_member(ChatMemberUpdatedFilter(PROMOTED_TRANSITION))
+@router.chat_member(ChatMemberUpdatedFilter(ADMINISTRATOR >> MEMBER))
+async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot):
+    members = await event.chat.get_administrators()
+    new_admins = [member.user.id for member in members]
+    global_data.admins[event.chat.id] = new_admins
+    db_save_bot_value(session, event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
+
+
+

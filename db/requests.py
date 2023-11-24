@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import timedelta
 from sys import argv
@@ -60,16 +61,20 @@ def db_get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
     return [row[0] for row in result]
 
 
-def db_get_chat_dict_by_key(session: Session, chat_key: int) -> Dict[int, str]:
+def db_get_chat_dict_by_key(session: Session, chat_key: int, return_json=False) -> Dict[int, str|list]:
     """
     Get dictionary of chat IDs and corresponding values by a specific chat key.
 
+    :param return_json: if True, return the list as JSON
     :param session: SQLAlchemy DB session
     :param chat_key: The key of the chat
     :return: Dictionary with chat IDs as keys and corresponding values as values for the provided chat key
     """
     result = session.query(BotTable.chat_id, BotTable.chat_value).filter(BotTable.chat_key == chat_key).all()
-    return {row[0]: row[1] for row in result}
+    if return_json:
+        return {row[0]: json.loads(row[1]) for row in result}
+    else:
+        return {row[0]: row[1] for row in result}
 
 
 def db_save_bot_user(session: Session, user_id: int, user_name: str, user_type: int = 0):
@@ -110,7 +115,6 @@ def db_load_bot_users(session: Session) -> List[BotUsers]:
     Retrieve a list of BotUsers objects filtered by user_name from the bot_users table.
 
     :param session: SQLAlchemy DB session
-    :param user_name: The name of the user to filter by
     :return: A list of BotUsers objects
     """
     result = session.query(BotUsers).all()

@@ -1,12 +1,15 @@
+from contextlib import suppress
+
 from aiogram import F, Bot
 from aiogram.enums import ChatType, ParseMode, ChatAction
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from sqlalchemy.orm import Session
 
-from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message
+from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
@@ -241,7 +244,20 @@ async def cmd_save_good_user(message: Message, session: Session):
 
 
 @router.message(F.entities, F.text)  # если текст с ссылками #точно не приватное, приватные выше остановились
-async def cmd_no_first_link(message: Message, session: Session):
+async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
+    # if user need be alert
+    if message.chat.id in global_data.alert_me:
+        for entity in message.entities:
+            if entity.type == 'mention':
+                username = entity.extract_from(message.text)
+                user_id = db_load_user_id(session, username[1:])
+                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
+                    with suppress(TelegramBadRequest):
+                        alert_username = '@'+message.from_user.username if message.from_user.username else message.from_user.full_name
+                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
+                                                        f'В чате {message.chat.title}\n'
+                                                        f'Ссылка на сообщение {message.get_url()}')
+
     if message.chat.id not in global_data.no_first_link:
         return
 

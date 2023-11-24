@@ -3,20 +3,22 @@ import hashlib
 import json
 import os
 import re
+from contextlib import suppress
+
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, FSInputFile, ChatPermissions
+from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.orm import Session
+
 from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.dialog import talk_get_summary
-from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes
+from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user
 from utils.stellar_utils import send_by_list
-from aiogram.exceptions import TelegramBadRequest
-
 from utils.timedelta import parse_timedelta_from_message
 
 router = Router()
@@ -321,27 +323,25 @@ async def cmd_get_sha1(message: Message, bot: Bot):
     hasher.update(file_bytes)
 
     # Get the SHA-1 hash and convert it into bytes
-    sha1_hash = hasher.hexdigest()#.encode('utf-8')
+    sha1_hash = hasher.hexdigest()  # .encode('utf-8')
     print(sha1_hash, sha1_hash)
 
     # Encode the bytes to BASE64
     base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
     print(sha1_hash, base64_hash)
 
-    #sha256
+    # sha256
     sha256_hasher = hashlib.sha256()
     sha256_hasher.update(file_bytes)
     sha256_hash = sha256_hasher.hexdigest()
 
     print(f"SHA-256: {sha256_hash}")
 
-
     await message.reply(f'SHA-1: <code>{sha1_hash}</code>\n'
                         f'BASE64: <code>{base64_hash}</code>\n\n'
                         f'SHA-256: <code>{sha256_hash}</code>')
-    #hex: 679cd49aec59cf2ccaf843ea4c484975d33dd18a
-    #base64: Z5zUmuxZzyzK+EPqTEhJddM90Yo=
-
+    # hex: 679cd49aec59cf2ccaf843ea4c484975d33dd18a
+    # base64: Z5zUmuxZzyzK+EPqTEhJddM90Yo=
 
 
 @router.message(Command(commands=["s"]))
@@ -355,13 +355,15 @@ async def cmd_get_info(message: Message, bot: Bot):
         await message.reply('Please send for reply message to get it')
         return
 
-    if message.reply_to_message :
+    if message.reply_to_message:
         await bot.send_message(chat_id=message.from_user.id, text=message.reply_to_message.html_text)
 
 
 global_data.info_cmd["/no_first_link"] = "Включить защиту от спама первого сообщения с ссылкой"
+
+
 @router.message(Command(commands=["no_first_link"]))
-async def cmd_set_listen(message: Message, session: Session):
+async def cmd_set_no_first_link(message: Message, session: Session):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
@@ -377,3 +379,81 @@ async def cmd_set_listen(message: Message, session: Session):
 
     cmd_delete_later(message, 1)
     cmd_delete_later(msg, 1)
+
+
+@update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку")
+@router.message(Command(commands=["alert_me"]))
+async def cmd_set_alert_me(message: Message, session: Session):
+    if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
+        global_data.alert_me[message.chat.id].remove(message.from_user.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.AlertMe,
+                          json.dumps(global_data.alert_me[message.chat.id]))
+        msg = await message.reply('Removed')
+    else:
+        if message.chat.id not in global_data.alert_me:
+            global_data.alert_me[message.chat.id] = []
+        global_data.alert_me[message.chat.id].append(message.from_user.id)
+        db_save_bot_value(session, message.chat.id, BotValueTypes.AlertMe,
+                          json.dumps(global_data.alert_me[message.chat.id]))
+        msg = await message.reply('Added')
+
+    cmd_delete_later(message, 1)
+    cmd_delete_later(msg, 1)
+
+
+@update_command_info("/sync", "Синхронизирует сообщение в чате с постом в канале")
+@router.message(Command(commands=["sync"]))
+async def cmd_sync_post(message: Message, session: Session, bot: Bot):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return
+
+    if not message.reply_to_message or not message.reply_to_message.forward_from_chat:
+        await message.reply('Могу синхронизировать только посты')
+        return
+
+    try:
+        chat = await bot.get_chat(message.reply_to_message.forward_from_chat.id)
+        post_id = message.reply_to_message.forward_from_message_id
+        url = f'https://t.me/c/{str(chat.id)[4:]}/{message.reply_to_message.forward_from_message_id}'
+        new_msg = await message.answer(message.reply_to_message.html_text,
+                                       reply_markup=InlineKeyboardMarkup(
+                                           inline_keyboard=[[InlineKeyboardButton(text='Редактировать', url=url)]]
+                                       ))
+
+        if chat.id not in global_data.sync:
+            global_data.sync[chat.id] = {}
+
+        if str(post_id) not in global_data.sync[chat.id]:
+            global_data.sync[chat.id][str(post_id)] = []
+
+        global_data.sync[chat.id][str(post_id)].append({'chat_id': message.chat.id,
+                                                   'message_id': new_msg.message_id,
+                                                   'url': url})
+
+        db_save_bot_value(session, chat.id, BotValueTypes.Sync,
+                          json.dumps(global_data.sync[chat.id]))
+
+        with suppress(TelegramBadRequest):
+            await message.reply_to_message.delete()
+            await message.delete()
+
+    except:
+        await message.reply('Канал не найден, нужно быть админом в канале')
+        return
+
+    return
+
+
+@router.edited_channel_post(F.text)
+async def cmd_edited_channel_post(message: Message, session: Session, bot: Bot):
+    if message.chat.id in global_data.sync:
+        if str(message.message_id) in global_data.sync[message.chat.id]:
+            for data in global_data.sync[message.chat.id][str(message.message_id)]:
+                with suppress(TelegramBadRequest):
+                    await bot.edit_message_text(text=message.html_text, chat_id=data['chat_id'],
+                                                message_id=data['message_id'], disable_web_page_preview=True,
+                                                reply_markup=InlineKeyboardMarkup(
+                                                    inline_keyboard=[
+                                                        [InlineKeyboardButton(text='Редактировать', url=data['url'])]]
+                                                ))
