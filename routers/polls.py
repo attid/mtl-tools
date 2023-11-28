@@ -202,7 +202,18 @@ async def cmd_poll_reload_vote(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    await cmd_save_votes(session)
+    vote_list = await cmd_save_votes(session)
+    entries_with_dots = []
+
+    for key, value in vote_list.items():
+        for sub_key in value.keys():
+            if '..' in sub_key:
+                entries_with_dots.append(sub_key.upper())
+
+    if len(entries_with_dots) > 0:
+        await message.reply(
+            'Список пользователей не найденых в реестрах:\n' + '\n'.join(entries_with_dots))
+
     # importlib.reload(skynet_poll_handlers)
     await message.reply('reload complete')
 
