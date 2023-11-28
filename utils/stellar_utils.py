@@ -318,7 +318,7 @@ async def stellar_get_account(account_id) -> json:
             return await resp.json()
 
 
-async def stellar_get_assets(account_id) -> dict:
+async def stellar_get_issuer_assets(account_id) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.get(f'https://horizon.stellar.org/assets?asset_issuer={account_id}') as resp:
             data = await resp.json()

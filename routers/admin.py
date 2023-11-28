@@ -416,10 +416,14 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
         chat = await bot.get_chat(message.reply_to_message.forward_from_chat.id)
         post_id = message.reply_to_message.forward_from_message_id
         url = f'https://t.me/c/{str(chat.id)[4:]}/{message.reply_to_message.forward_from_message_id}'
-        new_msg = await message.answer(message.reply_to_message.html_text,
-                                       reply_markup=InlineKeyboardMarkup(
-                                           inline_keyboard=[[InlineKeyboardButton(text='Редактировать', url=url)]]
-                                       ))
+        msg_text = message.reply_to_message.html_text
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Edit', url=url),
+                                                              InlineKeyboardButton(text='Edit', url=url)]])
+        if msg_text[-1] == '*':
+            msg_text = msg_text[:-1]
+            reply_markup = None
+        new_msg = await message.answer(msg_text, disable_web_page_preview=True,
+                                       reply_markup=reply_markup)
 
         if chat.id not in global_data.sync:
             global_data.sync[chat.id] = {}
@@ -428,15 +432,15 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
             global_data.sync[chat.id][str(post_id)] = []
 
         global_data.sync[chat.id][str(post_id)].append({'chat_id': message.chat.id,
-                                                   'message_id': new_msg.message_id,
-                                                   'url': url})
+                                                        'message_id': new_msg.message_id,
+                                                        'url': url})
 
         db_save_bot_value(session, chat.id, BotValueTypes.Sync,
                           json.dumps(global_data.sync[chat.id]))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
-            await message.delete()
+        await message.delete()
 
     except:
         await message.reply('Канал не найден, нужно быть админом в канале')
@@ -451,9 +455,13 @@ async def cmd_edited_channel_post(message: Message, session: Session, bot: Bot):
         if str(message.message_id) in global_data.sync[message.chat.id]:
             for data in global_data.sync[message.chat.id][str(message.message_id)]:
                 with suppress(TelegramBadRequest):
-                    await bot.edit_message_text(text=message.html_text, chat_id=data['chat_id'],
+                    msg_text = message.html_text
+                    reply_markup = InlineKeyboardMarkup(
+                        inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
+                                          InlineKeyboardButton(text='Edit', url=data['url'])]])
+                    if msg_text[-1] == '*':
+                        msg_text = msg_text[:-1]
+                        reply_markup = None
+                    await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
                                                 message_id=data['message_id'], disable_web_page_preview=True,
-                                                reply_markup=InlineKeyboardMarkup(
-                                                    inline_keyboard=[
-                                                        [InlineKeyboardButton(text='Редактировать', url=data['url'])]]
-                                                ))
+                                                reply_markup=reply_markup)

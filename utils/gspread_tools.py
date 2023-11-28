@@ -8,6 +8,8 @@ from itertools import zip_longest
 import gspread_asyncio
 # from google-auth package
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from oauth2client.service_account import ServiceAccountCredentials
 
 from db.requests import add_to_watchlist
 from utils.global_data import float2str, global_data
@@ -509,14 +511,140 @@ async def gs_check_vote_table(table_uuid):
     return matched_addresses.values()
 
 
-async def gs_test():
-    options = [1, 2, 3]
-    agc = await agcm.authorize()
-    ss = await agc.open_by_key("1WuJqeDb0TVN5ABSxeTWH8BfOJ232LkjRAjkkJtLyKsU")
-    wks = await ss.worksheet("Result")
-    data = await wks.get_all_values()
+def get_sheet_styles(spreadsheet_id, sheet_name):
+    # from googleapiclient.discovery import build
 
-    print(data[4:])
+    service = build('sheets', 'v4', credentials=credentials)
+    result = service.spreadsheets().get(spreadsheetId=spreadsheet_id, ranges=sheet_name, includeGridData=True).execute()
+    sheet_data = result['sheets'][0]['data'][0]
+    styles = [[cell.get('userEnteredFormat') for cell in row.get('values', [])] for row in
+              sheet_data.get('rowData', [])]
+    return styles
+
+
+async def gs_test():
+    gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+                                    "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
+    return
+    agc = await agcm.authorize()
+    data = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
+    public = await agc.open_by_key("1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc")
+    data_report = await data.worksheet("report")
+    public_report = await public.worksheet("report")
+
+    # copy data
+    data_report_data = await data_report.get_all_values()
+    print(data_report_data)
+    await public_report.update('A1', data_report_data)
+
+    q = await data_report.get()
+    print(q)
+    # result = service.spreadsheets().get(spreadsheetId=spreadsheet_id, ranges=sheet_name, includeGridData=True).execute()
+    # sheet_data = result['sheets'][0]['data'][0]
+    # styles = [[cell.get('userEnteredFormat') for cell in row.get('values', [])] for row in sheet_data.get('rowData', [])]
+    # return styles
+
+
+def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name):
+    # sheet_data_result = await asyncio.to_thread(get_sheet_data_and_styles_sync, service, copy_from, sheet_name)
+    # Настройка аутентификации для Google Sheets API
+    key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
+    service = build('sheets', 'v4', credentials=credentials)
+
+    # Асинхронный клиент для gspread
+    #agcm = gspread_asyncio.AsyncioGspreadClientManager(lambda: credentials)
+    #agc = await agcm.authorize()
+
+        # Запрос метаданных всего документа
+    source_sheet_data = service.spreadsheets().get(spreadsheetId=copy_from, includeGridData=True).execute()
+
+    # Находим нужный лист по имени
+    sheet_data = None
+    for sheet in source_sheet_data['sheets']:
+        if sheet['properties']['title'] == sheet_name:
+            sheet_data = sheet
+            break
+
+    if not sheet_data:
+        raise Exception(f"Sheet {sheet_name} not found in spreadsheet.")
+
+    # Получение данных и стилей с исходного листа
+    row_data = sheet_data.get('data', [])[0].get('rowData', [])
+    merges = sheet_data.get('merges', [])
+
+    # Получение целевого документа и листа
+    # Запрос метаданных всего документа
+    target_sheet_data = service.spreadsheets().get(spreadsheetId=copy_to).execute()
+
+    # Находим нужный лист в целевом документе по имени и получаем его ID
+    target_sheet_id = None
+    for sheet in target_sheet_data['sheets']:
+        if sheet['properties']['title'] == sheet_name:
+            target_sheet_id = sheet['properties']['sheetId']
+            break
+
+    if target_sheet_id is None:
+        raise Exception(f"Target sheet {sheet_name} not found in spreadsheet.")
+
+    # Применение данных и стилей к целевому листу
+    requests = []
+    for row_index, row in enumerate(row_data):
+        for col_index, cell in enumerate(row.get('values', [])):
+            cell_data = cell.get('effectiveValue', {})
+            cell_style = cell.get('effectiveFormat', {})
+
+            # Формирование значения для ячейки
+            user_entered_value = {}
+            if 'stringValue' in cell_data:
+                user_entered_value = {"stringValue": cell_data['stringValue']}
+            elif 'numberValue' in cell_data:
+                user_entered_value = {"numberValue": cell_data['numberValue']}
+            elif 'boolValue' in cell_data:
+                user_entered_value = {"boolValue": cell_data['boolValue']}
+
+            # Формирование запроса для обновления ячейки
+            cell_update = {
+                "userEnteredFormat": cell_style
+            }
+            if user_entered_value:
+                cell_update["userEnteredValue"] = user_entered_value
+
+            requests.append({
+                "updateCells": {
+                    "rows": [{"values": [cell_update]}],
+                    "fields": "userEnteredValue,userEnteredFormat",
+                    "start": {
+                        "sheetId": target_sheet_id,
+                        "rowIndex": row_index,
+                        "columnIndex": col_index
+                    }
+                }
+            })
+
+    for merge in merges:
+        start_row = merge.get('startRowIndex', 0)
+        end_row = merge.get('endRowIndex', 0)
+        start_col = merge.get('startColumnIndex', 0)
+        end_col = merge.get('endColumnIndex', 0)
+
+        requests.append({
+            "mergeCells": {
+                "range": {
+                    "sheetId": target_sheet_id,
+                    "startRowIndex": start_row,
+                    "endRowIndex": end_row,
+                    "startColumnIndex": start_col,
+                    "endColumnIndex": end_col
+                },
+                "mergeType": "MERGE_ALL"  # или "MERGE_COLUMNS", "MERGE_ROWS" в зависимости от ваших потребностей
+            }
+        })
+
+    # Отправка запросов к API
+    if requests:
+        service.spreadsheets().batchUpdate(spreadsheetId=copy_to, body={"requests": requests}).execute()
 
 
 if __name__ == "__main__":
@@ -528,5 +656,5 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    a = asyncio.run(gs_find_user(25787713))
+    a = asyncio.run(gs_test())
     print(a)

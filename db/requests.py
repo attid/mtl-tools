@@ -1,9 +1,11 @@
 import json
 import re
+from contextlib import suppress
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast, Optional
 from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
@@ -61,7 +63,7 @@ def db_get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
     return [row[0] for row in result]
 
 
-def db_get_chat_dict_by_key(session: Session, chat_key: int, return_json=False) -> Dict[int, str|list]:
+def db_get_chat_dict_by_key(session: Session, chat_key: int, return_json=False) -> Dict[int, str | list]:
     """
     Get dictionary of chat IDs and corresponding values by a specific chat key.
 
@@ -560,16 +562,16 @@ def db_get_summary(session, chat_id: int, thread_id: int, dt: datetime = None) -
     return summaries.all()
 
 
-def db_get_last_trade_operation(session: Session) -> float:
+def db_get_last_trade_operation(session: Session, asset_code='MTL', minimal_sum=0) -> float:
     stmt = (
         select(TOperations)
         .where(
             (TOperations.operation == 'trade') &
             (
-                    and_((TOperations.code1 == 'MTL'), (TOperations.code2 == 'EURMTL'),
-                         (sql_cast(TOperations.amount1, Float).__gt__(1))) |
-                    and_((TOperations.code1 == 'EURMTL'), (TOperations.code2 == 'MTL'),
-                         (sql_cast(TOperations.amount2, Float).__gt__(1)))
+                    and_((TOperations.code1 == asset_code), (TOperations.code2 == 'EURMTL'),
+                         (sql_cast(TOperations.amount1, Float).__gt__(minimal_sum))) |
+                    and_((TOperations.code1 == 'EURMTL'), (TOperations.code2 == asset_code),
+                         (sql_cast(TOperations.amount2, Float).__gt__(minimal_sum)))
             )
         )
         .order_by(desc(TOperations.dt))
@@ -577,20 +579,22 @@ def db_get_last_trade_operation(session: Session) -> float:
     )
 
     result = session.execute(stmt)
-    operation = result.scalar_one()
+    with suppress(NoResultFound):
+        operation = result.scalar_one()
 
-    if operation.code2 == 'MTL':
-        rate = float(operation.amount1) / float(operation.amount2)
-    else:
-        rate = float(operation.amount2) / float(operation.amount1)
+        if operation.code2 == asset_code:
+            rate = float(operation.amount1) / float(operation.amount2)
+        else:
+            rate = float(operation.amount2) / float(operation.amount1)
 
-    return round(rate, 2)
+        return round(rate, 2)
+    return 0
 
 
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(len(db_get_watch_list(quik_pool())))
+    print(db_get_last_trade_operation(quik_pool(), 'BTCMTL'))
 
     # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',

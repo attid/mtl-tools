@@ -2,6 +2,8 @@ import datetime
 
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
+
+from utils.gspread_tools import gs_copy_sheets_with_style
 from utils.stellar_utils import *
 from scripts.mtl_exchange import check_fire
 
@@ -59,8 +61,6 @@ async def update_main_report(session: Session):
     s = s[:s.find('"')]
     await wks.update('D6', float(s))
 
-    await wks.update('D13', db_get_last_trade_operation(session=session))
-
     # defi
     defi_balance = 0
     requests.get('https://debank.com/profile/0x0358D265874b5Cf002d1801949F1cEE3B08Fa2E9')
@@ -105,11 +105,15 @@ async def update_main_report(session: Session):
                 update_data.append([key, float(assets.get(key, 0))])
             await address_sheet.update('A1', update_data)
 
-            assets = await stellar_get_assets(address[0])
+            assets = await stellar_get_issuer_assets(address[0])
             update_data = [['ISSUER']]
             for key in assets:
-                update_data.append([key, float(assets.get(key, 0))])
+                update_data.append([key, float(assets.get(key, 0)),
+                                    db_get_last_trade_operation(session=session, asset_code=key)])
             await address_sheet.update('E1', update_data)
+
+    await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+                            "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
 
     await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
@@ -728,7 +732,7 @@ async def main():
 
 if __name__ == "__main__":
     # from db.quik_pool import quik_pool
-    # asyncio.run(update_fest(quik_pool()))  # only from skynet
+    # asyncio.run(update_main_report(quik_pool()))  # only from skynet
     # exit()
 
     asyncio.run(main())
