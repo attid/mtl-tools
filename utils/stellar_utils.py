@@ -23,7 +23,7 @@ base_fee = config.base_fee
 class MTLAddresses:
     public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
     public_pawnshop = "GDASYWP6F44TVNJKZKQ2UEVZOKTENCJFTWVMP6UC7JBZGY4ZNB6YAVD4"
-    public_defi = "GBTOF6RLHRPG5NRIU6MQ7JGMCV7YHL5V33YYC76YYG4JUKCJTUP5DEFI"
+    public_farm = "GCAQ3NPOLUPDBN7M32DHGKQPVCNIZ3KQFN6UXPZDPRLRUYJATNQ4FARM"
     public_btc_guards = "GATUN5FV3QF35ZMU3C63UZ63GOFRYUHXV2SHKNTKPBZGYF2DU3B7IW6Z"
     public_fund_city = "GCOJHUKGHI6IATN7AIEK4PSNBPXIAIZ7KB2AWTTUCNIAYVPUB2DMCITY"
     public_fund_defi = "GAEZHXMFRW2MWLWCXSBNZNUSE6SN3ODZDDOMPFH3JPMJXN4DKBPMDEFI"
@@ -67,7 +67,7 @@ class MTLAssets:
     btcdebt_asset = Asset("BTCDEBT", MTLAddresses.public_issuer)
     usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
-    defi_asset = Asset("MTLDefi", MTLAddresses.public_defi)
+    farm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
     damircoin_asset = Asset("DamirCoin", MTLAddresses.public_damir)
@@ -921,7 +921,7 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
 
 
 async def get_defi_xdr(div_sum: int):
-    accounts = await stellar_get_mtl_holders(MTLAssets.defi_asset)
+    accounts = await stellar_get_mtl_holders(MTLAssets.farm_asset)
     accounts_list = []
     total_sum = 0
     # div_bonus = div_sum * 0.1
@@ -932,7 +932,7 @@ async def get_defi_xdr(div_sum: int):
         token_balance = 0
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == MTLAssets.defi_asset.code:
+                if balance["asset_code"] == MTLAssets.farm_asset.code:
                     token_balance = balance["balance"]
                     token_balance = int(token_balance[0:token_balance.find('.')])
         accounts_list.append([account["account_id"], token_balance, 0])
@@ -946,7 +946,7 @@ async def get_defi_xdr(div_sum: int):
         # else:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_defi)
+    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_farm)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -960,7 +960,7 @@ async def get_defi_xdr(div_sum: int):
     return xdr
 
 
-async def get_usdm_xdr(div_sum: int):
+async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
     accounts = await stellar_get_mtl_holders(MTLAssets.usdm_asset)
     accounts_list = []
     total_sum = 0
@@ -990,6 +990,10 @@ async def get_usdm_xdr(div_sum: int):
         if account[2] > 0.0001:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.usdm_asset,
                                           amount=str(round(account[2], 7)))
+    transaction.append_payment_op(destination=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
+                                  amount=str(premium_sum))
+    transaction.append_payment_op(source=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
+                                  amount=str(income_sum), destination=MTLAddresses.public_usdm)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 
@@ -1806,8 +1810,9 @@ async def get_chicago_xdr():
         # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
         if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
                 and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer):
-            accounts_dict[transaction['from']] = (float(transaction['amount']) +
-                                                  accounts_dict.get(transaction['from'], 0))
+            if transaction['to'] != transaction['from'] and transaction['to'] == stellar_address:
+                accounts_dict[transaction['from']] = (float(transaction['amount']) +
+                                                      accounts_dict.get(transaction['from'], 0))
 
     # print(accounts_dict)
     root_account = Server(horizon_url="https://horizon.stellar.org").load_account(stellar_address)
@@ -1816,6 +1821,7 @@ async def get_chicago_xdr():
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.add_text_memo('cashback')
     total_sum = 0
+    total_income_sum = 0
     premium_sum = 0
     for account in accounts_dict:
         # 13 всем, премиум 26
@@ -1825,6 +1831,7 @@ async def get_chicago_xdr():
         else:
             cashback_sum = accounts_dict[account] * 0.13
         total_sum += cashback_sum
+        total_income_sum += accounts_dict[account]
 
         transaction.append_payment_op(destination=account, asset=MTLAssets.eurmtl_asset,
                                       amount=str(round(cashback_sum, 7)))
@@ -1833,6 +1840,8 @@ async def get_chicago_xdr():
     result.append(f'За период - ')
     num_premium_accounts = sum(account in premium_list for account in accounts_dict)
     num_regular_accounts = len(accounts_dict) - num_premium_accounts
+    total_sum, total_income_sum, premium_sum = round(total_sum, 2), round(total_income_sum, 2), round(premium_sum, 2)
+    result.append(f'Сумма входящих - {total_income_sum}')
     result.append(f'Премиум пользователей: {num_premium_accounts} обычных пользователей: {num_regular_accounts}')
     result.append(f'Premium sum: {premium_sum} Total sum: {total_sum}')
     result.append(xdr)
@@ -1912,6 +1921,22 @@ async def get_mtlap_votes():
     return result
 
 
+async def get_get_income():
+    address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
+    transactions = await stellar_get_transactions(address,
+                                                  datetime.strptime('15.11.2023', '%d.%m.%Y'),
+                                                  datetime.strptime('30.11.2023', '%d.%m.%Y'))
+    # total_amount = sum(transaction.amount for transaction in transactions if transaction)
+    total_amount = 0
+    for transaction in transactions:
+        # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
+        if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
+                and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer
+                and transaction.get('type') == 'payment' and transaction.get('to') == address):
+            total_amount += float(transaction['amount'])
+    print(total_amount)
+
+
 if __name__ == '__main__':
     pass
 
@@ -1919,7 +1944,7 @@ if __name__ == '__main__':
     # print(gen_new('GANG'))
     # print(determine_working_range())
 
-    print(asyncio.run(get_mtlap_votes()))
+    print(asyncio.run(get_usdm_xdr(999,888,111)))
 
     # stellar_sync_submit(
     #    stellar_sign(

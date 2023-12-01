@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from config_reader import start_path
 from scripts.update_report import update_airdrop, update_fest
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
-from utils.global_data import MTLChats, is_skynet_admin, global_data
+from utils.global_data import MTLChats, is_skynet_admin, global_data, str2float
 from utils.gspread_tools import gs_check_bim, agcm
 from utils.img_tools import create_image_with_text
 from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
@@ -286,12 +286,16 @@ async def cmd_get_defi_xdr(message: Message):
 
 @router.message(Command(commands=["get_usdm_xdr"]))
 async def cmd_get_usdm_xdr_(message: Message):
-    if len(message.text.split()) > 1:
-        xdr = await get_usdm_xdr(int(message.text.split()[1]))
+    arr = message.text.split()
+    if len(arr) > 3:
+        xdr = await get_usdm_xdr(str2float(arr[1]), str2float(arr[2]), str2float(arr[3]))
         await multi_answer(message, xdr)
         await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
     else:
-        await multi_answer(message, 'use -  /get_usdm_xdr 44444 \n where 44444 usdm sum to pay')
+        await multi_answer(message, 'use -  /get_usdm_xdr 999 888 111 \n'
+                                    'где 999 сумма в usd что была заработана за месяц\n'
+                                    '888 сумма в usdm которая уйдет держателям usdm\n'
+                                    '111 сумма премии фарм компании')
 
 
 @router.message(Command(commands=["get_btcmtl_xdr"]))
