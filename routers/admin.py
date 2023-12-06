@@ -342,6 +342,17 @@ async def cmd_get_sha1(message: Message, bot: Bot):
                         f'SHA-256: <code>{sha256_hash}</code>')
     # hex: 679cd49aec59cf2ccaf843ea4c484975d33dd18a
     # base64: Z5zUmuxZzyzK+EPqTEhJddM90Yo=
+    #Soz Nov 1982-11-14
+
+
+@router.message(Command(commands=["sha256"]))
+async def cmd_get_info(message: Message, bot: Bot):
+    sha256_hasher = hashlib.sha256()
+    print(message.text[8:])
+    sha256_hasher.update(message.text[8:].encode('utf-8'))
+    sha256_hash = sha256_hasher.hexdigest()
+    print(sha256_hash)
+    await message.reply(f'SHA-256: <code>{sha256_hash}</code>')
 
 
 @router.message(Command(commands=["s"]))

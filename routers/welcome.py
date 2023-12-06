@@ -197,7 +197,9 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
     if event.chat.id in global_data.auto_all:
         members = json.loads(db_load_bot_value(session, event.chat.id, BotValueTypes.All, '[]'))
         if event.from_user.username:
-            members.remove('@' + event.from_user.username)
+            username = '@' + event.from_user.username
+            if username in members:
+                members.remove(username)
             db_save_bot_value(session, event.chat.id, BotValueTypes.All, json.dumps(members))
 
 
@@ -284,6 +286,3 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot)
     new_admins = [member.user.id for member in members]
     global_data.admins[event.chat.id] = new_admins
     db_save_bot_value(session, event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
-
-
-

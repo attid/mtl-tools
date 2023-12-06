@@ -1,5 +1,6 @@
 import datetime
 
+import sentry_sdk
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
@@ -7,19 +8,8 @@ from utils.gspread_tools import gs_copy_sheets_with_style
 from utils.stellar_utils import *
 from scripts.mtl_exchange import check_fire
 
+
 # https://docs.gspread.org/en/latest/
-
-CITY_ASSETS = ['MTLDVL', 'MTLBRO', 'MTLGoldriver', 'MonteSol', 'MCITY136920', 'MonteAqua', 'MTLCAMP', 'TOR', 'HOT',
-               'MTLCITYV33', 'MTLCITYAH11']
-MABIZ_ASSETS = ['Agora', 'BIOM', 'FCM', 'GPA', 'iTrade', 'MTLBR', 'TIC', 'USDMM', 'DamirCoin', 'REITM', 'TOC']
-DEFI_ASSETS = ['AUMTL', 'BTCMTL', 'EURMTL', 'MTLDefi', 'SATSMTL', 'MAT', 'USDM']
-ISSUER_ASSETS = ['XLM', ]
-
-COST_DATA = ['FCM_COST', 'MTLBR_COST', 'MTL_COST_N', 'LAND_AMOUNT', 'LAND_COST', 'MTLDVL_COST', 'TIC_COST',
-             'REITM_COST']
-
-USDM_ASSETS = ['EURMTL', 'USDC', 'yUSDC', 'USDFARM', 'MTLFARM', 'XLM', 'SATSMTL']
-
 
 @logger.catch
 async def update_main_report(session: Session):
@@ -97,7 +87,12 @@ async def update_main_report(session: Session):
 
             update_data = [['DATA']]
             for key in data:
-                update_data.append([key, float(decode_data_value(data[key]))])
+                decoded_value = decode_data_value(data[key])
+                try:
+                    decoded_value = float(decoded_value)
+                except ValueError:
+                    pass
+                update_data.append([key, decoded_value])
             await address_sheet.update('C1', update_data)
 
             update_data = [['ASSETS']]
@@ -114,39 +109,12 @@ async def update_main_report(session: Session):
 
     await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
                             "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
+    await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+                            "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report")
 
     await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'Main report all done {datetime.now()}')
-
-
-@logger.catch
-async def update_usdm_report(session: Session):
-    agc = await agcm.authorize()
-
-    # Open a sheet from a spreadsheet in one go
-    ss = await agc.open("USDMM report")
-    wks = await ss.worksheet("autodata")
-
-    # Update a range of cells using the top left corner address
-    now = datetime.now()
-    # print(now.strftime('%d.%m.%Y %H:%M:%S'))
-
-    # USDM count
-    rq = requests.get(
-        'https://horizon.stellar.org/assets?asset_code=USDM&asset_issuer=GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM')
-    await wks.update('B4', float(rq.json()['_embedded']['records'][0]['amount']))
-
-    assets, data = await get_balances(MTLAddresses.public_usdm, return_data=True)
-
-    good_assets = []
-    for ms in USDM_ASSETS:
-        good_assets.append([ms, float(assets.get(ms, 0))])
-    await wks.update('A13', good_assets)
-
-    await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
-
-    logger.info(f'all done {now}')
 
 
 @logger.catch
@@ -715,7 +683,6 @@ async def main():
 
     await asyncio.gather(
         update_main_report(quik_pool()),
-        update_usdm_report(quik_pool()),
         update_guarantors_report(),
         update_bim_data(quik_pool()),
         update_top_holders_report(quik_pool()),
@@ -732,7 +699,14 @@ async def main():
 
 if __name__ == "__main__":
     # from db.quik_pool import quik_pool
+    #
     # asyncio.run(update_main_report(quik_pool()))  # only from skynet
     # exit()
+
+    sentry_sdk.init(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
 
     asyncio.run(main())

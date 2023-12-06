@@ -1,3 +1,5 @@
+import sentry_sdk
+
 from utils.stellar_utils import *
 from db.models import TLedgers, TOperations
 from db.quik_pool import quik_pool
@@ -266,5 +268,10 @@ def decode_effects_records(records, ledger):
 
 
 if __name__ == "__main__":
-    logger.add("check_ledger.log", rotation="1 MB")
+    logger.add("check_ledger.log", rotation="1 MB", level="WARNING")
+    sentry_sdk.init(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
     asyncio.run(extra_run())

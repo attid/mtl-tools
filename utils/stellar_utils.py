@@ -2,6 +2,7 @@ import asyncio
 import base64
 import math
 from copy import deepcopy
+from time import time
 
 import aiohttp
 import requests
@@ -9,7 +10,8 @@ from aiogram import Bot
 from aiogram.types import Message
 from loguru import logger
 from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
-                         AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair)
+                         AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
+                         ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from config_reader import config
@@ -68,6 +70,7 @@ class MTLAssets:
     usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
     farm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
+    usd_farm_asset = Asset("USDFARM", MTLAddresses.public_farm)
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
     damircoin_asset = Asset("DamirCoin", MTLAddresses.public_damir)
@@ -441,15 +444,15 @@ async def get_cash_balance(chat_id):
     result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = [
-        ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
+        ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
+        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
         ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
         ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
-        ['GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ', 'Егора'],
-        ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
         ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
-        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
+        ['GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ', 'Егора'],
+        ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
+        ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
         ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
-
     ]
 
     t = """
@@ -992,7 +995,7 @@ async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
                                           amount=str(round(account[2], 7)))
     transaction.append_payment_op(destination=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
                                   amount=str(premium_sum))
-    transaction.append_payment_op(source=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
+    transaction.append_payment_op(source=MTLAddresses.public_farm, asset=MTLAssets.usd_farm_asset,
                                   amount=str(income_sum), destination=MTLAddresses.public_usdm)
     transaction = transaction.build()
     xdr = transaction.to_xdr()
@@ -1937,14 +1940,39 @@ async def get_get_income():
     print(total_amount)
 
 
+def test_xdr():
+    server = Server(horizon_url="https://horizon.stellar.org")
+    transaction = TransactionBuilder(source_account=server.load_account(MTLAddresses.public_itolstov),
+                                     network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+                                     base_fee=base_fee)
+    transaction.set_timeout(60 * 60 * 24 * 7)
+    transaction.append_create_claimable_balance_op(
+        asset=Asset(code='TestCode2023', issuer=MTLAddresses.public_itolstov),
+        amount='10',
+        claimants=[
+            Claimant(
+                destination='GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
+                predicate=ClaimPredicate.predicate_not(
+                    ClaimPredicate.predicate_before_absolute_time(
+                        int(time()) + 60 * 60 * 24 * 7
+                    ))
+            ),
+            Claimant(destination=MTLAddresses.public_itolstov)
+        ])
+    print(ClaimPredicate.predicate_before_absolute_time(int(time()) + 60 * 60 * 24 * 7))
+    print(transaction.build().to_xdr())
+
+
 if __name__ == '__main__':
     pass
+    test_xdr()
+    exit()
 
     # gen new
     # print(gen_new('GANG'))
     # print(determine_working_range())
 
-    print(asyncio.run(get_usdm_xdr(999,888,111)))
+    print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
 
     # stellar_sync_submit(
     #    stellar_sign(

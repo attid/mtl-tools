@@ -140,12 +140,29 @@ def db_save_url(session, chat_id, msg_id, msg):
     db_save_bot_value(session, chat_id, BotValueTypes.PinnedId, msg_id)
 
 
+# def extract_url(msg, surl='eurmtl.me'):
+#     if surl:
+#         url = re.search("(?P<url>https?://" + surl + "[^\s]+)", msg).group("url")
+#     else:
+#         url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
+#     return url
+
 def extract_url(msg, surl='eurmtl.me'):
-    if surl:
-        url = re.search("(?P<url>https?://" + surl + "[^\s]+)", msg).group("url")
-    else:
-        url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
-    return url
+    try:
+        if surl:
+            pattern = f"https?://{surl}[^\s]+"
+        else:
+            pattern = "https?://[^\s]+"
+
+        search_result = re.search(pattern, msg)
+
+        if search_result:
+            return search_result.group(0)  # Извлекаем URL
+        else:
+            return None  # URL не найден
+    except Exception as e:
+        print(f"Ошибка при извлечении URL: {e}")
+        return None
 
 
 def db_get_total_user_div(session: Session) -> float:
