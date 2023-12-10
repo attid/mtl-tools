@@ -100,7 +100,7 @@ async def check_exchange():
         # EURMTL - BTC
         AddressConfig(address=MTLAddresses.public_exchange_eurmtl_btc,
                       asset_a=MTLAssets.btcmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-                      price_min=20000, price_max=40000,
+                      price_min=20000, price_max=45000,
                       price_a=round(btc_eur_cost * 1.01),
                       price_b=round((1 / btc_eur_cost) * 1.03, 7),
                       check_persent=persent_btc_cost,
@@ -109,7 +109,7 @@ async def check_exchange():
         # EURMTL - SATS
         AddressConfig(address=MTLAddresses.public_exchange_eurmtl_sats,
                       asset_a=MTLAssets.satsmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-                      price_min=20000 / sats_cost, price_max=40000 / sats_cost,
+                      price_min=20000 / sats_cost, price_max=45000 / sats_cost,
                       price_a=round(btc_eur_cost * 1.01 / sats_cost, 8),
                       price_b=round(1 / btc_eur_cost * sats_cost * 1.03),
                       check_persent=persent_cost,

@@ -1948,7 +1948,7 @@ def test_xdr():
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.append_create_claimable_balance_op(
         asset=Asset(code='TestCode2023', issuer=MTLAddresses.public_itolstov),
-        amount='10',
+        amount='100',
         claimants=[
             Claimant(
                 destination='GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
@@ -1964,15 +1964,15 @@ def test_xdr():
 
 
 if __name__ == '__main__':
-    pass
-    test_xdr()
-    exit()
+    # pass
+    # test_xdr()
+    # exit()
 
     # gen new
-    # print(gen_new('GANG'))
+    print(gen_new('KORB'))
     # print(determine_working_range())
 
-    print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
+    #print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
 
     # stellar_sync_submit(
     #    stellar_sign(

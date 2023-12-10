@@ -545,7 +545,9 @@ async def gs_test():
     # return styles
 
 
-def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name):
+def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to=None):
+    if sheet_name_to is None:
+        sheet_name_to = sheet_name_from
     # sheet_data_result = await asyncio.to_thread(get_sheet_data_and_styles_sync, service, copy_from, sheet_name)
     # Настройка аутентификации для Google Sheets API
     key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
@@ -563,12 +565,12 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name):
     # Находим нужный лист по имени
     sheet_data = None
     for sheet in source_sheet_data['sheets']:
-        if sheet['properties']['title'] == sheet_name:
+        if sheet['properties']['title'] == sheet_name_from:
             sheet_data = sheet
             break
 
     if not sheet_data:
-        raise Exception(f"Sheet {sheet_name} not found in spreadsheet.")
+        raise Exception(f"Sheet {sheet_name_from} not found in spreadsheet.")
 
     # Получение данных и стилей с исходного листа
     row_data = sheet_data.get('data', [])[0].get('rowData', [])
@@ -581,12 +583,12 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name):
     # Находим нужный лист в целевом документе по имени и получаем его ID
     target_sheet_id = None
     for sheet in target_sheet_data['sheets']:
-        if sheet['properties']['title'] == sheet_name:
+        if sheet['properties']['title'] == sheet_name_to:
             target_sheet_id = sheet['properties']['sheetId']
             break
 
     if target_sheet_id is None:
-        raise Exception(f"Target sheet {sheet_name} not found in spreadsheet.")
+        raise Exception(f"Target sheet {sheet_name_to} not found in spreadsheet.")
 
     # Применение данных и стилей к целевому листу
     requests = []
