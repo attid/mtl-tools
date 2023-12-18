@@ -1686,14 +1686,22 @@ def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive
 
 
 def gen_new(last_name):
-    new_account = Keypair.random()
     i = 0
-    while new_account.public_key[-len(last_name):] != last_name:
-        new_account = Keypair.random()
-        # print(i, new_account.public_key, new_account.secret)
+    while True:
+        mnemonic = Keypair.generate_mnemonic_phrase()
+        try:
+            new_account = Keypair.from_mnemonic_phrase(mnemonic)
+        except ValueError:
+            print(f"Invalid mnemonic: {mnemonic}")
+            continue
+
+        if new_account.public_key[-len(last_name):] == last_name:
+            break
+
         i += 1
-        print(i, new_account.public_key, new_account.secret)
-    return [i, new_account.public_key, new_account.secret]
+        print(f"{i}: Public Key: {new_account.public_key}")
+
+    return [i, new_account.public_key, new_account.secret, mnemonic]
 
 
 def stellar_add_fond_trustline(address_id, asset_code):
@@ -1969,10 +1977,10 @@ if __name__ == '__main__':
     # exit()
 
     # gen new
-    print(gen_new('KORB'))
+    print(gen_new('MTLM'))
     # print(determine_working_range())
 
-    #print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
+    # print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
 
     # stellar_sync_submit(
     #    stellar_sign(
