@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value
-from scripts.mtl_exchange2 import check_mm
+from scripts.mtl_exchange2 import check_mm, check_mmwb
 from utils.global_data import MTLChats, BotValueTypes
 
 
@@ -81,6 +81,7 @@ async def time_check_ledger(bot: Bot, session_pool):
                 if core_latest_ledger > saved_ledger + 10:
                     db_send_admin_message(session, f'Отставание больше чем {core_latest_ledger - saved_ledger}')
 
+
 @logger.catch
 async def time_check_mm(bot: Bot, session_pool):
     with session_pool() as session:
@@ -88,12 +89,20 @@ async def time_check_mm(bot: Bot, session_pool):
 
 
 @logger.catch
-def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
+async def time_check_mmwb(bot: Bot, session_pool):
+    with session_pool() as session:
+        await check_mmwb(session)
 
+
+@logger.catch
+def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
     scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
                       jitter=5 * 60)
-    scheduler.add_job(time_check_mm, "interval", hours=1, args=(bot, session_pool), misfire_grace_time=360, jitter=10 * 60)
+    scheduler.add_job(time_check_mm, "interval", hours=1, args=(bot, session_pool), misfire_grace_time=360,
+                      jitter=10 * 60)
+    scheduler.add_job(time_check_mmwb, "interval", hours=6, args=(bot, session_pool), misfire_grace_time=360,
+                      jitter=10 * 60)
 
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
                       misfire_grace_time=360)

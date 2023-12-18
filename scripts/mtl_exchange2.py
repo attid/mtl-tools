@@ -98,24 +98,58 @@ async def check_mm(session: Session):
     await update_mmwb_report(session)
 
 
+async def check_mmwb(session: Session):
+    balances = await get_balances(MTLAddresses.public_wallet)
+    amount = float(balances.get('USDC', 0))
+    if amount < 2000:
+        db_send_admin_message(session, f'{amount} USDC bad sum')
+        logger.info(f'{amount} USDC bad sum')
+
+    amount = float(balances.get('XLM', 0))
+    if amount < 500:
+        db_send_admin_message(session, f'{amount} XLM bad sum')
+        logger.info(f'{amount} XLM bad sum')
+
+    amount = float(balances.get('SATSMTL', 0))
+    if amount < 500000:
+        db_send_admin_message(session, f'{amount} SATSMTL bad sum')
+        logger.info(f'{amount} SATSMTL bad sum')
+
+    async with aiohttp.ClientSession() as httpsession:
+        async with httpsession.get(f'https://apilist.tronscan.org/api/account?'
+                                   f'address=TJaGpx1zVVmKgYwSdeSr6YmsuDcHHhgZDS') as resp:
+            json_resp = await resp.json()
+            for token in json_resp['tokens']:
+                if token['tokenAbbr'] == 'USDT':
+                    if float(token['amount']) < 1000:
+                        db_send_admin_message(session, f'{token["amount"]} {token["tokenAbbr"]} bad sum')
+                        logger.info(f'{token["amount"]} {token["tokenAbbr"]} bad sum')
+                if token['tokenAbbr'] == 'trx':
+                    if float(token['amount']) < 500:
+                        db_send_admin_message(session, f'{token["amount"]} {token["tokenAbbr"]} bad sum')
+                        logger.info(f'{token["amount"]} {token["tokenAbbr"]} bad sum')
+
+
 if __name__ == "__main__":
     from db.quik_pool import quik_pool
+
+    asyncio.run(check_mmwb(quik_pool()))
+
+    exit()
 
     # remove orders
     # xdr = stellar_remove_orders(MTLAddresses.public_exchange_usdm_xlm, None)
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
-
-    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_btc,
-                          destination_account='GBEVZ3PV5LWVWDQ5BTFPEI7T7FRMTBUVJVHRTHOWA5DTNY6DWD3VPZAB',
-                          amount='0.024', asset=MTLAssets.btcmtl_asset,
-                          ))
+    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
+                           destination_account=MTLAddresses.public_exchange_eurmtl_btc,
+                           amount='10000', asset=MTLAssets.eurmtl_asset,
+                           ))
 
     # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_eurmtl_btc,
     #                             destination_account=MTLAddresses.public_exchange_usdm_xlm,
     #                             amount='0.02', source_asset=MTLAssets.btcmtl_asset,
     #                             destination_asset=MTLAssets.xlm_asset))
-
 
     # asyncio.run(update_main_report(quik_pool()))
     # for x in [MTLAddresses.public_exchange_eurmtl_xlm,
