@@ -1700,9 +1700,9 @@ def gen_new(last_name):
 
         i += 1
         print(f"{i}: Public Key: {new_account.public_key}")
+        # print(mnemonic)
 
     return [i, new_account.public_key, new_account.secret, mnemonic]
-
 
 def stellar_add_fond_trustline(address_id, asset_code):
     return stellar_add_trustline(address_id, asset_code, MTLAddresses.public_issuer)

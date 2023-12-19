@@ -29,19 +29,6 @@ async def update_main_report(session: Session):
     await wks.update('D4', float(rq.json()['rates']['BTC']))
     await wks.update('D5', float(rq.json()['rates']['XLM']))
 
-    # # MTL
-    # rq = requests.get(
-    #     'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
-    # await wks.update('B9', float(rq.json()['_embedded']['records'][0]['amount']))
-    # # MTLRECT
-    # rq = requests.get(
-    #     'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer=GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V')
-    # await wks.update('B10', float(rq.json()['_embedded']['records'][0]['amount']))
-    # MTLCITY
-    # rq = requests.get(
-    #    'https://horizon.stellar.org/assets?asset_code=MTLCITY&asset_issuer=GDUI7JVKWZV4KJVY4EJYBXMGXC2J3ZC67Z6O5QFP4ZMVQM2U5JXK2OK3')
-    # await wks.update('J9', float(rq.json()['_embedded']['records'][0]['amount']))
-
     # aum
     s = requests.get(
         f'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
@@ -116,7 +103,40 @@ async def update_main_report(session: Session):
 
     await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
+    await update_main_report_additional(session=session)
+
     logger.info(f'Main report all done {datetime.now()}')
+
+
+@logger.catch
+async def update_main_report_additional(session: Session):
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec")
+    wks_all = await ss.worksheet("IND_ALL")
+    wks_monitoring = await ss.worksheet("MONITORING")
+
+    # Проверка значения в первой ячейке столбца D
+    value_cell = await wks_all.acell('D1')
+    if value_cell.value != "Value":
+        raise ValueError("Ожидалось 'Value' в ячейке D1")
+
+    # Получение данных из столбца D
+    column_d_values = await wks_all.col_values(4)
+
+    # Получение всех значений из столбца A листа MONITORING
+    column_a_values = await wks_monitoring.col_values(1)
+    # Находим первую пустую ячейку
+    last_row = len(column_a_values) + 1
+
+    # Вставка текущей даты в найденную ячейку
+    current_date = datetime.now().strftime("%d.%m.%Y")
+
+    # Подготовка данных для обновления (одна строка)
+    row_update = [current_date] + column_d_values[1:]
+
+    # Обновление данных за один запрос
+    await wks_monitoring.update(f'A{last_row}', [row_update], value_input_option='USER_ENTERED')
+
 
 
 @logger.catch
@@ -563,7 +583,7 @@ async def update_wallet_report(session: Session):
     await wks.update('A4', update_list)
     await wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'all done {now}')
+    logger.info(f'wallet report all done {now}')
 
 
 async def update_wallet_report2(session: Session):
@@ -595,7 +615,7 @@ async def update_wallet_report2(session: Session):
     await wks.update(f'A{last_row}', update_data)
     await wks.update('K1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'all done {now}')
+    logger.info(f'wallet report 2 all done {now}')
 
 
 async def update_export(session: Session):
@@ -628,7 +648,7 @@ async def update_export(session: Session):
     await wks.update(f'A{last_row}', update_list, value_input_option='USER_ENTERED')
     # await wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'all done {now}')
+    logger.info(f'export all done {now}')
 
 
 async def update_fest(session: Session):
@@ -702,7 +722,7 @@ async def main():
 if __name__ == "__main__":
     # from db.quik_pool import quik_pool
     #
-    # asyncio.run(update_main_report(quik_pool()))  # only from skynet
+    # asyncio.run(update_main_report_additional(quik_pool()))  # only from skynet
     # exit()
 
     sentry_sdk.init(
