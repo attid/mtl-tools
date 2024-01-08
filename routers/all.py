@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 
 from db.requests import db_load_bot_value, db_save_bot_value
 from utils.aiogram_utils import is_admin
-from utils.global_data import MTLChats, global_data, BotValueTypes
+from utils.global_data import MTLChats, global_data, BotValueTypes, update_command_info
 
 router = Router()
 
 
+@update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")
 @router.message(Command(commands=["all"]))
 async def cmd_all(message: Message, session: Session):
     if message.chat.id == MTLChats.SignGroup:
@@ -32,6 +33,7 @@ async def cmd_all(message: Message, session: Session):
             await message.reply('/all не настроен, используйте /add_all и /del_all')
 
 
+@update_command_info("/add_all", "Добавить пользователей в /all. запуск с параметрами /add_all @user1 @user2 итд")
 @router.message(Command(commands=["add_all"]))
 async def cmd_add_all(message: Message, session:Session):
     if not await is_admin(message):
@@ -49,6 +51,7 @@ async def cmd_add_all(message: Message, session:Session):
         await message.reply('не указаны параметры кого добавить')
 
 
+@update_command_info("/del_all", "Убрать пользователей в /all. запуск с параметрами /del_all @user1 @user2 итд")
 @router.message(Command(commands=["del_all"]))
 async def cmd_del_all(message: Message, session: Session):
     if not await is_admin(message):
@@ -67,6 +70,7 @@ async def cmd_del_all(message: Message, session: Session):
         await message.reply('не указаны параметры кого добавить')
 
 
+@update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе")
 @router.message(Command(commands=["auto_all"]))
 async def msg_save_all(message: Message, session:Session):
     if not await is_admin(message):

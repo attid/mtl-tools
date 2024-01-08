@@ -142,8 +142,8 @@ async def update_main_report_additional(session: Session):
 @logger.catch
 async def update_fire(session: Session):
     agc = await agcm.authorize()
-    ss = await agc.open("MTL Report")
-    wks = await ss.worksheet("AutoData")
+    ss = await agc.open_by_key("1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec")
+    wks = await ss.worksheet("IND_ALL")
 
     # Получаем все значения из столбцов B и D
     column_B = await wks.get('B1:B100')
@@ -152,7 +152,7 @@ async def update_fire(session: Session):
     # Ищем строку 'book value of 1 token' в столбце B
     for i, row in enumerate(column_B):
         for cell in row:
-            if cell == 'book value of 1 token':
+            if cell == 'Book Value':
                 # Нашли нужную строку, получаем соответствующее значение из столбца D
                 cost_fire = column_D[i][0]
                 break

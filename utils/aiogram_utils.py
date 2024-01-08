@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from aiogram.client.session import aiohttp
 from aiogram.filters import Filter
 from aiogram.types import Message
 
@@ -58,12 +59,14 @@ def has_words(master, words_array):
             return True
     return False
 
+
 def start_words(master, words_array):
     if master:
         for word in words_array:
             if master.upper().startswith(word.upper()):
                 return True
     return False
+
 
 class HasText(Filter):
     def __init__(self, my_arr: tuple) -> None:
@@ -72,9 +75,26 @@ class HasText(Filter):
     async def __call__(self, message: Message) -> bool:
         return has_words(message.text, self.my_arr)
 
+
 class StartText(Filter):
     def __init__(self, my_arr: tuple) -> None:
         self.my_arr = my_arr
 
     async def __call__(self, message: Message) -> bool:
         return start_words(message.text, self.my_arr)
+
+
+async def get_web_request(method, url, json=None, headers=None, data=None, return_type=None):
+    async with aiohttp.ClientSession() as web_session:
+        if method.upper() == 'POST':
+            request_coroutine = web_session.post(url, json=json, headers=headers, data=data)
+        elif method.upper() == 'GET':
+            request_coroutine = web_session.get(url, headers=headers, params=data)
+        else:
+            raise ValueError("Неизвестный метод запроса")
+
+        async with request_coroutine as response:
+            if response.headers.get('Content-Type') == 'application/json' or return_type == 'json':
+                return response.status, await response.json()
+            else:
+                return response.status, await response.text()

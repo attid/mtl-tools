@@ -110,12 +110,14 @@ def float2str(f) -> str:
             break
     return s
 
+
 def str2float(f) -> float:
     return float(float2str(f))
 
 
-def update_command_info(command_name, info):
+def update_command_info(command_name: str, info: str):
     def decorator(func):
         global_data.info_cmd[command_name] = info
         return func
+
     return decorator

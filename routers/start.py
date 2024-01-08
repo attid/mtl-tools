@@ -1,13 +1,13 @@
-from aiogram import Router, Bot
+from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_save_bot_user
-from utils.global_data import MTLChats
+from utils.global_data import MTLChats, update_command_info
 from utils.stellar_utils import MTLAddresses
 
 router = Router()
@@ -46,11 +46,21 @@ links_msg = f"""
 """
 
 
-@router.message(Command(commands=["start"]))
-async def cmd_start(message: Message, state: FSMContext, session: Session):
+@update_command_info("/start", "начать все с чистого листа")
+@router.message(F.text.lower() == "/start", F.chat.type == "private")
+async def cmd_start(message: Message, state: FSMContext, session: Session, bot: Bot):
     await state.clear()
     db_save_bot_user(session, message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
+    #await bot.set_message_reaction(message.chat.id, message.message_id, ["🔥"])
+    #if message.reply_to_message:
+    #    await message.reply_to_message.react([ReactionTypeEmoji(emoji="👎")])
+    #await bot.set_message_reaction(
+    #    chat_id=message.chat.id,
+    #    message_id=message.message_id,
+    #    reaction=[ReactionTypeEmoji(emoji="👍"), ReactionTypeEmoji(emoji="👎")],
+    #)
+
 
 
 @router.message(Command(commands=["save"]))
@@ -62,15 +72,18 @@ async def cmd_save(message: Message):
         await message.answer('Saved')
 
 
+@update_command_info("/links", "показать полезные ссылки")
 @router.message(Command(commands=["links"]))
 async def cmd_links(message: Message):
     await message.answer(links_msg, parse_mode=ParseMode.MARKDOWN)
 
 
+@update_command_info("/show_id", "Показать ID чата")
 @router.message(Command(commands=["show_id"]))
 async def cmd_show_id(message: Message):
     await message.answer(f"chat_id = {message.chat.id} message_thread_id = {message.message_thread_id} " +
                          f"is_topic_message  = {message.is_topic_message}")
+
 
 @router.message(Command(commands=["me"]))
 async def cmd_me(message: Message, bot: Bot):

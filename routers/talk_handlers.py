@@ -16,7 +16,7 @@ from skynet_start import add_bot_users
 from utils import dialog
 from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin
 from utils.dialog import talk_check_spam, add_task_to_google
-from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data
+from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
 from scripts.update_data import update_lab
 
@@ -61,7 +61,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
         if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup,
                                MTLChats.DefiGroup, MTLChats.LandLordGroup,
                                MTLChats.SignGroupForChanel):
-            msg = check_url_xdr(
+            msg = await check_url_xdr(
                 db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
             msg = f'\n'.join(msg)
             await multi_reply(message, msg)
@@ -130,18 +130,19 @@ async def cmd_last_check_nap(message: Message):
 async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
     if message.reply_to_message:
         if message.reply_to_message.text.find('eurmtl.me/sign_tools') > -1:
-            msg = check_url_xdr(extract_url(message.reply_to_message.text))
+            msg = await check_url_xdr(extract_url(message.reply_to_message.text))
             msg = f'\n'.join(msg)
             await multi_reply(message, msg)
         else:
             await message.reply('Ссылка не найдена')
     else:
-        msg = check_url_xdr(
+        msg = await check_url_xdr(
             db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg[:4000])
 
 
+@update_command_info("Скайнет напомни", "Попросить Скайнет напомнить про подпись транзакции. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('НАПОМНИ',)))
 async def cmd_last_check_remind(message: Message, session: Session, bot: Bot):
@@ -167,6 +168,8 @@ async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot)
     await message.answer('\n'.join(dialog.get_horoscope()), parse_mode=ParseMode.MARKDOWN)
 
 
+@update_command_info("Скайнет обнови отчёт", "Попросить Скайнет обновить файл отчета. Только в рабочем чате.")
+@update_command_info("Скайнет обнови гарантов", "Попросить Скайнет обновить файл гарантов. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ОБНОВИ',)))
 async def cmd_last_check_update(message: Message, session: Session, bot: Bot):

@@ -11,7 +11,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value, db_send_admin_message
 from utils.aiogram_utils import is_admin, cmd_delete_later
-from utils.global_data import global_data, BotValueTypes, is_skynet_admin
+from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -21,6 +21,7 @@ class CaptchaCallbackData(CallbackData, prefix="captcha"):
     answer: int
 
 
+@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата")
 @router.message(Command(commands=["delete_income"]))
 async def cmd_delete_income(message: Message, session: Session):
     if not await is_admin(message):
@@ -40,6 +41,7 @@ async def cmd_delete_income(message: Message, session: Session):
         await message.reply('Added')
 
 
+@update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
 async def cmd_delete_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -55,6 +57,7 @@ async def cmd_delete_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
+@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$")
 @router.message(Command(commands=["set_welcome"]))
 async def cmd_set_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -72,6 +75,7 @@ async def cmd_set_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
+@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
 @router.message(Command(commands=["set_reply_only"]))
 async def cmd_set_reply_only(message: Message, session: Session):
     if not await is_admin(message):
@@ -90,6 +94,7 @@ async def cmd_set_reply_only(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
+@update_command_info("/set_welcome_button", "Установить текст на кнопке капчи")
 @router.message(Command(commands=["set_welcome_button"]))
 async def cmd_set_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -108,6 +113,8 @@ async def cmd_set_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
+@update_command_info("/set_captcha on", "Включает капчу")
+@update_command_info("/set_captcha off", "Выключает капчу")
 @router.message(Command(commands=["set_captcha"]))
 async def cmd_set_captcha(message: Message, session: Session):
     if not await is_admin(message):
@@ -127,6 +134,7 @@ async def cmd_set_captcha(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
+@update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
 async def cmd_stop_exchange(message: Message, session: Session):
     if not is_skynet_admin(message):
@@ -139,6 +147,7 @@ async def cmd_stop_exchange(message: Message, session: Session):
     await message.reply('Was stop')
 
 
+@update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
 async def cmd_start_exchange(message: Message, session: Session):
     if not is_skynet_admin(message):

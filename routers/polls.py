@@ -51,6 +51,7 @@ async def channel_post(message: Message, session: Session):
             db_save_bot_value(session, message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
 
 
+@update_command_info("/poll", "Создать голование с учетом веса голосов, надо слать в ответ на стандартное голосование")
 @router.message(Command(commands=["poll"]))
 async def cmd_poll(message: Message, session: Session):
     if message.reply_to_message and message.reply_to_message.poll:
@@ -73,6 +74,7 @@ async def cmd_poll(message: Message, session: Session):
         await message.answer('Требуется в ответ на голосование')
 
 
+@update_command_info("/poll_replace_text", "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text")
 @router.message(Command(commands=["poll_replace_text"]))
 async def cmd_poll_rt(message: Message, session: Session):
     # print(message)
@@ -90,6 +92,7 @@ async def cmd_poll_rt(message: Message, session: Session):
         await message.answer('Требуется в ответ на голосование')
 
 
+@update_command_info("/poll_close", "Закрыть голосование. после этого нельзя голосовать или менять его.")
 @router.message(Command(commands=["poll_close"]))
 @router.message(Command(commands=["poll_stop"]))
 @router.message(Command(commands=["apoll_stop"]))
@@ -117,6 +120,7 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot):
         await message.answer('Требуется в ответ на голосование')
 
 
+@update_command_info("/poll_check", "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'")
 @router.message(Command(commands=["poll_check"]))
 async def cmd_poll_check(message: Message, session: Session):
     if message.reply_to_message:
@@ -196,6 +200,7 @@ async def cmd_save_votes(session: Session):
     return vote_list
 
 
+@update_command_info("/poll_reload_vote", "Перечитать голоса из блокчейна")
 @router.message(Command(commands=["poll_reload_vote"]))
 async def cmd_poll_reload_vote(message: Message, session: Session):
     if not is_skynet_admin(message):

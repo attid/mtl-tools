@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from config_reader import start_path
 from scripts.update_report import update_airdrop, update_fest
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
-from utils.global_data import MTLChats, is_skynet_admin, global_data, str2float
+from utils.global_data import MTLChats, is_skynet_admin, global_data, str2float, update_command_info
 from utils.gspread_tools import gs_check_bim, agcm
 from utils.img_tools import create_image_with_text
 from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
@@ -21,30 +21,35 @@ from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_s
 router = Router()
 
 
+@update_command_info("/fee", "показать комиссию в стелларе")
 @router.message(Command(commands=["fee"]))
 async def cmd_fee(message: Message):
     await message.answer("Комиссия (мин и мах) " + cmd_check_fee())
 
 
+@update_command_info("/decode", "декодирует xdr использовать: /decode xdr где ")
 @router.message(Command(commands=["decode"]))
 async def cmd_decode(message: Message):
     try:
         # logger.info(f'decode {message}')
-        if message.text.find('eurmtl.me/sign_tools') > -1:
-            msg = check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
+        if message.text.find('eurmtl.me') > -1:
+            msg = await check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         else:
             msg = decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
     except Exception as e:
         await message.reply(f'Параметр не распознан. Надо xdr или ссылку на тулзу')
+        logger.error(e)
 
 
+@update_command_info("/show_bim", "показать инфо по БДM")
 @router.message(Command(commands=["show_bim"]))
 async def rt_show_bim_msg(message: Message, session: Session):
     await message.answer(await cmd_show_bim(session))
 
 
+@update_command_info("/balance", "Показать сколько денег или мулек(EURMTL) в кубышке")
 @router.message(Command(commands=["balance"]))
 async def cmd_show_balance(message: Message):
     result = await get_cash_balance(message.chat.id)
@@ -87,6 +92,7 @@ async def cmd_do_bim(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, f"BDM. Work done. Step (7/7)"))
 
 
+@update_command_info("/do_resend", "Переотправить транзакцию. Только для админов")
 @router.message(Command(commands=["do_resend"]))
 async def cmd_do_key_rate(message: Message, session: Session):
     if not is_skynet_admin(message):
@@ -124,6 +130,7 @@ async def cmd_do_all(message: Message):
     await cmd_do_bim(message)
 
 
+@update_command_info("/do_div", "начать выплаты дивидентов")
 @router.message(Command(commands=["do_div"]))
 async def cmd_do_div(message: Message, session: Session):
     if not is_skynet_admin(message):
@@ -182,6 +189,7 @@ async def cmd_do_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 12, f"All work done. Step (12/12)"))
 
 
+@update_command_info("/do_sats_div", "выплата дивидентов в satsmtl")
 @router.message(Command(commands=["do_sats_div"]))
 async def cmd_do_sats_div(message: Message, session: Session):
     if not is_skynet_admin(message):
@@ -262,6 +270,7 @@ async def cmd_do_usdm_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
 
 
+@update_command_info("/get_vote_fund_xdr", "сделать транзакцию на обновление голосов фонда")
 @router.message(Command(commands=["get_vote_fund_xdr"]))
 async def cmd_get_vote_fund_xdr(message: Message):
     if len(message.text.split()) > 1:
@@ -298,6 +307,7 @@ async def cmd_get_usdm_xdr_(message: Message):
                                     '111 сумма премии фарм компании')
 
 
+@update_command_info("/get_btcmtl_xdr", "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL")
 @router.message(Command(commands=["get_btcmtl_xdr"]))
 async def cmd_get_defi_xdr_(message: Message):
     arg = message.text.split()
@@ -354,6 +364,7 @@ async def cmd_get_toc_xdr(message: Message):
                            'use -  /get_toc_xdr 123 \n where 123 sum in EURMTL')
 
 
+@update_command_info("/update_airdrops", "Обновить файл airdrops")
 @router.message(Command(commands=["update_airdrops"]))
 async def cmd_update_airdrops(message: Message):
     if not is_skynet_admin(message):
@@ -372,6 +383,10 @@ async def cmd_update_fest(message: Message, session: Session):
     await message.answer('Обновление завершено')
 
 
+@update_command_info("/show_data", "Показать какие данные есть в стеларе на этот адрес. Use: /show_data public_key")
+@update_command_info("/show_data bdm", "Показать какие данные есть в стеларе по боду")
+@update_command_info("/show_data delegate", "Показать какие данные есть в стеларе по делегированию")
+@update_command_info("/show_data donate", "Показать какие данные есть в стеларе по донатам в правительство")
 @router.message(Command(commands=["show_data"]))
 async def route_show_data(message: Message):
     if len(message.text.split()) > 1:

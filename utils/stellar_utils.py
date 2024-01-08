@@ -13,9 +13,11 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
                          AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
                          ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
+from stellar_sdk.sep.mnemonic import StellarMnemonic
 
 from config_reader import config
 from db.requests import *
+from utils.aiogram_utils import get_web_request
 from utils.global_data import float2str, global_data
 from utils.gspread_tools import agcm, gs_get_chicago_premium
 
@@ -86,14 +88,24 @@ exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_ex
                  MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire)
 
 
-def check_url_xdr(url, full_data=True):
-    rq = requests.get(url).text
-    rq = rq[rq.find('<span class="tx-body">') + 22:]
-    # print(rq)
-    rq = rq[:rq.find('</span>')]
-    rq = rq.replace("&#x3D;", "=")
-    # print(rq)
-    return decode_xdr(rq, full_data=full_data)
+async def check_url_xdr(url, full_data=True):
+    xdr = await get_eurmtl_xdr(url)
+    return decode_xdr(xdr, full_data=full_data)
+
+
+async def get_eurmtl_xdr(url):
+    try:
+        url = 'https://eurmtl.me/remote/get_xdr/' + url.split('/')[-1]
+        status, response_json = await get_web_request('GET', url=url)
+
+        if 'xdr' in response_json:
+            return response_json['xdr']
+        else:
+            return 'Invalid response format: missing "xdr" field.'
+
+    except Exception as ex:
+        logger.info(['get_eurmtl_xdr', ex])
+        return 'An error occurred during the request.'
 
 
 def cleanhtml(raw_html):
@@ -1704,6 +1716,7 @@ def gen_new(last_name):
 
     return [i, new_account.public_key, new_account.secret, mnemonic]
 
+
 def stellar_add_fond_trustline(address_id, asset_code):
     return stellar_add_trustline(address_id, asset_code, MTLAddresses.public_issuer)
 
@@ -1768,7 +1781,10 @@ async def check_mtlap(key):
 def determine_working_range():
     today = datetime.now()
     if 1 <= today.day <= 14:
-        start_range = datetime(today.year, today.month - 1, 15)
+        if today.month == 1:
+            start_range = datetime(today.year - 1, 12, 15)
+        else:
+            start_range = datetime(today.year, today.month - 1, 15)
         end_range = datetime(today.year, today.month, 1) - timedelta(days=1)
     else:
         start_range = datetime(today.year, today.month, 1)
@@ -1972,12 +1988,20 @@ def test_xdr():
 
 
 if __name__ == '__main__':
-    # pass
+    pass
     # test_xdr()
     # exit()
+    m = "huge slush sample lemon rookie caught sugar shove sand agent chase icon"
+    new_account = Keypair.from_mnemonic_phrase(m)
+    print(new_account.public_key, new_account.secret)
+
+    raw_ed25519_seed = StellarMnemonic().to_seed(
+        m, '', 0
+    )
+    print(raw_ed25519_seed)
 
     # gen new
-    print(gen_new('MTLM'))
+    # print(gen_new('MTLM'))
     # print(determine_working_range())
 
     # print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
