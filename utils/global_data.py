@@ -14,11 +14,12 @@ class MTLChats:
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
     GroupAnonymousBot = 1087968824
-    DefiGroup = -1001876391583
+    FARMGroup = -1001876391583
     LandLordGroup = -1001757912662
     SignGroupForChanel = -1001784614029
     USDMMGroup = -1001800264199
     ITolstov = 84131737
+    Any = 191153115
     FCMGroup = -1001637378851
     MMWBGroup = -1001729647273
     FinGroup = -1001941169217
@@ -26,6 +27,8 @@ class MTLChats:
     MonteliberoChanel = -1001009485608
     HelperChat = -1001466779498
     SpamGroup = -1002007280572
+    CyberGroup = -1002079305671
+
 
 
 class BotValueTypes:
@@ -37,7 +40,7 @@ class BotValueTypes:
     LastRectTransaction = 6
     LastMTLTransaction = 7
     LastMTLandTransaction = 8
-    LastDefiTransaction = 9
+    LastFarmTransaction = 9
     LastFCMTransaction = 10
     LastLedger = 11
     LastMMWBTransaction = 12

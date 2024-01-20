@@ -13,13 +13,12 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
                          AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
                          ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
-from stellar_sdk.sep.mnemonic import StellarMnemonic
-
 from config_reader import config
 from db.requests import *
 from utils.aiogram_utils import get_web_request
 from utils.global_data import float2str, global_data
 from utils.gspread_tools import agcm, gs_get_chicago_premium
+from utils.mytypes import MyShareHolder
 
 base_fee = config.base_fee
 
@@ -63,6 +62,7 @@ class MTLAddresses:
 
 class MTLAssets:
     mtl_asset = Asset("MTL", MTLAddresses.public_issuer)
+    mtlrect_asset = Asset("MTLRECT", MTLAddresses.public_issuer)
     eurmtl_asset = Asset("EURMTL", MTLAddresses.public_issuer)
     eurdebt_asset = Asset("EURDEBT", MTLAddresses.public_issuer)
     xlm_asset = Asset("XLM", None)
@@ -783,6 +783,9 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
         div_sum = await get_balances(MTLAddresses.public_div)
         div_sum = float(div_sum['SATSMTL'])
         logger.info(f"div_sum = {div_sum}")
+        await stellar_async_submit(
+            stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_SATSMTL:{div_sum}'),
+                         config.private_sign.get_secret_value()))
 
     sponsor_sum = 0.0
 
@@ -851,6 +854,8 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
         div_sum = await get_balances(MTLAddresses.public_div)
         div_sum = float(div_sum['USDM'])
         logger.info(f"div_sum = {div_sum}")
+        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
+                                                config.private_sign.get_secret_value()))
 
     # print(json.dumps(response, indent=4))
     accounts = await stellar_get_mtl_holders()
@@ -1147,11 +1152,12 @@ async def get_btcmtl_xdr(btc_sum, address: str, memo=None):
 
 async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool = False):
     result_data = []
-    if account_id == 'delegate':
+    if account_id == 'delegate':  # не используеться не работает
+        pass
         # get all delegate
-        vote_list = await cmd_gen_mtl_vote_list(return_delegate_list=True)
-        for k, v in vote_list.items():
-            result_data.append(f'{k} => {v}')
+        # vote_list = await cmd_gen_mtl_vote_list(return_delegate_list=True)
+        # for k, v in vote_list.items():
+        #    result_data.append(f'{k} => {v}')
     elif account_id == 'donate':
         # get all guards
         result_data = cmd_show_donates()
@@ -1268,11 +1274,18 @@ async def cmd_show_guards_list():
     return result_data
 
 
-async def cmd_gen_mtl_vote_list(return_delegate_list: bool = False, mini=False):
-    account_list = []
-    divider = 1000
+async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MyShareHolder]:
+    if delegate_list is None:
+        delegate_list = {}
+    shareholder_list = []
 
-    accounts = await stellar_get_mtl_holders(mini=mini)
+    accounts = []
+    for asset in (MTLAssets.mtl_asset, MTLAssets.mtlrect_asset):
+        asset_accounts = await stellar_get_mtl_holders(asset)
+        # Добавляем аккаунты, избегая дублирования
+        for account in asset_accounts:
+            if account not in accounts:
+                accounts.append(account)
 
     # mtl
     for account in accounts:
@@ -1287,70 +1300,72 @@ async def cmd_gen_mtl_vote_list(return_delegate_list: bool = False, mini=False):
                 if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = balance["balance"]
                     balance_rect = int(balance_rect[0:balance_rect.find('.')])
-        lg = round(math.log2((balance_mtl + balance_rect + 0.001) / divider)) + 1
         if account["account_id"] != MTLAddresses.public_issuer:
-            account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data']])
-    # 2
-    big_list = []
-    for arr in account_list:
-        if int(arr[1]) >= 1:
-            big_list.append(arr)
-    big_list.sort(key=lambda k: k[1], reverse=True)
+            shareholder = MyShareHolder(
+                account_id=account["account_id"],
+                balance_mtl=balance_mtl,
+                balance_rect=balance_rect,
+                data=account.get('data')
+            )
+            shareholder_list.append(shareholder)
+
+    # Фильтруем shareholder_list, оставляя только аккаунты с балансом >= 1
+    shareholder_list = [sh for sh in shareholder_list if sh.balance >= 1]
+
+    # Сортируем shareholder_list по убыванию баланса
+    shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
 
     # find delegate
-    delegate_list = {}
-    for account in big_list:
-        if account[4]:
-            data = account[4]
+    for shareholder in shareholder_list:
+        if shareholder.data:
+            data = shareholder.data
             for data_name in list(data):
                 data_value = data[data_name]
                 if data_name in ('delegate', 'mtl_delegate'):
-                    delegate_list[account[0]] = decode_data_value(data_value)
+                    delegate_list[shareholder.account_id] = decode_data_value(data_value)
 
-    if return_delegate_list:
-        return delegate_list
+    # account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data'], balance_mtl, balance_rect])
+
+    for shareholder in shareholder_list:
+        if delegate_list.get(shareholder.account_id):
+            for delegate_for in shareholder_list:
+                if delegate_for.account_id == delegate_list[shareholder.account_id]:
+                    delegate_for.balance_delegated += shareholder.balance
+                    shareholder.balance_mtl = 0
+                    shareholder.balance_rect = 0
+                    delegate_list.pop(shareholder.account_id)
+                    break
 
     # delete blacklist user
-    bl = cmd_getblacklist()
-    for arr in big_list:
-        if bl.get(arr[0]):
-            arr[1] = 0
-            arr[2] = 0
-            # vote_list.remove(arr)
-            # print(arr)
+    bl = cmd_get_blacklist()
+    # Обработка черного списка для shareholder_list
+    for shareholder in shareholder_list:
+        if bl.get(shareholder.account_id):
+            # Обнуляем соответствующие значения
+            shareholder.balance_mtl = 0
+            shareholder.balance_rect = 0
+            shareholder.balance_delegated = 0
 
-    for arr_from in big_list:
-        if delegate_list.get(arr_from[0]):
-            for arr_for in big_list:
-                if arr_for[0] == delegate_list[arr_from[0]]:
-                    arr_for[1] += arr_from[1]
-                    arr_from[1] = 0
-                    delegate_list.pop(arr_from[0])
-                    arr_for[2] = round(math.log2((arr_for[1] + 0.001) / divider)) + 1
-                    arr_from[2] = 0
-                    break
-            # vote_list.remove(arr)
-            # print(arr,source)
+    # Сортируем shareholder_list по убыванию баланса
+    shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
 
-    big_list.sort(key=lambda k: k[1], reverse=True)
-    big_list = big_list[:20]
     total_sum = 0
-    for account in big_list:
-        total_sum += account[1]
-    # divider = total_sum#ceil() #big_list[19][1]
+    for account in shareholder_list[:20]:
+        total_sum += account.balance
+
     total_vote = 0
-    for account in big_list:
-        account[2] = math.ceil(account[1] * 100 / total_sum)
-        total_vote += account[2]
+    for account in shareholder_list[:20]:
+        account.calculated_votes = math.ceil(account.balance * 100 / total_sum)
+        total_vote += account.calculated_votes
 
-    big_vote = big_list[0][2]
+    big_vote = shareholder_list[0].calculated_votes
 
-    for account in big_list:
-        account[2] = round(account[2] ** (
+    for account in shareholder_list[:20]:
+        account.calculated_votes = round(account.calculated_votes ** (
                 1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
     # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
 
-    return big_list
+    return shareholder_list[:trim_count]
 
 
 async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
@@ -1422,7 +1437,7 @@ async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
     return final_list
 
 
-def cmd_getblacklist():
+def cmd_get_blacklist():
     return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
 
 
@@ -1460,8 +1475,8 @@ def isfloat(value):
         return False
 
 
-def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_master=False, max_count=20,
-                 threshold_style=0):
+def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, source=None, remove_master=False,
+                 max_count=20, threshold_style=0):
     # узнать кто в подписантах
     server = Server(horizon_url="https://horizon.stellar.org")
     source_account = server.load_account(public_key)
@@ -1469,22 +1484,23 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
     sg = source_account.load_ed25519_public_key_signers()
 
     for s in sg:
-        bfound = False
+        was_found = False
         for arr in vote_list:
-            if arr[0] == s.account_id:
-                arr[3] = s.weight
-                bfound = True
-        if (bfound == False) and (s.account_id != public_key):
-            vote_list.append([s.account_id, 0, 0, s.weight])
+            if arr.account_id == s.account_id:
+                arr.votes = s.weight
+                was_found = True
+        if (was_found == False) and (s.account_id != public_key):
+            vote_list.append(MyShareHolder(account_id=s.account_id, votes=s.weight))
 
-    vote_list.sort(key=lambda k: k[2], reverse=True)
+    vote_list.sort(key=lambda k: k.calculated_votes, reverse=True)
 
     # up user to delete
     tmp_list = []
     del_count = 0
 
+    # account_list.append([account["account_id"], balance_mtl, lg, 0, account['data'], balance_mtl, balance_rect])
     for arr in vote_list:
-        if (int(arr[2]) == 0) & (int(arr[3]) > 0):
+        if (int(arr.calculated_votes) == 0) & (int(arr.votes) > 0):
             tmp_list.append(arr)
             vote_list.remove(arr)
             del_count += 1
@@ -1493,9 +1509,9 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
 
     while len(tmp_list) > max_count + del_count:
         arr = tmp_list.pop(max_count + del_count)
-        if arr[3] > 0:
+        if arr.votes > 0:
             del_count += 1
-            tmp_list.insert(0, [arr[0], 0, 0, arr[3]])
+            tmp_list.insert(0, MyShareHolder(account_id=arr.account_id, votes=arr.votes))
 
     vote_list = tmp_list
     # 5
@@ -1509,9 +1525,9 @@ def gen_vote_xdr(public_key, vote_list, transaction=None, source=None, remove_ma
     threshold = 0
 
     for arr in vote_list:
-        if int(arr[2]) != int(arr[3]):
-            transaction.append_ed25519_public_key_signer(arr[0], int(arr[2]), source=source)
-        threshold += int(arr[2])
+        if int(arr.calculated_votes) != int(arr.votes):
+            transaction.append_ed25519_public_key_signer(arr.account_id, int(arr.calculated_votes), source=source)
+        threshold += int(arr.calculated_votes)
 
     if threshold_style == 1:
         threshold = threshold // 3 * 2
@@ -1639,19 +1655,20 @@ async def resolve_account(account_id: str):
     return result
 
 
-async def stellar_add_mtl_holders_info(accounts: dict):
+async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
     async with ServerAsync(
             horizon_url="https://horizon.stellar.org", client=AiohttpClient()
     ) as server:
         source_account = await server.load_account(MTLAddresses.public_issuer)
         sg = source_account.load_ed25519_public_key_signers()
 
-    for s in sg:
-        for arr in accounts:
-            if arr[0] == s.account_id:
-                arr[3] = s.weight
+    # Создаем словарь для быстрого доступа к весу по account_id
+    signer_weights = {s.account_id: s.weight for s in sg}
 
-    return accounts
+    # Обновляем голоса аккаунтов в соответствии с весом подписчиков
+    for account in accounts:
+        if account.account_id in signer_weights:
+            account.votes = signer_weights[account.account_id]
 
 
 def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
@@ -1699,6 +1716,7 @@ def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive
 
 def gen_new(last_name):
     i = 0
+    new_account = None
     while True:
         mnemonic = Keypair.generate_mnemonic_phrase()
         try:
@@ -1734,25 +1752,25 @@ def stellar_add_trustline(address_id, asset_code, asset_issuer):
     return xdr
 
 
-async def cmd_get_new_vote_all_tfm():
-    vote_list = await cmd_gen_fin_vote_list()
-    vote_list2 = deepcopy(vote_list)
-
-    transaction = TransactionBuilder(
-        source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_fin),
-        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
-    sequence = transaction.source_account.sequence
-    transaction.set_timeout(60 * 60 * 24 * 7)
-    xdr = gen_vote_xdr(public_key=MTLAddresses.public_fin, vote_list=vote_list,
-                       threshold_style=1, transaction=transaction)
-
-    # return sequence because every build inc number
-    transaction.source_account.sequence = sequence
-    xdr = gen_vote_xdr(public_key=MTLAddresses.public_tfm, vote_list=vote_list2,
-                       threshold_style=1, transaction=transaction, source=MTLAddresses.public_tfm)
-
-    # print(gen_vote_xdr(public_new,vote_list2))
-    return xdr
+# async def cmd_get_new_vote_all_tfm():
+#     vote_list = await cmd_gen_fin_vote_list()
+#     vote_list2 = deepcopy(vote_list)
+#
+#     transaction = TransactionBuilder(
+#         source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_fin),
+#         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
+#     sequence = transaction.source_account.sequence
+#     transaction.set_timeout(60 * 60 * 24 * 7)
+#     xdr = gen_vote_xdr(public_key=MTLAddresses.public_fin, vote_list=vote_list,
+#                        threshold_style=1, transaction=transaction)
+#
+#     # return sequence because every build inc number
+#     transaction.source_account.sequence = sequence
+#     xdr = gen_vote_xdr(public_key=MTLAddresses.public_tfm, vote_list=vote_list2,
+#                        threshold_style=1, transaction=transaction, source=MTLAddresses.public_tfm)
+#
+#     # print(gen_vote_xdr(public_new,vote_list2))
+#     return xdr
 
 
 def find_stellar_public_key(text):
@@ -1989,28 +2007,6 @@ def test_xdr():
 
 if __name__ == '__main__':
     pass
-    # test_xdr()
-    # exit()
-    m = "huge slush sample lemon rookie caught sugar shove sand agent chase icon"
-    new_account = Keypair.from_mnemonic_phrase(m)
-    print(new_account.public_key, new_account.secret)
-
-    raw_ed25519_seed = StellarMnemonic().to_seed(
-        m, '', 0
-    )
-    print(raw_ed25519_seed)
-
-    # gen new
-    # print(gen_new('MTLM'))
-    # print(determine_working_range())
-
-    # print(asyncio.run(get_usdm_xdr(1390, 1112, 278)))
-
-    # stellar_sync_submit(
-    #    stellar_sign(
-    #        '',
-    #        get_private_sign()))
-
-    # open and send
-    # stellar_sync_submit(
-    #    stellar_sign(stellar_add_fond_trustline(MTLAddresses.public_exchange_mtl_xlm, 'MTL'), get_private_sign()))
+    a = gen_new('AIAI')
+    #a = asyncio.run()
+    print(a)

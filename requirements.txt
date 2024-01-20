@@ -315,3 +315,5 @@ yarl==1.9.2
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
+
+tiktoken~=0.3.1

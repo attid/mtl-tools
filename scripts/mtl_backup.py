@@ -1,3 +1,4 @@
+from config_reader import start_path
 from utils.stellar_utils import *
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EURDEBT', 'EURMTL', 'GRAFDRON',
@@ -17,13 +18,22 @@ async def save_asset(asset: str):
     with open(f"backup/{asset}.{d}.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
 
-# ToDo брать адреса из файла реестра
-#save_account(public_issuer)
-#№save_account(public_pawnshop)
-#save_account(public_fund_mabiz)
-#save_account(public_fund_city)
-#save_account(public_fund_defi)
 
-#for asset in MASTERASSETS:
-asyncio.run(save_asset('mtl'))
+async def save_assets(assets: list):
+    accounts = []
+    for asset in assets:
+        asset_accounts = await stellar_get_mtl_holders(asset)
+        # Добавляем аккаунты, избегая дублирования
+        for account in asset_accounts:
+            if account not in accounts:
+                accounts.append(account)
 
+    # Сохраняем данные в файл с уникальным идентификатором
+    d = datetime.now().day % 5
+    with open(f"{start_path}/backup/all.{d}.json", "w") as fp:
+        json.dump(accounts, fp, indent=2)
+    with open(f"{start_path}/backup/all.last.json", "w") as fp:
+        json.dump(accounts, fp, indent=2)
+
+
+asyncio.run(save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset]))

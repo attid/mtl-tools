@@ -10,7 +10,7 @@
 # and then, to convert JSON from a string, do
 #
 #     result = offer_from_dict(json.loads(json_string))
-
+import math
 from dataclasses import dataclass
 from typing import Optional, Any, List, TypeVar, Type, cast, Callable
 from datetime import datetime
@@ -519,11 +519,30 @@ class MyAccount:
         return result
 
 
+@dataclass
+class MyShareHolder:
+    account_id: str
+    balance_mtl: float = 0
+    balance_rect: float = 0
+    balance_delegated: float = 0
+    data: Optional[dict] = None
+    votes: int = 0
+    calculated_votes: int = 0
+
+    @property
+    def balance(self):
+        return self.balance_mtl + self.balance_rect + self.balance_delegated
+
+    @property
+    def lg_vote(self):  # divider = 1000
+        return round(math.log2((self.balance + 0.001) / 1000)) + 1
+
+
 if __name__ == "__main__":
     # print(json.dumps(o))
     pass
 
-    #def offers_from_dict(s: Any) -> MyOffers:
+    # def offers_from_dict(s: Any) -> MyOffers:
     #    return MyOffers.from_dict(s)
-    #def offers_to_dict(x: MyOffers) -> Any:
+    # def offers_to_dict(x: MyOffers) -> Any:
     #    return to_class(MyOffers, x)

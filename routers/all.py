@@ -7,10 +7,13 @@ from aiogram.types import Message
 from sqlalchemy.orm import Session
 
 from db.requests import db_load_bot_value, db_save_bot_value
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.aiogram_utils import is_admin
 from utils.global_data import MTLChats, global_data, BotValueTypes, update_command_info
 
 router = Router()
+router.error()(sentry_error_handler)
+
 
 
 @update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")

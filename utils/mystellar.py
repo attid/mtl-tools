@@ -305,7 +305,7 @@
 #         return delegate_list
 #
 #     # delete blacklist user
-#     bl = cmd_getblacklist()
+#     bl = cmd_get_blacklist()
 #     for arr in big_list:
 #         if bl.get(arr[0]):
 #             arr[1] = 0

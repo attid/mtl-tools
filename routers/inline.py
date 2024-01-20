@@ -1,9 +1,11 @@
 from aiogram import Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.global_data import global_data
 
 router = Router()
+router.error()(sentry_error_handler)
 
 
 @router.inline_query()

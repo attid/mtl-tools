@@ -7,10 +7,12 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_save_bot_user
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.global_data import MTLChats, update_command_info
 from utils.stellar_utils import MTLAddresses
 
 router = Router()
+router.error()(sentry_error_handler)
 
 startmsg = """
 Привет, я бот из Монтелиберо https://montelibero.org/

@@ -64,8 +64,10 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
     global_tasks.append(asyncio.create_task(work_with_support()))
-    asyncio.create_task(startup_update_namelist(bot))
-    asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
+    if 'test' in sys.argv:
+        return
+    await asyncio.create_task(startup_update_namelist(bot))
+    await asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
 
 
 async def startup_update_namelist(bot: Bot):
@@ -114,6 +116,8 @@ async def main():
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
+
+
 
     dp.include_router(admin.router)
     dp.include_router(all.router)

@@ -10,11 +10,13 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
     ChatMemberUpdated, ChatMemberMember
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value, db_send_admin_message
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
+router.error()(sentry_error_handler)
 
 
 class CaptchaCallbackData(CallbackData, prefix="captcha"):

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from config_reader import config
 from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.aiogram_utils import is_admin, cmd_delete_later
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
@@ -25,6 +26,7 @@ from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
 router = Router()
+router.error()(sentry_error_handler)
 
 
 @router.message(Command(commands=["exit"]))
@@ -55,7 +57,7 @@ async def cmd_log_err(message: Message):
 
 
 @router.message(Command(commands=["log"]))
-async def cmd_log(message: Message):
+async def cmd_log(message: Message, state: FSMContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False

@@ -1,3 +1,5 @@
+import sentry_sdk
+
 from utils.stellar_utils import *
 import sys
 from db.quik_pool import quik_pool
@@ -36,18 +38,18 @@ def cmd_check_cron_transaction(session: Session):
             if len(msg) > 4096:
                 db_cmd_add_message(session, MTLChats.SignGroup, "Слишком много операций показаны первые ")
             db_cmd_add_message(session, MTLChats.SignGroup, msg[0:4000])
-    # DEFI
+    # FARM
     asyncio.run(asyncio.sleep(10))
     result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_defi,
-                                       value_id=BotValueTypes.LastDefiTransaction)
+                                       stellar_address=MTLAddresses.public_farm,
+                                       value_id=BotValueTypes.LastFarmTransaction)
     if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.DefiGroup, "Получены новые транзакции")
+        db_cmd_add_message(session, MTLChats.FARMGroup, "Получены новые транзакции")
         for transaction in result:
             msg = f'\n'.join(transaction)
             if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.DefiGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.DefiGroup, msg[0:4000])
+                db_cmd_add_message(session, MTLChats.FARMGroup, "Слишком много операций показаны первые ")
+            db_cmd_add_message(session, MTLChats.FARMGroup, msg[0:4000])
 
     # USDM
     asyncio.run(asyncio.sleep(10))
@@ -157,6 +159,12 @@ async def cmd_check_price(session: Session):
 
 if __name__ == "__main__":
     logger.add("check_stellar.log", rotation="1 MB")
+    sentry_sdk.init(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+
     if 'check_transaction' in sys.argv:
         cmd_check_cron_transaction(quik_pool())
     elif 'check_bot' in sys.argv:

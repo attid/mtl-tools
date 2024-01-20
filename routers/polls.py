@@ -10,12 +10,14 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from sqlalchemy.orm import Session
 
 from db.requests import db_save_bot_value, db_load_bot_value
+from middlewares.sentry_error_handler import sentry_error_handler
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.gspread_tools import gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote, \
     gs_update_a_table_first, gs_check_vote_table
 from utils.stellar_utils import MTLAddresses, get_balances, address_id_to_username, get_mtlap_votes
 
 router = Router()
+router.error()(sentry_error_handler)
 
 
 class PollCallbackData(CallbackData, prefix="poll"):

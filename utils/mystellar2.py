@@ -99,7 +99,7 @@
 #             bigarr.append([s.account_id, 0, 0, s.weight])
 #     # 6
 #     # delete blecklist user
-#     bl = cmd_getblacklist()
+#     bl = cmd_get_blacklist()
 #     for arr in bigarr:
 #         if bl.get(arr[0]) != None:
 #             bigarr.remove(arr)

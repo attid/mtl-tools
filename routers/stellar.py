@@ -6,6 +6,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from config_reader import start_path
+from middlewares.sentry_error_handler import sentry_error_handler
 from scripts.update_report import update_airdrop, update_fest
 from utils.aiogram_utils import multi_reply, add_text, multi_answer
 from utils.global_data import MTLChats, is_skynet_admin, global_data, str2float, update_command_info
@@ -19,6 +20,7 @@ from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_s
                                  get_chicago_xdr)
 
 router = Router()
+router.error()(sentry_error_handler)
 
 
 @update_command_info("/fee", "показать комиссию в стелларе")

@@ -3,24 +3,27 @@ from contextlib import suppress
 from aiogram import F, Bot
 from aiogram.enums import ChatType, ParseMode, ChatAction
 from aiogram import Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
+    URLInputFile
 from sqlalchemy.orm import Session
 
 from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id
+from middlewares.sentry_error_handler import sentry_error_handler
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
 from utils import dialog
 from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin
-from utils.dialog import talk_check_spam, add_task_to_google
+from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
 from scripts.update_data import update_lab
 
 router = Router()
+router.error()(sentry_error_handler)
 
 my_talk_message = []
 
@@ -48,6 +51,20 @@ async def cmd_employment(message: Message, bot: Bot):
         await bot.send_message(chat_id=MTLChats.TestGroup, text=f'Спам {spam_persent}% check please')
 
 
+@router.message(Command(commands=["img"]))
+async def cmd_img(message: Message, bot: Bot):
+    if message.chat.id in (MTLChats.CyberGroup, MTLChats.Any, MTLChats.ITolstov):
+        text = message.text[5:]
+        image_urls = generate_image(text)
+
+        for url in image_urls:
+            image_file = URLInputFile(url, filename="image.png")
+            await message.reply_photo(image_file)
+    else:
+        await message.reply('Только в канале фракции Киберократии')
+        return False
+
+
 @router.message(F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
@@ -59,7 +76,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
         db_save_url(session, message.chat.id, message.message_id, message.text)
         await message.pin()
         if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup,
-                               MTLChats.DefiGroup, MTLChats.LandLordGroup,
+                               MTLChats.FARMGroup, MTLChats.LandLordGroup,
                                MTLChats.SignGroupForChanel):
             msg = await check_url_xdr(
                 db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
@@ -210,10 +227,23 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
 
 
 @router.message(F.chat.type == ChatType.PRIVATE)
-@router.message(StartText(('SKYNET', 'СКАЙНЕТ')))
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ', 'SKYNET4', 'СКАЙНЕТ4')))
 @router.message(Command(commands=["skynet"]))
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
-    msg = await dialog.talk(message.chat.id, message.text)
+    gpt4 = False
+    if message.text[7] == '4':
+        if message.chat.id != MTLChats.CyberGroup:
+            await message.reply('Только в канале фракции Киберократии')
+            return False
+        gpt4 = True
+
+    msg = message.text
+    if message.reply_to_message and message.reply_to_message.text:
+        msg = f"{message.reply_to_message.text} \n================\n{message.text}"
+
+    msg = await dialog.talk(message.chat.id, msg, gpt4)
+    if msg is None:
+        msg = '=( connection error, retry again )='
     msg = await message.reply(msg)
     if message.chat.type != ChatType.PRIVATE:
         # на случай вызова из /skynet
@@ -255,8 +285,8 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
                 username = entity.extract_from(message.text)
                 user_id = db_load_user_id(session, username[1:])
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
-                    with suppress(TelegramBadRequest):
-                        alert_username = '@'+message.from_user.username if message.from_user.username else message.from_user.full_name
+                    with suppress(TelegramBadRequest, TelegramForbiddenError):
+                        alert_username = '@' + message.from_user.username if message.from_user.username else message.from_user.full_name
                         await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
                                                         f'В чате {message.chat.title}\n'
                                                         f'Ссылка на сообщение {message.get_url()}')
