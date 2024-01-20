@@ -1,7 +1,8 @@
 import asyncio
 import json
-from datetime import datetime, date
 import random
+from datetime import datetime, date
+import tiktoken
 import openai
 from aioredis import Redis
 from loguru import logger
@@ -9,9 +10,11 @@ from loguru import logger
 from config_reader import config
 from utils.gspread_tools import gs_save_new_task
 
+MAX_TOKENS = 4000
 save_time_long = 60 * 60 * 2
 redis = Redis(host='localhost', port=6379, db=6)
 openai_key = config.openai_key.get_secret_value()
+enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
@@ -28,24 +31,61 @@ async def save_to_redis(chat_id, msg, is_answer=False):
     await redis.expire(data_name, save_time_long)
 
 
+def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
+    """Возвращает количество токенов, используемых списком сообщений."""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        print("Предупреждение: модель не найдена. Используется кодировка cl100k_base.")
+        encoding = tiktoken.get_encoding("cl100k_base")
+
+    if "gpt-3.5-turbo" in model or "gpt-4" in model:
+        # Для моделей gpt-3.5-turbo и gpt-4
+        tokens_per_message = 3
+        tokens_per_name = 1
+    else:
+        raise NotImplementedError(
+            f"""num_tokens_from_messages() не реализована для модели {model}. См. https://github.com/openai/openai-python/blob/main/chatml.md для информации о преобразовании сообщений в токены."""
+        )
+
+    num_tokens = 0
+    for message in messages:
+        num_tokens += tokens_per_message
+        for key, value in message.items():
+            num_tokens += len(encoding.encode(value))
+            if key == "name":
+                num_tokens += tokens_per_name
+
+    num_tokens += 3  # каждый ответ начинается с 'assistant'
+    return num_tokens
+
+
 async def load_from_redis(chat_id):
     keys = await redis.keys(f'{chat_id}:*')
     messages = []
 
     for key in keys:
         value = await redis.get(key)
-        # извлекаем сообщение и добавляем его в список сообщений
         message = json.loads(value)
-        # извлекаем timestamp из ключа
         _, timestamp = key.decode().split(":")
-        # добавляем сообщение и соответствующий timestamp в список
         messages.append((float(timestamp), message))
 
-    # сортируем сообщения по времени
+    # Сортируем сообщения по времени (от самых старых к самым новым)
     messages.sort(key=lambda x: x[0])
 
-    # возвращаем только сообщения, без timestamp
-    return [msg for _, msg in messages]
+    # Подсчитываем токены
+    model = "gpt-3.5-turbo"  # Или используйте другую модель, если необходимо
+    formatted_messages = [msg[1] for msg in messages]  # Форматируем сообщения для подсчета токенов
+    total_tokens = num_tokens_from_messages(formatted_messages, model=model)
+    logger.info(f"Total tokens: {total_tokens}")
+
+    # Удаляем старые сообщения, если количество токенов превышает максимальное значение
+    while total_tokens > MAX_TOKENS and messages:
+        removed_message = messages.pop(0)
+        total_tokens = num_tokens_from_messages([msg[1] for msg in messages], model=model)
+        logger.info(f"Total tokens after removing: {total_tokens}")
+
+    return [msg[1] for msg in messages]  # Возвращаем только данные сообщений
 
 
 async def delete_last_redis(chat_id):
@@ -61,10 +101,13 @@ async def delete_last_redis(chat_id):
     await redis.delete(keys[-1])
 
 
-async def talk(chat_id, msg):
+async def talk(chat_id, msg, gpt4=False):
     await save_to_redis(chat_id, msg)
-    msg_data = await load_from_redis(chat_id)
-    msg = await talk_open_ai_async(msg_data=msg_data)
+    if gpt4:
+        msg = await talk_open_ai_async(msg=msg, gpt4=True)
+    else:
+        msg_data = await load_from_redis(chat_id)
+        msg = await talk_open_ai_async(msg_data=msg_data)
     if msg:
         await save_to_redis(chat_id, msg, is_answer=True)
         return msg
@@ -73,14 +116,14 @@ async def talk(chat_id, msg):
         return '=( connection error, retry again )='
 
 
-async def talk_open_ai_list_models():
+async def talk_open_ai_list_models(name_filter):
     openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
     openai.api_key = openai_key
     # list models
     models = openai.Model.list()
     print(list(models))
     for raw in models['data']:
-        if raw['id'].find('gpt') > -1:
+        if raw['id'].find(name_filter) > -1:
             print(raw['id'])
     # print(raw)
     # gpt-3.5-turbo-0613
@@ -90,7 +133,7 @@ async def talk_open_ai_list_models():
     # gpt-3.5-turbo
 
 
-async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, b16k=False):
+async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False):
     openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
     openai.api_key = openai_key
     # list models
@@ -103,14 +146,13 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, b16k=False
         if user_name:
             messages[0]["name"] = user_name
     try:
-        print('****', messages)
-        if b16k:
+        # print('****', messages)
+        if gpt4:
             chat_completion_resp = await openai.ChatCompletion.acreate(model="gpt-4", messages=messages)
         else:
             chat_completion_resp = await openai.ChatCompletion.acreate(model="gpt-3.5-turbo", messages=messages)
         return chat_completion_resp.choices[0].message.content
-    except openai.error.APIError as e:
-        logger.info(e.code)
+    except Exception as e:
         logger.info(e.args)
         return None
 
@@ -191,7 +233,7 @@ async def add_task_to_google(msg):
     openai.api_key = openai_key
 
     messages = [{"role": "user", "content": msg}]
-    #async def gs_save_new_task(task_name, customer, manager, executor, contract_url):
+    # async def gs_save_new_task(task_name, customer, manager, executor, contract_url):
     functions = [
         {
             "name": "gs_save_new_task",
@@ -219,7 +261,7 @@ async def add_task_to_google(msg):
                         "type": "string",
                         "description": "Ссылка на задачу, по умолчанию ссылка на прошлое сообщение",
                     },
-                    #"unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+                    # "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
                 },
                 "required": ["task_name", "executor", "contract_url"],
             },
@@ -274,21 +316,35 @@ async def talk_get_summary(article):
                 {"role": "user", "content": article}]
     msg = None
     while msg is None:
-        msg = await talk_open_ai_async(msg_data=messages, b16k=True)
+        msg = await talk_open_ai_async(msg_data=messages, gpt4=True)
         if not msg:
             logger.info('msg is None')
             await asyncio.sleep(3)
     return msg
 
 
+def generate_image(prompt, model="dall-e-3", n=1):
+    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
+    openai.api_key = openai_key
+
+    response = openai.Image.create(
+        prompt=prompt,
+        n=n,
+        model=model
+    )
+
+    # Это вернет список URL изображений
+    return [image['url'] for image in response['data']]
+
+
 if __name__ == "__main__":
     pass
-    #print(asyncio.run(add_task_to_google('Скайнет, задача. Добавь задачу , заказчик эни, ссылка ya.ru , описание "Добавить новые поля в отчет"')))
-    #asyncio.run(talk_open_ai_list_models())
-    #exit()
+    # print(asyncio.run(add_task_to_google('Скайнет, задача. Добавь задачу , заказчик эни, ссылка ya.ru , описание "Добавить новые поля в отчет"')))
+    asyncio.run(talk_open_ai_list_models('dall'))
+    exit()
 
     # article  = '''привет, ищу где купить мыло '''
     # print(asyncio.run(talk_check_spam(article)))
-    #print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
-    asyncio.run(asyncio.sleep(50))
-    print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))
+    # print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
+    # asyncio.run(asyncio.sleep(50))
+    # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))
