@@ -1,9 +1,11 @@
 import datetime
 
+import numpy as np
 import sentry_sdk
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
+from config_reader import start_path
 from utils.gspread_tools import gs_copy_sheets_with_style
 from utils.stellar_utils import *
 from scripts.mtl_exchange import check_fire
@@ -59,6 +61,7 @@ async def update_main_report(session: Session):
         await wks.update('D8', int(defi_balance))
     else:
         logger.warning(f'debank error - {debank}')
+        sentry_sdk.capture_message(f'debank error - {debank}')
         # db_send_admin_message(session, 'debank error')
 
     addresses = await wks.get_values('A2:A')
@@ -94,14 +97,15 @@ async def update_main_report(session: Session):
                                     db_get_last_trade_operation(session=session, asset_code=key)])
             await address_sheet.update('E1', update_data)
 
+    await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+
+    await asyncio.sleep(5)
     await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                            "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
+                            "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)
     await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                            "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report")
+                            "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report", None)
     await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
                             "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")
-
-    await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
     await update_main_report_additional(session=session)
 
@@ -119,6 +123,15 @@ async def update_main_report_additional(session: Session):
     value_cell = await wks_all.acell('D1')
     if value_cell.value != "Value":
         raise ValueError("Ожидалось 'Value' в ячейке D1")
+
+    # add data
+    statistic = calculate_statistics()
+    await wks_all.update('D19:D21', [[statistic['EURMTL']],
+                                     [statistic['SATSMTL']],
+                                     [statistic['USDM']]])
+
+    await wks_all.update('D24', [[statistic['Median']]])
+    await wks_all.update('D28', [[statistic['MTL_MTLRECT']]])
 
     # Получение данных из столбца D
     column_d_values = await wks_all.col_values(4)
@@ -138,6 +151,50 @@ async def update_main_report_additional(session: Session):
     await wks_monitoring.update(f'A{last_row}', [row_update], value_input_option='USER_ENTERED')
 
 
+def calculate_statistics():
+    with open(f"{start_path}/backup/all.last.json", "r") as file:
+        accounts = json.load(file)
+
+    usdm_count = 0
+    satsmtl_count = 0
+    eurmtl_count = 0
+    mtl_mtlrect_count = 0
+    mtl_mtlrect_amounts = []
+
+    for account in accounts:
+        has_usdm = has_satsmtl = has_eurmtl = False
+        mtl_mtlrect_balance = 0
+
+        for balance in account.get("balances", []):
+            asset_code = balance.get("asset_code", "")
+            balance_amount = float(balance.get("balance", "0"))
+
+            if asset_code == "USDM":
+                has_usdm = True
+            elif asset_code == "SATSMTL":
+                has_satsmtl = True
+            elif asset_code == "EURMTL":
+                has_eurmtl = True
+            if asset_code in ["MTL", "MTLRECT"]:
+                mtl_mtlrect_balance += balance_amount
+
+        if mtl_mtlrect_balance > 1:
+            mtl_mtlrect_count += 1
+            mtl_mtlrect_amounts.append(mtl_mtlrect_balance)
+            usdm_count += has_usdm
+            satsmtl_count += has_satsmtl
+            eurmtl_count += has_eurmtl
+
+    median_mtl_mtlrect = np.median(mtl_mtlrect_amounts) if mtl_mtlrect_amounts else 0
+
+    return {
+        "USDM": usdm_count,
+        "SATSMTL": satsmtl_count,
+        "EURMTL": eurmtl_count,
+        "MTL_MTLRECT": mtl_mtlrect_count,
+        "Median": median_mtl_mtlrect
+    }
+
 
 @logger.catch
 async def update_fire(session: Session):
@@ -152,7 +209,7 @@ async def update_fire(session: Session):
     # Ищем строку 'book value of 1 token' в столбце B
     for i, row in enumerate(column_B):
         for cell in row:
-            if cell == 'Book Value':
+            if cell == 'Share Market Price':
                 # Нашли нужную строку, получаем соответствующее значение из столбца D
                 cost_fire = column_D[i][0]
                 break
@@ -265,20 +322,37 @@ async def update_top_holders_report(session: Session):
 
     ss = await agc.open("MTL_TopHolders")
     wks = await ss.worksheet("TopHolders")
+    wks_d = await ss.worksheet("Delegate")
 
-    vote_list = await cmd_gen_mtl_vote_list()
-    vote_list = await stellar_add_mtl_holders_info(vote_list)
+    delegate_list = {}
+    vote_list = await cmd_gen_mtl_vote_list(trim_count=30, delegate_list=delegate_list)
+    await stellar_add_mtl_holders_info(vote_list)
 
-    for vote in vote_list:
-        vote[0] = await resolve_account(vote[0]) if vote[1] > 400 else vote[0][:4] + '..' + vote[0][-4:]
-        vote.pop(4)
+    update_data = []
+    for account in vote_list:
+        update_data.append([account.account_id,
+                            account.balance_mtl,
+                            account.balance_rect,
+                            account.balance_delegated,
+                            account.balance,
+                            account.votes,
+                            account.calculated_votes
+                            ])
 
-    vote_list.sort(key=lambda k: k[2], reverse=True)
+    await wks.update('B2', update_data)
 
-    await wks.update('B2', vote_list)
-    await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    update_data = []
+    for key in delegate_list:
+        update_data.append([key, delegate_list[key]])
 
-    records = await wks.get_values('F2:F21')
+    for _ in range(1, 5):
+        update_data.append(["", ""])
+
+    await wks_d.update('A2', update_data)
+
+    await wks.update('I1', now.strftime('%d.%m.%Y %H:%M:%S'))
+
+    records = await wks.get_values('I2:I21')
     gd_link = 'https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156'
     for record in records:
         if record[0] != '0':
@@ -640,9 +714,10 @@ async def update_export(session: Session):
     #                        "where o.id > ? order by o.id", (last_id,))
     for record in list_operation:
         update_list.append(
-            [record.id, record.dt.strftime('%d.%m.%Y %H:%M:%S'), record.operation, float(record.amount1), record.code1,
-             None if record.amount2 is None else float(cast(float, record.amount2)), record.code2, record.from_account,
-             record.for_account, None, None, record.ledger])
+            [record.id, record.dt.strftime('%d.%m.%Y %H:%M:%S'), record.operation,
+             float(record.amount1) if record.amount1 else None, record.code1,
+             float(cast(float, record.amount2)) if record.amount2 else None, record.code2,
+             record.from_account, record.for_account, None, None, record.ledger])
 
     update_list.append(['LAST', ])
     await wks.update(f'A{last_row}', update_list, value_input_option='USER_ENTERED')
@@ -703,26 +778,24 @@ async def main():
 
     logger.add("update_report.log", rotation="1 MB")
 
-    await asyncio.gather(
-        update_main_report(quik_pool()),
-        update_guarantors_report(),
-        update_bim_data(quik_pool()),
-        update_top_holders_report(quik_pool()),
-        update_mmwb_report(quik_pool()),
-        update_donates_new(),
-        update_wallet_report(quik_pool()),
-        update_wallet_report2(quik_pool()),
-        update_export(quik_pool()),
-        return_exceptions=True
-    )
+    # await asyncio.gather( old
 
+    await update_main_report(quik_pool())
+    await update_guarantors_report()
+    await update_bim_data(quik_pool())
+    await update_top_holders_report(quik_pool())
+    await update_mmwb_report(quik_pool())
+    await update_donates_new()
+    await update_wallet_report(quik_pool())
+    await update_wallet_report2(quik_pool())
+    await update_export(quik_pool())
     await update_fire(quik_pool())
 
 
 if __name__ == "__main__":
     # from db.quik_pool import quik_pool
     #
-    # asyncio.run(update_main_report_additional(quik_pool()))  # only from skynet
+    # asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
     # exit()
 
     sentry_sdk.init(
