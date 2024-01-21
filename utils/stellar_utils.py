@@ -1928,8 +1928,8 @@ async def get_mtlap_votes():
     accounts = await stellar_get_mtl_holders(MTLAssets.mtlap_asset)
     for account in accounts:
         delegate = None
-        if account['data'] and account['data'].get('mtla_c_delegate'):
-            delegate = decode_data_value(account['data']['mtla_c_delegate'])
+        if account['data'] and account['data'].get('mtla_a_delegate'):
+            delegate = decode_data_value(account['data']['mtla_a_delegate'])
         vote = 0
         for balance in account['balances']:
             if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
@@ -1944,17 +1944,19 @@ async def get_mtlap_votes():
         for account in list(result):
             if result[account]['delegate'] and result[account]['delegate'] not in result:
                 find_new = True
-                a = await stellar_get_account(result[account]['delegate'])
+                new_account = await stellar_get_account(result[account]['delegate'])
                 delegate = None
-                if a['data'] and a['data'].get('mtla_a_delegate'):
-                    delegate = decode_data_value(a['data']['mtla_a_delegate'])
+                if new_account.get('data') and new_account['data'].get('mtla_a_delegate'):
+                    delegate = decode_data_value(new_account['data']['mtla_a_delegate'])
                 vote = 0
-                for balance in a['balances']:
-                    if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
-                        'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
-                        vote = int(float(balance['balance']))
-                        break
-                result[a['id']] = {'delegate': delegate, 'vote': vote}
+                balances = new_account.get('balances')
+                if balances:
+                    for balance in balances:
+                        if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
+                            'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
+                            vote = int(float(balance['balance']))
+                            break
+                result[new_account['id']] = {'delegate': delegate, 'vote': vote}
 
     for account in list(result):
         check_mtla_delegate(account, result)
@@ -2007,6 +2009,6 @@ def test_xdr():
 
 if __name__ == '__main__':
     pass
-    a = gen_new('AIAI')
-    #a = asyncio.run()
+    #a = gen_new('AIAI')
+    a = asyncio.run(get_mtlap_votes())
     print(a)
