@@ -297,36 +297,45 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
     if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
         return
 
-    # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
+    custom_emoji_count = 0
+    process_message = False
     for entity in message.entities:
         if entity.type in ('url', 'text_link', 'mention'):
-            await message.chat.restrict(message.from_user.id,
-                                        permissions=ChatPermissions(can_send_messages=False,
-                                                                    can_send_media_messages=False,
-                                                                    can_send_other_messages=False))
-            msg = await message.forward(MTLChats.SpamGroup)
-            chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
-            await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}',
-                            reply_markup=InlineKeyboardMarkup(
-                                inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
-                                                                       callback_data=SpamCheckCallbackData(
-                                                                           message_id=message.message_id,
-                                                                           chat_id=message.chat.id,
-                                                                           user_id=message.from_user.id,
-                                                                           new_message_id=msg.message_id,
-                                                                           good=True).pack())],
-                                                 [InlineKeyboardButton(text='Its spam! Kick him !',
-                                                                       callback_data=SpamCheckCallbackData(
-                                                                           message_id=message.message_id,
-                                                                           chat_id=message.chat.id,
-                                                                           user_id=message.from_user.id,
-                                                                           new_message_id=msg.message_id,
-                                                                           good=False).pack())]
-                                                 ]))
-            await message.delete()
-            break
+            process_message = True
+            break  # Прерываем цикл, так как нашли ссылку или упоминание
+        elif entity.type == 'custom_emoji':
+            custom_emoji_count += 1
 
+    if custom_emoji_count > 3:
+        process_message = True
+
+    if process_message:
+        await message.chat.restrict(message.from_user.id,
+                                    permissions=ChatPermissions(can_send_messages=False,
+                                                                can_send_media_messages=False,
+                                                                can_send_other_messages=False))
+        msg = await message.forward(MTLChats.SpamGroup)
+        chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
+        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}',
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
+                                                                   callback_data=SpamCheckCallbackData(
+                                                                       message_id=message.message_id,
+                                                                       chat_id=message.chat.id,
+                                                                       user_id=message.from_user.id,
+                                                                       new_message_id=msg.message_id,
+                                                                       good=True).pack())],
+                                             [InlineKeyboardButton(text='Its spam! Kick him !',
+                                                                   callback_data=SpamCheckCallbackData(
+                                                                       message_id=message.message_id,
+                                                                       chat_id=message.chat.id,
+                                                                       user_id=message.from_user.id,
+                                                                       new_message_id=msg.message_id,
+                                                                       good=False).pack())]
+                                             ]))
+        await message.delete()
         global_data.users_list[message.from_user.id] = 1
+
     add_bot_users(session, message.from_user.id, message.from_user.username, 0)
 
 
@@ -339,7 +348,8 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
     if callback_data.good:
         chat = await bot.get_chat(callback_data.chat_id)
         await bot.forward_message(callback_data.chat_id, query.message.chat.id, callback_data.new_message_id)
-        await query.message.chat.restrict(callback_data.user_id, permissions=chat.permissions)
+        await bot.restrict_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id,
+                                       permissions=chat.permissions)
         await query.answer("Oops, bringing the message back!", show_alert=True)
     else:
         await query.answer("Сорьки, пока не умею !", show_alert=True)
