@@ -334,9 +334,9 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
                                                                        good=False).pack())]
                                              ]))
         await message.delete()
-        global_data.users_list[message.from_user.id] = 1
-
-    add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+        add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+    else:
+        add_bot_users(session, message.from_user.id, message.from_user.username, 1)
 
 
 @router.callback_query(SpamCheckCallbackData.filter())
