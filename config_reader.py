@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     debank: SecretStr
     eurmtl_key: str
     sentry_dsn: str
+    sentry_report_dsn: str
 
     class Config:
         env_file = dotenv_path

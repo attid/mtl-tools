@@ -1,3 +1,4 @@
+import re
 from contextlib import suppress
 
 from aiogram import F, Bot
@@ -169,14 +170,21 @@ async def cmd_last_check_remind(message: Message, session: Session, bot: Bot):
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('задач',)))
 async def cmd_last_check_task(message: Message, session: Session, bot: Bot):
-    msg = message.text
-    msg += f'\nсообщение от {message.from_user.username} ссылка на это сообщение {message.get_url()}'
+    tmp_msg = await message.reply('Анализирую задачу...')
+    msg = ''
     if message.reply_to_message:
-        msg += f'\n\nсообщение отправлено в ответ на """{message.reply_to_message.text}"""'
-        msg += f'\nсообщение от {message.reply_to_message.from_user.username} ссылка на это сообщение {message.reply_to_message.get_url()}'
+        msg += (f'сообщение от: {message.reply_to_message.from_user.username} \n'
+                f'ссылка: {message.reply_to_message.get_url()}\n')
+        msg += f'текст: """{message.reply_to_message.text}"""\n\n\n'
 
+    msg += f'сообщение от: {message.from_user.username} \n'
+    msg += f'ссылка: {message.get_url()}\n'
+    msg += f'текст: """{message.text[7:]}"""\n\n\n'
+
+    print(msg)
     msg = await add_task_to_google(msg)
     await message.reply(msg)
+    await tmp_msg.delete()
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -276,6 +284,40 @@ async def cmd_save_good_user(message: Message, session: Session):
     # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
 
 
+def is_mixed_word(word):
+    # Проверяем наличие русских букв
+    contains_cyrillic = bool(re.search('[а-яА-Я]', word))
+    # Проверяем наличие цифр
+    contains_digit = bool(re.search('[0-9@]', word))
+    # Проверяем наличие латинских букв
+    contains_latin = bool(re.search('[a-zA-Z]', word))
+
+    # Считаем слово "смешанным", если оно содержит русские буквы и (цифры или латинские буквы)
+    return contains_cyrillic and (contains_digit or contains_latin)
+
+
+spam_phrases = [
+    "команду",
+    "команда",
+    "доход",
+    "без опыта",
+    "лс",
+    "прибыль",
+    "проект",
+    "предложение",
+    "тестирование",
+    "день",
+]
+
+
+def contains_spam_phrases(text, phrases=None, threshold=3):
+    if phrases is None:
+        phrases = spam_phrases
+    text = text.lower().split()
+    count = sum(phrase in text for phrase in phrases)
+    return count >= threshold
+
+
 @router.message(F.entities, F.text)  # если текст с ссылками #точно не приватное, приватные выше остановились
 async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
     # if user need be alert
@@ -307,6 +349,14 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
             custom_emoji_count += 1
 
     if custom_emoji_count > 3:
+        process_message = True
+
+    words = message.text.split()
+    mixed_word_count = sum(is_mixed_word(word) for word in words)
+    if mixed_word_count >= 3:
+        process_message = True
+
+    if contains_spam_phrases(message.text):
         process_message = True
 
     if process_message:
@@ -353,3 +403,20 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         await query.answer("Oops, bringing the message back!", show_alert=True)
     else:
         await query.answer("Сорьки, пока не умею !", show_alert=True)
+
+
+if __name__ == '__main__':
+    test = '''
+Вcex пpивeтcтвyю!
+Ищём тecтирoвщикa сeти.
+Дoxoд cocтaвляeт 220$/дeнь.
+Зapaбoтoк зaймeт нe бoлee 1 чaca eжeднeвнo.
+Ищeм 3-4 чeлoвeкa для кoмaнды.
+Вoзрaст oт 20 лeт, трeбyeтся знaниe pyssкoго языка. 
+Пиши + в ЛС
+'''
+
+    print(contains_spam_phrases(test))
+
+    mixed_count = sum(is_mixed_word(word) for word in test.split())
+    print(mixed_count)
