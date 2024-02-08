@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 
+import asyncio
 from aiogram.client.session import aiohttp
 from aiogram.filters import Filter
 from aiogram.types import Message
 
+from config_reader import config
 from utils.global_data import MTLChats
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -98,3 +100,29 @@ async def get_web_request(method, url, json=None, headers=None, data=None, retur
                 return response.status, await response.json()
             else:
                 return response.status, await response.text()
+
+
+async def get_debank_balance(account_id, chain='bsc'):
+    url = ("https://pro-openapi.debank.com/v1/user/chain_balance"
+           f"?id={account_id}"
+           f"&chain_id={chain}")
+    # url = ('https://pro-openapi.debank.com/v1/user/total_balance'
+    #        '?id=0x0358d265874b5cf002d1801949f1cee3b08fa2e9'
+    #        '&chain_id=bsc')
+
+    headers = {
+        'accept': 'application/json',
+        'AccessKey': config.debank.get_secret_value()
+    }
+    status, response = await get_web_request('GET', url, headers=headers)
+    if status == 200:
+        # {'usd_value': 253279.1102783137}
+        return float(response.get('usd_value'))
+    else:
+        raise Exception(f'Ошибка запроса: Статус {status}')
+
+
+
+if __name__ == '__main__':
+    a = asyncio.run(get_debank_balance('0x0358d265874b5cf002d1801949f1cee3b08fa2e9'))
+    print(a)
