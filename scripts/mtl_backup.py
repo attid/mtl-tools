@@ -36,4 +36,4 @@ async def save_assets(assets: list):
         json.dump(accounts, fp, indent=2)
 
 
-asyncio.run(save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset]))
+asyncio.run(save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset]))
