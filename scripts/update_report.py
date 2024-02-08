@@ -6,6 +6,7 @@ from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
 from config_reader import start_path
+from utils.aiogram_utils import get_debank_balance
 from utils.gspread_tools import gs_copy_sheets_with_style
 from utils.stellar_utils import *
 from scripts.mtl_exchange import check_fire
@@ -41,28 +42,11 @@ async def update_main_report(session: Session):
     await wks.update('D6', float(s))
 
     # defi
-    defi_balance = 0
-    requests.get('https://debank.com/profile/0x0358D265874b5Cf002d1801949F1cEE3B08Fa2E9')
-    debank = requests.get("https://api.debank.com/token/balance_list"
-                          "?user_addr=0x0358d265874b5cf002d1801949f1cee3b08fa2e9&chain=bsc")
-    if debank:
-        debank = debank.json()
-        for row in debank['data']:
-            defi_balance += row['amount'] * row['price']
-    await asyncio.sleep(2)
-    debank = requests.get("https://api.debank.com/portfolio/project_list"
-                          "?user_addr=0x0358d265874b5cf002d1801949f1cee3b08fa2e9")
-    if debank:
-        debank = debank.json()
-        for row in debank['data']:
-            for row2 in row['portfolio_item_list']:
-                for row3 in row2['asset_token_list']:
-                    defi_balance += row3['amount'] * row3['price']
-        await wks.update('D8', int(defi_balance))
-    else:
-        logger.warning(f'debank error - {debank}')
-        sentry_sdk.capture_message(f'debank error - {debank}')
-        # db_send_admin_message(session, 'debank error')
+    defi_balance = await get_debank_balance('0x0358d265874b5cf002d1801949f1cee3b08fa2e9')
+    await wks.update('D8', int(defi_balance))
+    # sentry_sdk.capture_message(f'debank error - {debank}')
+    defi_balance = await get_debank_balance('0xDb36745AA3601E2f12b07db58fF8d91946850a36')
+    await wks.update('D11', int(defi_balance))
 
     addresses = await wks.get_values('A2:A')
     for address in addresses:
@@ -131,7 +115,9 @@ async def update_main_report_additional(session: Session):
                                      [statistic['USDM']]])
 
     await wks_all.update('D24', [[statistic['Median']]])
+    await wks_all.update('D25', [[statistic['EURMTL_NONE_ZERO']]])
     await wks_all.update('D28', [[statistic['MTL_MTLRECT']]])
+    await wks_all.update('D41', [[statistic['MTLAP']]])
 
     # Получение данных из столбца D
     column_d_values = await wks_all.col_values(4)
@@ -156,10 +142,12 @@ def calculate_statistics():
         accounts = json.load(file)
 
     usdm_count = 0
+    mtlap_count = 0
     satsmtl_count = 0
     eurmtl_count = 0
     mtl_mtlrect_count = 0
     mtl_mtlrect_amounts = []
+    eurmtl_none_zero_count = 0
 
     for account in accounts:
         has_usdm = has_satsmtl = has_eurmtl = False
@@ -175,6 +163,10 @@ def calculate_statistics():
                 has_satsmtl = True
             elif asset_code == "EURMTL":
                 has_eurmtl = True
+                if balance_amount > 0:
+                    eurmtl_none_zero_count += 1
+            elif asset_code == "MTLAP" and balance_amount > 0:
+                mtlap_count += 1
             if asset_code in ["MTL", "MTLRECT"]:
                 mtl_mtlrect_balance += balance_amount
 
@@ -192,7 +184,9 @@ def calculate_statistics():
         "SATSMTL": satsmtl_count,
         "EURMTL": eurmtl_count,
         "MTL_MTLRECT": mtl_mtlrect_count,
-        "Median": median_mtl_mtlrect
+        "Median": median_mtl_mtlrect,
+        "MTLAP": mtlap_count,
+        "EURMTL_NONE_ZERO": eurmtl_none_zero_count
     }
 
 
@@ -796,10 +790,11 @@ if __name__ == "__main__":
     # from db.quik_pool import quik_pool
     #
     # asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
+    # print(calculate_statistics())
     # exit()
 
     sentry_sdk.init(
-        dsn=config.sentry_dsn,
+        dsn=config.sentry_report_dsn,
         traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
     )
