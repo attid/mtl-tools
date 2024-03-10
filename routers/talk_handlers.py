@@ -20,7 +20,7 @@ from scripts.update_report import update_guarantors_report, update_main_report, 
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
 from utils import dialog
-from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin
+from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
@@ -69,7 +69,7 @@ async def cmd_img(message: Message, bot: Bot):
         return False
 
 
-@router.message(F.chat.id.in_(global_data.need_decode), F.text.contains('eurmtl.me/sign_tools'))
+@router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
         msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
@@ -120,11 +120,9 @@ async def remind(message: Message, session: Session, bot: Bot):
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
-
-@router.message(F.reply_to_message.from_user.id == config.bot_token.get_secret_value().split(':')[0])
+@router.message(F.text, F.reply_to_message, ReplyToBot(), F.chat.type != ChatType.PRIVATE)
 async def cmd_last_check_reply_to_bot(message: Message):
-    if message.reply_to_message \
-            and (f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message):
+    if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
         # answer on bot message
         msg = await dialog.talk(message.chat.id, message.text)
         msg = await message.reply(msg)
@@ -252,7 +250,7 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
 
-@router.message(F.chat.id.in_(global_data.reply_only), F.text)
+@router.message(ChatInOption('reply_only'), F.text)
 async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
@@ -285,7 +283,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
             await msg.delete()
 
 
-@router.message(F.chat.id.in_(global_data.listen), F.text)
+@router.message(ChatInOption('listen'), F.text)
 async def cmd_save_msg(message: Message, session: Session):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)

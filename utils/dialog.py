@@ -4,6 +4,8 @@ import random
 from datetime import datetime, date
 import tiktoken
 import openai
+from openai import OpenAI, AsyncOpenAI
+
 from aioredis import Redis
 from loguru import logger
 
@@ -15,6 +17,9 @@ save_time_long = 60 * 60 * 2
 redis = Redis(host='localhost', port=6379, db=6)
 openai_key = config.openai_key.get_secret_value()
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+# client = OpenAI(api_key=openai_key)
+aclient = AsyncOpenAI(api_key=openai_key)
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
@@ -117,25 +122,15 @@ async def talk(chat_id, msg, gpt4=False):
 
 
 async def talk_open_ai_list_models(name_filter):
-    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
-    openai.api_key = openai_key
     # list models
-    models = openai.Model.list()
-    print(list(models))
-    for raw in models['data']:
-        if raw['id'].find(name_filter) > -1:
-            print(raw['id'])
-    # print(raw)
-    # gpt-3.5-turbo-0613
-    # gpt-3.5-turbo-16k-0613
-    # gpt-3.5-turbo-16k
-    # gpt-3.5-turbo-0301
-    # gpt-3.5-turbo
+    models = await aclient.models.list()
+    # print(models, type(models))
+    for raw in models.data:
+        if raw.id.find(name_filter) > -1:
+            print(raw.id)
 
 
 async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False):
-    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
-    openai.api_key = openai_key
     # list models
     # models = openai.Model.list()
 
@@ -148,9 +143,9 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
     try:
         # print('****', messages)
         if gpt4:
-            chat_completion_resp = await openai.ChatCompletion.acreate(model="gpt-4", messages=messages)
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages)
         else:
-            chat_completion_resp = await openai.ChatCompletion.acreate(model="gpt-3.5-turbo", messages=messages)
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
         logger.info(e.args)
@@ -228,9 +223,6 @@ async def talk_check_spam(article):
 
 async def add_task_to_google(msg):
     # https://platform.openai.com/docs/guides/gpt/function-calling
-    # Step 1: send the conversation and available functions to GPT
-    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
-    openai.api_key = openai_key
     model = "gpt-4-turbo-preview"
 
     messages = [{"role": "user", "content": msg}]
@@ -268,13 +260,11 @@ async def add_task_to_google(msg):
             },
         }
     ]
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        functions=functions,
-        function_call="auto",  # auto is default, but we'll be explicit
-    )
-    response_message = response["choices"][0]["message"]
+    response = await aclient.chat.completions.create(model=model,
+                                                     messages=messages,
+                                                     functions=functions,
+                                                     function_call="auto")
+    response_message = response.choices[0].message
 
     # Step 2: check if GPT wanted to call a function
     if response_message.get("function_call"):
@@ -283,9 +273,9 @@ async def add_task_to_google(msg):
         available_functions = {
             "gs_save_new_task": gs_save_new_task,
         }  # only one function in this example, but you can have multiple
-        function_name = response_message["function_call"]["name"]
+        function_name = response_message.function_call.name
         function_to_call = available_functions[function_name]
-        function_args = json.loads(response_message["function_call"]["arguments"])
+        function_args = json.loads(response_message.function_call.arguments)
         # async def gs_save_new_task(task_name, customer, manager, executor, contract_url):
         function_response = await function_to_call(
             task_name=function_args.get("task_name"),
@@ -308,10 +298,8 @@ async def add_task_to_google(msg):
             "role": "system",
             "content": "Пожалуйста, избегайте использования ссылок в вашем ответе."
         })
-        second_response = openai.ChatCompletion.create(
-            model=model,
-            messages=messages,
-        )  # get a new response from GPT where it can see the function response
+        second_response = await aclient.chat.completions.create(model=model,
+                                                                messages=messages)  # get a new response from GPT where it can see the function response
         return second_response.choices[0].message.content
 
 
@@ -328,56 +316,25 @@ async def talk_get_summary(article):
     return msg
 
 
-def generate_image(prompt, model="dall-e-3", n=1):
-    openai.organization = "org-Iq64OmMI81NWnwcPtn72dc7E"
-    openai.api_key = openai_key
-
-    response = openai.Image.create(
-        prompt=prompt,
-        n=n,
-        model=model
-    )
+async def generate_image(prompt, model="dall-e-3", n=1):
+    response = await aclient.images.generate(prompt=prompt,
+                                      n=n,
+                                      model=model)
 
     # Это вернет список URL изображений
-    return [image['url'] for image in response['data']]
+    return [image.url for image in response.data]
 
 
 if __name__ == "__main__":
     pass
-    # print(asyncio.run(add_task_to_google('Скайнет, задача. Добавь задачу , заказчик эни, ссылка ya.ru , описание "Добавить новые поля в отчет"')))
-    text = '''
-    сообщение от: sozidatel 
-ссылка: https://t.me/c/1767165598/2780
-текст: """Игорь, я недавно размышлял по теме телемедицины, и позволю себе накидать примерный ТЗ для более удобного бота обратной связи. Это может пригодиться и в других местах.
+    # asyncio.run(talk_open_ai_list_models('dall'))
 
-Всё, примерно, как сейчас, но добавляем поддержку топиков. У этого два смысла. Такое же плоский чат обратной связи, просто находится в определённом топике какого-то чата. По-моему уже тобою реализовано, и в этом моём сообщении не про это.
+    # a = asyncio.run(generate_image('красная панда'))
+    # print(a)
 
-Моя идея следующая.
-Чат обратной связи — топикизированный чат.
-
-Когда человек в первый раз пишет, создаётся топик, с выбранной в настройках иконкой и названием согласно другим настройкам, но в целом содержащим имя того, кто обратился. Опционально префиксы, постфиксы, дата инициации и подобное.
-Важно, что админы чата могут переименовывать топики для удобства, боту это фиолетово, он же ориентируется на айди.
-
-В первом сообщении пишется сообщение от имени бота, оно же закрепляется. Там основные данные, такие как имя того, кто обратился, его айди, юзернейм и, важно, список других топиков, инициированных этим человеком (прошлые и будущие, в идеале с выделением этого конкретного топика (вы находитесь здесь).
-
-Внутри топика идёт диалог с человеком, всё как обычно.
-
-Есть комманда, мол, топик закончен. Тогда топик архивируется, а новые обращения человека породят новый топик.
-
-Расширенная версия этой комманды позволит перенести часть общения в новый топик: я выделяю какую-либо реплику, в ответ на неё даю комманду, что топик закончен. Бот создаёт новый топик, ставит в него заголовочный закреп, как обычно, и переносит туда сообщение, на который я дал ответ + идущие ниже сообщения. Чтобы можно было перенести новый контекст в новый топик.
-
-Перенесённые сообщения работают, как обычно, то есть если ответить на сообщение от человека, он получит этот ответ.
-
-Примерно так, некоторые нюансы будут видны уже в реализации и можно будет уточнять по ходу дела."""
-
-
-сообщение от: itolstov 
-ссылка: https://t.me/c/1767165598/2816
-текст: """т добавь задачу"""
-'''
-    p = asyncio.run(add_task_to_google(text))
-    print(p)
-    exit()
+    # p = asyncio.run(add_task_to_google(text))
+    # print(p)
+    # exit()
 
     # article  = '''привет, ищу где купить мыло '''
     # print(asyncio.run(talk_check_spam(article)))

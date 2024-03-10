@@ -453,10 +453,10 @@ commands_info = {
 @update_command_info("/del_skynet_admin",
                      "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
-@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом. Need restart")
+@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
-@update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате. Need restart")
+@update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
 @update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, session: Session):
@@ -490,6 +490,7 @@ async def handle_command(message: Message, session: Session, command_info):
         info_message = await message.reply('Removed')
     else:
         value_to_set = command_args[0] if command_args else 1
+        global_data_field.append(chat_id)
         db_save_bot_value(session, chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 

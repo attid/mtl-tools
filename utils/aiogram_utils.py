@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
 
 import asyncio
+
+from aiogram import Bot
 from aiogram.client.session import aiohttp
 from aiogram.filters import Filter
 from aiogram.types import Message
 
 from config_reader import config
-from utils.global_data import MTLChats
+from utils.global_data import MTLChats, global_data
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler: AsyncIOScheduler
@@ -98,6 +100,19 @@ class StartText(Filter):
 
     async def __call__(self, message: Message) -> bool:
         return start_words(message.text, self.my_arr)
+
+
+class ReplyToBot(Filter):
+    async def __call__(self, message: Message, bot: Bot) -> bool:
+        return message.reply_to_message and message.reply_to_message.from_user.id == bot.id
+
+
+class ChatInOption(Filter):
+    def __init__(self, name: str) -> None:
+        self.attr_name = getattr(global_data, name)
+
+    async def __call__(self, message: Message) -> bool:
+        return message.chat.id in self.attr_name
 
 
 async def get_web_request(method, url, json=None, headers=None, data=None, return_type=None):
