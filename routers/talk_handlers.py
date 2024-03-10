@@ -1,8 +1,9 @@
 import re
 from contextlib import suppress
 
+import asyncio
 from aiogram import F, Bot
-from aiogram.enums import ChatType, ParseMode, ChatAction
+from aiogram.enums import ChatType, ParseMode, ChatAction, MessageEntityType
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
@@ -11,7 +12,9 @@ from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, Inline
     URLInputFile
 from sqlalchemy.orm import Session
 
-from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id
+from config_reader import config
+from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id, \
+    db_update_user_chat_date
 from middlewares.sentry_error_handler import sentry_error_handler
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
@@ -54,7 +57,7 @@ async def cmd_employment(message: Message, bot: Bot):
 
 @router.message(Command(commands=["img"]))
 async def cmd_img(message: Message, bot: Bot):
-    if message.chat.id in (MTLChats.CyberGroup, MTLChats.Any, MTLChats.ITolstov):
+    if message.chat.id in (MTLChats.CyberGroup,) or f'@{message.from_user.username.lower()}' in global_data.skynet_img:
         text = message.text[5:]
         image_urls = generate_image(text)
 
@@ -66,7 +69,7 @@ async def cmd_img(message: Message, bot: Bot):
         return False
 
 
-@router.message(F.text.contains('eurmtl.me/sign_tools'))
+@router.message(F.chat.id.in_(global_data.need_decode), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
         msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
@@ -76,18 +79,9 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
             pass
         db_save_url(session, message.chat.id, message.message_id, message.text)
         await message.pin()
-        if message.chat.id in (MTLChats.SignGroup, MTLChats.TestGroup, MTLChats.ShareholderGroup,
-                               MTLChats.FARMGroup, MTLChats.LandLordGroup,
-                               MTLChats.SignGroupForChanel):
-            msg = await check_url_xdr(
-                db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
-            msg = f'\n'.join(msg)
-            await multi_reply(message, msg)
-
-        # if message.chat.id in (MTLChats.SignGroup, MTLChats.SignGroupForChanel,):
-        #    msg = db_load_bot_value(session, message.chat.id,
-        #                             BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
-        #    await message.reply(msg)
+        msg = await check_url_xdr(db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
+        msg = f'\n'.join(msg)
+        await multi_reply(message, msg)
 
 
 @router.message(Command(commands=["comment"]))
@@ -127,8 +121,8 @@ async def remind(message: Message, session: Session, bot: Bot):
                                message_thread_id=message.message_thread_id)
 
 
-@router.message(F.reply_to_message.from_user.id == 2134695152)
-async def cmd_last_check1(message: Message, session: Session, bot: Bot):
+@router.message(F.reply_to_message.from_user.id == config.bot_token.get_secret_value().split(':')[0])
+async def cmd_last_check_reply_to_bot(message: Message):
     if message.reply_to_message \
             and (f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message):
         # answer on bot message
@@ -259,20 +253,43 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
 
 
 @router.message(F.chat.id.in_(global_data.reply_only), F.text)
-async def cmd_check_reply_only(message: Message, session: Session):
-    if message.reply_to_message or message.forward_from_chat:
+async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
+    if message.chat.id in global_data.save_last_message_date:
+        await save_last(message, session)
+
+    has_hashtag = False
+    if message.entities:
+        for entity in message.entities:
+            if entity.type == MessageEntityType.HASHTAG:
+                has_hashtag = True
+                break
+
+    if message.reply_to_message or message.forward_from_chat or has_hashtag:
         db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
     else:
-        await message.reply('Осуждаю ! Это сообщения не увидят в комментариях. Я удалю сообщение через 5 минут ! '
-                            'Рекомендую удалить его, и повторить его с использованием функции «ответ». \n'
-                            'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
-        return
+        msg = await message.reply(
+            'Осуждаю ! Это сообщения не увидят в комментариях. Я удалю сообщение через 15 секунд ! '
+            'Рекомендую повторить его с использованием функции «ответ» на нужное сообщение. \n'
+            'Ещё проще, если переписываться из комментариев к исходному посту в канале.')
+
+        await asyncio.sleep(15)
+        try:
+            await message.forward(chat_id=message.from_user.id)
+            await bot.send_message(chat_id=message.chat.id, text='Сообщение переслано в личку')
+        except TelegramBadRequest:
+            await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено')
+        with suppress(TelegramBadRequest):
+            await message.delete()
+            await msg.delete()
 
 
 @router.message(F.chat.id.in_(global_data.listen), F.text)
 async def cmd_save_msg(message: Message, session: Session):
+    if message.chat.id in global_data.save_last_message_date:
+        await save_last(message, session)
+
     db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                     thread_id=message.message_thread_id if message.is_topic_message else None,
                     text=message.text, chat_id=message.chat.id)
@@ -280,6 +297,9 @@ async def cmd_save_msg(message: Message, session: Session):
 
 @router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
 async def cmd_save_good_user(message: Message, session: Session):
+    if message.chat.id in global_data.save_last_message_date:
+        await save_last(message, session)
+
     add_bot_users(session, message.from_user.id, message.from_user.username, 1)
     # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
 
@@ -318,24 +338,18 @@ def contains_spam_phrases(text, phrases=None, threshold=3):
     return count >= threshold
 
 
-@router.message(F.entities, F.text)  # если текст с ссылками #точно не приватное, приватные выше остановились
+@router.message(F.entities, F.text)  # если текст с link # точно не приватное, приватные выше остановились
 async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
-    # if user need be alert
-    if message.chat.id in global_data.alert_me:
-        for entity in message.entities:
-            if entity.type == 'mention':
-                username = entity.extract_from(message.text)
-                user_id = db_load_user_id(session, username[1:])
-                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
-                    with suppress(TelegramBadRequest, TelegramForbiddenError):
-                        alert_username = '@' + message.from_user.username if message.from_user.username else message.from_user.full_name
-                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
-                                                        f'В чате {message.chat.title}\n'
-                                                        f'Ссылка на сообщение {message.get_url()}')
+    await check_alert(bot, message, session)
 
-    if message.chat.id not in global_data.no_first_link:
-        return
+    if message.chat.id in global_data.no_first_link:
+        await check_spam(message, session)
 
+    if message.chat.id in global_data.save_last_message_date:
+        await save_last(message, session)
+
+
+async def check_spam(message, session):
     if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
         return
 
@@ -387,6 +401,26 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
         add_bot_users(session, message.from_user.id, message.from_user.username, 0)
     else:
         add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+
+
+async def check_alert(bot, message, session):
+    # if user need be alert
+    if message.chat.id in global_data.alert_me:
+        for entity in message.entities:
+            if entity.type == 'mention':
+                username = entity.extract_from(message.text)
+                user_id = db_load_user_id(session, username[1:])
+                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
+                    with suppress(TelegramBadRequest, TelegramForbiddenError):
+                        alert_username = '@' + message.from_user.username if message.from_user.username else message.from_user.full_name
+                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
+                                                        f'В чате {message.chat.title}\n'
+                                                        f'Ссылка на сообщение {message.get_url()}')
+
+
+async def save_last(message, session):
+    if message.chat.id in global_data.save_last_message_date:
+        db_update_user_chat_date(session, message.from_user.id, message.chat.id)
 
 
 @router.callback_query(SpamCheckCallbackData.filter())

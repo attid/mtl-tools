@@ -608,6 +608,28 @@ def db_get_last_trade_operation(session: Session, asset_code='MTL', minimal_sum=
     return 0
 
 
+def db_update_user_chat_date(session: Session, user_id: int, chat_id: int):
+    """
+    Insert or update a BotUserChats record with the given user_id and chat_id.
+
+    :param session: SQLAlchemy session.
+    :param user_id: User ID.
+    :param chat_id: Chat ID.
+    """
+    existing_record = session.query(BotUserChats).filter(
+        BotUserChats.user_id == user_id,
+        BotUserChats.chat_id == chat_id
+    ).first()
+
+    if existing_record:
+        existing_record.dt_last = datetime.now()
+    else:
+        new_record = BotUserChats(user_id=user_id, chat_id=chat_id, dt_last=datetime.now())
+        session.add(new_record)
+
+    session.commit()
+
+
 if __name__ == '__main__':
     from quik_pool import quik_pool
 

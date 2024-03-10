@@ -13,7 +13,7 @@ def save_account(account: str):
 
 
 async def save_asset(asset: str):
-    accounts = await stellar_get_mtl_holders()
+    accounts = await stellar_get_holders()
     d = datetime.now().day % 5
     with open(f"backup/{asset}.{d}.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
@@ -22,7 +22,7 @@ async def save_asset(asset: str):
 async def save_assets(assets: list):
     accounts = []
     for asset in assets:
-        asset_accounts = await stellar_get_mtl_holders(asset)
+        asset_accounts = await stellar_get_holders(asset)
         # Добавляем аккаунты, избегая дублирования
         for account in asset_accounts:
             if account not in accounts:

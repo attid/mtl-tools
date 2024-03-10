@@ -160,7 +160,7 @@ oauthlib==3.2.2
     # via
     #   -r requirements.in
     #   requests-oauthlib
-openai==0.27.8
+openai==1.13.3
     # via -r requirements.in
 packaging==23.1
     # via -r requirements.in
@@ -316,4 +316,6 @@ yarl==1.9.2
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
 
-tiktoken~=0.3.1
+tiktoken~=0.6.0
+langchain~=0.1.9
+duckduckgo-search

@@ -2,7 +2,7 @@
 # from loguru import logger
 #
 # import fb
-# from mystellar import stellar_get_mtl_holders, eurmtl_asset, eurdebt_asset, get_balances, public_key_rate
+# from mystellar import stellar_get_holders, eurmtl_asset, eurdebt_asset, get_balances, public_key_rate
 #
 # key_rate = 1.6
 #
@@ -39,9 +39,9 @@
 #     eurdebt_dic = {}
 #     insert_list = []
 #
-#     holders = await stellar_get_mtl_holders(eurdebt_asset)
+#     holders = await stellar_get_holders(eurdebt_asset)
 #     get_pair(holders, eurmtl_dic, eurdebt_dic)
-#     holders = await stellar_get_mtl_holders(eurmtl_asset)
+#     holders = await stellar_get_holders(eurmtl_asset)
 #     get_pair(holders, eurmtl_dic, eurdebt_dic)
 #
 #     for key in eurmtl_dic:

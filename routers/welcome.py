@@ -23,27 +23,6 @@ class CaptchaCallbackData(CallbackData, prefix="captcha"):
     answer: int
 
 
-@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата")
-@router.message(Command(commands=["delete_income"]))
-async def cmd_delete_income(message: Message, session: Session):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
-    if message.chat.id in global_data.delete_income:
-        global_data.delete_income[message.chat.id] = None
-        db_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, None)
-        await message.reply('Removed')
-    else:
-        type_delete = 1
-        if len(message.text.split()) > 1:
-            global_data.delete_income[message.chat.id] = message.text.split()[1]
-        global_data.delete_income[message.chat.id] = 1
-        db_save_bot_value(session, message.chat.id, BotValueTypes.DeleteIncome, type_delete)
-        await message.reply('Added')
-
-
-@update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
 async def cmd_delete_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -73,25 +52,6 @@ async def cmd_set_welcome(message: Message, session: Session):
         cmd_delete_later(msg, 1)
     else:
         await cmd_delete_welcome(message, session)
-
-    cmd_delete_later(message, 1)
-
-
-@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
-@router.message(Command(commands=["set_reply_only"]))
-async def cmd_set_reply_only(message: Message, session: Session):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
-    if message.chat.id in global_data.reply_only:
-        global_data.reply_only.remove(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, None)
-        await message.reply('Removed')
-    else:
-        global_data.reply_only.append(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.ReplyOnly, 1)
-        await message.reply('Added')
 
     cmd_delete_later(message, 1)
 

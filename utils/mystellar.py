@@ -136,10 +136,10 @@
 #                          f"where e.was_packed = 0 group by e.user_key, e.asset order by e.asset")
 #
 #     accounts_list = []
-#     accounts = await stellar_get_mtl_holders(eurmtl_asset)
+#     accounts = await stellar_get_holders(eurmtl_asset)
 #     for account in accounts:
 #         accounts_list.append(f"{account['account_id']}-EURMTL")
-#     accounts = await stellar_get_mtl_holders(eurdebt_asset)
+#     accounts = await stellar_get_holders(eurdebt_asset)
 #     for account in accounts:
 #         accounts_list.append(f"{account['account_id']}-EURDEBT")
 #
@@ -266,7 +266,7 @@
 #
 # async def cmd_gen_usdm_vote_list(return_delegate_list: bool = False, mini=False):
 #     account_list = []
-#     accounts = await stellar_get_mtl_holders(mini=mini, asset=usdmm_asset)
+#     accounts = await stellar_get_holders(mini=mini, asset=usdmm_asset)
 #
 #     # mtl
 #     for account in accounts:
@@ -345,7 +345,7 @@
 #
 #
 # async def get_mrxpinvest_xdr(div_sum: float):
-#     accounts = await stellar_get_mtl_holders(mrxpinvest_asset)
+#     accounts = await stellar_get_holders(mrxpinvest_asset)
 #     accounts_list = []
 #     total_sum = 0
 #
@@ -452,7 +452,7 @@
 #
 #
 # async def send_satsmtl_pending():
-#     accounts = await stellar_get_mtl_holders()
+#     accounts = await stellar_get_holders()
 #     print(len(accounts))
 #     cnt = 0
 #     xdr = None
@@ -595,7 +595,7 @@
 #
 #
 # async def send_msg_to_mtl():
-#     holders = await stellar_get_mtl_holders(mini=False)
+#     holders = await stellar_get_holders(mini=False)
 #     i = 0
 #     x = 0
 #     transaction = TransactionBuilder(

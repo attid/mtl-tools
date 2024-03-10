@@ -22,6 +22,11 @@ class BotUsers(Base):
     user_name = Column(String(60))
     user_type = Column(SmallInteger, default=0)
 
+class BotUserChats(Base):
+    __tablename__ = 'BOT_USER_CHATS'
+    user_id = Column(BigInteger, primary_key=True)
+    chat_id = Column(BigInteger, primary_key=True)
+    dt_last = Column(DateTime, default=datetime.now)
 
 class TMessage(Base):
     __tablename__ = 'T_MESSAGE'

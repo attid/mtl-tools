@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import json
@@ -18,7 +19,7 @@ from sqlalchemy.orm import Session
 from config_reader import config
 from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
 from middlewares.sentry_error_handler import sentry_error_handler
-from utils.aiogram_utils import is_admin, cmd_delete_later
+from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user
@@ -67,96 +68,6 @@ async def cmd_log(message: Message, state: FSMContext):
 async def cmd_send_file(message: Message, filename):
     if os.path.isfile(filename):
         await message.reply_document(FSInputFile(filename))
-
-
-@update_command_info("/add_skynet_admin",
-                     "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
-@router.message(Command(commands=["add_skynet_admin"]))
-async def cmd_add_skynet_admin(message: Message, session: Session):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return False
-
-    if len(message.text.split()) > 1:
-        arg = message.text.split()
-        global_data.skynet_admins.extend(arg[1:])
-        db_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
-
-        await message.reply('Done')
-    else:
-        await message.reply('не указаны параметры кого добавить')
-
-
-@update_command_info("/del_skynet_admin",
-                     "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
-@router.message(Command(commands=["del_skynet_admin"]))
-async def cmd_del_skynet_admin(message: Message, session: Session):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return False
-
-    if len(message.text.split()) > 1:
-        arg = message.text.split()
-        global_data.skynet_admins.extend(arg[1:])
-
-        arg = message.text.split()
-        for member in arg:
-            if member in global_data.skynet_admins:
-                global_data.skynet_admins.remove(member)
-        db_save_bot_value(session, 0, BotValueTypes.SkynetAdmins, json.dumps(global_data.skynet_admins))
-        await message.reply('Done')
-    else:
-        await message.reply('не указаны параметры кого добавить')
-
-
-@update_command_info("/show_skynet_admin", "Показать админов скайнета")
-@router.message(Command(commands=["show_skynet_admin"]))
-async def cmd_show_skynet_admin(message: Message):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return False
-
-    await message.reply(' '.join(global_data.skynet_admins))
-
-
-# @router.message(Command(commands=["save_income_id"]))
-# async def cmd_save_income_id(message: Message):
-#     if not is_skynet_admin(message):
-#         await message.reply('You are not my admin.')
-#         return False
-#
-#     save_income_id_list = global_dict.get('save_income_id', [])
-#     if message.chat.id in save_income_id_list:
-#         save_income_id_list.remove(message.chat.id)
-#         global_dict['save_income_id'] = save_income_id_list
-#         global_dict[message.chat.id] = []
-#         await message.reply('Removed')
-#     else:
-#         save_income_id_list.append(message.chat.id)
-#         global_dict['save_income_id'] = save_income_id_list
-#         await message.reply('Added')
-#
-#
-# @router.message(Command(commands=["show_income_id"]))
-# async def cmd_show_income_id(message: Message):
-#     if not is_skynet_admin(message):
-#         await message.reply('You are not my admin.')
-#         return False
-#
-#     users_id = global_dict.get(message.chat.id, [])
-#     await message.reply(str(users_id))
-#
-#
-# @router.message(Command(commands=["delete_income_id"]))
-# async def cmd_delete_income_id(message: Message):
-#     if not is_skynet_admin(message):
-#         await message.reply('You are not my admin.')
-#         return False
-#
-#     users_id = global_dict.get(message.chat.id, [])
-#     for user in users_id:
-#         await message.chat.kick(user)
-#     await message.reply(str(users_id))
 
 
 @update_command_info("/push", "Отправить сообщение в личку. Только для админов скайнета")
@@ -255,25 +166,6 @@ async def cmd_set_listen(message: Message, session: Session):
     else:
         global_data.listen.append(message.chat.id)
         db_save_bot_value(session, message.chat.id, BotValueTypes.Listen, 1)
-        msg = await message.reply('Added')
-
-    cmd_delete_later(message, 1)
-    cmd_delete_later(msg, 1)
-
-
-@router.message(Command(commands=["full_data"]))
-async def cmd_set_listen(message: Message, session: Session):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return False
-
-    if message.chat.id in global_data.full_data:
-        global_data.full_data.remove(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.FullData, None)
-        msg = await message.reply('Removed')
-    else:
-        global_data.full_data.append(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.FullData, 1)
         msg = await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -379,28 +271,6 @@ async def cmd_get_info(message: Message, bot: Bot):
 
     if message.reply_to_message:
         await bot.send_message(chat_id=message.from_user.id, text=message.reply_to_message.html_text)
-
-
-global_data.info_cmd["/no_first_link"] = "Включить защиту от спама первого сообщения с ссылкой"
-
-
-@router.message(Command(commands=["no_first_link"]))
-async def cmd_set_no_first_link(message: Message, session: Session):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
-    if message.chat.id in global_data.no_first_link:
-        global_data.no_first_link.remove(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.NoFirstLink, None)
-        msg = await message.reply('Removed')
-    else:
-        global_data.no_first_link.append(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.NoFirstLink, 1)
-        msg = await message.reply('Added')
-
-    cmd_delete_later(message, 1)
-    cmd_delete_later(msg, 1)
 
 
 @update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)")
@@ -554,3 +424,104 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
     # Обновляем сообщение, добавляя клавиатуру
     await sent_message.edit_reply_markup(reply_markup=reply_markup)
+
+
+commands_info = {
+    "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin"),
+    "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin"),
+    "no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin"),
+    # full_data - чаты с полной расшифровкой по адресу
+    "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin"),
+    "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin"),
+    "save_last_message_date": (
+    global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate, "toggle", "admin"),
+
+    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin"),
+    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin"),
+    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin"),
+    "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin"),
+    "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin"),
+    "show_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "show_list", "skynet_admin"),
+
+}
+
+
+@update_command_info("/add_skynet_img",
+                     "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+@update_command_info("/add_skynet_admin",
+                     "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+@update_command_info("/del_skynet_admin",
+                     "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
+@update_command_info("/show_skynet_admin", "Показать админов скайнета")
+@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом. Need restart")
+@update_command_info("/delete_welcome", "Отключить сообщения приветствия")
+@update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
+@update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате. Need restart")
+@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
+@router.message(Command(commands=list(commands_info.keys())))
+async def universal_command_handler(message: Message, session: Session):
+    command = message.text.lower().split()[0][1:]
+    command_info = commands_info[command]
+    action_type = command_info[2]
+    admin_check = command_info[3]
+
+    if admin_check == "skynet_admin" and not is_skynet_admin(message):
+        await message.reply("You are not my admin.")
+        return
+    elif admin_check == "admin" and not await is_admin(message):
+        await message.reply("You are not admin.")
+        return
+
+    if action_type in ["add_list", "del_list", "show_list"]:
+        await list_command_handler(message, session, command_info)
+    else:
+        await handle_command(message, session, command_info)
+
+
+async def handle_command(message: Message, session: Session, command_info):
+    chat_id = message.chat.id
+    global_data_field, db_value_type, action, admin_check = command_info
+
+    command_args = message.text.split()[1:]  # Список аргументов после команды
+
+    if chat_id in global_data_field:
+        global_data_field.remove(chat_id)
+        db_save_bot_value(session, chat_id, db_value_type, None)
+        info_message = await message.reply('Removed')
+    else:
+        value_to_set = command_args[0] if command_args else 1
+        db_save_bot_value(session, chat_id, db_value_type, value_to_set)
+        info_message = await message.reply('Added')
+
+    await asyncio.create_task(cmd_sleep_and_delete(info_message, 10))
+    with suppress(TelegramBadRequest):
+        await message.delete()
+
+
+async def list_command_handler(message: Message, session: Session, command_info):
+    global_data_field, db_value_type, action_type, admin_check = command_info
+    command_args = message.text.lower().split()[1:] # аргументы после команды
+
+    if action_type == "add_list":
+        if not command_args:
+            await message.reply("Необходимо указать аргументы.")
+        else:
+            global_data_field.extend(command_args)
+            db_save_bot_value(session, 0, db_value_type, json.dumps(global_data_field))
+            await message.reply(f'Added: {" ".join(command_args)}')
+
+    elif action_type == "del_list":
+        if not command_args:
+            await message.reply("Необходимо указать аргументы.")
+        else:
+            for arg in command_args:
+                if arg in global_data_field:
+                    global_data_field.remove(arg)
+            db_save_bot_value(session, 0, db_value_type, json.dumps(global_data_field))
+            await message.reply(f'Removed: {" ".join(command_args)}')
+
+    elif action_type == "show_list":
+        if global_data_field:
+            await message.reply(' '.join(global_data_field))
+        else:
+            await message.reply('The list is empty.')

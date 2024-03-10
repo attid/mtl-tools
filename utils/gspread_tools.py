@@ -422,12 +422,12 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
 
 async def gs_find_user_a(username):
     agc = await agcm.authorize()
-    ss = await agc.open_by_key("17S_qKJuaWrYte7pCHkHtqwpAnJdJj24wjT2ulN6-BGk")
-    ws = await ss.worksheet("data")
-    data = await ws.find(str(username), in_column=2, case_sensitive=False)
+    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ws = await ss.worksheet("MTLAP")
+    data = await ws.find(str(username), in_column=1, case_sensitive=False)
     if data:
         result = await ws.row_values(data.row)
-        return result[0]
+        return result[2]
 
 
 async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, wks=None):
@@ -480,12 +480,12 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
 async def gs_check_vote_table(table_uuid):
     # Авторизация и получение данных из первой таблицы
     agc = await agcm.authorize()
-    ss = await agc.open_by_key("17S_qKJuaWrYte7pCHkHtqwpAnJdJj24wjT2ulN6-BGk")
-    ws = await ss.worksheet("data")
+    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ws = await ss.worksheet("MTLAP")
     data = await ws.get_all_values()
 
     # Создание словаря для хранения адресов и соответствующих @username
-    address_dict = {row[0]: row[1] for row in data if len(row) >= 2}
+    address_dict = {row[2]: row[0] for row in data if len(row) >= 2}
 
     # Открытие второй таблицы и получение списка участников
     ss = await agc.open_by_key(table_uuid)

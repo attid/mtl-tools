@@ -36,6 +36,20 @@ def cmd_delete_later(message: Message, minutes=5):
     scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(message,))
 
 
+async def cmd_sleep_and_delete(message: Message, sleep_time):
+    """
+    Asynchronous function that sleeps for a specified time and then attempts to delete a message.
+    Args:
+        message (Message): The message to be deleted.
+        sleep_time: The time to sleep in seconds.
+    """
+    await asyncio.sleep(sleep_time)
+    try:
+        await message.delete()
+    except:
+        pass
+
+
 async def cmd_delete_by_scheduler(message: Message):
     try:
         await message.delete()
@@ -120,7 +134,6 @@ async def get_debank_balance(account_id, chain='bsc'):
         return float(response.get('usd_value'))
     else:
         raise Exception(f'Ошибка запроса: Статус {status}')
-
 
 
 if __name__ == '__main__':

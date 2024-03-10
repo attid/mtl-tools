@@ -152,6 +152,9 @@ def load_globals(session: Session):
     global_data.listen = db_get_chat_ids_by_key(session, BotValueTypes.Listen)
     global_data.full_data = db_get_chat_ids_by_key(session, BotValueTypes.FullData)
     global_data.no_first_link = db_get_chat_ids_by_key(session, BotValueTypes.NoFirstLink)
+    global_data.skynet_img = db_get_chat_ids_by_key(session, BotValueTypes.SkynetImg)
+    global_data.need_decode = db_get_chat_ids_by_key(session, BotValueTypes.NeedDecode)
+    global_data.save_last_message_date = db_get_chat_ids_by_key(session, BotValueTypes.SaveLastMessageDate)
 
     global_data.welcome_messages = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
     global_data.welcome_button = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
@@ -175,6 +178,8 @@ def add_bot_users(session: Session, user_id: int, username: str, new_user_type: 
 
 if __name__ == "__main__":
     try:
+        # import logging
+        # logging.basicConfig(level=logging.DEBUG)
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.error("Exit")

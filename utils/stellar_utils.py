@@ -34,6 +34,7 @@ class MTLAddresses:
     public_usdm = "GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM"
     public_fin = "GCSAXEHZBQY65URLO6YYDOCTRLIGTNMGCQHVW2RZPFNPTEJN6VN7TFIN"
     public_tfm = "GDOJK7UAUMQX5IZERYPNBPQYQ3SHPKGLF5MBUKWLDL2UV2AY6BIS3TFM"
+    public_mtla = "GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA"
     # bot
     public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
     public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
@@ -165,6 +166,8 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             result.append(
                 f"*** для аккаунта {address_id_to_username(operation.source.account_id, full_data=full_data)}")
         if good_operation(operation, "Payment", filter_operation, ignore_operation):
+            if 'SPAM' in ignore_operation and operation.asset.code == 'XLM' and operation.amount < '0.1':
+                continue
             if float(operation.amount) > filter_sum:
                 if (filter_asset is None) or (operation.asset == filter_asset):
                     data_exist = True
@@ -641,9 +644,9 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
     rq = requests.get(
         f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
-    # FOND
-    fund_balance = await get_balances(MTLAddresses.public_issuer)
-    mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+    # FOND old
+    # fund_balance = await get_balances(MTLAddresses.public_issuer)
+    # mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
 
     div_accounts = []
     donates = []
@@ -660,7 +663,7 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
     sponsor_sum = 0.0
 
     # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_mtl_holders()
+    accounts = await stellar_get_all_mtl_holders()
     for account in accounts:
         # print(json.dumps(account,indent=4))
         # print('***')
@@ -790,7 +793,7 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
     sponsor_sum = 0.0
 
     # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_mtl_holders()
+    accounts = await stellar_get_all_mtl_holders()
     for account in accounts:
         # print(json.dumps(account,indent=4))
         # print('***')
@@ -858,7 +861,7 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
                                                 config.private_sign.get_secret_value()))
 
     # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_mtl_holders()
+    accounts = await stellar_get_all_mtl_holders()
     for account in accounts:
         # print(json.dumps(account,indent=4))
         # print('***')
@@ -941,7 +944,8 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
 
 
 async def get_defi_xdr(div_sum: int):
-    accounts = await stellar_get_mtl_holders(MTLAssets.farm_asset)
+    return None
+    accounts = await stellar_get_holders(MTLAssets.farm_asset)
     accounts_list = []
     total_sum = 0
     # div_bonus = div_sum * 0.1
@@ -981,7 +985,8 @@ async def get_defi_xdr(div_sum: int):
 
 
 async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
-    accounts = await stellar_get_mtl_holders(MTLAssets.usdm_asset)
+    accounts = await stellar_get_holders(MTLAssets.usdm_asset)
+    pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
     accounts_list = []
     total_sum = 0
 
@@ -989,11 +994,22 @@ async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
         balances = account["balances"]
         token_balance = 0
         for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if (balance["asset_code"] == MTLAssets.usdm_asset.code and
-                        balance["asset_issuer"] == MTLAssets.usdm_asset.issuer):
-                    token_balance = balance["balance"]
-                    token_balance = int(token_balance[0:token_balance.find('.')])
+            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
+                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
+                token_balance += float(balance["balance"])
+            elif balance["asset_type"] == "liquidity_pool_shares":
+                # Находим пул по его ID и вычисляем долю USDM для аккаунта
+                pool_id = balance["liquidity_pool_id"]
+                pool_share = float(balance["balance"])
+                for pool in pools:
+                    if pool['id'] == pool_id:
+                        usdm_amount = float(
+                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
+                        total_shares = float(pool['total_shares'])
+                        # Рассчитываем долю USDM в пуле, принадлежащую аккаунту
+                        if total_shares > 0 and pool_share > 0:
+                            token_balance += (pool_share / total_shares) * usdm_amount
+
         accounts_list.append([account["account_id"], token_balance, 0])
         total_sum += token_balance
 
@@ -1021,7 +1037,7 @@ async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
 
 
 async def get_damircoin_xdr(div_sum: int):
-    accounts = await stellar_get_mtl_holders(MTLAssets.damircoin_asset)
+    accounts = await stellar_get_holders(MTLAssets.damircoin_asset)
     accounts_list = []
     total_sum = 0
 
@@ -1058,7 +1074,7 @@ async def get_damircoin_xdr(div_sum: int):
 
 
 async def get_agora_xdr():
-    accounts = await stellar_get_mtl_holders(MTLAssets.agora_asset)
+    accounts = await stellar_get_holders(MTLAssets.agora_asset)
     accounts_list = []
     total_sum = 0
 
@@ -1098,7 +1114,7 @@ async def get_agora_xdr():
 
 
 async def get_toc_xdr(div_sum: int):
-    accounts = await stellar_get_mtl_holders(MTLAssets.toc_asset)
+    accounts = await stellar_get_holders(MTLAssets.toc_asset)
     accounts_list = []
     total_sum = 0
 
@@ -1185,7 +1201,7 @@ def decode_data_value(data_value: str):
 
 
 async def cmd_show_donates(return_json=False, return_table=False):
-    accounts = await stellar_get_mtl_holders()
+    accounts = await stellar_get_all_mtl_holders()
     account_list = []
 
     for account in accounts:
@@ -1227,7 +1243,7 @@ async def cmd_show_donates(return_json=False, return_table=False):
     return donate_data
 
 
-async def stellar_get_mtl_holders(asset=MTLAssets.mtl_asset, mini=False):
+async def stellar_get_holders(asset=MTLAssets.mtl_asset, mini=False):
     client = AiohttpClient(request_timeout=3 * 60)
 
     async with ServerAsync(
@@ -1244,6 +1260,16 @@ async def stellar_get_mtl_holders(asset=MTLAssets.mtl_asset, mini=False):
                 return accounts
         # print(json.dumps(response, indent=4))
         return accounts
+
+
+async def stellar_get_all_mtl_holders() -> list:
+    accounts = []
+    for asset in (MTLAssets.mtl_asset, MTLAssets.mtlrect_asset):
+        asset_accounts = await stellar_get_holders(asset)
+        for account in asset_accounts:
+            if account not in accounts:
+                accounts.append(account)
+    return accounts
 
 
 async def stellar_get_token_amount(asset=MTLAssets.mtl_asset):
@@ -1279,13 +1305,7 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
         delegate_list = {}
     shareholder_list = []
 
-    accounts = []
-    for asset in (MTLAssets.mtl_asset, MTLAssets.mtlrect_asset):
-        asset_accounts = await stellar_get_mtl_holders(asset)
-        # Добавляем аккаунты, избегая дублирования
-        for account in asset_accounts:
-            if account not in accounts:
-                accounts.append(account)
+    accounts = stellar_get_all_mtl_holders()
 
     # mtl
     for account in accounts:
@@ -1925,7 +1945,7 @@ def check_mtla_delegate(account, result, delegated_list=None):
 async def get_mtlap_votes():
     result = {}
     # составляем дерево по держателям
-    accounts = await stellar_get_mtl_holders(MTLAssets.mtlap_asset)
+    accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
     for account in accounts:
         delegate = None
         if account['data'] and account['data'].get('mtla_a_delegate'):
@@ -1952,8 +1972,9 @@ async def get_mtlap_votes():
                 balances = new_account.get('balances')
                 if balances:
                     for balance in balances:
-                        if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
-                            'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
+                        if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and \
+                                balance[
+                                    'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
                             vote = int(float(balance['balance']))
                             break
                 result[new_account['id']] = {'delegate': delegate, 'vote': vote}
@@ -2007,8 +2028,36 @@ def test_xdr():
     print(transaction.build().to_xdr())
 
 
+async def get_liquidity_pools_for_asset(asset):
+    client = AiohttpClient(request_timeout=3 * 60)
+
+    async with ServerAsync(
+            horizon_url="https://horizon.stellar.org", client=client
+    ) as server:
+        pools = []
+        pools_call_builder = server.liquidity_pools().for_reserves([asset]).limit(200)
+
+        page_records = await pools_call_builder.call()
+        while page_records["_embedded"]["records"]:
+            for pool in page_records["_embedded"]["records"]:
+                # Удаление _links из результатов
+                pool.pop('_links', None)
+
+                # Преобразование списка reserves в словарь reserves_dict
+                reserves_dict = {reserve['asset']: reserve['amount'] for reserve in pool['reserves']}
+                pool['reserves_dict'] = reserves_dict
+
+                # Удаление исходного списка reserves
+                pool.pop('reserves', None)
+
+                pools.append(pool)
+
+            page_records = await pools_call_builder.next()
+        return pools
+
+
 if __name__ == '__main__':
     pass
-    #a = gen_new('AIAI')
-    a = asyncio.run(get_mtlap_votes())
+    # a = gen_new('AIAI')
+    a = asyncio.run(get_usdm_xdr(1000, 1000, 1))
     print(a)

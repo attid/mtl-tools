@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 from contextlib import suppress
 
 from aiogram import Router, Bot
@@ -30,12 +31,13 @@ empty_poll = '{"closed": true, "question": "", "options": []}'
 chat_to_address = {-1001649743884: MTLAddresses.public_issuer,
                    -1001837984392: MTLAddresses.public_issuer,
                    MTLChats.TestGroup: MTLAddresses.public_issuer,
-                   MTLChats.USDMMGroup: MTLAddresses.public_usdm}
+                   MTLChats.USDMMGroup: MTLAddresses.public_usdm,
+                   -1002042260878: MTLAddresses.public_mtla}
 
 
 @router.channel_post()
 async def channel_post(message: Message, session: Session):
-    if message.chat.id in (-1001649743884, -1001837984392):
+    if message.chat.id in (-1001649743884, -1001837984392, -1002042260878):
         if message.poll:
             buttons = []
             my_buttons = []
@@ -76,7 +78,8 @@ async def cmd_poll(message: Message, session: Session):
         await message.answer('Требуется в ответ на голосование')
 
 
-@update_command_info("/poll_replace_text", "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text")
+@update_command_info("/poll_replace_text",
+                     "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text")
 @router.message(Command(commands=["poll_replace_text"]))
 async def cmd_poll_rt(message: Message, session: Session):
     # print(message)
@@ -122,22 +125,47 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot):
         await message.answer('Требуется в ответ на голосование')
 
 
-@update_command_info("/poll_check", "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'")
+@update_command_info("/poll_check",
+                     "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'")
 @router.message(Command(commands=["poll_check"]))
 async def cmd_poll_check(message: Message, session: Session):
+    chat_id = message.chat.id
+    message_id = None
+
+    # Проверка, является ли сообщение ответом на другое сообщение
     if message.reply_to_message:
+        message_id = -1 * message.reply_to_message.message_id
+        if message.reply_to_message.forward_origin:
+            chat_id = message.reply_to_message.forward_origin.chat.id
+            message_id = -1 * message.reply_to_message.forward_origin.message_id
+
+    if message_id:
         my_poll = json.loads(
-            db_load_bot_value(session, message.chat.id, -1 * message.reply_to_message.message_id, empty_poll))
-        votes_check = copy.deepcopy(global_data.votes)
-        for button in my_poll["buttons"]:
-            for vote in button[2]:
-                if vote in votes_check:
-                    votes_check.pop(vote)
-        votes_check.pop("NEED")
-        keys = votes_check.keys()
-        await message.reply_to_message.reply(' '.join(keys) + '\nСмотрите голосование \ Look at the poll')
+            db_load_bot_value(session, chat_id, message_id, empty_poll))
+
+        # Получение ключа для votes_check из chat_to_address
+        address_key = chat_to_address.get(chat_id)
+        if address_key and address_key in global_data.votes:
+            votes_detail = global_data.votes[address_key]
+
+            # Извлечение всех уникальных пользователей из votes_detail
+            all_voters = set(votes_detail.keys())
+            all_voters.remove("NEED")
+
+            # Проверка и удаление голосовавших пользователей из списка всех голосов
+            for button in my_poll["buttons"]:
+                for voter in button[2]:
+                    voter = voter.strip("'")  # Удаление кавычек из имён пользователей, если они есть
+                    if voter in all_voters:
+                        all_voters.remove(voter)
+
+            # Вывод оставшихся голосов
+            remaining_voters = ' '.join(all_voters)
+            await message.reply_to_message.reply(f'{remaining_voters}\nСмотрите голосование \ Look at the poll')
+        else:
+            await message.reply_to_message.reply('Данные голосования не найдены или ключ чата отсутствует в chat_to_address')
     else:
-        await message.answer('Требуется в ответ на голосование')
+        await message.answer('Требуется в ответ на голосование или пересланное голосование из канала')
 
 
 @router.callback_query(PollCallbackData.filter())
@@ -195,8 +223,10 @@ async def cmd_save_votes(session: Session):
                     total += signer['weight']
                     vote_list[chat_to_address[chat_id]][address_id_to_username(signer['key'], full_data=True).lower()] = \
                         signer['weight']
-            vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1, '75': total // 3 * 2 + 1,
+            vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1,
+                                                           '75': math.ceil(total * 0.75),
                                                            '100': total}
+
     db_save_bot_value(session, 0, BotValueTypes.Votes, json.dumps(vote_list))
     global_data.votes = vote_list
     return vote_list

@@ -63,6 +63,9 @@ class BotValueTypes:
     Admins = 29
     AlertMe = 30
     Sync = 31
+    SkynetImg = 32
+    NeedDecode = 33
+    SaveLastMessageDate = 34
 
 
 class LogQuery:
@@ -77,20 +80,23 @@ class GlobalData:
     votes = {}
     welcome_messages = {}
     welcome_button = {}
-    skynet_admins = []
     delete_income = {}
-    auto_all = []
-    reply_only = []
-    captcha = []
-    listen = []
-    full_data = []
     name_list = {}
-    no_first_link = []
     users_list = {}
     info_cmd = {}
     admins = {}
     alert_me = {}
     sync = {}
+    skynet_admins = []
+    skynet_img = []
+    auto_all = []
+    reply_only = []
+    captcha = []
+    listen = []
+    full_data = []
+    no_first_link = []
+    save_last_message_date = []
+    need_decode = []
 
 
 global_data = GlobalData()
@@ -98,7 +104,7 @@ global_tasks = []
 
 
 def is_skynet_admin(message: Message):
-    return f'@{message.from_user.username}' in global_data.skynet_admins
+    return f'@{message.from_user.username.lower()}' in global_data.skynet_admins
 
 
 def float2str(f) -> str:

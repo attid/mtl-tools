@@ -242,7 +242,7 @@ async def update_guarantors_report():
     address_list.pop(0)
     len_address_list = len(address_list)
 
-    all_accounts = await stellar_get_mtl_holders(MTLAssets.eurdebt_asset)
+    all_accounts = await stellar_get_holders(MTLAssets.eurdebt_asset)
     for account in all_accounts:
         if account["id"] in address_list:
             pass
