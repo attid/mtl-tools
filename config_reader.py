@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     eurmtl_key: str
     sentry_dsn: str
     sentry_report_dsn: str
+    horizon_url: str
 
     class Config:
         env_file = dotenv_path

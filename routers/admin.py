@@ -11,7 +11,8 @@ from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, \
+    ReactionTypeEmoji
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
@@ -429,37 +430,38 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 commands_info = {
     "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin"),
     "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin"),
-    "no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin"),
+    "set_no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin"),
     # full_data - чаты с полной расшифровкой по адресу
     "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin"),
     "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin"),
     "save_last_message_date": (
-    global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate, "toggle", "admin"),
+        global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate, "toggle", "admin"),
 
-    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin"),
-    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin"),
-    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin"),
     "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin"),
     "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin"),
     "show_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "show_list", "skynet_admin"),
+    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin"),
+    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin"),
+    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin"),
 
 }
 
 
-@update_command_info("/add_skynet_img",
-                     "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
-@update_command_info("/add_skynet_admin",
-                     "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
-@update_command_info("/del_skynet_admin",
-                     "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
-@update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
-@update_command_info("/delete_welcome", "Отключить сообщения приветствия")
+@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата")
 @update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
 @update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
+
+@update_command_info("/add_skynet_img",
+                     "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+@update_command_info("/del_skynet_admin",
+                     "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
+@update_command_info("/add_skynet_admin",
+                     "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+@update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, session: Session):
+async def universal_command_handler(message: Message, session: Session, bot: Bot):
     command = message.text.lower().split()[0][1:]
     command_info = commands_info[command]
     action_type = command_info[2]
@@ -471,6 +473,8 @@ async def universal_command_handler(message: Message, session: Session):
     elif admin_check == "admin" and not await is_admin(message):
         await message.reply("You are not admin.")
         return
+    await bot.set_message_reaction(chat_id=message.chat.id, message_id=message.message_id,
+                                   reaction=[ReactionTypeEmoji(emoji='👀')])
 
     if action_type in ["add_list", "del_list", "show_list"]:
         await list_command_handler(message, session, command_info)
@@ -494,14 +498,17 @@ async def handle_command(message: Message, session: Session, command_info):
         db_save_bot_value(session, chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 
-    await asyncio.create_task(cmd_sleep_and_delete(info_message, 10))
+
+    await cmd_sleep_and_delete(info_message, 5)
+
     with suppress(TelegramBadRequest):
+        await asyncio.sleep(1)
         await message.delete()
 
 
 async def list_command_handler(message: Message, session: Session, command_info):
     global_data_field, db_value_type, action_type, admin_check = command_info
-    command_args = message.text.lower().split()[1:] # аргументы после команды
+    command_args = message.text.lower().split()[1:]  # аргументы после команды
 
     if action_type == "add_list":
         if not command_args:

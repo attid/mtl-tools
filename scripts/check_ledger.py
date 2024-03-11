@@ -76,7 +76,7 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session_pool):
 async def load_from_stellar(name, queue, session):
     saved_ledger = int(db_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
     async with aiohttp.ClientSession() as httpsession:
-        async with httpsession.get(f'https://horizon.stellar.org') as resp:
+        async with httpsession.get(config.horizon_url) as resp:
             json_resp = await resp.json()
             core_latest_ledger = int(json_resp['history_latest_ledger'])
             if core_latest_ledger > saved_ledger:
@@ -134,7 +134,7 @@ async def cmd_check_ledger(start_ledger_id=None, session: Session = None):
         logger.info(f'ledger_id {ledger_id}')
         effects = []
         async with ServerAsync(
-                horizon_url="https://horizon.stellar.org"  # , client=AiohttpClient(request_timeout=5)
+                horizon_url=config.horizon_url  # , client=AiohttpClient(request_timeout=5)
         ) as server:
             call_builder = server.effects().for_ledger(ledger_id).limit(200)
             page_records = await call_builder.call()

@@ -131,7 +131,7 @@ async def cmd_check_bot(session: Session):
 @logger.catch
 async def cmd_check_price(session: Session):
     # "message_id": 6568,  "chat": {"id": -1001707489173,
-    cb_cb = Server(horizon_url="https://horizon.stellar.org").orderbook(MTLAssets.usdc_asset,
+    cb_cb = Server(horizon_url=config.horizon_url).orderbook(MTLAssets.usdc_asset,
                                                                         MTLAssets.eurmtl_asset).limit(200).call()
     msg = ['Продают <b>EURMTL</b> за <b>USDC</b>']
     for idx, price in enumerate(cb_cb['bids']):

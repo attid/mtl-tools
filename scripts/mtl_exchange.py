@@ -23,7 +23,7 @@ AddressConfig = namedtuple('AddressConfig', [
 
 # server = Server(horizon_url="http://158.58.231.224:8000/")
 # server = Server(horizon_url="https://horizon.publicnode.org")
-server = Server(horizon_url="https://horizon.stellar.org")
+server = Server(horizon_url=config.horizon_url)
 
 
 def get_offers(address: str):
@@ -220,7 +220,7 @@ async def check_fire(cost_fire):
     logger.info(['fire', 'sum_eurmtl', sum_eurmtl, 'sum_mtl', sum_mtl])
 
     # get offers
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{MTLAddresses.public_fire}/offers').json()
+    rq = requests.get(f'{config.horizon_url}/accounts/{MTLAddresses.public_fire}/offers').json()
     # print(json.dumps(rq["_embedded"]["records"], indent=4))
     records = {}
     if len(rq["_embedded"]["records"]) > 0:

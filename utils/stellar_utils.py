@@ -323,14 +323,14 @@ async def send_by_list(bot: Bot, all_users: list, message: Message, session: Ses
 
 
 def cmd_check_fee() -> str:
-    fee = Server(horizon_url="https://horizon.stellar.org").fee_stats().call()["fee_charged"]
+    fee = Server(horizon_url=config.horizon_url).fee_stats().call()["fee_charged"]
     return fee['min'] + '-' + fee['max']
-    # print(Server(horizon_url="https://horizon.stellar.org").fetch_base_fee())
+    # print(Server(horizon_url=config.horizon_url).fetch_base_fee())
 
 
 async def stellar_get_account(account_id) -> json:
     async with aiohttp.ClientSession() as session:
-        async with session.get(f'https://horizon.stellar.org/accounts/{account_id}') as resp:
+        async with session.get(f'{config.horizon_url}/accounts/{account_id}') as resp:
             # print(resp.status)
             # print(await resp.text())
             return await resp.json()
@@ -338,7 +338,7 @@ async def stellar_get_account(account_id) -> json:
 
 async def stellar_get_issuer_assets(account_id) -> dict:
     async with aiohttp.ClientSession() as session:
-        async with session.get(f'https://horizon.stellar.org/assets?asset_issuer={account_id}') as resp:
+        async with session.get(f'{config.horizon_url}/assets?asset_issuer={account_id}') as resp:
             data = await resp.json()
             assets = {}
             if assets.get('type'):
@@ -391,7 +391,7 @@ def stellar_sign(xdr, signkey):
 
 def stellar_sync_submit(xdr: str):
     with Server(
-            horizon_url="https://horizon.stellar.org"
+            horizon_url=config.horizon_url
     ) as server:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         transaction_resp = server.submit_transaction(transaction)
@@ -418,7 +418,7 @@ async def get_bim_list():
         # get balance
         balances = {}
         # print(address)
-        rq = requests.get(f'https://horizon.stellar.org/accounts/{address}').json()
+        rq = requests.get(f'{config.horizon_url}/accounts/{address}').json()
         # print(json.dumps(rq, indent=4))
         if rq.get("balances"):
             for balance in rq["balances"]:
@@ -441,7 +441,7 @@ async def cmd_show_bim(session: Session):
     result += f'\nЧерез систему за всю историю выплачено {round(total_sum, 2)} EURMTL'
 
     balances = {}
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{MTLAddresses.public_bod_eur}').json()
+    rq = requests.get(f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}').json()
     # print(json.dumps(rq, indent=4))
     for balance in rq["balances"]:
         if balance["asset_type"] == 'credit_alphanum12':
@@ -517,7 +517,7 @@ async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
     good = list(filter(lambda x: x[1], bod_list))
 
     balances = {}
-    rq = requests.get(f'https://horizon.stellar.org/accounts/{MTLAddresses.public_bod_eur}').json()
+    rq = requests.get(f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}').json()
     # print(json.dumps(rq, indent=4))
     for balance in rq["balances"]:
         if balance["asset_type"] == 'credit_alphanum12':
@@ -563,7 +563,7 @@ def cmd_gen_xdr(session: Session, list_id: int):
     div_list = db_get_div_list(session, list_id)
     memo = div_list.memo
     pay_type = div_list.pay_type
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     div_account, asset = None, None
     if pay_type == 0:
         div_account = server.load_account(MTLAddresses.public_div)
@@ -611,7 +611,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
     for db_transaction in cmd_load_transactions(session, list_id):
         transaction = TransactionEnvelope.from_xdr(db_transaction.xdr,
                                                    network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-        server = Server(horizon_url="https://horizon.stellar.org")
+        server = Server(horizon_url=config.horizon_url)
         div_account = server.load_account(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence
@@ -627,7 +627,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
 
 async def stellar_async_submit(xdr: str):
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+            horizon_url=config.horizon_url, client=AiohttpClient()
     ) as server:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         transaction_resp = await server.submit_transaction(transaction)
@@ -636,13 +636,13 @@ async def stellar_async_submit(xdr: str):
 
 
 async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int, test_sum=0):
-    # server = Server(horizon_url="https://horizon.stellar.org")
+    # server = Server(horizon_url=config.horizon_url)
 
     # MTL
-    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
+    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
     rq = requests.get(
-        f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
+        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
     # FOND old
     # fund_balance = await get_balances(MTLAddresses.public_issuer)
@@ -748,7 +748,7 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
     if xdr:
         transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     else:
-        server = Server(horizon_url="https://horizon.stellar.org")
+        server = Server(horizon_url=config.horizon_url)
         root_account = server.load_account(account_id)
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -768,10 +768,10 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
 
 async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
     # MTL
-    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
+    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
     rq = requests.get(
-        f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
+        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
     # FOND
     fund_balance = await get_balances(MTLAddresses.public_issuer)
@@ -839,10 +839,10 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
 
 async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
     # MTL
-    rq = requests.get(f'https://horizon.stellar.org/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
+    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
     rq = requests.get(
-        f'https://horizon.stellar.org/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
+        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
     mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
     # FOND
     fund_balance = await get_balances(MTLAddresses.public_issuer)
@@ -920,7 +920,7 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
         # print(vote_list)
         result = []
         transaction = TransactionBuilder(
-            source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer),
+            source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer),
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
         xdr = gen_vote_xdr(MTLAddresses.public_issuer, vote_list, transaction)
@@ -970,7 +970,7 @@ async def get_defi_xdr(div_sum: int):
         # else:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_farm)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_farm)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1018,7 +1018,7 @@ async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_usdm)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_usdm)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1058,7 +1058,7 @@ async def get_damircoin_xdr(div_sum: int):
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_damir)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_damir)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1098,7 +1098,7 @@ async def get_agora_xdr():
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAssets.agora_asset.issuer)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAssets.agora_asset.issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1136,7 +1136,7 @@ async def get_toc_xdr(div_sum: int):
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAssets.toc_asset.issuer)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAssets.toc_asset.issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1151,7 +1151,7 @@ async def get_toc_xdr(div_sum: int):
 
 
 async def get_btcmtl_xdr(btc_sum, address: str, memo=None):
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_issuer)
+    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1178,7 +1178,7 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
         # get all guards
         result_data = cmd_show_donates()
     else:
-        account_json = requests.get(f'https://horizon.stellar.org/accounts/{account_id}').json()
+        account_json = requests.get(f'{config.horizon_url}/accounts/{account_id}').json()
         if "data" in account_json:
             data = account_json["data"]
             for data_name in list(data):
@@ -1245,9 +1245,8 @@ async def cmd_show_donates(return_json=False, return_table=False):
 
 async def stellar_get_holders(asset=MTLAssets.mtl_asset, mini=False):
     client = AiohttpClient(request_timeout=3 * 60)
-
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=client
+            horizon_url=config.horizon_url, client=client
     ) as server:
         accounts = []
         accounts_call_builder = server.accounts().for_asset(asset).limit(200)
@@ -1273,7 +1272,7 @@ async def stellar_get_all_mtl_holders() -> list:
 
 
 async def stellar_get_token_amount(asset=MTLAssets.mtl_asset):
-    async with ServerAsync(horizon_url="https://horizon.stellar.org") as server:
+    async with ServerAsync(horizon_url=config.horizon_url) as server:
         assets = await server.assets().for_code(asset.code).for_issuer(asset.issuer).call()
         return assets['_embedded']['records'][0]['amount']
 
@@ -1401,7 +1400,7 @@ async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
 
     donor_dict = {}
 
-    async with ServerAsync(horizon_url="https://horizon.stellar.org") as server:
+    async with ServerAsync(horizon_url=config.horizon_url) as server:
         payments_call_builder = server.payments().for_account(account_id).order(desc=True)
         page_records = await payments_call_builder.call()
 
@@ -1465,13 +1464,13 @@ def stellar_remove_orders(public_key, xdr):
     if xdr:
         transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     else:
-        root_account = Server(horizon_url="https://horizon.stellar.org").load_account(public_key)
+        root_account = Server(horizon_url=config.horizon_url).load_account(public_key)
         transaction = TransactionBuilder(source_account=root_account,
                                          network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                          base_fee=base_fee)
         transaction.set_timeout(60 * 60 * 24 * 7)
 
-    call = Server(horizon_url="https://horizon.stellar.org").offers().for_account(public_key).limit(200).call()
+    call = Server(horizon_url=config.horizon_url).offers().for_account(public_key).limit(200).call()
 
     for record in call['_embedded']['records']:
         # print(record['price'], record)
@@ -1498,7 +1497,7 @@ def isfloat(value):
 def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, source=None, remove_master=False,
                  max_count=20, threshold_style=0):
     # узнать кто в подписантах
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     source_account = server.load_account(public_key)
 
     sg = source_account.load_ed25519_public_key_signers()
@@ -1535,7 +1534,7 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
 
     vote_list = tmp_list
     # 5
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     source_account = server.load_account(public_key)
     root_account = Account(public_key, sequence=source_account.sequence)
     if transaction is None:
@@ -1572,7 +1571,7 @@ def cmd_check_new_transaction(session: requests.Session, ignore_operation: List,
                               stellar_address=MTLAddresses.public_issuer):
     result = []
     last_id = db_load_bot_value(session, 0, value_id)
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
     new_transactions = []
@@ -1632,7 +1631,7 @@ def decode_db_effect(row: TOperations):
 
 
 def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
-    operations = Server(horizon_url="https://horizon.stellar.org").operations().for_account(address).order().limit(
+    operations = Server(horizon_url=config.horizon_url).operations().for_account(address).order().limit(
         1).call()
     op = operations['_embedded']['records'][0]
     # print(operation["created_at"])  # 2022-08-23T13:47:33Z
@@ -1643,8 +1642,8 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
 
 
 def get_memo_by_op(op: str):
-    operation = Server(horizon_url="https://horizon.stellar.org").operations().operation(op).call()
-    transaction = Server(horizon_url="https://horizon.stellar.org").transactions().transaction(
+    operation = Server(horizon_url=config.horizon_url).operations().operation(op).call()
+    transaction = Server(horizon_url=config.horizon_url).transactions().transaction(
         operation['transaction_hash']).call()
     return transaction.get('memo', 'None')
 
@@ -1677,7 +1676,7 @@ async def resolve_account(account_id: str):
 
 async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+            horizon_url=config.horizon_url, client=AiohttpClient()
     ) as server:
         source_account = await server.load_account(MTLAddresses.public_issuer)
         sg = source_account.load_ed25519_public_key_signers()
@@ -1693,7 +1692,7 @@ async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
 
 def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
     try:
-        server = Server(horizon_url="https://horizon.stellar.org")
+        server = Server(horizon_url=config.horizon_url)
         call_result = server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
         if len(call_result['_embedded']['records']) > 0:
             # [{'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL',
@@ -1720,7 +1719,7 @@ def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: As
 
 def stellar_swap(from_account: str, send_asset: Asset, send_amount: str, receive_asset: Asset,
                  receive_amount: str):
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     source_account = server.load_account(from_account)
     transaction = TransactionBuilder(source_account=source_account,
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
@@ -1760,7 +1759,7 @@ def stellar_add_fond_trustline(address_id, asset_code):
 
 
 def stellar_add_trustline(address_id, asset_code, asset_issuer):
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(address_id)
+    root_account = Server(horizon_url=config.horizon_url).load_account(address_id)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1777,7 +1776,7 @@ def stellar_add_trustline(address_id, asset_code, asset_issuer):
 #     vote_list2 = deepcopy(vote_list)
 #
 #     transaction = TransactionBuilder(
-#         source_account=Server(horizon_url="https://horizon.stellar.org").load_account(MTLAddresses.public_fin),
+#         source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_fin),
 #         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
 #     sequence = transaction.source_account.sequence
 #     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -1832,7 +1831,7 @@ def determine_working_range():
 
 async def stellar_get_transactions(address, start_range, end_range):
     transactions = []
-    async with ServerAsync(horizon_url="https://horizon.stellar.org", client=AiohttpClient()) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         # Запускаем получение страниц транзакций
         payments_call_builder = server.payments().for_account(account_id=address).limit(200).order()
         page_records = await payments_call_builder.call()
@@ -1880,7 +1879,7 @@ async def get_chicago_xdr():
                                                       accounts_dict.get(transaction['from'], 0))
 
     # print(accounts_dict)
-    root_account = Server(horizon_url="https://horizon.stellar.org").load_account(stellar_address)
+    root_account = Server(horizon_url=config.horizon_url).load_account(stellar_address)
     transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -2006,7 +2005,7 @@ async def get_get_income():
 
 
 def test_xdr():
-    server = Server(horizon_url="https://horizon.stellar.org")
+    server = Server(horizon_url=config.horizon_url)
     transaction = TransactionBuilder(source_account=server.load_account(MTLAddresses.public_itolstov),
                                      network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
                                      base_fee=base_fee)
@@ -2032,7 +2031,7 @@ async def get_liquidity_pools_for_asset(asset):
     client = AiohttpClient(request_timeout=3 * 60)
 
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=client
+            horizon_url=config.horizon_url, client=client
     ) as server:
         pools = []
         pools_call_builder = server.liquidity_pools().for_reserves([asset]).limit(200)

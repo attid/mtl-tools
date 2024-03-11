@@ -22,7 +22,7 @@ router.error()(sentry_error_handler)
 class CaptchaCallbackData(CallbackData, prefix="captcha"):
     answer: int
 
-
+@update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
 async def cmd_delete_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -257,3 +257,9 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot)
     new_admins = [member.user.id for member in members]
     global_data.admins[event.chat.id] = new_admins
     db_save_bot_value(session, event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
+
+# @router.message(Command(commands=["test"]))
+# async def cmd_test(message: Message, bot: Bot):
+#     print(await bot.get_chat_member(-1001767165598,3718221))
+
+

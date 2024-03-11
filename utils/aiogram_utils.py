@@ -8,7 +8,7 @@ from aiogram.filters import Filter
 from aiogram.types import Message
 
 from config_reader import config
-from utils.global_data import MTLChats, global_data
+from utils.global_data import MTLChats, global_data, global_tasks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler: AsyncIOScheduler
@@ -45,6 +45,10 @@ async def cmd_sleep_and_delete(message: Message, sleep_time):
         message (Message): The message to be deleted.
         sleep_time: The time to sleep in seconds.
     """
+    asyncio.ensure_future(cmd_sleep_and_delete_task(message, sleep_time))
+
+
+async def cmd_sleep_and_delete_task(message: Message, sleep_time):
     await asyncio.sleep(sleep_time)
     try:
         await message.delete()

@@ -58,8 +58,10 @@ async def cmd_employment(message: Message, bot: Bot):
 @router.message(Command(commands=["img"]))
 async def cmd_img(message: Message, bot: Bot):
     if message.chat.id in (MTLChats.CyberGroup,) or f'@{message.from_user.username.lower()}' in global_data.skynet_img:
+        await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
+        await bot.send_message(chat_id=MTLChats.ITolstov, text=f'{message.from_user.username}:{message.text}')
         text = message.text[5:]
-        image_urls = generate_image(text)
+        image_urls = await generate_image(text)
 
         for url in image_urls:
             image_file = URLInputFile(url, filename="image.png")
@@ -278,6 +280,8 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
             await bot.send_message(chat_id=message.chat.id, text='Сообщение переслано в личку')
         except TelegramBadRequest:
             await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено')
+        except TelegramForbiddenError:
+            await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено. Личка в блокировке =(')
         with suppress(TelegramBadRequest):
             await message.delete()
             await msg.delete()

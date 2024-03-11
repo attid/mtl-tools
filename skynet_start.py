@@ -5,6 +5,7 @@ from contextlib import suppress
 import sentry_sdk
 import tzlocal
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
@@ -99,10 +100,10 @@ async def main():
 
     # Creating bot and its dispatcher
     if 'test' in sys.argv:
-        bot = Bot(token=config.test_token.get_secret_value(), parse_mode='HTML')
+        bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
         print('start test')
     else:
-        bot = Bot(token=config.bot_token.get_secret_value(), parse_mode="HTML")
+        bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
 
     storage = RedisStorage(redis=Redis(host='localhost', port=6379, db=4))
     dp = Dispatcher(storage=storage)
@@ -145,14 +146,15 @@ async def main():
 
 def load_globals(session: Session):
     global_data.skynet_admins = json.loads(db_load_bot_value(session, 0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.skynet_img = json.loads(db_load_bot_value(session, 0, BotValueTypes.SkynetImg, '[]'))
     global_data.votes = json.loads(db_load_bot_value(session, 0, BotValueTypes.Votes, '{}'))
+
     global_data.auto_all = db_get_chat_ids_by_key(session, BotValueTypes.AutoAll)
     global_data.reply_only = db_get_chat_ids_by_key(session, BotValueTypes.ReplyOnly)
     global_data.captcha = db_get_chat_ids_by_key(session, BotValueTypes.Captcha)
     global_data.listen = db_get_chat_ids_by_key(session, BotValueTypes.Listen)
     global_data.full_data = db_get_chat_ids_by_key(session, BotValueTypes.FullData)
     global_data.no_first_link = db_get_chat_ids_by_key(session, BotValueTypes.NoFirstLink)
-    global_data.skynet_img = db_get_chat_ids_by_key(session, BotValueTypes.SkynetImg)
     global_data.need_decode = db_get_chat_ids_by_key(session, BotValueTypes.NeedDecode)
     global_data.save_last_message_date = db_get_chat_ids_by_key(session, BotValueTypes.SaveLastMessageDate)
 

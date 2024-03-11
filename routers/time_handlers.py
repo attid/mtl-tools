@@ -6,6 +6,8 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
+
+from config_reader import config
 from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value
 from scripts.mtl_exchange2 import check_mm, check_mmwb
 from utils.global_data import MTLChats, BotValueTypes
@@ -75,7 +77,7 @@ async def time_check_ledger(bot: Bot, session_pool):
     with session_pool() as session:
         saved_ledger = int(db_load_bot_value(session, 0, BotValueTypes.LastLedger, '45407700'))
         async with aiohttp.ClientSession() as httpsession:
-            async with httpsession.get(f'https://horizon.stellar.org') as resp:
+            async with httpsession.get(config.horizon_url) as resp:
                 json_resp = await resp.json()
                 core_latest_ledger = int(json_resp['history_latest_ledger'])
                 if core_latest_ledger > saved_ledger + 10:

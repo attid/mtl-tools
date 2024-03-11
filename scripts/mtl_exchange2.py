@@ -7,7 +7,7 @@ from scripts.update_report import update_mmwb_report
 
 async def move_token(source_account, destination_account, amount: str, asset):
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+            horizon_url=config.horizon_url, client=AiohttpClient()
     ) as st_server:
         # Загрузка аккаунта
         account = await st_server.load_account(source_account)
@@ -37,7 +37,7 @@ async def move_token(source_account, destination_account, amount: str, asset):
 
 async def exchange_token(source_account, destination_account, amount: str, source_asset, destination_asset):
     async with ServerAsync(
-            horizon_url="https://horizon.stellar.org", client=AiohttpClient()
+            horizon_url=config.horizon_url, client=AiohttpClient()
     ) as st_server:
         # Загрузка аккаунта
         account = await st_server.load_account(source_account)
@@ -141,15 +141,15 @@ if __name__ == "__main__":
     # xdr = stellar_remove_orders(MTLAddresses.public_exchange_usdm_xlm, None)
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
-    # asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
-    #                        destination_account=MTLAddresses.public_exchange_eurmtl_sats,
-    #                        amount='3000', asset=MTLAssets.eurmtl_asset,
-    #                        ))
+    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
+                           destination_account=MTLAddresses.public_exchange_eurmtl_xlm,
+                           amount='25', asset=MTLAssets.xlm_asset,
+                           ))
 
-    asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
-                                destination_account=MTLAddresses.public_exchange_usdm_usdc,
-                                amount='10000', source_asset=MTLAssets.xlm_asset,
-                                destination_asset=MTLAssets.usdm_asset))
+    # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
+    #                             destination_account=MTLAddresses.public_exchange_usdm_usdc,
+    #                             amount='10000', source_asset=MTLAssets.xlm_asset,
+    #                             destination_asset=MTLAssets.usdm_asset))
 
     # asyncio.run(update_main_report(quik_pool()))
     # for x in [MTLAddresses.public_exchange_eurmtl_xlm,
