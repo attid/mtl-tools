@@ -112,24 +112,6 @@ async def check_exchange_old():
                       check_persent=persent_cost,
                       max_a=max_eurmtl, max_b=max_eurmtl
                       ),
-        # EURMTL - BTC
-        # AddressConfig(address=MTLAddresses.public_exchange_usdm_mtlfarm,
-        #               asset_a=MTLAssets.btcmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-        #               price_min=30000, price_max=60000,
-        #               price_a=round(btc_eur_cost * 1.01),
-        #               price_b=round((1 / btc_eur_cost) * 1.03, 7),
-        #               check_persent=persent_btc_cost,
-        #               max_a=round(max_eurmtl / btc_eur_cost, 5), max_b=max_eurmtl
-        #               ),
-        # EURMTL - SATS
-        # AddressConfig(address=MTLAddresses.public_exchange_usdm_sats,
-        #               asset_a=MTLAssets.satsmtl_asset, asset_b=MTLAssets.eurmtl_asset,
-        #               price_min=30000 / sats_cost, price_max=60000 / sats_cost,
-        #               price_a=round(btc_eur_cost * 1.01 / sats_cost, 8),
-        #               price_b=round(1 / btc_eur_cost * sats_cost * 1.03),
-        #               check_persent=persent_cost,
-        #               max_a=round(max_eurmtl / btc_eur_cost, 5) * sats_cost, max_b=max_eurmtl
-        #               ),
         # EURMTL - USDM
         AddressConfig(address=MTLAddresses.public_exchange_eurmtl_usdm,
                       asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.usdm_asset,
@@ -246,7 +228,8 @@ async def check_fire(cost_fire):
             buying_name = 'XLM' if record["buying"]["asset_type"] == 'native' else record["buying"]["asset_code"]
             records[f'{selling_name}-{buying_name}'] = record
 
-    await update_offer(account_key=account_fire.account, price_min=1/5, price_max=1/3, price=round(1 / cost_fire, 5),
+    await update_offer(account_key=account_fire.account, price_min=1 / 5, price_max=1 / 3,
+                       price=round(1 / cost_fire, 5),
                        selling_asset=MTLAssets.eurmtl_asset, buying_asset=MTLAssets.mtl_asset, amount=sum_eurmtl,
                        check_persent=1.01,
                        record=records.get('EURMTL-MTL'))
@@ -364,6 +347,7 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
 
     max_price = max(prices)
     min_price = min(prices)
+    inverse_max_price = 1 / max_price
 
     to_close_offers = []
 
@@ -371,6 +355,12 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
         offer_price = float(offer['price'])
         offer_amount = float(offer['amount'])
         if offer_price > max_price or offer_price < min_price or offer_amount > amount_per_order:
+            to_close_offers.append(offer)
+
+    # Добавляем шаг для обработки обратных офферов
+    for offer in current_offers.get(f'{asset_b.code}-{asset_a.code}', []):
+        offer_price = float(offer['price'])
+        if offer_price > inverse_max_price:
             to_close_offers.append(offer)
 
     if to_close_offers:
@@ -400,7 +390,7 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
                     f'Добавлена операция ордера: {asset_a.code} -> {asset_b.code}, Цена: {price}, Количество: {required_amount_a}')
             else:
                 logger.debug(
-                    f'Ордер в диапазоне {price * (1 - step_decimal)} - {price * (1 + step_decimal)} уже существует.')
+                    f'Ордер {asset_a.code}-{asset_b.code} в диапазоне {price * (1 - step_decimal)} - {price * (1 + step_decimal)} уже существует.')
         else:
             sentry_sdk.capture_message(f'Недостаточно средств для выставления '
                                        f'ордера по цене {price} токены {asset_a.code}-{asset_b.code} средств {available_a}', )
@@ -409,7 +399,10 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
     if transaction.operations:
         transaction = transaction.build()
         transaction.sign(get_private_sign())
-        server.submit_transaction(transaction)
+        try:
+            server.submit_transaction(transaction)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
 
     return True
 
@@ -439,11 +432,6 @@ async def check_exchange():
                       asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.xlm_asset,
                       price=eur_usdt * (1 / xlm_usdt)
                       ),
-        # MTL - XLM
-        # AddressConfig(account_id=MTLAddresses.public_exchange_mtl_xlm,
-        #               asset_a=MTLAssets.mtl_asset, asset_b=MTLAssets.xlm_asset,
-        # todo
-        #               ),
         # USDM - SATS
         AddressConfig(account_id=MTLAddresses.public_exchange_usdm_sats,
                       asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.satsmtl_asset,
@@ -494,18 +482,18 @@ async def check_exchange_run(start_configs: list[AddressConfig]):
                 logger.debug(f"Цена {start_config.price} в диапазоне для {start_config.account_id}. Обновляем ордера.")
                 # вызов функции для создания лесенки ордеров в прямом направлении
                 await place_ladder_orders(account_id=start_config.account_id, asset_a=start_config.asset_a,
-                                    asset_b=start_config.asset_b, price=start_config.price,
-                                    offset=offset_percent, step=step_percent, ladder_length=steps,
-                                    max_leverage_amount=lever_a)
+                                          asset_b=start_config.asset_b, price=start_config.price,
+                                          offset=offset_percent, step=step_percent, ladder_length=steps,
+                                          max_leverage_amount=lever_a)
 
                 # расчет обратной цены для второго набора ордеров
                 reverse_price = 1 / start_config.price
 
                 # вызов функции для создания лесенки ордеров в обратном направлении
                 await place_ladder_orders(account_id=start_config.account_id, asset_a=start_config.asset_b,
-                                    asset_b=start_config.asset_a, price=reverse_price,
-                                    offset=offset_percent, step=step_percent, ladder_length=steps,
-                                    max_leverage_amount=lever_b)
+                                          asset_b=start_config.asset_a, price=reverse_price,
+                                          offset=offset_percent, step=step_percent, ladder_length=steps,
+                                          max_leverage_amount=lever_b)
         else:
             sentry_sdk.capture_message(
                 f"Не удалось найти конфигурацию для {start_config.account_id}. Отменяем ордера.")
@@ -549,8 +537,8 @@ if __name__ == "__main__":
         asyncio.run(check_exchange_one())
     else:
         print('need more parameters')
-        #asyncio.run(check_exchange_one())
-
+        asyncio.run(check_exchange_one())
+        # asyncio.run(check_exchange_one())
 
     # place_ladder_orders(account_id=MTLAddresses.public_exchange_usdm_xlm, asset_a=MTLAssets.usdm_asset,
     #                     asset_b=MTLAssets.xlm_asset, price=7.7, offset=2, step=1, ladder_length=5,
