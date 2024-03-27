@@ -267,7 +267,7 @@ async def add_task_to_google(msg):
     response_message = response.choices[0].message
 
     # Step 2: check if GPT wanted to call a function
-    if response_message.get("function_call"):
+    if response_message.function_call:
         # Step 3: call the function
         # Note: the JSON response may not always be valid; be sure to handle errors
         available_functions = {
@@ -332,6 +332,8 @@ if __name__ == "__main__":
     # a = asyncio.run(generate_image('красная панда'))
     # print(a)
 
+    # text = 'добавь задачу что надо покрасить забор, испольнитель Егор, постановщик Владимир'
+    #
     # p = asyncio.run(add_task_to_google(text))
     # print(p)
     # exit()

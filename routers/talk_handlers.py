@@ -122,6 +122,7 @@ async def remind(message: Message, session: Session, bot: Bot):
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
+
 @router.message(F.text, F.reply_to_message, ReplyToBot(), F.chat.type != ChatType.PRIVATE)
 async def cmd_last_check_reply_to_bot(message: Message):
     if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
@@ -233,7 +234,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
 @router.message(Command(commands=["skynet"]))
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     gpt4 = False
-    if message.text[7] == '4':
+    if len(message.text) > 7 and message.text[7] == '4':
         if message.chat.id != MTLChats.CyberGroup:
             await message.reply('Только в канале фракции Киберократии')
             return False
@@ -329,14 +330,22 @@ spam_phrases = [
     "предложение",
     "тестирование",
     "день",
+    "заработка",
+    "заработок",
+    "процент",
+    "связки"
+
 ]
 
 
 def contains_spam_phrases(text, phrases=None, threshold=3):
     if phrases is None:
         phrases = spam_phrases
-    text = text.lower().split()
+
+    text = re.findall(r'\w+', text.lower())
+
     count = sum(phrase in text for phrase in phrases)
+    # print(f'count: {count}')
     return count >= threshold
 
 
@@ -443,16 +452,7 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
 
 if __name__ == '__main__':
     test = '''
-Вcex пpивeтcтвyю!
-Ищём тecтирoвщикa сeти.
-Дoxoд cocтaвляeт 220$/дeнь.
-Зapaбoтoк зaймeт нe бoлee 1 чaca eжeднeвнo.
-Ищeм 3-4 чeлoвeкa для кoмaнды.
-Вoзрaст oт 20 лeт, трeбyeтся знaниe pyssкoго языка. 
-Пиши + в ЛС
+Приветствую,ищу людей для взаимовыгодного партнерства на удаленке,за подробностями пишите мне
 '''
 
     print(contains_spam_phrases(test))
-
-    mixed_count = sum(is_mixed_word(word) for word in test.split())
-    print(mixed_count)

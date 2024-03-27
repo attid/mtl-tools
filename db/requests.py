@@ -7,6 +7,8 @@ from typing import List, Dict, cast, Optional
 from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import count
+
 from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
 
@@ -301,6 +303,17 @@ def db_get_ledger(session: Session, ledger_id: int) -> TLedgers:
     """
     result = session.execute(select(TLedgers).filter(TLedgers.ledger == ledger_id))
     return cast(TLedgers, result.scalars().first())
+
+
+def db_get_ledger_count(session: Session) -> int:
+    """
+    Get the total number of ledgers in the table
+
+    :param session: SQLAlchemy DB session
+    :return: The count of ledgers (integer)
+    """
+    result = session.execute(select(count()).select_from(TLedgers))
+    return cast(int, result.scalar())
 
 
 def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int = 0, update_id: int = None,
@@ -633,7 +646,7 @@ def db_update_user_chat_date(session: Session, user_id: int, chat_id: int):
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(db_get_last_trade_operation(quik_pool(), 'BTCMTL'))
+    print(db_get_ledger_count(quik_pool()))
 
     # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',

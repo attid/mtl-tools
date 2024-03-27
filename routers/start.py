@@ -37,8 +37,8 @@ links_msg = f"""
 Списки [черный]({link_json}blacklist.json) / [BL for DG]({link_json}dg_blacklist.json) 
 Боты [Обмен eurmtl_xlm]({link_stellar}{MTLAddresses.public_exchange_eurmtl_xlm}) / \
 [Обмен eurmtl_usdc]({link_stellar}{MTLAddresses.public_exchange_eurmtl_usdm}) / \
-[Обмен eurmtl_sats]({link_stellar}{MTLAddresses.public_exchange_eurmtl_sats}) / \
-[Обмен eurmtl_btc]({link_stellar}{MTLAddresses.public_exchange_eurmtl_btc}) / \
+[Обмен usdm_sats]({link_stellar}{MTLAddresses.public_exchange_usdm_sats}) / \
+[Обмен usdm_mtlfarm]({link_stellar}{MTLAddresses.public_exchange_usdm_mtlfarm}) / \
 [Дивиденды]({link_stellar}GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ/) / \
 [BIM-XLM]({link_stellar}GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH) / \
 [BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \

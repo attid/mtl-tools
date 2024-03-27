@@ -60,8 +60,8 @@ async def exchange_token(source_account, destination_account, amount: str, sourc
         stellar_transaction = stellar_transaction.build()
         stellar_transaction.sign(get_private_sign())
 
-        # xdr = stellar_transaction.to_xdr()
-        # logger.info(f"xdr: {xdr}")
+        xdr = stellar_transaction.to_xdr()
+        logger.debug(f"xdr: {xdr}")
 
         # Отправка транзакции
         transaction_resp = await st_server.submit_transaction(stellar_transaction)
@@ -100,10 +100,10 @@ async def check_mm(session: Session):
 
 async def check_mmwb(session: Session):
     balances = await get_balances(MTLAddresses.public_wallet)
-    amount = float(balances.get('USDC', 0))
+    amount = float(balances.get('USDM', 0))
     if amount < 2000:
-        db_send_admin_message(session, f'{amount} USDC bad sum')
-        logger.info(f'{amount} USDC bad sum')
+        db_send_admin_message(session, f'{amount} USDM bad sum')
+        logger.info(f'{amount} USDM bad sum')
 
     amount = float(balances.get('XLM', 0))
     if amount < 500:
@@ -143,13 +143,13 @@ if __name__ == "__main__":
 
     asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
                            destination_account=MTLAddresses.public_exchange_eurmtl_xlm,
-                           amount='25', asset=MTLAssets.xlm_asset,
+                           amount='1', asset=MTLAssets.xlm_asset,
                            ))
 
-    # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
-    #                             destination_account=MTLAddresses.public_exchange_usdm_usdc,
-    #                             amount='10000', source_asset=MTLAssets.xlm_asset,
-    #                             destination_asset=MTLAssets.usdm_asset))
+    # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_mtl_xlm,
+    #                            destination_account=MTLAddresses.public_exchange_mtl_xlm,
+    #                            amount='1', source_asset=MTLAssets.xlm_asset,
+    #                            destination_asset=MTLAssets.mtl_asset))
 
     # asyncio.run(update_main_report(quik_pool()))
     # for x in [MTLAddresses.public_exchange_eurmtl_xlm,

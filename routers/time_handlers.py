@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
 from config_reader import config
-from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value
+from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value, db_get_ledger_count
 from scripts.mtl_exchange2 import check_mm, check_mmwb
 from utils.global_data import MTLChats, BotValueTypes
 
@@ -81,7 +81,10 @@ async def time_check_ledger(bot: Bot, session_pool):
                 json_resp = await resp.json()
                 core_latest_ledger = int(json_resp['history_latest_ledger'])
                 if core_latest_ledger > saved_ledger + 10:
-                    db_send_admin_message(session, f'Отставание больше чем {core_latest_ledger - saved_ledger}')
+                    db_send_admin_message(session, f'Отставание от горизонта больше чем {core_latest_ledger - saved_ledger}')
+        queue_size = db_get_ledger_count(session)
+        if queue_size > 10:
+            db_send_admin_message(session, f'Очередь в обработке ledger {queue_size}!')
 
 
 @logger.catch

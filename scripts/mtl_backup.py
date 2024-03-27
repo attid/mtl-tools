@@ -35,4 +35,11 @@ async def save_assets(assets: list):
     with open(f"{start_path}/backup/all.last.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
 
+print("Start", datetime.now())
 asyncio.run(save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset]))
+print("End", datetime.now())
+#Start 2024-03-25 13:27:57.126788
+#  End 2024-03-25 13:28:48.953880
+
+#Start 2024-03-25 13:29:17.809484
+#  End 2024-03-25 13:30:26.712109

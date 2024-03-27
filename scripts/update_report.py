@@ -1,4 +1,5 @@
 import datetime
+import sys
 
 import numpy as np
 import sentry_sdk
@@ -185,7 +186,7 @@ def calculate_statistics():
         "EURMTL": eurmtl_count,
         "MTL_MTLRECT": mtl_mtlrect_count,
         "Median": median_mtl_mtlrect,
-        "MTLAP": mtlap_count,
+        "MTLAP": mtlap_count - 1,
         "EURMTL_NONE_ZERO": eurmtl_none_zero_count
     }
 
@@ -420,7 +421,7 @@ async def update_mmwb_report(session: Session):
     wks = await ss.worksheet("DATA")
 
     # check structure
-    records = await wks.get_values('L1')
+    records = await wks.get_values('O1')
     if records != [['Баланс %']]:
         # print(records)
         raise Exception('wrong structure')
@@ -432,32 +433,55 @@ async def update_mmwb_report(session: Session):
     # update data EURMTL	USDM	USDC	XLM BTC*
     update_data = []
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_xlm)
-    update_data.append([balances.get('EURMTL', 0), None, None, balances.get('XLM', 0)])
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_xlm)
+    costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.xlm_asset)
+    update_data.append([balances.get('EURMTL', 0), None, None,
+                        balances.get('XLM', 0), None, len(offers), costs[2]])
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_usdm)
-    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), balances.get('USDC', 0)])
-    balances = await get_balances(MTLAddresses.public_exchange_eurmtl_sats)
-    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('SATSMTL', 0)])
-    balances = await get_balances(MTLAddresses.public_exchange_eurmtl_btc)
-    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('BTCMTL', 0)])
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_usdm)
+    costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.usdm_asset)
+    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), balances.get('USDC', 0),
+                        None, None, len(offers), costs[2]])
+    balances = await get_balances(MTLAddresses.public_exchange_usdm_sats)
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_sats)
+    costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.satsmtl_asset)
+    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), None,
+                        None, balances.get('SATSMTL', 0), len(offers), costs[2]])
+    balances = await get_balances(MTLAddresses.public_exchange_usdm_mtlfarm)
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_mtlfarm)
+    costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.mtlfarm_asset)
+    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), None,
+                        None, balances.get('MTLFARM', 0), len(offers), costs[2]])
     balances = await get_balances(MTLAddresses.public_exchange_usdm_xlm)
-    update_data.append([None, balances.get('USDM', 0), None, balances.get('XLM', 0)])
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_xlm)
+    costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.xlm_asset)
+    update_data.append([None, balances.get('USDM', 0), None,
+                        balances.get('XLM', 0), None, len(offers), costs[2]])
     balances = await get_balances(MTLAddresses.public_exchange_usdm_usdc)
-    update_data.append([None, balances.get('USDM', 0), balances.get('USDC', 0)])
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_usdc)
+    costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.usdc_asset)
+    update_data.append([None, balances.get('USDM', 0), balances.get('USDC', 0),
+                        None, None, len(offers), costs[2]])
 
     balances = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
-    update_data.append([balances.get('MTL', 0), None, None, balances.get('XLM', 0)])
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_mtl_xlm)
+    costs = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
+    update_data.append([balances.get('MTL', 0), None, None,
+                        balances.get('XLM', 0), None, len(offers), costs[2]])
+
     balances = await get_balances(MTLAddresses.public_fire)
-    update_data.append([balances.get('EURMTL', 0), None, None, None, balances.get('MTL', 0)])
+    update_data.append([balances.get('EURMTL', 0), None, None,
+                        None, balances.get('MTL', 0)])
 
-    await wks.update('D2', update_data)
+    await wks.update('E2', update_data)
 
-    records = await wks.get_values('L2:L6')
+    records = await wks.get_values('O2:O6')
     for record in records:
         value = float(record[0].replace(',', '.'))
         if value < 0.2 or value > 0.8:
             db_send_admin_message(session, f'update_mmwb_report balance error {value}')
 
-    await wks.update('N1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update('Q1', now.strftime('%d.%m.%Y %H:%M:%S'))
     logger.info(f'update mmwb_report all done {now}')
 
 
@@ -787,16 +811,21 @@ async def main():
 
 
 if __name__ == "__main__":
-    # from db.quik_pool import quik_pool
-    #
-    # asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
-    # print(calculate_statistics())
-    # exit()
+    logger.add("mtl_report.log", rotation="1 MB")
 
-    sentry_sdk.init(
-        dsn=config.sentry_report_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
+    if 'report' in sys.argv:
+        sentry_sdk.init(
+            dsn=config.sentry_report_dsn,
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+        )
+        asyncio.run(main())
+    elif 'one_exchange' in sys.argv:
+        pass
+    else:
+        print('need more parameters')
+        from db.quik_pool import quik_pool
+        asyncio.run(update_fire(quik_pool()))  # only from skynet
+        # print(calculate_statistics())
 
-    asyncio.run(main())
+

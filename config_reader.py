@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     sentry_dsn: str
     sentry_report_dsn: str
     horizon_url: str
+    coinmarketcap: SecretStr
 
     class Config:
         env_file = dotenv_path

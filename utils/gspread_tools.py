@@ -241,9 +241,32 @@ async def gs_update_namelist():
                     key_to_desc[key] = username
                 else:
                     key_to_desc[key] = key[:4] + '__' + key[-4:]
-        global_data.name_list = key_to_desc
+        #global_data.name_list = key_to_desc
     else:
         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
+    print(key_to_desc)
+    ss_mtlap = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ws_mtlap = await ss_mtlap.worksheet("MTLAP")
+
+    # Проверяем заголовки в первой строке
+    headers = await ws_mtlap.row_values(1)
+    if headers[0].lower() == 'telegram' and headers[2].lower() == 'stellar':
+        # Считываем данные из столбцов Telegram и Stellar
+        tgs = await ws_mtlap.col_values(1)
+        stellar_keys = await ws_mtlap.col_values(3)
+
+        # Добавляем данные в словарь key_to_desc
+        for tg, stellar_key in zip_longest(tgs, stellar_keys, fillvalue=''):
+            if len(stellar_key) == 56:
+                if tg:
+                    key_to_desc[stellar_key] = tg[1:]
+                else:
+                    key_to_desc[stellar_key] = stellar_key[:4] + '__' + stellar_key[-4:]
+    else:
+        raise ValueError("Expected 'Telegram' in column 1 and 'Stellar' in column 3 of the MTLAP worksheet")
+    print(key_to_desc)
+    global_data.name_list = key_to_desc
+
 
 
 async def gs_get_assets_dict():
@@ -306,6 +329,33 @@ async def gs_get_accounts_dict():
         accounts_dict[descr] = pub_key
 
     return accounts_dict
+
+
+async def gs_get_accounts_multi_list() -> list:
+    agc = await agcm.authorize()
+
+    ss = await agc.open("MTL_assets")
+    wks = await ss.worksheet("ACCOUNTS")
+
+    data = await wks.get_all_values()
+
+    if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][5] != 'signers':
+        return None
+
+    accounts_list = []
+    for row in data[1:]:
+        descr = row[2]
+        pub_key = row[6]
+        flag = row[5]
+
+        # Проверьте условия
+        if flag.lower().find('multisp') == -1 or len(pub_key) != 56 or len(descr) < 3:
+            continue
+
+        # Добавьте в словарь
+        accounts_list.append(pub_key)
+
+    return accounts_list
 
 
 async def gs_get_chicago_premium():
@@ -511,20 +561,9 @@ async def gs_check_vote_table(table_uuid):
     return matched_addresses.values()
 
 
-def get_sheet_styles(spreadsheet_id, sheet_name):
-    # from googleapiclient.discovery import build
-
-    service = build('sheets', 'v4', credentials=credentials)
-    result = service.spreadsheets().get(spreadsheetId=spreadsheet_id, ranges=sheet_name, includeGridData=True).execute()
-    sheet_data = result['sheets'][0]['data'][0]
-    styles = [[cell.get('userEnteredFormat') for cell in row.get('values', [])] for row in
-              sheet_data.get('rowData', [])]
-    return styles
-
-
 async def gs_test():
     gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                                    "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
+                              "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
     return
     agc = await agcm.authorize()
     data = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
@@ -555,11 +594,7 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
     credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
     service = build('sheets', 'v4', credentials=credentials)
 
-    # Асинхронный клиент для gspread
-    #agcm = gspread_asyncio.AsyncioGspreadClientManager(lambda: credentials)
-    #agc = await agcm.authorize()
-
-        # Запрос метаданных всего документа
+    # Запрос метаданных всего документа
     source_sheet_data = service.spreadsheets().get(spreadsheetId=copy_from, includeGridData=True).execute()
 
     # Находим нужный лист по имени
@@ -589,6 +624,9 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
 
     if target_sheet_id is None:
         raise Exception(f"Target sheet {sheet_name_to} not found in spreadsheet.")
+
+    # Вставляем вызов функции unmerge_all_cells здесь
+    unmerge_all_cells(service, copy_to, target_sheet_id)
 
     # Применение данных и стилей к целевому листу
     requests = []
@@ -649,7 +687,63 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
         service.spreadsheets().batchUpdate(spreadsheetId=copy_to, body={"requests": requests}).execute()
 
 
+def unmerge_all_cells(service, spreadsheet_id, sheet_id):
+    # Получаем информацию о листе, чтобы найти все объединенные ячейки
+    sheet_info = service.spreadsheets().get(spreadsheetId=spreadsheet_id, includeGridData=False).execute()
+    requests = []
+
+    # Поиск объединенных ячеек в нужном листе
+    for sheet in sheet_info['sheets']:
+        if sheet['properties']['sheetId'] == sheet_id:
+            merges = sheet.get('merges', [])
+            for merge in merges:
+                # Для каждой найденной объединенной группы создаем запрос на разъединение
+                requests.append({
+                    "unmergeCells": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": merge['startRowIndex'],
+                            "endRowIndex": merge['endRowIndex'],
+                            "startColumnIndex": merge['startColumnIndex'],
+                            "endColumnIndex": merge['endColumnIndex']
+                        }
+                    }
+                })
+            break
+
+    # Если есть запросы на разъединение, отправляем их
+    if requests:
+        service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests}).execute()
+
+
+async def get_all_data_from_mmwb_config():
+    agc = await agcm.authorize()
+    # Открытие таблицы по ключу
+    ss = await agc.open_by_key("1ImFxY_WaDzBDBXkpokUj186CdxBhZH7-_COxXnMkoVc")
+    # Выбор вкладки "CONFIG"
+    ws = await ss.worksheet("CONFIG")
+    # Получение всех данных с вкладки
+    data = await ws.get_all_values()
+    return data
+
+
+async def get_one_data_mm_from_report():
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
+    ws = await ss.worksheet("autodata_config")
+
+    data = await ws.get_values('D2:D15')
+    mtl_market = data[11][0]
+    mtlfarm_usd = data[8][0]
+    usd_eur = data[1][0]
+    xlm_usd = data[3][0]
+    mtl_market_xlm = (float(float2str(mtl_market)) / float(float2str(usd_eur)) / float(float2str(xlm_usd)))
+    mtlfarm_usd = float(float2str(mtlfarm_usd))
+    return mtl_market_xlm, mtlfarm_usd
+
+
 if __name__ == "__main__":
+    pass
     # a = asyncio.run(gs_check_bim(user_name='itolstov'))
     # a = asyncio.run(gs_find_user('710700915'))
     # from db.quik_pool import quik_pool
@@ -658,5 +752,11 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    a = asyncio.run(gs_test())
+    a = asyncio.run(gs_update_namelist())
     print(a)
+    # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+    #                           "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)
+    # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+    #                           "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report", None)
+    # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+    #                           "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")

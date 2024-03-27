@@ -160,7 +160,7 @@ async def cmd_check_price(session: Session):
 if __name__ == "__main__":
     logger.add("check_stellar.log", rotation="1 MB")
     sentry_sdk.init(
-        dsn=config.sentry_dsn,
+        dsn=config.sentry_report_dsn,
         traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
     )
@@ -170,6 +170,7 @@ if __name__ == "__main__":
     elif 'check_bot' in sys.argv:
         asyncio.run(cmd_check_bot(quik_pool()))
     elif 'check_price' in sys.argv:
-        asyncio.run(cmd_check_price(quik_pool()))
+        pass
+        #asyncio.run(cmd_check_price(quik_pool()))
     else:
         print('need more parameters')

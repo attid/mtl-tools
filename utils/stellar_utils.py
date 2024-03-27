@@ -2,6 +2,7 @@ import asyncio
 import base64
 import math
 from copy import deepcopy
+from datetime import date
 from time import time
 
 import aiohttp
@@ -17,7 +18,7 @@ from config_reader import config
 from db.requests import *
 from utils.aiogram_utils import get_web_request
 from utils.global_data import float2str, global_data
-from utils.gspread_tools import agcm, gs_get_chicago_premium
+from utils.gspread_tools import agcm, gs_get_chicago_premium, gs_get_accounts_multi_list
 from utils.mytypes import MyShareHolder
 
 base_fee = config.base_fee
@@ -46,8 +47,8 @@ class MTLAddresses:
     public_boss = "GC72CB75VWW7CLGXS76FGN3CC5K7EELDAQCPXYMZLNMOTC42U3XJBOSS"
 
     public_exchange_eurmtl_xlm = "GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT"
-    public_exchange_eurmtl_btc = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
-    public_exchange_eurmtl_sats = "GAEO4HE7DJAJPOEE4KU375WEGB2IWO42KVTG3PLBTXL7TSWDSPHPZBOT"
+    public_exchange_usdm_mtlfarm = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
+    public_exchange_usdm_sats = "GAEO4HE7DJAJPOEE4KU375WEGB2IWO42KVTG3PLBTXL7TSWDSPHPZBOT"
     public_exchange_eurmtl_usdm = "GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT"
     public_exchange_usdm_usdc = "GDFBQS4TSDNSVGSR62VYGQAJHYKC3K3WIPBKMODNU6J3DKMSKMN3GBOT"
     public_exchange_mtl_xlm = "GDLIKJG7G3DDGK53TCWMXIEJF3D2U4MBUGINZJFPLHI2JLJBNBE3GBOT"
@@ -72,7 +73,7 @@ class MTLAssets:
     btcdebt_asset = Asset("BTCDEBT", MTLAddresses.public_issuer)
     usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
-    farm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
+    mtlfarm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
     usd_farm_asset = Asset("USDFARM", MTLAddresses.public_farm)
     usdmm_asset = Asset("USDMM", MTLAddresses.public_usdm)
     usdm_asset = Asset("USDM", MTLAddresses.public_usdm)
@@ -85,8 +86,9 @@ class MTLAssets:
 
 pack_count = 70  # for select first pack_count - to pack to xdr
 
-exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_eurmtl_btc,
-                 MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire)
+exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_usdm_mtlfarm,
+                 MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire,
+                 MTLAddresses.public_exchange_usdm_sats)
 
 
 async def check_url_xdr(url, full_data=True):
@@ -370,6 +372,45 @@ async def get_balances(address: str, return_assets=False, return_data=False, ret
         if return_signers:
             return assets, account.get('signers')
         return assets
+
+
+async def stellar_get_offers(account_id: str):
+    async with ServerAsync(
+            horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        call = await server.offers().for_account(account_id).limit(200).call()
+        return call['_embedded']['records']
+
+
+async def get_asset_swap_spread(selling_asset: Asset, buying_asset: Asset, amount: float = 1):
+    """
+    Возвращает спред обмена между двумя ассетами для заданного количества ассета для продажи и покупки.
+    :param selling_asset: Asset, который продается.
+    :param buying_asset: Asset, который покупается.
+    :param amount: Количество ассета для продажи.
+    :return: Кортеж из двух значений (количество, получаемое при продаже, количество, необходимое для покупки).
+    """
+    async with ServerAsync(
+            horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        sell_to_buy = await server.strict_send_paths(source_asset=selling_asset, source_amount=str(amount),
+                                                     destination=[buying_asset]).limit(1).call()
+        # print(sell_to_buy['_embedded']['records'])
+        destination_amount_sell_to_buy = float(sell_to_buy['_embedded']['records'][0]['destination_amount']) if \
+            sell_to_buy['_embedded']['records'] else 0
+
+        # Определяем кол-во отправляемого ассета для покупки указанного кол-ва другого ассета
+        # buy_to_sell = server.strict_receive_paths(source=[selling_asset], destination_asset=buying_asset, destination_amount=amount).limit(1).call()
+        buy_to_sell = await server.strict_send_paths(source_asset=buying_asset, source_amount=str(1 / amount),
+                                                     destination=[selling_asset]).limit(1).call()
+        # print(buy_to_sell['_embedded']['records'])
+        source_amount_buy_to_sell = 1 / float(buy_to_sell['_embedded']['records'][0]['destination_amount']) if \
+            buy_to_sell['_embedded']['records'] else 0
+
+        average = 0 if destination_amount_sell_to_buy == 0 or source_amount_buy_to_sell == 0 else round(
+            (destination_amount_sell_to_buy + source_amount_buy_to_sell) / 2, 5)
+
+        return destination_amount_sell_to_buy, source_amount_buy_to_sell, average
 
 
 def get_private_sign():
@@ -911,31 +952,21 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
         result = [gen_vote_xdr(public_key, vote_list, remove_master=remove_master, source=public_key)]
     else:
         vote_list = await cmd_gen_mtl_vote_list()
-        # vote_list1 = copy.deepcopy(vote_list)
-        vote_list2 = deepcopy(vote_list)
-        vote_list3 = deepcopy(vote_list)
-        vote_list4 = deepcopy(vote_list)
-        vote_list5 = deepcopy(vote_list)
-        vote_list6 = deepcopy(vote_list)
-        # print(vote_list)
+        address_list = await gs_get_accounts_multi_list()
         result = []
         transaction = TransactionBuilder(
             source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer),
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
         sequence = transaction.source_account.sequence
-        xdr = gen_vote_xdr(MTLAddresses.public_issuer, vote_list, transaction)
-        xdr = gen_vote_xdr(MTLAddresses.public_adm, vote_list2, transaction, MTLAddresses.public_adm,
-                           remove_master=True)
-        xdr = gen_vote_xdr(MTLAddresses.public_fund_defi, vote_list3, transaction, MTLAddresses.public_fund_defi,
-                           remove_master=True)
-        xdr = gen_vote_xdr(MTLAddresses.public_fund_city, vote_list4, transaction, MTLAddresses.public_fund_city,
-                           remove_master=True)
-        xdr = gen_vote_xdr(MTLAddresses.public_fund_mabiz, vote_list5, transaction, MTLAddresses.public_fund_mabiz,
-                           remove_master=True)
-        # return sequence because every build inc number
-        transaction.source_account.sequence = sequence
         transaction.set_timeout(60 * 60 * 24 * 7)
-        xdr = gen_vote_xdr(MTLAddresses.public_pawnshop, vote_list6, transaction, MTLAddresses.public_pawnshop, )
+        xdr = None
+        for address in address_list:
+            vote_list_copy = deepcopy(vote_list)
+            # return sequence because every build inc number
+            transaction.source_account.sequence = sequence
+            if len(transaction.operations) < 80:
+                xdr = gen_vote_xdr(address, vote_list_copy, transaction, source=address, remove_master=True)
+
         result.append(xdr)
 
     # print(gen_vote_xdr(public_new,vote_list2))
@@ -945,7 +976,7 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
 
 async def get_defi_xdr(div_sum: int):
     return None
-    accounts = await stellar_get_holders(MTLAssets.farm_asset)
+    accounts = await stellar_get_holders(MTLAssets.mtlfarm_asset)
     accounts_list = []
     total_sum = 0
     # div_bonus = div_sum * 0.1
@@ -956,7 +987,7 @@ async def get_defi_xdr(div_sum: int):
         token_balance = 0
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == MTLAssets.farm_asset.code:
+                if balance["asset_code"] == MTLAssets.mtlfarm_asset.code:
                     token_balance = balance["balance"]
                     token_balance = int(token_balance[0:token_balance.find('.')])
         accounts_list.append([account["account_id"], token_balance, 0])
@@ -1304,21 +1335,30 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
         delegate_list = {}
     shareholder_list = []
 
-    accounts = stellar_get_all_mtl_holders()
+    accounts = await stellar_get_all_mtl_holders()
 
     # mtl
     for account in accounts:
         balances = account["balances"]
         balance_mtl = 0
         balance_rect = 0
+        # Токены MTL полностью теряют силу голоса с 1 января 2025 года. В период с 01.04.2024 по 30.06.2024 к ним применяется понижающий коэффициент 0,75, в период с 01.07.2024 по 30.09.2024 — 0,5, в период 01.10.2024 по 31.12.2024 — 0,25.
+        k = 1
+        if datetime.now().date() >= date(2024, 4, 1):
+            k = 0.75
+        if datetime.now().date() >= date(2024, 7, 1):
+            k = 0.5
+        if datetime.now().date() >= date(2024, 10, 1):
+            k = 0.25
+        if datetime.now().date() >= date(2025, 1, 1):
+            k = 0
+
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
                 if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_mtl = balance["balance"]
-                    balance_mtl = int(balance_mtl[0:balance_mtl.find('.')])
+                    balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
                 if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_rect = balance["balance"]
-                    balance_rect = int(balance_rect[0:balance_rect.find('.')])
+                    balance_rect = int(float(balance["balance"]))
         if account["account_id"] != MTLAddresses.public_issuer:
             shareholder = MyShareHolder(
                 account_id=account["account_id"],
@@ -1480,8 +1520,9 @@ def stellar_remove_orders(public_key, xdr):
             amount='0', price=Price(record['price_r']['n'], record['price_r']['d']), offer_id=int(record['id']),
             source=public_key)
 
-    transaction = transaction.build()
-    xdr = transaction.to_xdr()
+    if transaction.operations:
+        transaction = transaction.build()
+        xdr = transaction.to_xdr()
 
     return xdr
 
@@ -2058,5 +2099,15 @@ async def get_liquidity_pools_for_asset(asset):
 if __name__ == '__main__':
     pass
     # a = gen_new('AIAI')
-    a = asyncio.run(get_usdm_xdr(1000, 1000, 1))
-    print(a)
+    # a = asyncio.run(get_get_income())
+    # print(a)
+    # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
+    #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),
+    #                                                     datetime.strptime('01.04.2024', '%d.%m.%Y')))
+    # print(transactions)
+    xdr = None
+    for i in range(99):
+        xdr = cmd_gen_data_xdr(MTLAddresses.public_exchange_eurmtl_xlm, f'{i}:', xdr=xdr)
+
+    xdr = stellar_sign(xdr, config.private_sign.get_secret_value())
+    print(stellar_sync_submit(xdr))
