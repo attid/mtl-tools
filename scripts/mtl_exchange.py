@@ -360,7 +360,7 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
     # Добавляем шаг для обработки обратных офферов
     for offer in current_offers.get(f'{asset_b.code}-{asset_a.code}', []):
         offer_price = float(offer['price'])
-        if offer_price > inverse_max_price:
+        if offer_price < inverse_max_price:
             to_close_offers.append(offer)
 
     if to_close_offers:
@@ -403,6 +403,7 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
             server.submit_transaction(transaction)
         except Exception as e:
             sentry_sdk.capture_exception(e)
+            logger.error(f'Не удалось выставить ордер: {e}')
 
     return True
 
