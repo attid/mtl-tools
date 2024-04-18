@@ -7,87 +7,51 @@ from db.quik_pool import quik_pool
 
 @logger.catch
 def cmd_check_cron_transaction(session: Session):
-    # logger.info('cmd_check_new_transaction')
-    # by assets
     assets_config = [
         ['MMWB', BotValueTypes.LastMMWBTransaction, MTLChats.MMWBGroup, 0],
         ['FCM', BotValueTypes.LastFCMTransaction, MTLChats.FCMGroup, 0],
-        # GDIE253MSIYMFUS3VHRGEQPIBG7VAIPSMATWLTBF73UPOLBUH5RV2FCM
         ['MTLand', BotValueTypes.LastMTLandTransaction, MTLChats.SignGroup, 10],
         ['MTL', BotValueTypes.LastMTLTransaction, MTLChats.SignGroup, 10],
         ['MTLRECT', BotValueTypes.LastRectTransaction, MTLChats.SignGroup, 10],
         ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-        ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0],
+        ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0]
     ]
-    for assets in assets_config:
-        result = cmd_check_new_asset_transaction(session, asset_name=assets[0], save_id=assets[1], filter_sum=assets[3])
-        if len(result) > 0:
-            msg = f"Обнаружены новые операции для {assets[0]}\n"
-            msg = msg + f'\n'.join(result)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, assets[2], "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, assets[2], msg[0:4000])
-    # FUND
-    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_issuer,
-                                       value_id=BotValueTypes.LastFondTransaction)
-    if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.SignGroup, "Получены новые транзакции")
-        for transaction in result:
-            msg = f'\n'.join(transaction)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.SignGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.SignGroup, msg[0:4000])
-    # FARM
-    asyncio.run(asyncio.sleep(10))
-    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_farm,
-                                       value_id=BotValueTypes.LastFarmTransaction)
-    if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.FARMGroup, "Получены новые транзакции")
-        for transaction in result:
-            msg = f'\n'.join(transaction)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.FARMGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.FARMGroup, msg[0:4000])
+    process_transactions_by_assets(session, assets_config)
+    address_config = [
+        (MTLAddresses.public_issuer, BotValueTypes.LastFondTransaction, MTLChats.SignGroup),
+        (MTLAddresses.public_farm, BotValueTypes.LastFarmTransaction, MTLChats.FARMGroup),
+        (MTLAddresses.public_usdm, BotValueTypes.LastUSDMFundTransaction, MTLChats.USDMMGroup),
+        (MTLAddresses.public_fin, BotValueTypes.LastFINFundTransaction, MTLChats.FinGroup),
+        (MTLAddresses.public_tfm, BotValueTypes.LastTFMFundTransaction, MTLChats.FinGroup),
+        (MTLAddresses.public_mtla, BotValueTypes.LastMTLATransaction, MTLChats.MTLAGroup)
+    ]
+    process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
-    # USDM
-    asyncio.run(asyncio.sleep(10))
-    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_usdm,
-                                       value_id=BotValueTypes.LastUSDMFundTransaction)
-    if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.USDMMGroup, "Получены новые транзакции")
-        for transaction in result:
-            msg = f'\n'.join(transaction)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.USDMMGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.USDMMGroup, msg[0:4000])
 
-    # FIN
+def process_transactions_by_assets(session, assets_config):
+    for asset in assets_config:
+        result = cmd_check_new_asset_transaction(session, asset_name=asset[0], save_id=asset[1], filter_sum=asset[3])
+        if result:
+            result.insert(0, f"Обнаружены новые операции для {asset[0]}")
+            send_message_4000(session, asset[2], result)
+
+
+def process_specific_transactions(session, address_config, ignore_operations):
     asyncio.run(asyncio.sleep(10))
-    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_fin,
-                                       value_id=BotValueTypes.LastFINFundTransaction)
-    if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
-        for transaction in result:
-            msg = f'\n'.join(transaction)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
-    # TFM
-    asyncio.run(asyncio.sleep(10))
-    result = cmd_check_new_transaction(session, ignore_operation=['CreateClaimableBalance', 'SPAM'],
-                                       stellar_address=MTLAddresses.public_tfm,
-                                       value_id=BotValueTypes.LastTFMFundTransaction)
-    if len(result) > 0:
-        db_cmd_add_message(session, MTLChats.FinGroup, "Получены новые транзакции")
-        for transaction in result:
-            msg = f'\n'.join(transaction)
-            if len(msg) > 4096:
-                db_cmd_add_message(session, MTLChats.FinGroup, "Слишком много операций показаны первые ")
-            db_cmd_add_message(session, MTLChats.FinGroup, msg[0:4000])
+    for address, value_id, chat in address_config:
+        results = cmd_check_new_transaction(session, ignore_operation=ignore_operations,
+                                            stellar_address=address, value_id=value_id)
+        if results:
+            for result in results:
+                result.insert(0, f"Получены новые транзакции")
+                send_message_4000(session, chat, result)
+
+
+def send_message_4000(session, chat_id, messages):
+    msg = '\n'.join(messages)
+    if len(msg) > 4096:
+        msg = "Слишком много операций показаны первые . . . \n" + msg[:4000]
+    db_cmd_add_message(session, chat_id, msg)
 
 
 @logger.catch
@@ -105,19 +69,19 @@ async def cmd_check_bot(session: Session):
             delta = now - dt
             if delta.days > 15:
                 db_cmd_add_message(session, MTLChats.SignGroup,
-                                f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
         elif bot_address == MTLAddresses.public_exchange_eurmtl_usdm:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 3:
                 db_cmd_add_message(session, MTLChats.SignGroup,
-                                f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
         else:
             dt = cmd_check_last_operation(bot_address)
             delta = now - dt
             if delta.days > 0:
                 db_cmd_add_message(session, MTLChats.SignGroup,
-                                f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
 
     # key rate
     # dt = fb.execsql1('select max(t.dt_add) from t_keyrate t', [], datetime.now())
@@ -132,7 +96,7 @@ async def cmd_check_bot(session: Session):
 async def cmd_check_price(session: Session):
     # "message_id": 6568,  "chat": {"id": -1001707489173,
     cb_cb = Server(horizon_url=config.horizon_url).orderbook(MTLAssets.usdc_asset,
-                                                                        MTLAssets.eurmtl_asset).limit(200).call()
+                                                             MTLAssets.eurmtl_asset).limit(200).call()
     msg = ['Продают <b>EURMTL</b> за <b>USDC</b>']
     for idx, price in enumerate(cb_cb['bids']):
         if idx < 3:
@@ -171,6 +135,6 @@ if __name__ == "__main__":
         asyncio.run(cmd_check_bot(quik_pool()))
     elif 'check_price' in sys.argv:
         pass
-        #asyncio.run(cmd_check_price(quik_pool()))
+        # asyncio.run(cmd_check_price(quik_pool()))
     else:
         print('need more parameters')
