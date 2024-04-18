@@ -463,6 +463,12 @@ async def update_mmwb_report(session: Session):
     update_data.append([None, balances.get('USDM', 0), balances.get('USDC', 0),
                         None, None, len(offers), costs[2]])
 
+    balances = await get_balances(MTLAddresses.public_exchange_eurmtl_eurc)
+    offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_eurc)
+    costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.eurc_asset)
+    update_data.append([balances.get('EURMTL', 0), None, balances.get('EURC', 0),
+                        None, None, len(offers), costs[2]])
+
     balances = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_mtl_xlm)
     costs = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
@@ -825,7 +831,7 @@ if __name__ == "__main__":
     else:
         print('need more parameters')
         from db.quik_pool import quik_pool
-        asyncio.run(update_fire(quik_pool()))  # only from skynet
+        asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
         # print(calculate_statistics())
 
 

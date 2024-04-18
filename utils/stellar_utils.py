@@ -53,6 +53,7 @@ class MTLAddresses:
     public_exchange_usdm_usdc = "GDFBQS4TSDNSVGSR62VYGQAJHYKC3K3WIPBKMODNU6J3DKMSKMN3GBOT"
     public_exchange_mtl_xlm = "GDLIKJG7G3DDGK53TCWMXIEJF3D2U4MBUGINZJFPLHI2JLJBNBE3GBOT"
     public_exchange_usdm_xlm = "GARRQAITJSDKJ7QXVHTHGQX4FMQRJJBQ5ZXKZK57AVIMHMPS5FDRZBOT"
+    public_exchange_eurmtl_eurc = "GAEMIYH3JPPL54IMXFF42R7T7BTGA25Z5TY3QOBNACFLXATDO2RDXBOT"
 
     # user
     public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
@@ -82,6 +83,7 @@ class MTLAssets:
     toc_asset = Asset("TOC", 'GBJ3HT6EDPWOUS3CUSIJW5A4M7ASIKNW4WFTLG76AAT5IE6VGVN47TIC')
     aqua_asset = Asset("AQUA", 'GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA')
     mtlap_asset = Asset("MTLAP", 'GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA')
+    eurc_asset = Asset("EURC", 'GAQRF3UGHBT6JYQZ7YSUYCIYWAF4T2SAA5237Q5LIQYJOHHFAWDXZ7NM')
 
 
 pack_count = 70  # for select first pack_count - to pack to xdr
@@ -190,12 +192,20 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             continue
         if good_operation(operation, "ChangeTrust", filter_operation, ignore_operation):
             data_exist = True
-            if operation.limit == '0':
-                result.append(
-                    f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
+            if operation.asset.type == 'liquidity_pool_shares':
+                if operation.limit == '0':
+                    result.append(
+                        f"    Закрываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}")
+                else:
+                    result.append(
+                        f"    Открываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}")
             else:
-                result.append(
-                    f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
+                if operation.limit == '0':
+                    result.append(
+                        f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
+                else:
+                    result.append(
+                        f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
 
             continue
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
@@ -275,12 +285,18 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             continue
         if type(operation).__name__ == "Clawback":
             data_exist = True
-            # bad xdr 14 <Clawback [
-            # asset=<Asset [code=MTLAP, issuer=GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA, type=credit_alphanum12]>,
-            # from_=<MuxedAccount [account_id=GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR, account_muxed_id=None]>,
-            # amount=1, source=None]>
             result.append(
                 f"    Возврат {operation.amount} {operation.asset.code} с аккаунта {address_id_to_username(operation.from_.account_id)}")
+            continue
+        if type(operation).__name__ == "LiquidityPoolDeposit":
+            data_exist = True
+            min_price = operation.min_price.n / operation.min_price.d
+            max_price = operation.max_price.n / operation.max_price.d
+            result.append(f"    LiquidityPoolDeposit {operation.liquidity_pool_id} пополнение {operation.max_amount_a}/{operation.max_amount_b} ограничения цены {min_price}/{max_price}")
+            continue
+        if type(operation).__name__ == "LiquidityPoolWithdraw":
+            data_exist = True
+            result.append(f"    LiquidityPoolWithdraw {operation.liquidity_pool_id} вывод {operation.amount} минимум {operation.min_amount_a}/{operation.min_amount_b} ")
             continue
 
         if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
@@ -500,12 +516,13 @@ async def get_cash_balance(chat_id):
     result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = [
+        ['GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN', 'Антон'],
         ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
         ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
         ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
         ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
         ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
-        ['GB4TL4G5DRFRCUVVPE5B6542TVLSYAVARNUZUPWARCAEIDR7QMDOGZQQ', 'Егора'],
+        ['GDMH3NZSKNWLYYGX7AMIG6QDOVZ3KDVNBEL7KHNGSXBWUBKU5ARMVOED', 'Егора'],
         ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
         ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
         ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
@@ -715,11 +732,11 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
         # check all balance
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
+                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT":
+                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "EURMTL":
+                if balance["asset_code"] == "EURMTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     eur = 1
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
@@ -845,11 +862,11 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
         # check all balance
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
+                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT":
+                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "SATSMTL":
+                if balance["asset_code"] == "SATSMTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     sats_open = 1
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
@@ -913,11 +930,11 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
         # check all balance
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL":
+                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT":
+                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "USDM":
+                if balance["asset_code"] == "USDM" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     usdm_open = 1
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
@@ -974,47 +991,6 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     return result
 
 
-async def get_defi_xdr(div_sum: int):
-    return None
-    accounts = await stellar_get_holders(MTLAssets.mtlfarm_asset)
-    accounts_list = []
-    total_sum = 0
-    # div_bonus = div_sum * 0.1
-    # div_sum = div_sum - div_bonus
-
-    for account in accounts:
-        balances = account["balances"]
-        token_balance = 0
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == MTLAssets.mtlfarm_asset.code:
-                    token_balance = balance["balance"]
-                    token_balance = int(token_balance[0:token_balance.find('.')])
-        accounts_list.append([account["account_id"], token_balance, 0])
-        total_sum += token_balance
-
-    persent = div_sum / total_sum
-
-    for account in accounts_list:
-        # if account[0] == 'GBVIX6CZ57SHXHGPA4AL7DACNNZX4I2LCKIAA3VQUOGTGWYQYVYSE5TU':
-        #    account[2] = account[1] * persent + div_bonus
-        # else:
-        account[2] = account[1] * persent
-
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_farm)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                     base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 24 * 7)
-    for account in accounts_list:
-        if account[2] > 0.0001:
-            transaction.append_payment_op(destination=account[0], asset=MTLAssets.satsmtl_asset,
-                                          amount=str(round(account[2], 7)))
-    transaction = transaction.build()
-    xdr = transaction.to_xdr()
-
-    return xdr
-
-
 async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
     accounts = await stellar_get_holders(MTLAssets.usdm_asset)
     pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
@@ -1054,13 +1030,14 @@ async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
     for account in accounts_list:
-        if account[2] > 0.0001:
+        if account[2] > 0.004:
             transaction.append_payment_op(destination=account[0], asset=MTLAssets.usdm_asset,
                                           amount=str(round(account[2], 7)))
     transaction.append_payment_op(destination=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
                                   amount=str(premium_sum))
     transaction.append_payment_op(source=MTLAddresses.public_farm, asset=MTLAssets.usd_farm_asset,
                                   amount=str(income_sum), destination=MTLAddresses.public_usdm)
+    print(len(transaction.operations))
     transaction = transaction.build()
     xdr = transaction.to_xdr()
 
@@ -2098,16 +2075,17 @@ async def get_liquidity_pools_for_asset(asset):
 
 if __name__ == '__main__':
     pass
-    # a = gen_new('AIAI')
-    # a = asyncio.run(get_get_income())
+    # a = gen_new('POOL')
+    # # a = asyncio.run(get_get_income())
     # print(a)
-    # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
+    # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),
     #                                                     datetime.strptime('01.04.2024', '%d.%m.%Y')))
     # print(transactions)
-    xdr = None
-    for i in range(99):
-        xdr = cmd_gen_data_xdr(MTLAddresses.public_exchange_eurmtl_xlm, f'{i}:', xdr=xdr)
-
-    xdr = stellar_sign(xdr, config.private_sign.get_secret_value())
-    print(stellar_sync_submit(xdr))
+    # xdr = None
+    # for i in range(99):
+    #     xdr = cmd_gen_data_xdr(MTLAddresses.public_exchange_eurmtl_xlm, f'{i}:', xdr=xdr)
+    #
+    # xdr = stellar_sign(xdr, config.private_sign.get_secret_value())
+    # print(stellar_sync_submit(xdr))
+    # print(asyncio.run(get_usdm_xdr(5168, 4134, 1034)))

@@ -14,7 +14,7 @@ from utils.gspread_tools import gs_check_bim, agcm
 from utils.img_tools import create_image_with_text
 from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
                                  MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id,
-                                 cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl, get_defi_xdr,
+                                 cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl,
                                  get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, get_damircoin_xdr,
                                  cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap, get_agora_xdr,
                                  get_chicago_xdr)
@@ -285,16 +285,6 @@ async def cmd_get_vote_fund_xdr(message: Message):
         await multi_answer(message, arr2[0])
 
 
-@router.message(Command(commands=["get_defi_xdr"]))
-async def cmd_get_defi_xdr(message: Message):
-    if len(message.text.split()) > 1:
-        xdr = await get_defi_xdr(int(message.text.split()[1]))
-        await multi_answer(message, xdr)
-        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
-    else:
-        await multi_answer(message, 'use -  /get_defi_xdr 44444 \n where 44444 satoshi sum to pay')
-
-
 @router.message(Command(commands=["get_usdm_xdr"]))
 async def cmd_get_usdm_xdr_(message: Message):
     arr = message.text.split()
@@ -309,7 +299,8 @@ async def cmd_get_usdm_xdr_(message: Message):
                                     '111 сумма премии фарм компании')
 
 
-@update_command_info("/get_btcmtl_xdr", "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL")
+@update_command_info("/get_btcmtl_xdr",
+                     "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL")
 @router.message(Command(commands=["get_btcmtl_xdr"]))
 async def cmd_get_defi_xdr_(message: Message):
     arg = message.text.split()

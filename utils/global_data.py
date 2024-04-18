@@ -28,6 +28,7 @@ class MTLChats:
     HelperChat = -1001466779498
     SpamGroup = -1002007280572
     CyberGroup = -1002079305671
+    MTLAGroup = -1001892843127
 
 
 
@@ -66,6 +67,7 @@ class BotValueTypes:
     SkynetImg = 32
     NeedDecode = 33
     SaveLastMessageDate = 34
+    LastMTLATransaction = 35
 
 
 class LogQuery:

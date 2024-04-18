@@ -70,30 +70,30 @@ async def exchange_token(source_account, destination_account, amount: str, sourc
 
 
 async def check_mm(session: Session):
-    balances = await get_balances(MTLAddresses.public_exchange_usdm_xlm)
-    amount = float(balances.get('USDM', 0))
-    if amount > 12000:
-        amount = str(round(amount - 11000))
-        await move_token(MTLAddresses.public_exchange_usdm_xlm, MTLAddresses.public_exchange_usdm_usdc,
-                         amount, MTLAssets.usdm_asset)
-        db_send_admin_message(session, f'{amount} USDM was moved usdm_xlm - usdm_usdc')
-        logger.info(f'{amount} USDM was moved usdm_xlm - usdm_usdc')
-
-    balances = await get_balances(MTLAddresses.public_exchange_usdm_usdc)
-    amount = float(balances.get('USDM', 0))
-    if amount > 20000:
-        amount = str(round(amount - 19000))
-        await move_token(MTLAddresses.public_exchange_usdm_usdc, MTLAddresses.public_exchange_eurmtl_usdm,
-                         amount, MTLAssets.usdm_asset)
-        db_send_admin_message(session, f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
-        logger.info(f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
-    amount = float(balances.get('USDC', 0))
-    if amount > 12000:
-        amount = str(round(amount - 11000))
-        await exchange_token(MTLAddresses.public_exchange_usdm_usdc, MTLAddresses.public_exchange_usdm_xlm,
-                             amount, MTLAssets.usdc_asset, MTLAssets.xlm_asset)
-        db_send_admin_message(session, f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
-        logger.info(f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
+    # balances = await get_balances(MTLAddresses.public_exchange_usdm_xlm)
+    # amount = float(balances.get('USDM', 0))
+    # if amount > 12000:
+    #     amount = str(round(amount - 11000))
+    #     await move_token(MTLAddresses.public_exchange_usdm_xlm, MTLAddresses.public_exchange_usdm_usdc,
+    #                      amount, MTLAssets.usdm_asset)
+    #     db_send_admin_message(session, f'{amount} USDM was moved usdm_xlm - usdm_usdc')
+    #     logger.info(f'{amount} USDM was moved usdm_xlm - usdm_usdc')
+    #
+    # balances = await get_balances(MTLAddresses.public_exchange_usdm_usdc)
+    # amount = float(balances.get('USDM', 0))
+    # if amount > 20000:
+    #     amount = str(round(amount - 19000))
+    #     await move_token(MTLAddresses.public_exchange_usdm_usdc, MTLAddresses.public_exchange_eurmtl_usdm,
+    #                      amount, MTLAssets.usdm_asset)
+    #     db_send_admin_message(session, f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
+    #     logger.info(f'{amount} USDM was moved usdm_usdc - eurmtl_usdm')
+    # amount = float(balances.get('USDC', 0))
+    # if amount > 12000:
+    #     amount = str(round(amount - 11000))
+    #     await exchange_token(MTLAddresses.public_exchange_usdm_usdc, MTLAddresses.public_exchange_usdm_xlm,
+    #                          amount, MTLAssets.usdc_asset, MTLAssets.xlm_asset)
+    #     db_send_admin_message(session, f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
+    #     logger.info(f'{amount} USDC was moved to XLM \n usdm_usdc - usdm_xlm')
 
     await update_mmwb_report(session)
 
@@ -138,12 +138,12 @@ if __name__ == "__main__":
     # exit()#
 
     # remove orders
-    # xdr = stellar_remove_orders(MTLAddresses.public_exchange_usdm_xlm, None)
+    # xdr = stellar_remove_orders(MTLAddresses.public_exchange_eurmtl_xlm, None)
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
-    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
-                           destination_account=MTLAddresses.public_exchange_eurmtl_xlm,
-                           amount='1', asset=MTLAssets.xlm_asset,
+    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_usdm_xlm,
+                           destination_account=MTLAddresses.public_wallet,
+                           amount='5000', asset=MTLAssets.usdm_asset,
                            ))
 
     # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_mtl_xlm,

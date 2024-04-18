@@ -408,7 +408,6 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
             if xdr:
                 stellar_sync_submit(stellar_sign(xdr, get_private_sign()))
 
-
     return True
 
 
@@ -429,7 +428,8 @@ async def check_exchange():
     xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
     btc_usdt = data['data']['BTC']['quote']['USDT']['price']
     eurs_usdt = data['data']['EURS']['quote']['USDT']['price']
-    eur_usdt = eurs_usdt * 1.01  # Увеличиваем на 1%
+    eur_eur = 1.02
+    eur_usdt = eurs_usdt * eur_eur  # Увеличиваем на 1%
 
     start_configs = [
         # EURMTL - XLM
@@ -456,6 +456,11 @@ async def check_exchange():
         AddressConfig(account_id=MTLAddresses.public_exchange_usdm_xlm,
                       asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
                       price=1 / xlm_usdt
+                      ),
+        # EURMTL - EURC
+        AddressConfig(account_id=MTLAddresses.public_exchange_eurmtl_eurc,
+                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.eurc_asset,
+                      price=eur_eur
                       ),
 
     ]
@@ -528,6 +533,33 @@ async def check_exchange_one():
     await check_exchange_run(start_configs)
 
 
+async def check_exchange_test():
+    url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+    parameters = {
+        'symbol': 'XLM,BTC,EURS,EURT,EURC',  # Примерный список символов
+        'convert': 'USDT'
+    }
+    headers = {
+        'Accepts': 'application/json',
+        'X-CMC_PRO_API_KEY': config.coinmarketcap.get_secret_value(),
+    }
+
+    response = requests.get(url, headers=headers, params=parameters)
+    data = response.json()
+
+    xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
+
+    start_configs = [
+        # USDM - XLM
+        AddressConfig(account_id=MTLAddresses.public_exchange_usdm_xlm,
+                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
+                      price=1 / xlm_usdt
+                      ),
+    ]
+
+    await check_exchange_run(start_configs)
+
+
 if __name__ == "__main__":
     logger.add("mtl_exchange.log", rotation="1 MB", level="WARNING")
 
@@ -543,7 +575,7 @@ if __name__ == "__main__":
         asyncio.run(check_exchange_one())
     else:
         print('need more parameters')
-        asyncio.run(check_exchange_one())
+        asyncio.run(check_exchange_test())
         # asyncio.run(check_exchange_one())
 
     # place_ladder_orders(account_id=MTLAddresses.public_exchange_usdm_xlm, asset_a=MTLAssets.usdm_asset,
