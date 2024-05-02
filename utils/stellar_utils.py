@@ -40,6 +40,7 @@ class MTLAddresses:
     public_bod_eur = "GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW"
     public_bod = "GARUNHJH3U5LCO573JSZU4IOBEVQL6OJAAPISN4JKBG2IYUGLLVPX5OH"
     public_div = "GDNHQWZRZDZZBARNOH6VFFXMN6LBUNZTZHOKBUT7GREOWBTZI4FGS7IQ"
+    public_usdm_div = "GDAA7YDU6O7F27XUOSU27IHDDHE2XX7CRP427AA73VIJVZQ447E5UDIV"
     public_key_rate = "GDGGHSIA62WGNMN2VOIBW3X66ATOBW5J2FU7CSJZ6XVHI2ZOXZCRRATE"
     public_sign = "GDCGYX7AXIN3EWIBFZ3AMMZU4IUWS4CIZ7Z7VX76WVOIJORCKDDRSIGN"
     public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
@@ -292,11 +293,13 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             data_exist = True
             min_price = operation.min_price.n / operation.min_price.d
             max_price = operation.max_price.n / operation.max_price.d
-            result.append(f"    LiquidityPoolDeposit {operation.liquidity_pool_id} пополнение {operation.max_amount_a}/{operation.max_amount_b} ограничения цены {min_price}/{max_price}")
+            result.append(
+                f"    LiquidityPoolDeposit {operation.liquidity_pool_id} пополнение {operation.max_amount_a}/{operation.max_amount_b} ограничения цены {min_price}/{max_price}")
             continue
         if type(operation).__name__ == "LiquidityPoolWithdraw":
             data_exist = True
-            result.append(f"    LiquidityPoolWithdraw {operation.liquidity_pool_id} вывод {operation.amount} минимум {operation.min_amount_a}/{operation.min_amount_b} ")
+            result.append(
+                f"    LiquidityPoolWithdraw {operation.liquidity_pool_id} вывод {operation.amount} минимум {operation.min_amount_a}/{operation.min_amount_b} ")
             continue
 
         if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
@@ -363,7 +366,10 @@ async def stellar_get_issuer_assets(account_id) -> dict:
                 return {}
             else:
                 for balance in data['_embedded']['records']:
-                    assets[balance['asset_code']] = float(balance['amount'])
+                    assets[balance['asset_code']] = (
+                            float(balance['amount']) +
+                            float(balance.get('claimable_balances_amount', 0)) +
+                            float(balance.get('liquidity_pools_amount', 0)))
                 return assets
 
 
@@ -637,6 +643,10 @@ def cmd_gen_xdr(session: Session, list_id: int):
 
     if pay_type == 5:
         div_account = server.load_account(MTLAddresses.public_div)
+        asset = MTLAssets.usdm_asset
+
+    if pay_type == 6:
+        div_account = server.load_account(MTLAddresses.public_usdm_div)
         asset = MTLAssets.usdm_asset
 
     transaction = TransactionBuilder(source_account=div_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -963,6 +973,121 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
     # print(*mtl_accounts, sep='\n')
 
 
+async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0):
+    # all_usdm_sum = await stellar_get_issuer_assets(MTLAddresses.public_usdm)
+    # all_usdm_sum = float(all_usdm_sum['USDM'])
+
+    div_accounts = []
+    if test_sum > 0:
+        div_sum = test_sum
+    else:
+        # get balance
+        div_sum = await get_balances(MTLAddresses.public_usdm_div)
+        div_sum = float(div_sum['USDM']) - 0.1
+        logger.info(f"div_sum = {div_sum}")
+        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
+                                                config.private_sign.get_secret_value()))
+
+    # print(json.dumps(response, indent=4))
+    accounts = await stellar_get_holders(MTLAssets.usdm_asset)
+    pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
+    total_calc_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
+                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
+                token_balance += float(balance["balance"])
+            elif balance["asset_type"] == "liquidity_pool_shares":
+                # Находим пул по его ID и вычисляем долю USDM для аккаунта
+                pool_id = balance["liquidity_pool_id"]
+                pool_share = float(balance["balance"])
+                for pool in pools:
+                    if pool['id'] == pool_id:
+                        usdm_amount = float(
+                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
+                        total_shares = float(pool['total_shares'])
+                        # Рассчитываем долю USDM в пуле, принадлежащую аккаунту
+                        if total_shares > 0 and pool_share > 0:
+                            token_balance += (pool_share / total_shares) * usdm_amount
+
+        div_accounts.append([account["account_id"], token_balance, 0, 0, div_list_id])
+        total_calc_sum += token_balance
+
+    div_accounts_dict = {account[0]: account[1] for account in div_accounts}
+
+    current_date = datetime.now().date()
+    start_current_month = datetime.now().replace(day=1).date()
+    start_previous_month = (start_current_month - timedelta(days=1)).replace(day=1)
+
+    while current_date >= start_current_month:
+        for record in db_get_operations_by_asset(session, MTLAssets.usdm_asset.code, current_date):
+            if record.for_account in div_accounts_dict:
+                if record.operation == 'account_credited':
+                    div_accounts_dict[record.for_account] -= float(record.amount1)
+                elif record.operation == 'account_debited':
+                    div_accounts_dict[record.for_account] += float(record.amount1)
+                elif record.operation == 'trade':
+                    if record.code1 == 'USDM':
+                        div_accounts_dict[record.for_account] += float(record.amount1)
+                    if record.code2 == 'USDM':
+                        div_accounts_dict[record.for_account] -= float(record.amount2)
+        current_date = current_date - timedelta(days=1)
+
+    total_token_balance = sum(div_accounts_dict.values())
+
+    div_accounts_dict_month = deepcopy(div_accounts_dict)
+    month_full_sum = total_token_balance
+
+    while current_date >= start_previous_month:
+        for record in db_get_operations_by_asset(session, MTLAssets.usdm_asset.code, current_date):
+            if record.for_account in div_accounts_dict:
+                if record.operation == 'account_credited':
+                    div_accounts_dict[record.for_account] -= float(record.amount1)
+                elif record.operation == 'account_debited':
+                    div_accounts_dict[record.for_account] += float(record.amount1)
+                elif record.operation == 'trade':
+                    if record.code1 == 'USDM':
+                        div_accounts_dict[record.for_account] += float(record.amount1)
+                    elif record.code2 == 'USDM':
+                        div_accounts_dict[record.for_account] -= float(record.amount2)
+
+        for key, value in div_accounts_dict.items():
+            if value < 0:
+                div_accounts_dict[key] = 0
+        current_date = current_date - timedelta(days=1)
+        total_token_balance = sum(div_accounts_dict.values())
+        month_full_sum += total_token_balance
+        for key, value in div_accounts_dict.items():
+            div_accounts_dict_month[key] += value
+
+    for record in div_accounts:
+        record[2] = round((div_accounts_dict_month[record[0]] / month_full_sum) * div_sum, 7)
+        record[3] = record[2]
+
+    div_accounts.sort(key=get_key_1, reverse=True)
+
+    # Фильтруем список div_accounts, оставляя только те элементы, которые удовлетворяют условию
+    div_accounts = [record for record in div_accounts if round(record[2], 5) > 0]
+    payments = [
+        TPayments(
+            user_key=item[0],
+            mtl_sum=item[1],
+            user_calc=item[2],
+            user_div=item[3],
+            id_div_list=item[4]
+        )
+        for item in div_accounts
+    ]
+    session.add_all(payments)
+    session.commit()
+
+    return div_accounts
+    # print(*mtl_accounts, sep='\n')
+
+
 async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     if len(public_key) > 10:
         vote_list = await cmd_gen_mtl_vote_list()
@@ -989,59 +1114,6 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     # print(gen_vote_xdr(public_new,vote_list2))
 
     return result
-
-
-async def get_usdm_xdr(income_sum, div_sum, premium_sum: float):
-    accounts = await stellar_get_holders(MTLAssets.usdm_asset)
-    pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
-    accounts_list = []
-    total_sum = 0
-
-    for account in accounts:
-        balances = account["balances"]
-        token_balance = 0
-        for balance in balances:
-            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
-                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
-                token_balance += float(balance["balance"])
-            elif balance["asset_type"] == "liquidity_pool_shares":
-                # Находим пул по его ID и вычисляем долю USDM для аккаунта
-                pool_id = balance["liquidity_pool_id"]
-                pool_share = float(balance["balance"])
-                for pool in pools:
-                    if pool['id'] == pool_id:
-                        usdm_amount = float(
-                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
-                        total_shares = float(pool['total_shares'])
-                        # Рассчитываем долю USDM в пуле, принадлежащую аккаунту
-                        if total_shares > 0 and pool_share > 0:
-                            token_balance += (pool_share / total_shares) * usdm_amount
-
-        accounts_list.append([account["account_id"], token_balance, 0])
-        total_sum += token_balance
-
-    persent = div_sum / total_sum
-
-    for account in accounts_list:
-        account[2] = account[1] * persent
-
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_usdm)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                     base_fee=base_fee)
-    transaction.set_timeout(60 * 60 * 24 * 7)
-    for account in accounts_list:
-        if account[2] > 0.004:
-            transaction.append_payment_op(destination=account[0], asset=MTLAssets.usdm_asset,
-                                          amount=str(round(account[2], 7)))
-    transaction.append_payment_op(destination=MTLAddresses.public_farm, asset=MTLAssets.usdm_asset,
-                                  amount=str(premium_sum))
-    transaction.append_payment_op(source=MTLAddresses.public_farm, asset=MTLAssets.usd_farm_asset,
-                                  amount=str(income_sum), destination=MTLAddresses.public_usdm)
-    print(len(transaction.operations))
-    transaction = transaction.build()
-    xdr = transaction.to_xdr()
-
-    return xdr
 
 
 async def get_damircoin_xdr(div_sum: int):
@@ -2075,9 +2147,12 @@ async def get_liquidity_pools_for_asset(asset):
 
 if __name__ == '__main__':
     pass
-    # a = gen_new('POOL')
-    # # a = asyncio.run(get_get_income())
-    # print(a)
+    # a = gen_new('UDIV')
+    # a = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
+    from db.quik_pool import quik_pool
+
+    a = asyncio.run(cmd_calc_usdm_usdm_divs(quik_pool(), 100, 3475))
+    print(a)
     # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),
     #                                                     datetime.strptime('01.04.2024', '%d.%m.%Y')))

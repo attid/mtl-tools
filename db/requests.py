@@ -4,7 +4,7 @@ from contextlib import suppress
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast, Optional
-from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast
+from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast, Date
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import count
@@ -643,10 +643,18 @@ def db_update_user_chat_date(session: Session, user_id: int, chat_id: int):
     session.commit()
 
 
+def db_get_operations_by_asset(session: Session, asset_code, dt_filter) -> List[TOperations]:
+    query = (session.query(TOperations)
+             .filter((TOperations.code1 == asset_code) | (TOperations.code2 == asset_code))
+             .filter(sql_cast(TOperations.dt, Date) == dt_filter))
+    records = query.all()
+    return records
+
+
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(db_get_ledger_count(quik_pool()))
+    print(db_get_operations_by_asset(quik_pool(), 'USDM', datetime.now().date()))
 
     # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',

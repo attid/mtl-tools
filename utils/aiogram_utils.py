@@ -12,6 +12,7 @@ from utils.global_data import MTLChats, global_data, global_tasks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler: AsyncIOScheduler
+non_breaking_space = chr(0x00A0)
 
 
 async def is_admin(message: Message):

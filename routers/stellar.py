@@ -15,9 +15,9 @@ from utils.img_tools import create_image_with_text
 from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
                                  MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id,
                                  cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl,
-                                 get_btcmtl_xdr, float2str, cmd_show_data, get_usdm_xdr, get_damircoin_xdr,
+                                 get_btcmtl_xdr, float2str, cmd_show_data, get_damircoin_xdr,
                                  cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap, get_agora_xdr,
-                                 get_chicago_xdr)
+                                 get_chicago_xdr, cmd_calc_usdm_usdm_divs)
 
 router = Router()
 router.error()(sentry_error_handler)
@@ -272,6 +272,47 @@ async def cmd_do_usdm_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
 
 
+@update_command_info("/do_usdm_usdm_div", "выплата дивидентов в usdm от usdm")
+@router.message(Command(commands=["do_usdm_usdm_div"]))
+async def cmd_do_usdm_usdm_div(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    balance = await get_balances(MTLAddresses.public_usdm_div)
+    if int(balance.get('USDM', 0)) < 100:
+        await message.reply(f'Low usdm balance at {MTLAddresses.public_usdm_div} can`t pay divs')
+        return
+
+    # новая запись
+    # ('mtl div 17/12/2021')
+    div_list_id = cmd_create_list(session, datetime.now().strftime('usdm div %d/%m/%Y'), 6)
+    lines = []
+    msg = await message.answer(
+        add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+    result = await cmd_calc_usdm_usdm_divs(session, div_list_id)
+    await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    i = 1
+
+    while i > 0:
+        i = cmd_gen_xdr(session, div_list_id)
+        await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
+
+    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    i = 1
+    e = 1
+    while i > 0:
+        try:
+            i = await cmd_send_by_list_id(session, div_list_id)
+            await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/12)"))
+        except Exception as err:
+            logger.info(str(err))
+            await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
+            e += 1
+    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
+
+
 @update_command_info("/get_vote_fund_xdr", "сделать транзакцию на обновление голосов фонда")
 @router.message(Command(commands=["get_vote_fund_xdr"]))
 async def cmd_get_vote_fund_xdr(message: Message):
@@ -283,20 +324,6 @@ async def cmd_get_vote_fund_xdr(message: Message):
         arr2 = await cmd_get_new_vote_all_mtl('')
         await message.answer('for FUND')
         await multi_answer(message, arr2[0])
-
-
-@router.message(Command(commands=["get_usdm_xdr"]))
-async def cmd_get_usdm_xdr_(message: Message):
-    arr = message.text.split()
-    if len(arr) > 3:
-        xdr = await get_usdm_xdr(str2float(arr[1]), str2float(arr[2]), str2float(arr[3]))
-        await multi_answer(message, xdr)
-        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
-    else:
-        await multi_answer(message, 'use -  /get_usdm_xdr 999 888 111 \n'
-                                    'где 999 сумма в usd что была заработана за месяц\n'
-                                    '888 сумма в usdm которая уйдет держателям usdm\n'
-                                    '111 сумма премии фарм компании')
 
 
 @update_command_info("/get_btcmtl_xdr",
@@ -333,9 +360,7 @@ async def cmd_get_damircoin_xdr(message: Message):
     await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
 
 
-global_data.info_cmd['/get_chicago_xdr'] = 'Делает транзакцию кешбека для chicago'
-
-
+@update_command_info("/get_chicago_xdr", "Делает транзакцию кешбека для chicago")
 @router.message(Command(commands=["get_chicago_xdr"]))
 async def cmd_get_damircoin_xdr(message: Message):
     result = await get_chicago_xdr()
