@@ -23,7 +23,7 @@ from middlewares.sentry_error_handler import sentry_error_handler
 from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
-from utils.gspread_tools import gs_find_user
+from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
@@ -452,7 +452,6 @@ commands_info = {
 @update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
 @update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
-
 @update_command_info("/add_skynet_img",
                      "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
 @update_command_info("/del_skynet_admin",
@@ -498,7 +497,6 @@ async def handle_command(message: Message, session: Session, command_info):
         db_save_bot_value(session, chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 
-
     await cmd_sleep_and_delete(info_message, 5)
 
     with suppress(TelegramBadRequest):
@@ -533,3 +531,42 @@ async def list_command_handler(message: Message, session: Session, command_info)
             await message.reply(' '.join(global_data_field))
         else:
             await message.reply('The list is empty.')
+
+
+@router.message(Command(commands=["update_mtlap"]))
+async def cmd_update_mtlap(message: Message, bot: Bot):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    data = await gs_get_all_mtlap()
+
+    # Проверка заголовков
+    if not data or len(data) < 1:
+        await message.reply("Ошибка: таблица пуста или не найдены данные.")
+        return
+
+    headers = data[0]
+
+    if len(headers) < 15 or headers[1] != "TGID" or headers[14] != "SkyNet":
+        await message.reply("Ошибка: неверный формат таблицы. Проверьте наличие и позицию столбцов TGID и SkyNet.")
+        return
+
+    results = []
+    user_id:int
+
+    for row in data[1:]:
+        if len(row[1]) < 3:
+            break
+
+        try:
+            user_id = int(row[1])
+            await bot.send_chat_action(user_id, action='typing')
+            results.append(True)
+        except Exception as e:
+            results.append(False)
+        await asyncio.sleep(0.1)
+
+    await gs_get_update_mtlap_skynet_row(results)
+
+    await message.reply("Готово.")

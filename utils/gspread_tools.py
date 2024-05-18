@@ -244,7 +244,7 @@ async def gs_update_namelist():
         #global_data.name_list = key_to_desc
     else:
         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
-    print(key_to_desc)
+    # print(key_to_desc)
     ss_mtlap = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
     ws_mtlap = await ss_mtlap.worksheet("MTLAP")
 
@@ -740,6 +740,25 @@ async def get_one_data_mm_from_report():
     mtl_market_xlm = (float(float2str(mtl_market)) / float(float2str(usd_eur)) / float(float2str(xlm_usd)))
     mtlfarm_usd = float(float2str(mtlfarm_usd))
     return mtl_market_xlm, mtlfarm_usd
+
+
+async def gs_get_all_mtlap():
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ws = await ss.worksheet("MTLAP")
+    data = await ws.get_all_values()
+    return data
+
+
+async def gs_get_update_mtlap_skynet_row(data):
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ws = await ss.worksheet("MTLAP")
+
+    # Обновляем значения в 14-м столбце (SkyNet) за один запрос
+    cell_range = "O2"
+    values = [[value] for value in data]
+    await ws.update(cell_range, values)
 
 
 if __name__ == "__main__":
