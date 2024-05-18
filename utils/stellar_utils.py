@@ -522,7 +522,8 @@ async def get_cash_balance(chat_id):
     result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = [
-        ['GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN', 'Антон'],
+        ['GAOIY67QNDNFSOKTLSBGI4ZDLIEEPNKYBS7ZNJSSM7FRE6XX2MKSEZYW', 'Алексея'],
+        ['GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN', 'Антона'],
         ['GBEOQ4VGEH34LRR7SO36EAFSQMGH3VLX443NNZ4DS7WVICO577WOSLOV', 'Артема'],
         ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
         ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
@@ -537,7 +538,7 @@ async def get_cash_balance(chat_id):
     t = """
     ==============================
     |Кубышка | Наличных | EURMTL |
-    |Игоря   |      500 |  49500 | 
+    |Игоря   |      500 |  49500 |
     =========================+====
     |Итого в !     23749! 111535 !
     ========================+=====
@@ -704,17 +705,8 @@ async def stellar_async_submit(xdr: str):
 
 
 async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int, test_sum=0):
-    # server = Server(horizon_url=config.horizon_url)
-
-    # MTL
-    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
-    rq = requests.get(
-        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
-    # FOND old
-    # fund_balance = await get_balances(MTLAddresses.public_issuer)
-    # mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+    all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
+    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
 
     div_accounts = []
     donates = []
@@ -723,7 +715,7 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
     else:
         # get balance
         div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = div_sum['EURMTL']
+        div_sum = float(div_sum['EURMTL']) - 0.1
         logger.info(f'div_sum = {div_sum}')
         await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS:{div_sum}'),
                                                 config.private_sign.get_secret_value()))
@@ -835,15 +827,8 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
 
 
 async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
-    # MTL
-    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
-    rq = requests.get(
-        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
-    # FOND
-    fund_balance = await get_balances(MTLAddresses.public_issuer)
-    mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+    all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
+    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
 
     div_accounts = []
     donates = []
@@ -852,7 +837,7 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
     else:
         # get balance
         div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = float(div_sum['SATSMTL'])
+        div_sum = float(div_sum['SATSMTL']) - 1
         logger.info(f"div_sum = {div_sum}")
         await stellar_async_submit(
             stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_SATSMTL:{div_sum}'),
@@ -906,15 +891,8 @@ async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
 
 
 async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
-    # MTL
-    rq = requests.get(f'{config.horizon_url}/assets?asset_code=MTL&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum = float(rq.json()['_embedded']['records'][0]['amount'])
-    rq = requests.get(
-        f'{config.horizon_url}/assets?asset_code=MTLRECT&asset_issuer={MTLAddresses.public_issuer}')
-    mtl_sum += float(rq.json()['_embedded']['records'][0]['amount'])
-    # FOND
-    fund_balance = await get_balances(MTLAddresses.public_issuer)
-    mtl_sum = mtl_sum - fund_balance.get('MTL', 0)
+    all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
+    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
 
     div_accounts = []
     donates = []
@@ -923,7 +901,7 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
     else:
         # get balance
         div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = float(div_sum['USDM'])
+        div_sum = float(div_sum['USDM']) - 0.1
         logger.info(f"div_sum = {div_sum}")
         await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
                                                 config.private_sign.get_secret_value()))
@@ -944,7 +922,7 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
                     balance_mtl = round(float(balance["balance"]), 7)
                 if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "USDM" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+                if balance["asset_code"] == "USDM" and balance["asset_issuer"] == MTLAddresses.public_usdm:
                     usdm_open = 1
         div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
         # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
@@ -2151,7 +2129,7 @@ if __name__ == '__main__':
     # a = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
     from db.quik_pool import quik_pool
 
-    a = asyncio.run(cmd_calc_usdm_usdm_divs(quik_pool(), 100, 3475))
+    a = asyncio.run(cmd_calc_usdm_divs(quik_pool(), 100, 740))
     print(a)
     # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),

@@ -3,12 +3,9 @@ import json
 import random
 from datetime import datetime, date
 import tiktoken
-import openai
-from openai import OpenAI, AsyncOpenAI
-
 from aioredis import Redis
 from loguru import logger
-
+from openai import AsyncOpenAI
 from config_reader import config
 from utils.gspread_tools import gs_save_new_task
 
@@ -145,7 +142,9 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
         if gpt4:
             chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages)
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
+            # gpt-4o-2024-05-13
+            # gpt-3.5-turbo
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4o", messages=messages)
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
         logger.info(e.args)
@@ -318,8 +317,8 @@ async def talk_get_summary(article):
 
 async def generate_image(prompt, model="dall-e-3", n=1):
     response = await aclient.images.generate(prompt=prompt,
-                                      n=n,
-                                      model=model)
+                                             n=n,
+                                             model=model)
 
     # Это вернет список URL изображений
     return [image.url for image in response.data]
@@ -327,7 +326,7 @@ async def generate_image(prompt, model="dall-e-3", n=1):
 
 if __name__ == "__main__":
     pass
-    # asyncio.run(talk_open_ai_list_models('dall'))
+    asyncio.run(talk_open_ai_list_models('gpt-4'))
 
     # a = asyncio.run(generate_image('красная панда'))
     # print(a)
