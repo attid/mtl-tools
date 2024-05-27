@@ -142,8 +142,8 @@ if __name__ == "__main__":
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
     asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_usdm,
-                           destination_account=MTLAddresses.public_itolstov,
-                           amount='12000', asset=MTLAssets.usdm_asset,
+                           destination_account=MTLAddresses.public_exchange_usdm_xlm,
+                           amount='10000', asset=MTLAssets.usdm_asset,
                            ))
 
     # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_mtl_xlm,

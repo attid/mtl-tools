@@ -4,6 +4,8 @@ from contextlib import suppress
 from datetime import timedelta
 from sys import argv
 from typing import List, Dict, cast, Optional
+
+from loguru import logger
 from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast, Date
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
@@ -328,6 +330,7 @@ def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int
     :param update_id:
     :param button_json:
     """
+    logger.info(f"db_cmd_add_message: {text}")
     new_message = TMessage(user_id=user_id, text=text, use_alarm=use_alarm, update_id=update_id,
                            button_json=button_json)
     session.add(new_message)

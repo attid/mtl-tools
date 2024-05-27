@@ -55,7 +55,7 @@ async def rt_show_bim_msg(message: Message, session: Session):
 @router.message(Command(commands=["balance"]))
 async def cmd_show_balance(message: Message):
     result = await get_cash_balance(message.chat.id)
-    create_image_with_text(result, image_size=(550, 500))
+    create_image_with_text(result, image_size=(550, 600))
     await message.answer_photo(FSInputFile(start_path + 'output_image.png'))
 
 

@@ -74,6 +74,7 @@ class MTLAssets:
     btcmtl_asset = Asset("BTCMTL", MTLAddresses.public_issuer)
     btcdebt_asset = Asset("BTCDEBT", MTLAddresses.public_issuer)
     usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
+    yusdc_asset = Asset("yUSDC", "GDGTVWSM4MGS4T7Z6W4RPWOCHE2I6RDFCIFZGS3DOA63LWQTRNZNTTFF")
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
     mtlfarm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
     usd_farm_asset = Asset("USDFARM", MTLAddresses.public_farm)
@@ -404,6 +405,22 @@ async def stellar_get_offers(account_id: str):
         return call['_embedded']['records']
 
 
+async def stellar_get_orders_sum(address, selling_asset, buying_asset) -> float:
+    orders = await stellar_get_offers(address)
+    total_amount = 0.0
+
+    for order in orders:
+        if (order['selling']['asset_type'] == selling_asset.type and
+                order['buying']['asset_type'] == buying_asset.type and
+                order['selling']['asset_code'] == selling_asset.code and
+                order['selling']['asset_issuer'] == selling_asset.issuer and
+                order['buying']['asset_code'] == buying_asset.code and
+                order['buying']['asset_issuer'] == buying_asset.issuer):
+            total_amount += float(order['amount'])
+
+    return total_amount
+
+
 async def get_asset_swap_spread(selling_asset: Asset, buying_asset: Asset, amount: float = 1):
     """
     Возвращает спред обмена между двумя ассетами для заданного количества ассета для продажи и покупки.
@@ -533,6 +550,7 @@ async def get_cash_balance(chat_id):
         ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
         ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
         ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
+        ['GAAGBEUVMKO7D672X7FCNIYCBWDNWNEMFICMEKNCHUAWUZ2XCDWMTORT', 'Тортуга']
     ]
 
     t = """
@@ -2129,7 +2147,7 @@ if __name__ == '__main__':
     # a = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
     from db.quik_pool import quik_pool
 
-    a = asyncio.run(cmd_calc_usdm_divs(quik_pool(), 100, 740))
+    a = asyncio.run(stellar_get_orders_sum(MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset))
     print(a)
     # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),

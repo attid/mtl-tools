@@ -82,6 +82,19 @@ async def cmd_check_bot(session: Session):
                 db_cmd_add_message(session, MTLChats.SignGroup,
                                    f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
 
+    # USDM order
+    params = [
+        (MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset, 5000),
+        (MTLAddresses.public_usdm, MTLAssets.yusdc_asset, MTLAssets.usdm_asset, 5000),
+        (MTLAddresses.public_usdm, MTLAssets.usdm_asset, MTLAssets.usdc_asset, 50000),
+    ]
+
+    for address, selling_asset, buying_asset, order_min_sum in params:
+        order_sum = await stellar_get_orders_sum(address, selling_asset, buying_asset)
+        if order_sum < order_min_sum:
+            db_cmd_add_message(session, MTLChats.USDMMGroup, f'Внимание ордер {selling_asset.code}/{buying_asset.code} {order_sum} !')
+
+
     # key rate
     # dt = fb.execsql1('select max(t.dt_add) from t_keyrate t', [], datetime.now())
     # dt = datetime.combine(dt, datetime.min.time())
