@@ -16,13 +16,15 @@ def cmd_check_cron_transaction(session: Session):
         ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0]
     ]
     process_transactions_by_assets(session, assets_config)
+    asyncio.run(asyncio.sleep(10))
     address_config = [
+        # address, value_id, chat
         (MTLAddresses.public_issuer, BotValueTypes.LastFondTransaction, MTLChats.SignGroup),
         (MTLAddresses.public_farm, BotValueTypes.LastFarmTransaction, MTLChats.FARMGroup),
         (MTLAddresses.public_usdm, BotValueTypes.LastUSDMFundTransaction, MTLChats.USDMMGroup),
         (MTLAddresses.public_fin, BotValueTypes.LastFINFundTransaction, MTLChats.FinGroup),
         (MTLAddresses.public_tfm, BotValueTypes.LastTFMFundTransaction, MTLChats.FinGroup),
-        (MTLAddresses.public_mtla, BotValueTypes.LastMTLATransaction, MTLChats.MTLAGroup)
+        (MTLAddresses.public_mtla, BotValueTypes.LastMTLATransaction, MTLChats.MTLAAgoraGroup)
     ]
     process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
@@ -36,7 +38,6 @@ def process_transactions_by_assets(session, assets_config):
 
 
 def process_specific_transactions(session, address_config, ignore_operations):
-    asyncio.run(asyncio.sleep(10))
     for address, value_id, chat in address_config:
         results = cmd_check_new_transaction(session, ignore_operation=ignore_operations,
                                             stellar_address=address, value_id=value_id)

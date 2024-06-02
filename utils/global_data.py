@@ -29,6 +29,7 @@ class MTLChats:
     SpamGroup = -1002007280572
     CyberGroup = -1002079305671
     MTLAGroup = -1001892843127
+    MTLAAgoraGroup = -1002032873651
 
 
 

@@ -46,6 +46,9 @@ async def cmd_send_message_1m(bot: Bot, session_pool):
                 if record.user_id == MTLChats.SignGroup:
                     await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
                                            message_thread_id=59558, disable_web_page_preview=True)
+                elif record.user_id == MTLChats.MTLAAgoraGroup:
+                    await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
+                                           message_thread_id=5418, disable_web_page_preview=True)
                 else:
                     if record.update_id > 0:
                         reply_markup = None
