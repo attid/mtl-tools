@@ -406,7 +406,11 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
             logger.error(f'Не удалось выставить ордер: {e}')
             xdr = stellar_remove_orders(account_id, None)
             if xdr:
-                stellar_sync_submit(stellar_sign(xdr, get_private_sign()))
+                try:
+                    stellar_sync_submit(stellar_sign(xdr, get_private_sign()))
+                except Exception as e:
+                    logger.error(f'Не удалось отменить ордер: {e}')
+                    logger.info(xdr)
 
     return True
 
