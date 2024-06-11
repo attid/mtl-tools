@@ -75,6 +75,8 @@ class MTLAssets:
     btcdebt_asset = Asset("BTCDEBT", MTLAddresses.public_issuer)
     usdc_asset = Asset("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
     yusdc_asset = Asset("yUSDC", "GDGTVWSM4MGS4T7Z6W4RPWOCHE2I6RDFCIFZGS3DOA63LWQTRNZNTTFF")
+    btc_asset = Asset("BTC", "GDPJALI4AZKUU2W426U5WKMAT6CN3AJRPIIRYR2YM54TL2GDWO5O2MZM")
+    ybtc_asset = Asset("yBTC", "GBUVRNH4RW4VLHP4C5MOF46RRIRZLAVHYGX45MVSTKA2F6TMR7E7L6NW")
     mrxpinvest_asset = Asset("MrxpInvest", 'GDAJVYFMWNIKYM42M6NG3BLNYXC3GE3WMEZJWTSYH64JLZGWVJPTGGB7')
     mtlfarm_asset = Asset("MTLFARM", MTLAddresses.public_farm)
     usd_farm_asset = Asset("USDFARM", MTLAddresses.public_farm)
@@ -374,8 +376,12 @@ async def stellar_get_issuer_assets(account_id) -> dict:
                 return assets
 
 
-async def get_balances(address: str, return_assets=False, return_data=False, return_signers=False):
-    account = await stellar_get_account(address)
+async def get_balances(address: str, return_assets=False, return_data=False, return_signers=False, account_json=None):
+    if account_json:
+        account = account_json
+    else:
+        account = await stellar_get_account(address)
+
     assets = {}
     if account.get('type'):
         return []
@@ -596,32 +602,39 @@ def cmd_create_list(session: Session, memo: str, pay_type: int):
 
 
 async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
-    bod_list = await get_bim_list()
-    good = list(filter(lambda x: x[1], bod_list))
-
-    balances = {}
-    rq = requests.get(f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}').json()
-    # print(json.dumps(rq, indent=4))
-    for balance in rq["balances"]:
-        if balance["asset_type"] == 'credit_alphanum12':
-            balances[balance["asset_code"]] = balance["balance"]
-
-    mtl_accounts = []
+    bim_accounts = []
     if test_sum > 0:
         div_sum = test_sum
     else:
-        div_sum = float(balances["EURMTL"])
+        div_sum = await get_balances(MTLAddresses.public_bod_eur)
+        div_sum = int(float(div_sum['EURMTL']) / 2) #50%
+        logger.info(f'div_sum = {div_sum}')
 
-    for account in good:
-        bls = 0
-        div = 0
-        sdiv = div_sum
-        eur = 1
-        sdiv = int(div_sum / len(good) * 100) / 100
+    accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
 
-        mtl_accounts.append([account[0], bls, div, sdiv, list_id])
+    valid_accounts = [account for account in accounts if (await get_balances(account['account_id'], account_json=account)).get('EURMTL')]
+    one_mtlap_accounts = [account for account in valid_accounts if 1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
+    two_or_more_mtlap_accounts = [account for account in valid_accounts if (await get_balances(account['account_id'], account_json=account))['MTLAP'] >= 2]
 
-    mtl_accounts.sort(key=get_key_1, reverse=True)
+    amount_for_one_mtlap_accounts = int(div_sum * 0.2)
+    amount_for_two_or_more_mtlap_accounts = int(div_sum * 0.8)
+
+    sdiv_one_mtlap = int(amount_for_one_mtlap_accounts / len(one_mtlap_accounts) * 100) / 100 if one_mtlap_accounts else 0
+    sdiv_two_mtlap = int(amount_for_two_or_more_mtlap_accounts / len(two_or_more_mtlap_accounts) * 100) / 100 if two_or_more_mtlap_accounts else 0
+
+    mtl_accounts = []
+    for account in valid_accounts:
+        balances = await get_balances(account['account_id'], account_json=account)
+        bls = balances['EURMTL']
+        if account in two_or_more_mtlap_accounts:
+            div = sdiv_two_mtlap
+        elif account in one_mtlap_accounts:
+            div = sdiv_one_mtlap
+        else:
+            div = 0
+        mtl_accounts.append([account['account_id'], bls, div, div, list_id])
+
+    mtl_accounts.sort(key=lambda x: x[0], reverse=True)
     payments = [
         TPayments(
             user_key=item[0],
@@ -2143,11 +2156,12 @@ async def get_liquidity_pools_for_asset(asset):
 
 if __name__ == '__main__':
     pass
-    # a = gen_new('UDIV')
-    # a = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
-    from db.quik_pool import quik_pool
-
-    a = asyncio.run(stellar_get_orders_sum(MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset))
+    # a = gen_new('YMON')
+    a = asyncio.run(cmd_gen_mtl_vote_list())
+    # from db.quik_pool import quik_pool
+    # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))
+    #
+    # # a = asyncio.run(stellar_get_orders_sum(MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset))
     print(a)
     # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),

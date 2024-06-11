@@ -1,19 +1,14 @@
-import asyncio
 import sys
 from dataclasses import dataclass, field
-
 import sentry_sdk
-
 from utils.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
 from utils.stellar_utils import *
 from db.quik_pool import quik_pool
-from collections import namedtuple
 
 max_eurmtl = 10000.0  # max offer
 # max_btcmtl = 0.1  # max offer
 # max_satsmtl = 1000000  # max offer
 sats_cost = 100000000
-
 # min_xlm = 50.0
 persent_eurmtl = 1.03  # 1.03 =  5% наценки
 persent_btc = 1.01  #
@@ -76,74 +71,6 @@ async def update_offers(update_config):
                        buying_asset=update_config.asset_a,
                        amount=amount_b, check_persent=update_config.check_persent,
                        record=offers.get(f'{update_config.asset_b.code}-{update_config.asset_a.code}'))
-
-
-async def check_exchange_old():
-    # EUR cost
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').json()
-    usdt_eur_cost = 1 / float(rq['price'])
-
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT').json()
-    stl = 1 / float(rq['price'])
-    usd_xlm_cost = stl
-    eurmtl_xlm_cost = stl / usdt_eur_cost
-
-    rq = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()
-    btc_eur_cost = float(rq['price']) * usdt_eur_cost
-    logger.info(['eur_cost', usdt_eur_cost, 'eurmtl_xlm_cost', eurmtl_xlm_cost, eurmtl_xlm_cost * persent_eurmtl,
-                 'usd_xlm_cost', usd_xlm_cost, 'btc_eur_cost', btc_eur_cost])
-
-    configs = [
-        # EURMTL - XLM
-        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_xlm,
-                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.xlm_asset,
-                      price_min=5, price_max=15,
-                      price_a=eurmtl_xlm_cost * persent_eurmtl,
-                      price_b=round((1 / eurmtl_xlm_cost) * persent_xlm, 5),
-                      check_persent=persent_cost,
-                      max_a=max_eurmtl, max_b=round(max_eurmtl * eurmtl_xlm_cost)
-                      ),
-        # MTL - XLM
-        AddressConfig(address=MTLAddresses.public_exchange_mtl_xlm,
-                      asset_a=MTLAssets.mtl_asset, asset_b=MTLAssets.xlm_asset,
-                      price_min=5 * 4, price_max=15 * 4,
-                      price_a=eurmtl_xlm_cost * persent_eurmtl * 4,
-                      price_b=round((1 / eurmtl_xlm_cost / 3) * persent_xlm, 5),
-                      check_persent=persent_cost,
-                      max_a=max_eurmtl, max_b=max_eurmtl
-                      ),
-        # EURMTL - USDM
-        AddressConfig(address=MTLAddresses.public_exchange_eurmtl_usdm,
-                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.usdm_asset,
-                      price_min=0.8, price_max=1.3,
-                      price_a=round(1 / usdt_eur_cost * persent_eurmtl, 4),
-                      price_b=round(usdt_eur_cost * persent_usdc, 4),
-                      check_persent=persent_cost,
-                      max_a=max_eurmtl, max_b=round(max_eurmtl * (1 / usdt_eur_cost))
-                      ),
-        # USDM - USDC
-        AddressConfig(address=MTLAddresses.public_exchange_usdm_usdc,
-                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.usdc_asset,
-                      price_min=0.9, price_max=1.1,
-                      price_a=round(0.999999, 7),
-                      price_b=round(1.01, 4),
-                      check_persent=persent_cost,
-                      max_a=max_eurmtl, max_b=max_eurmtl
-                      ),
-        # USDM - XLM
-        AddressConfig(address=MTLAddresses.public_exchange_usdm_xlm,
-                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
-                      price_min=5, price_max=15,
-                      price_a=usd_xlm_cost * 1.02,
-                      price_b=round((1 / usd_xlm_cost) * 1.03, 5),
-                      check_persent=persent_cost,
-                      max_a=max_eurmtl, max_b=round(max_eurmtl * usd_xlm_cost)
-                      ),
-
-    ]
-
-    for update_config in configs:
-        await update_offers(update_config)
 
 
 @logger.catch
@@ -342,8 +269,10 @@ async def place_ladder_orders(account_id, asset_a, asset_b, price, offset, step,
     current_offers = get_offers(account_id)
 
     prices = [round(price * (1 + offset_decimal + i * step_decimal), 5) for i in range(ladder_length)]
+    prices_start = str(prices)
     if ladder_length > max_ladder_length:
         prices = prices[-max_ladder_length:]
+    logger.info(f'prices: {prices_start} -> {prices}')
 
     max_price = max(prices)
     min_price = min(prices)
@@ -538,27 +467,33 @@ async def check_exchange_one():
 
 
 async def check_exchange_test():
-    url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-    parameters = {
-        'symbol': 'XLM,BTC,EURS,EURT,EURC',  # Примерный список символов
-        'convert': 'USDT'
-    }
-    headers = {
-        'Accepts': 'application/json',
-        'X-CMC_PRO_API_KEY': config.coinmarketcap.get_secret_value(),
-    }
-
-    response = requests.get(url, headers=headers, params=parameters)
-    data = response.json()
-
-    xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
+    # url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+    # parameters = {
+    #     'symbol': 'XLM,BTC,EURS,EURT,EURC',  # Примерный список символов
+    #     'convert': 'USDT'
+    # }
+    # headers = {
+    #     'Accepts': 'application/json',
+    #     'X-CMC_PRO_API_KEY': config.coinmarketcap.get_secret_value(),
+    # }
+    #
+    # response = requests.get(url, headers=headers, params=parameters)
+    # data = response.json()
+    #
+    # xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
 
     start_configs = [
-        # USDM - XLM
-        AddressConfig(account_id=MTLAddresses.public_exchange_usdm_xlm,
-                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
-                      price=1 / xlm_usdt
+        # # USDM - XLM
+        # AddressConfig(account_id=MTLAddresses.public_exchange_usdm_xlm,
+        #               asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
+        #               price=1 / xlm_usdt
+        #               ),
+        # USDM - USDC
+        AddressConfig(account_id=MTLAddresses.public_exchange_usdm_usdc,
+                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.usdc_asset,
+                      price=1
                       ),
+
     ]
 
     await check_exchange_run(start_configs)

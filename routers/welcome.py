@@ -7,11 +7,11 @@ from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_
     ADMINISTRATOR
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
-    ChatMemberUpdated, ChatMemberMember
+    ChatMemberUpdated, ChatMemberMember, ChatJoinRequest, User
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value, db_send_admin_message
 from middlewares.sentry_error_handler import sentry_error_handler
-from utils.aiogram_utils import is_admin, cmd_delete_later
+from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
 from utils.stellar_utils import stellar_stop_all_exchange
 
@@ -21,6 +21,13 @@ router.error()(sentry_error_handler)
 
 class CaptchaCallbackData(CallbackData, prefix="captcha"):
     answer: int
+
+
+class JoinCallbackData(CallbackData, prefix="join"):
+    user_id: int
+    chat_id: int
+    can_join: bool
+
 
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
@@ -126,10 +133,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.chat.id in global_data.welcome_messages:
         if event.new_chat_member.user:
             msg = global_data.welcome_messages.get(event.chat.id, 'Hi new user')
-            if event.from_user.username:
-                username = f'@{event.new_chat_member.user.username} {event.new_chat_member.user.full_name}'
-            else:
-                username = f'<a href="tg://user?id={event.new_chat_member.user.id}">{event.new_chat_member.user.full_name}</a>'
+            username = get_username_link(event.new_chat_member.user)
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
@@ -146,7 +150,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
                 except Exception as e:
-                    db_send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.json()}')
+                    db_send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
 
             answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
@@ -258,8 +262,56 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot)
     global_data.admins[event.chat.id] = new_admins
     db_save_bot_value(session, event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
 
+
 # @router.message(Command(commands=["test"]))
 # async def cmd_test(message: Message, bot: Bot):
 #     print(await bot.get_chat_member(-1001767165598,3718221))
 
 
+@router.chat_join_request()
+async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot):
+    chat_id = chat_join_request.chat.id
+    user_id = chat_join_request.from_user.id
+
+    if chat_id in global_data.notify_join:
+        info_chat_id = global_data.notify_join[chat_id]
+        username = get_username_link(chat_join_request.from_user)
+
+        kb_join = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Принять",
+                                 callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id,
+                                                                can_join=True).pack()),
+            InlineKeyboardButton(text="Отказать",
+                                 callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id,
+                                                                can_join=False).pack())
+        ]])
+
+        if len(info_chat_id) > 5:
+            await bot.send_message(
+                info_chat_id,
+                f"Новый участник {username} хочет присоединиться к чату \"{chat_join_request.chat.title}\". "
+                f"Требуется подтверждение.",
+                reply_markup=kb_join
+            )
+        else:
+            await bot.send_message(
+                chat_id,
+                f"Новый участник {username} хочет присоединиться к чату. Требуется подтверждение.",
+                reply_markup=kb_join
+            )
+    # Optional: Auto-approve join request
+    # await bot.approve_chat_join_request(chat_id, user_id)
+
+
+@router.callback_query(JoinCallbackData.filter())
+async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot):
+    if not await is_admin(query.message):
+        await query.answer('You are not admin.', show_alert=True)
+        return False
+
+    if callback_data.can_join:
+        await query.bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
+    else:
+        await query.bot.decline_chat_join_request(callback_data.chat_id, callback_data.user_id)
+
+    await query.answer("Ready !", show_alert=True)

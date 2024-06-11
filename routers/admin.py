@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, \
-    ReactionTypeEmoji
+    ReactionTypeEmoji, ReplyParameters
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
@@ -434,8 +434,10 @@ commands_info = {
     # full_data - чаты с полной расшифровкой по адресу
     "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin"),
     "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin"),
-    "save_last_message_date": (
-        global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate, "toggle", "admin"),
+    "save_last_message_date": (global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate,
+                               "toggle", "admin"),
+    "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin"),
+    "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin"),
 
     "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin"),
     "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin"),
@@ -459,9 +461,17 @@ commands_info = {
 @update_command_info("/add_skynet_admin",
                      "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
+@update_command_info("/notify_join_request",
+                     "Оповещать о новом участнике, требующем подтверждения для присоединения. "
+                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу")
+@update_command_info("/notify_message",
+                     "Оповещать о новом сообщении в определенный чат"
+                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками")
+
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, session: Session, bot: Bot):
     command = message.text.lower().split()[0][1:]
+    command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
     action_type = command_info[2]
     admin_check = command_info[3]
@@ -472,6 +482,14 @@ async def universal_command_handler(message: Message, session: Session, bot: Bot
     elif admin_check == "admin" and not await is_admin(message):
         await message.reply("You are not admin.")
         return
+
+    if command_info[2] == "toggle_chat" and command_arg and len(command_arg) > 5:
+        dest_chat = command_arg.split(":")[0]
+        dest_admin = await is_admin(message, dest_chat)
+        if not dest_admin:
+            await message.reply("Bad target chat. Or you are not admin.")
+            return
+
     await bot.set_message_reaction(chat_id=message.chat.id, message_id=message.message_id,
                                    reaction=[ReactionTypeEmoji(emoji='👀')])
 
@@ -488,12 +506,19 @@ async def handle_command(message: Message, session: Session, command_info):
     command_args = message.text.split()[1:]  # Список аргументов после команды
 
     if chat_id in global_data_field:
-        global_data_field.remove(chat_id)
+        if isinstance(global_data_field, dict):
+            global_data_field.pop(chat_id)
+        else:
+            global_data_field.remove(chat_id)
         db_save_bot_value(session, chat_id, db_value_type, None)
         info_message = await message.reply('Removed')
     else:
-        value_to_set = command_args[0] if command_args else 1
-        global_data_field.append(chat_id)
+        value_to_set = command_args[0] if command_args else '1'
+        if isinstance(global_data_field, dict):
+            global_data_field[chat_id] = value_to_set
+        else:
+            global_data_field.append(chat_id)
+
         db_save_bot_value(session, chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 
@@ -553,7 +578,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
         return
 
     results = []
-    user_id:int
+    user_id: int
 
     for row in data[1:]:
         if len(row[1]) < 3:

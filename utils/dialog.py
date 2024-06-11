@@ -106,9 +106,11 @@ async def delete_last_redis(chat_id):
 async def talk(chat_id, msg, gpt4=False):
     await save_to_redis(chat_id, msg)
     if gpt4:
+        msg = f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n\n{msg}"
         msg = await talk_open_ai_async(msg=msg, gpt4=True)
     else:
         msg_data = await load_from_redis(chat_id)
+        msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде."})
         msg = await talk_open_ai_async(msg_data=msg_data)
     if msg:
         await save_to_redis(chat_id, msg, is_answer=True)

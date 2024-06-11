@@ -1,3 +1,4 @@
+import html
 from datetime import datetime, timedelta
 
 import asyncio
@@ -5,7 +6,7 @@ import asyncio
 from aiogram import Bot
 from aiogram.client.session import aiohttp
 from aiogram.filters import Filter
-from aiogram.types import Message
+from aiogram.types import Message, User
 
 from config_reader import config
 from utils.global_data import MTLChats, global_data, global_tasks
@@ -15,8 +16,10 @@ scheduler: AsyncIOScheduler
 non_breaking_space = chr(0x00A0)
 
 
-async def is_admin(message: Message):
-    members = await message.chat.get_administrators()
+async def is_admin(message: Message, chat_id=None):
+    if chat_id is None:
+        chat_id = message.chat.id
+    members = await message.bot.get_chat_administrators(chat_id=chat_id)
     if message.from_user.id == MTLChats.GroupAnonymousBot:
         return True
     try:
@@ -154,6 +157,15 @@ async def get_debank_balance(account_id, chain='bsc'):
         return float(response.get('usd_value'))
     else:
         raise Exception(f'Ошибка запроса: Статус {status}')
+
+
+def get_username_link(user: User):
+    full_name = html.unescape(user.full_name)
+    if user.username:
+        username = f'@{user.username} {full_name}'
+    else:
+        username = f'<a href="tg://user?id={user.id}">{full_name}</a>'
+    return username
 
 
 if __name__ == '__main__':

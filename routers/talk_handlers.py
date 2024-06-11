@@ -1,3 +1,4 @@
+import html
 import re
 from contextlib import suppress
 
@@ -9,7 +10,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
-    URLInputFile
+    URLInputFile, ReplyParameters
 from sqlalchemy.orm import Session
 
 from config_reader import config
@@ -20,7 +21,8 @@ from scripts.update_report import update_guarantors_report, update_main_report, 
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
 from utils import dialog
-from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption
+from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption, \
+    get_username_link
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
@@ -38,6 +40,11 @@ class SpamCheckCallbackData(CallbackData, prefix="SpamCheck"):
     user_id: int
     good: bool
     new_message_id: int
+
+
+class ReplyCallbackData(CallbackData, prefix="Reply"):
+    message_id: int
+    chat_id: int
 
 
 # @router.message(F.chat == MTLChats.Employment)
@@ -130,6 +137,8 @@ async def cmd_last_check_reply_to_bot(message: Message):
         msg = await dialog.talk(message.chat.id, message.text)
         msg = await message.reply(msg)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
+
+    await answer_notify_message(message)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -278,7 +287,10 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
 
         await asyncio.sleep(15)
         try:
-            await message.forward(chat_id=message.from_user.id)
+            if message.has_protected_content:
+                await message.copy_to(chat_id=message.from_user.id)
+            else:
+                await message.forward(chat_id=message.from_user.id)
             await bot.send_message(chat_id=message.chat.id, text='Сообщение переслано в личку')
         except TelegramBadRequest:
             await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено')
@@ -298,6 +310,8 @@ async def cmd_save_msg(message: Message, session: Session):
                     thread_id=message.message_thread_id if message.is_topic_message else None,
                     text=message.text, chat_id=message.chat.id)
 
+    await notify_message(message)
+
 
 @router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
 async def cmd_save_good_user(message: Message, session: Session):
@@ -306,6 +320,7 @@ async def cmd_save_good_user(message: Message, session: Session):
 
     add_bot_users(session, message.from_user.id, message.from_user.username, 1)
     # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
+    await notify_message(message)
 
 
 def is_mixed_word(word):
@@ -359,6 +374,14 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
 
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
+
+    if message.chat.id in global_data.notify_message:
+        await notify_message(message)
+
+
+@router.message(ChatInOption('notify_message'))
+async def cmd_save_msg(message: Message):
+    await notify_message(message)
 
 
 async def check_spam(message, session):
@@ -449,6 +472,48 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         await query.answer("Oops, bringing the message back!", show_alert=True)
     else:
         await query.answer("Сорьки, пока не умею !", show_alert=True)
+
+
+async def notify_message(message: Message):
+    if message.is_automatic_forward:
+        return
+
+    if message.chat.id in global_data.notify_message:
+        record = global_data.notify_message[message.chat.id].split(':')
+        dest_chat = record[0]
+        dest_topic = record[1] if len(record) > 1 else None
+        if len(dest_chat) > 3:
+            kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="👀",
+                                     callback_data=ReplyCallbackData(chat_id=message.chat.id,
+                                                                     message_id=message.message_id).pack()),
+                InlineKeyboardButton(text="👀",
+                                     callback_data=ReplyCallbackData(chat_id=message.chat.id,
+                                                                     message_id=message.message_id).pack()),
+            ]])
+
+            msg = await message.bot.send_message(chat_id=dest_chat,
+                                                 message_thread_id=dest_topic,
+                                                 text=f'User {get_username_link(message.from_user)}: \nChat: {html.escape(message.chat.title)}',
+                                                 reply_markup=kb_reply,
+                                                 reply_parameters=ReplyParameters(
+                                                     message_id=message.message_id,
+                                                     chat_id=message.chat.id)
+                                                 )
+            print(msg)
+
+
+async def answer_notify_message(message: Message):
+    if (message.reply_to_message.from_user.id == message.bot.id and message.reply_to_message.reply_markup and
+            message.reply_to_message.external_reply and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
+        info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
+        # "Reply:96:-1002175508678" msg_id:chat_id
+        if len(info) > 2 and info[0] == 'Reply':
+            await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
+
+
+async def cq_reply(query: CallbackQuery):
+    await query.answer("👀", show_alert=True)
 
 
 if __name__ == '__main__':

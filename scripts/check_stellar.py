@@ -85,7 +85,7 @@ async def cmd_check_bot(session: Session):
 
     # USDM order
     params = [
-        (MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset, 5000),
+        (MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset, 3000),
         (MTLAddresses.public_usdm, MTLAssets.yusdc_asset, MTLAssets.usdm_asset, 5000),
         (MTLAddresses.public_usdm, MTLAssets.usdm_asset, MTLAssets.usdc_asset, 50000),
     ]

@@ -161,6 +161,8 @@ def load_globals(session: Session):
     global_data.welcome_messages = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
     global_data.welcome_button = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
     global_data.delete_income = db_get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
+    global_data.notify_join = db_get_chat_dict_by_key(session, BotValueTypes.NotifyJoin)
+    global_data.notify_message = db_get_chat_dict_by_key(session, BotValueTypes.NotifyMessage)
     global_data.admins = db_get_chat_dict_by_key(session, BotValueTypes.Admins, True)
     global_data.alert_me = db_get_chat_dict_by_key(session, BotValueTypes.AlertMe, True)
     global_data.sync = db_get_chat_dict_by_key(session, BotValueTypes.Sync, True)

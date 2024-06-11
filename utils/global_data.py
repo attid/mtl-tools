@@ -69,6 +69,8 @@ class BotValueTypes:
     NeedDecode = 33
     SaveLastMessageDate = 34
     LastMTLATransaction = 35
+    NotifyJoin = 36
+    NotifyMessage = 37
 
 
 class LogQuery:
@@ -84,6 +86,8 @@ class GlobalData:
     welcome_messages = {}
     welcome_button = {}
     delete_income = {}
+    notify_join = {}
+    notify_message = {}
     name_list = {}
     users_list = {}
     info_cmd = {}
