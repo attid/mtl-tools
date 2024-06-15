@@ -15,11 +15,9 @@ router = Router()
 router.error()(sentry_error_handler)
 
 startmsg = """
-Привет, я бот из Монтелиберо https://montelibero.org/
-помогаю справляться с задачами 
-чтоб увидеть все что я умею наберите в поле ввода @mymtlbot и любое слово для поиска команды
-
-Либо просто можем пообщаться.
+Привет, я бот из <a href="https://montelibero.org">Монтелиберо</a>.
+Помогаю справляться с задачами, либо просто можем пообщаться.
+Чтобы увидеть все, что я умею, наберите в поле ввода @mymtlbot и любое слово для поиска команды
 """
 
 link_stellar = "https://stellar.expert/explorer/public/account/"

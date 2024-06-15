@@ -22,7 +22,7 @@ from scripts.update_report import update_guarantors_report, update_main_report, 
 from skynet_start import add_bot_users
 from utils import dialog
 from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption, \
-    get_username_link
+    get_username_link, cmd_sleep_and_delete
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
@@ -274,16 +274,17 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
                 has_hashtag = True
                 break
 
-    if message.reply_to_message or message.forward_from_chat or has_hashtag:
+    if message.reply_to_message or message.forward_from_chat or has_hashtag or message.is_automatic_forward:
         db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
     else:
         msg = await message.reply(
-            'Осуждаю!\n'
-            'Это сообщения не увидят в комментариях. \n'
-            'Я его удалю через 15 секунд!\n'
-            'Рекомендую повторить его с использованием функции "ответ" на нужное сообщение.')
+            'В этом чате включен режим контроля использования функции ответа. \n'
+            'Сообщение будет удаленно через 15 секунд!\n'
+            'Рекомендую скопировать его повторить его с использованием функции "ответ" на нужное сообщение.\n'
+            '<a href="https://telegra.ph/rc-06-15-3">Подробнее о режиме тут</a>',
+            disable_web_page_preview=True)
 
         await asyncio.sleep(15)
         try:
@@ -291,14 +292,21 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
                 await message.copy_to(chat_id=message.from_user.id)
             else:
                 await message.forward(chat_id=message.from_user.id)
-            await bot.send_message(chat_id=message.chat.id, text='Сообщение переслано в личку')
+            msg_d = await bot.send_message(chat_id=message.chat.id, disable_web_page_preview=True,
+                                           text=f'Сообщение от {message.from_user.username} переслано в личку.\n'
+                                                '<a href="https://telegra.ph/rc-06-15-3">Подробнее о режиме тут</a>')
         except TelegramBadRequest:
-            await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено')
+            msg_d = await bot.send_message(chat_id=message.chat.id, disable_web_page_preview=True,
+                                           text=f'Сообщение от {message.from_user.username} удалено\n'
+                                                '<a href="https://telegra.ph/rc-06-15-3">Подробнее о режиме тут</a>')
         except TelegramForbiddenError:
-            await bot.send_message(chat_id=message.chat.id, text='Сообщение удалено. Личка в блокировке =(')
+            msg_d = await bot.send_message(chat_id=message.chat.id, disable_web_page_preview=True,
+                                           text=f'Сообщение от {message.from_user.username} удалено. Личка в блокировке =(\n'
+                                                '<a href="https://telegra.ph/rc-06-15-3">Подробнее о режиме тут</a>')
         with suppress(TelegramBadRequest):
             await message.delete()
             await msg.delete()
+        await cmd_sleep_and_delete(msg_d, 120)
 
 
 @router.message(ChatInOption('listen'), F.text)

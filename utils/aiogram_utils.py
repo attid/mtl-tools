@@ -49,7 +49,8 @@ async def cmd_sleep_and_delete(message: Message, sleep_time):
         message (Message): The message to be deleted.
         sleep_time: The time to sleep in seconds.
     """
-    asyncio.ensure_future(cmd_sleep_and_delete_task(message, sleep_time))
+    # asyncio.ensure_future(cmd_sleep_and_delete_task(message, sleep_time))
+    return asyncio.create_task(cmd_sleep_and_delete_task(message, sleep_time))
 
 
 async def cmd_sleep_and_delete_task(message: Message, sleep_time):
