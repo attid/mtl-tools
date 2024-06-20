@@ -357,11 +357,12 @@ async def check_exchange():
 
     response = requests.get(url, headers=headers, params=parameters)
     data = response.json()
+    #print(data)
 
     xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
     btc_usdt = data['data']['BTC']['quote']['USDT']['price']
     eurs_usdt = data['data']['EURS']['quote']['USDT']['price']
-    eur_eur = 1.02
+    eur_eur = 1.01
     eur_usdt = eurs_usdt * eur_eur  # Увеличиваем на 1%
 
     start_configs = [
@@ -514,7 +515,7 @@ if __name__ == "__main__":
         asyncio.run(check_exchange_one())
     else:
         print('need more parameters')
-        asyncio.run(check_exchange_test())
+        asyncio.run(check_exchange())
         # asyncio.run(check_exchange_one())
 
     # place_ladder_orders(account_id=MTLAddresses.public_exchange_usdm_xlm, asset_a=MTLAssets.usdm_asset,

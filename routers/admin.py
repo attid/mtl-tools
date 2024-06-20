@@ -12,14 +12,14 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, \
-    ReactionTypeEmoji, ReplyParameters
+    ReactionTypeEmoji, ReplyParameters, ErrorEvent
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
 
 from config_reader import config
 from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
-from middlewares.sentry_error_handler import sentry_error_handler
+from middlewares.throttling import rate_limit
 from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
@@ -28,8 +28,6 @@ from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
 router = Router()
-router.error()(sentry_error_handler)
-
 
 @router.message(Command(commands=["exit"]))
 @router.message(Command(commands=["restart"]))
@@ -467,7 +465,6 @@ commands_info = {
 @update_command_info("/notify_message",
                      "Оповещать о новом сообщении в определенный чат"
                      "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками")
-
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, session: Session, bot: Bot):
     command = message.text.lower().split()[0][1:]
@@ -595,3 +592,14 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
     await gs_get_update_mtlap_skynet_row(results)
 
     await message.reply("Готово.")
+
+# @rate_limit(5, 'test')
+# @router.message(Command(commands=["test"]))
+# async def cmd_test(message: Message, state: FSMContext):
+#     await state.update_data(state_my_test=1)
+#     await message.reply('test')
+
+
+
+
+

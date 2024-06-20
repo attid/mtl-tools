@@ -7,12 +7,10 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_save_bot_user
-from middlewares.sentry_error_handler import sentry_error_handler
 from utils.global_data import MTLChats, update_command_info
 from utils.stellar_utils import MTLAddresses
 
 router = Router()
-router.error()(sentry_error_handler)
 
 startmsg = """
 Привет, я бот из <a href="https://montelibero.org">Монтелиберо</a>.
@@ -65,7 +63,7 @@ async def cmd_start(message: Message, state: FSMContext, session: Session, bot: 
 
 @router.message(Command(commands=["save"]))
 async def cmd_save(message: Message):
-    logger.info(f'{message.json()}')
+    logger.info(f'{message.model_dump_json(indent=2)}')
     if message.from_user.id == MTLChats.ITolstov:
         await message.answer("Готово")
     else:

@@ -18,6 +18,8 @@ from config_reader import config
 from db.requests import db_load_bot_value, db_get_chat_ids_by_key, db_get_chat_dict_by_key, db_save_bot_user, \
     db_load_bot_users
 from middlewares.db import DbSessionMiddleware
+from middlewares.sentry_error_handler import sentry_error_handler
+from middlewares.throttling import ThrottlingMiddleware
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
 from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
@@ -84,14 +86,8 @@ async def on_shutdown(bot: Bot):
         task.cancel()
 
 
-@logger.catch
 async def main():
     logger.add("skynet.log", rotation="1 MB", level='INFO')
-    sentry_sdk.init(
-        dsn=config.sentry_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
 
     # Запуск бота
     engine = create_engine(config.db_dns, pool_pre_ping=True, max_overflow=50)
@@ -105,7 +101,8 @@ async def main():
     else:
         bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
 
-    storage = RedisStorage(redis=Redis(host='localhost', port=6379, db=4))
+    redis = Redis(host='localhost', port=6379, db=4)
+    storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 
     load_globals(db_pool())
@@ -117,8 +114,7 @@ async def main():
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
-
-
+    dp.message.middleware(ThrottlingMiddleware(redis=redis))
 
     dp.include_router(admin.router)
     dp.include_router(all.router)
@@ -137,6 +133,7 @@ async def main():
     dp['dbsession_pool'] = db_pool
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
+    dp.errors.register(sentry_error_handler)
 
     # Запускаем бота и пропускаем все накопленные входящие
     # Да, этот метод можно вызвать даже если у вас поллинг
@@ -181,6 +178,11 @@ def add_bot_users(session: Session, user_id: int, username: str, new_user_type: 
 
 
 if __name__ == "__main__":
+    sentry_sdk.init(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
     try:
         # import logging
         # logging.basicConfig(level=logging.DEBUG)

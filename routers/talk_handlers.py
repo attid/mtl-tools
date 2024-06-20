@@ -12,11 +12,9 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
     URLInputFile, ReplyParameters
 from sqlalchemy.orm import Session
-
-from config_reader import config
 from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id, \
     db_update_user_chat_date
-from middlewares.sentry_error_handler import sentry_error_handler
+from middlewares.throttling import rate_limit
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
@@ -29,7 +27,6 @@ from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
 from scripts.update_data import update_lab
 
 router = Router()
-router.error()(sentry_error_handler)
 
 my_talk_message = []
 
@@ -308,7 +305,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
             await msg.delete()
         await cmd_sleep_and_delete(msg_d, 120)
 
-
+@rate_limit(0, 'listen')
 @router.message(ChatInOption('listen'), F.text)
 async def cmd_save_msg(message: Message, session: Session):
     if message.chat.id in global_data.save_last_message_date:
@@ -320,7 +317,7 @@ async def cmd_save_msg(message: Message, session: Session):
 
     await notify_message(message)
 
-
+@rate_limit(0, 'listen')
 @router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
 async def cmd_save_good_user(message: Message, session: Session):
     if message.chat.id in global_data.save_last_message_date:
@@ -372,7 +369,7 @@ def contains_spam_phrases(text, phrases=None, threshold=3):
     # print(f'count: {count}')
     return count >= threshold
 
-
+@rate_limit(0, 'listen')
 @router.message(F.entities, F.text)  # если текст с link # точно не приватное, приватные выше остановились
 async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
     await check_alert(bot, message, session)
@@ -387,6 +384,7 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
         await notify_message(message)
 
 
+@rate_limit(0, 'listen')
 @router.message(ChatInOption('notify_message'))
 async def cmd_save_msg(message: Message):
     await notify_message(message)
@@ -466,6 +464,7 @@ async def save_last(message, session):
         db_update_user_chat_date(session, message.from_user.id, message.chat.id)
 
 
+@rate_limit(0, 'listen')
 @router.callback_query(SpamCheckCallbackData.filter())
 async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session):
     if not await is_admin(query.message):

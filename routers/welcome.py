@@ -10,13 +10,11 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
     ChatMemberUpdated, ChatMemberMember, ChatJoinRequest, User
 from sqlalchemy.orm import Session
 from db.requests import db_save_bot_value, db_load_bot_value, db_send_admin_message
-from middlewares.sentry_error_handler import sentry_error_handler
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
-router.error()(sentry_error_handler)
 
 
 class CaptchaCallbackData(CallbackData, prefix="captcha"):
@@ -261,11 +259,6 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot)
     new_admins = [member.user.id for member in members]
     global_data.admins[event.chat.id] = new_admins
     db_save_bot_value(session, event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
-
-
-# @router.message(Command(commands=["test"]))
-# async def cmd_test(message: Message, bot: Bot):
-#     print(await bot.get_chat_member(-1001767165598,3718221))
 
 
 @router.chat_join_request()

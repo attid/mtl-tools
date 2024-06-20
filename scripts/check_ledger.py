@@ -174,8 +174,10 @@ def decode_effects_records(records, ledger):
                                   'account_removed', 'account_sponsorship_created', 'data_sponsorship_created',
                                   'signer_sponsorship_created', 'account_home_domain_updated', 'liquidity_pool_removed',
                                   'trustline_sponsorship_removed', 'liquidity_pool_withdrew', 'liquidity_pool_created',
-                                  'account_inflation_destination_updated', 'sequence_bumped', 'signer_sponsorship_removed',
-                                  'account_sponsorship_removed', 'liquidity_pool_revoked', 'claimable_balance_clawed_back'):
+                                  'account_inflation_destination_updated', 'sequence_bumped',
+                                  'signer_sponsorship_removed',
+                                  'account_sponsorship_removed', 'liquidity_pool_revoked',
+                                  'claimable_balance_clawed_back'):
                 continue
             if record['type'] == 'account_debited':
                 if record['account'] in watch_list or record.get('asset_issuer') in watch_list:
@@ -243,6 +245,11 @@ def decode_effects_records(records, ledger):
                     result.append([op_date, record['type'], record['limit'],
                                    record.get('asset_code', 'XLM'), None, None, None, record.get('account'), None, '',
                                    record['paging_token'], ledger])
+                    if record.get('type') in ('trustline_created', 'trustline_removed'): # trustline_created notyfication
+                        result.append([op_date, record['type'], record['limit'], record.get('asset_code', 'XLM'), None,
+                                       None, None, record.get('asset_issuer'), None, '',
+                                       record['paging_token'] + 'x', ledger])
+
                 continue
             if record['type'] in ('data_created', 'data_removed', 'data_updated'):
                 if record['account'] in watch_list:
