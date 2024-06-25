@@ -6,11 +6,10 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
-
 from config_reader import config
-from db.requests import db_load_new_message, db_send_admin_message, db_load_bot_value, db_get_ledger_count
+from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count
 from scripts.mtl_exchange2 import check_mm, check_mmwb
-from utils.global_data import MTLChats, BotValueTypes
+from utils.global_data import MTLChats, BotValueTypes, global_data
 
 
 @logger.catch
@@ -78,7 +77,7 @@ async def cmd_send_message_1m(bot: Bot, session_pool):
 @logger.catch
 async def time_check_ledger(bot: Bot, session_pool):
     with session_pool() as session:
-        saved_ledger = int(db_load_bot_value(session, 0, BotValueTypes.LastLedger, '45407700'))
+        saved_ledger = int(await global_data.json_config.load_bot_value(0, BotValueTypes.LastLedger, '45407700'))
         async with aiohttp.ClientSession() as httpsession:
             async with httpsession.get(config.horizon_url) as resp:
                 json_resp = await resp.json()

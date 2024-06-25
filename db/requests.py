@@ -15,7 +15,7 @@ from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
 
 
-def db_save_bot_value(session, chat_id: int, chat_key: int, chat_value: any):
+def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int, chat_value: any):
     """
     Update or insert a record in the BOT_TABLE.
 
@@ -40,7 +40,7 @@ def db_save_bot_value(session, chat_id: int, chat_key: int, chat_value: any):
     session.commit()
 
 
-def db_load_bot_value(session, chat_id: int, chat_key: int, default_value: any = ''):
+def db_load_bot_value_ext(session: Session, chat_id: int, chat_key: int, default_value: any = ''):
     """
     Get a chat_value by chat_id and chat_key from the BOT_TABLE.
 
@@ -55,32 +55,34 @@ def db_load_bot_value(session, chat_id: int, chat_key: int, default_value: any =
     return result[0] if result else default_value
 
 
-def db_get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
-    """
-    Get list of chat IDs by a specific chat key.
-
-    :param session: SQLAlchemy DB session
-    :param chat_key: The key of the chat
-    :return: List of chat IDs where the provided key exists
-    """
-    result = session.query(BotTable.chat_id).filter(BotTable.chat_key == chat_key).all()
-    return [row[0] for row in result]
-
-
-def db_get_chat_dict_by_key(session: Session, chat_key: int, return_json=False) -> Dict[int, str | list]:
-    """
-    Get dictionary of chat IDs and corresponding values by a specific chat key.
-
-    :param return_json: if True, return the list as JSON
-    :param session: SQLAlchemy DB session
-    :param chat_key: The key of the chat
-    :return: Dictionary with chat IDs as keys and corresponding values as values for the provided chat key
-    """
-    result = session.query(BotTable.chat_id, BotTable.chat_value).filter(BotTable.chat_key == chat_key).all()
-    if return_json:
-        return {row[0]: json.loads(row[1]) for row in result}
-    else:
-        return {row[0]: row[1] for row in result}
+#
+#
+# def db_get_chat_ids_by_key(session: Session, chat_key: int) -> List[int]:
+#     """
+#     Get list of chat IDs by a specific chat key.
+#
+#     :param session: SQLAlchemy DB session
+#     :param chat_key: The key of the chat
+#     :return: List of chat IDs where the provided key exists
+#     """
+#     result = session.query(BotTable.chat_id).filter(BotTable.chat_key == chat_key).all()
+#     return [row[0] for row in result]
+#
+#
+# def db_get_chat_dict_by_key(session: Session, chat_key: int, return_json=False) -> Dict[int, str | list]:
+#     """
+#     Get dictionary of chat IDs and corresponding values by a specific chat key.
+#
+#     :param return_json: if True, return the list as JSON
+#     :param session: SQLAlchemy DB session
+#     :param chat_key: The key of the chat
+#     :return: Dictionary with chat IDs as keys and corresponding values as values for the provided chat key
+#     """
+#     result = session.query(BotTable.chat_id, BotTable.chat_value).filter(BotTable.chat_key == chat_key).all()
+#     if return_json:
+#         return {row[0]: json.loads(row[1]) for row in result}
+#     else:
+#         return {row[0]: row[1] for row in result}
 
 
 def db_save_bot_user(session: Session, user_id: int, user_name: str, user_type: int = 0):
@@ -138,19 +140,6 @@ def db_load_new_message(session: Session) -> list[TMessage]:
     return cast(list[TMessage], result.scalars().all())
 
 
-def db_save_url(session, chat_id, msg_id, msg):
-    url = extract_url(msg)
-    db_save_bot_value(session, chat_id, BotValueTypes.PinnedUrl, url)
-    db_save_bot_value(session, chat_id, BotValueTypes.PinnedId, msg_id)
-
-
-# def extract_url(msg, surl='eurmtl.me'):
-#     if surl:
-#         url = re.search("(?P<url>https?://" + surl + "[^\s]+)", msg).group("url")
-#     else:
-#         url = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
-#     return url
-
 def extract_url(msg, surl='eurmtl.me'):
     try:
         if surl:
@@ -165,7 +154,7 @@ def extract_url(msg, surl='eurmtl.me'):
         else:
             return None  # URL не найден
     except Exception as e:
-        print(f"Ошибка при извлечении URL: {e}")
+        logger.error(f"Ошибка при извлечении URL: {e}")
         return None
 
 

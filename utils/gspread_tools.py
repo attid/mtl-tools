@@ -41,25 +41,6 @@ def get_creds():
 
 agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
 
-
-# Here's an example of how you use the API:
-
-async def example(agcm1):
-    # Always authorize first.
-    # If you have a long-running program call authorize() repeatedly.
-    agc = await agcm.authorize()
-
-    ss = await agc.open("MTL_BIM_register")
-    print("Spreadsheet URL: https://docs.google.com/spreadsheets/d/{0}".format(ss.id))
-    print("Open the URL in your browser to see gspread_asyncio in action!")
-
-    # Create a new spreadsheet but also grab a reference to the default one.
-    ws = await ss.worksheet("List")
-    data = await ws.find('katerinafutur', in_column=3)
-    print(data)
-    print("All done!")
-
-
 async def gs_check_bim(user_id=None, user_name=None):
     agc = await agcm.authorize()
     ss = await agc.open("MTL_BIM_register")
@@ -149,7 +130,7 @@ async def gs_close_support(url):
 
     data = await ws.find(url, in_column=5)
     if data:
-        print(data)
+        # print(data)
         record = await ws.row_values(data.row)
         user_id = record[3]
 
@@ -264,7 +245,7 @@ async def gs_update_namelist():
                     key_to_desc[stellar_key] = stellar_key[:4] + '__' + stellar_key[-4:]
     else:
         raise ValueError("Expected 'Telegram' in column 1 and 'Stellar' in column 3 of the MTLAP worksheet")
-    print(key_to_desc)
+    # print(key_to_desc)
     global_data.name_list = key_to_desc
 
 

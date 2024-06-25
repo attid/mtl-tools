@@ -5,7 +5,7 @@ from utils.stellar_utils import *
 
 
 @logger.catch
-def cmd_check_cron_transaction(session: Session):
+async def cmd_check_cron_transaction(session: Session):
     assets_config = [
         ['MMWB', BotValueTypes.LastMMWBTransaction, MTLChats.MMWBGroup, 0],
         ['FCM', BotValueTypes.LastFCMTransaction, MTLChats.FCMGroup, 0],
@@ -15,7 +15,7 @@ def cmd_check_cron_transaction(session: Session):
         ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
         ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0]
     ]
-    process_transactions_by_assets(session, assets_config)
+    await process_transactions_by_assets(session, assets_config)
     asyncio.run(asyncio.sleep(10))
     address_config = [
         # address, value_id, chat
@@ -26,20 +26,20 @@ def cmd_check_cron_transaction(session: Session):
         (MTLAddresses.public_tfm, BotValueTypes.LastTFMFundTransaction, MTLChats.FinGroup),
         (MTLAddresses.public_mtla, BotValueTypes.LastMTLATransaction, MTLChats.MTLAAgoraGroup)
     ]
-    process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
+    await process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
 
-def process_transactions_by_assets(session, assets_config):
+async def process_transactions_by_assets(session, assets_config):
     for asset in assets_config:
-        result = cmd_check_new_asset_transaction(session, asset_name=asset[0], save_id=asset[1], filter_sum=asset[3])
+        result = await cmd_check_new_asset_transaction(session, asset_name=asset[0], save_id=asset[1], filter_sum=asset[3])
         if result:
             result.insert(0, f"Обнаружены новые операции для {asset[0]}")
             send_message_4000(session, asset[2], result)
 
 
-def process_specific_transactions(session, address_config, ignore_operations):
+async def process_specific_transactions(session, address_config, ignore_operations):
     for address, value_id, chat in address_config:
-        results = cmd_check_new_transaction(session, ignore_operation=ignore_operations,
+        results = await cmd_check_new_transaction(session, ignore_operation=ignore_operations,
                                             stellar_address=address, value_id=value_id)
         if results:
             for result in results:
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     )
 
     if 'check_transaction' in sys.argv:
-        cmd_check_cron_transaction(quik_pool())
+        asyncio.run(cmd_check_cron_transaction(quik_pool()))
     elif 'check_bot' in sys.argv:
         asyncio.run(cmd_check_bot(quik_pool()))
     elif 'check_price' in sys.argv:

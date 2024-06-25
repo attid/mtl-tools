@@ -18,7 +18,7 @@ from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
 
 from config_reader import config
-from db.requests import db_save_bot_value, db_get_messages_without_summary, db_add_summary, db_get_summary
+from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
 from middlewares.throttling import rate_limit
 from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
@@ -160,11 +160,11 @@ async def cmd_set_listen(message: Message, session: Session):
 
     if message.chat.id in global_data.listen:
         global_data.listen.remove(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.Listen, None)
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Listen, None)
         msg = await message.reply('Removed')
     else:
         global_data.listen.append(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.Listen, 1)
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Listen, 1)
         msg = await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -219,25 +219,25 @@ async def cmd_get_sha1(message: Message, bot: Bot):
     file_data = await bot.download(document)
     file_bytes = file_data.read()
 
-    print(type(file_data), file_data)
+    #print(type(file_data), file_data)
 
     hasher = hashlib.sha1()
     hasher.update(file_bytes)
 
     # Get the SHA-1 hash and convert it into bytes
     sha1_hash = hasher.hexdigest()  # .encode('utf-8')
-    print(sha1_hash, sha1_hash)
+    #print(sha1_hash, sha1_hash)
 
     # Encode the bytes to BASE64
     base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
-    print(sha1_hash, base64_hash)
+    #print(sha1_hash, base64_hash)
 
     # sha256
     sha256_hasher = hashlib.sha256()
     sha256_hasher.update(file_bytes)
     sha256_hash = sha256_hasher.hexdigest()
 
-    print(f"SHA-256: {sha256_hash}")
+    #print(f"SHA-256: {sha256_hash}")
 
     await message.reply(f'SHA-1: <code>{sha1_hash}</code>\n'
                         f'BASE64: <code>{base64_hash}</code>\n\n'
@@ -277,14 +277,14 @@ async def cmd_get_info(message: Message, bot: Bot):
 async def cmd_set_alert_me(message: Message, session: Session):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
         global_data.alert_me[message.chat.id].remove(message.from_user.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.AlertMe,
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
                           json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Removed')
     else:
         if message.chat.id not in global_data.alert_me:
             global_data.alert_me[message.chat.id] = []
         global_data.alert_me[message.chat.id].append(message.from_user.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.AlertMe,
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
                           json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Added')
 
@@ -305,14 +305,24 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
 
     try:
         chat = await bot.get_chat(message.reply_to_message.forward_from_chat.id)
+    except TelegramBadRequest:
+        await message.reply('Канал не найден, нужно быть админом в канале')
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error while getting chat: {e}")
+        await message.reply('Произошла непредвиденная ошибка при получении информации о канале')
+        return
+
+    try:
         post_id = message.reply_to_message.forward_from_message_id
-        url = f'https://t.me/c/{str(chat.id)[4:]}/{message.reply_to_message.forward_from_message_id}'
+        url = f'https://t.me/c/{str(chat.id)[4:]}/{post_id}'
         msg_text = message.reply_to_message.html_text
         reply_markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Edit', url=url),
                                                               InlineKeyboardButton(text='Edit', url=url)]])
-        if msg_text[-1] == '*':
+        if msg_text and msg_text[-1] == '*':
             msg_text = msg_text[:-1]
             reply_markup = None
+
         new_msg = await message.answer(msg_text, disable_web_page_preview=True,
                                        reply_markup=reply_markup)
 
@@ -326,18 +336,18 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
                                                         'message_id': new_msg.message_id,
                                                         'url': url})
 
-        db_save_bot_value(session, chat.id, BotValueTypes.Sync,
+        await global_data.json_config.save_bot_value(chat.id, BotValueTypes.Sync,
                           json.dumps(global_data.sync[chat.id]))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()
 
-    except:
-        await message.reply('Канал не найден, нужно быть админом в канале')
-        return
+    except Exception as e:
+        logger.error(f"Error in cmd_sync_post: {e}")
+        await message.reply('Произошла ошибка при синхронизации поста')
 
-    return
 
 
 @router.edited_channel_post(F.text)
@@ -507,7 +517,7 @@ async def handle_command(message: Message, session: Session, command_info):
             global_data_field.pop(chat_id)
         else:
             global_data_field.remove(chat_id)
-        db_save_bot_value(session, chat_id, db_value_type, None)
+        await global_data.json_config.save_bot_value(chat_id, db_value_type, None)
         info_message = await message.reply('Removed')
     else:
         value_to_set = command_args[0] if command_args else '1'
@@ -516,7 +526,7 @@ async def handle_command(message: Message, session: Session, command_info):
         else:
             global_data_field.append(chat_id)
 
-        db_save_bot_value(session, chat_id, db_value_type, value_to_set)
+        await global_data.json_config.save_bot_value(chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 
     await cmd_sleep_and_delete(info_message, 5)
@@ -535,7 +545,7 @@ async def list_command_handler(message: Message, session: Session, command_info)
             await message.reply("Необходимо указать аргументы.")
         else:
             global_data_field.extend(command_args)
-            db_save_bot_value(session, 0, db_value_type, json.dumps(global_data_field))
+            await global_data.json_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Added: {" ".join(command_args)}')
 
     elif action_type == "del_list":
@@ -545,7 +555,7 @@ async def list_command_handler(message: Message, session: Session, command_info)
             for arg in command_args:
                 if arg in global_data_field:
                     global_data_field.remove(arg)
-            db_save_bot_value(session, 0, db_value_type, json.dumps(global_data_field))
+            await global_data.json_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Removed: {" ".join(command_args)}')
 
     elif action_type == "show_list":

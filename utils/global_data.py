@@ -2,6 +2,8 @@ from datetime import datetime
 
 from aiogram.types import Message
 
+from db.tinydb_requests import BotJsonConfig
+
 
 class MTLChats:
     System = 0  # системный "чат" храннение всего подряд
@@ -104,9 +106,12 @@ class GlobalData:
     no_first_link = []
     save_last_message_date = []
     need_decode = []
+    json_config: BotJsonConfig
+    reboot = False
 
 
 global_data = GlobalData()
+global_data.json_config = BotJsonConfig()
 global_tasks = []
 
 

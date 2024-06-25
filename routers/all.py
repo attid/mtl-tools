@@ -1,12 +1,9 @@
 import json
 from copy import copy
-
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.orm import Session
-
-from db.requests import db_load_bot_value, db_save_bot_value
 from utils.aiogram_utils import is_admin
 from utils.global_data import MTLChats, global_data, BotValueTypes, update_command_info
 
@@ -27,7 +24,7 @@ async def cmd_all(message: Message, session: Session):
     #    result = cmd_check_donate_list()
     #    await message.reply(' '.join(result))
     else:
-        members = json.loads(db_load_bot_value(session, message.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.All, '[]'))
         if members:
             await message.reply(' '.join(members))
         else:
@@ -42,10 +39,10 @@ async def cmd_add_all(message: Message, session:Session):
         return False
 
     if len(message.text.split()) > 1:
-        members = json.loads(db_load_bot_value(session, message.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.All, '[]'))
         arg = message.text.split()
         members.extend(arg[1:])
-        db_save_bot_value(session, message.chat.id, BotValueTypes.All, json.dumps(members))
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.All, json.dumps(members))
 
         await message.reply('Done')
     else:
@@ -60,12 +57,12 @@ async def cmd_del_all(message: Message, session: Session):
         return False
 
     if len(message.text.split()) > 1:
-        members = json.loads(db_load_bot_value(session, message.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.All, '[]'))
         arg = message.text.split()[1:]
         for member in arg:
             if member in members:
                 members.remove(member)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.All, json.dumps(members))
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.All, json.dumps(members))
         await message.reply('Done')
     else:
         await message.reply('не указаны параметры кого добавить')
@@ -80,9 +77,9 @@ async def msg_save_all(message: Message, session:Session):
 
     if message.chat.id in global_data.auto_all:
         global_data.auto_all.remove(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.AutoAll, None)
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AutoAll, None)
         await message.reply('Removed')
     else:
         global_data.auto_all.append(message.chat.id)
-        db_save_bot_value(session, message.chat.id, BotValueTypes.AutoAll, 1)
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AutoAll, 1)
         await message.reply('Added')

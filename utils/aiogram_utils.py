@@ -9,7 +9,7 @@ from aiogram.filters import Filter
 from aiogram.types import Message, User
 
 from config_reader import config
-from utils.global_data import MTLChats, global_data, global_tasks
+from utils.global_data import MTLChats, global_data
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler: AsyncIOScheduler

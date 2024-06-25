@@ -1,5 +1,4 @@
 import sentry_sdk
-
 from utils.stellar_utils import *
 from db.models import TLedgers, TOperations
 from db.quik_pool import quik_pool
@@ -74,7 +73,7 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session_pool):
 
 
 async def load_from_stellar(name, queue, session):
-    saved_ledger = int(db_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+    saved_ledger = int(db_load_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
     async with aiohttp.ClientSession() as httpsession:
         async with httpsession.get(config.horizon_url) as resp:
             json_resp = await resp.json()
@@ -87,7 +86,7 @@ async def load_from_stellar(name, queue, session):
                     queue.put_nowait(ledger.ledger)
                     session.commit()
 
-                db_save_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, core_latest_ledger)
+                db_save_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, core_latest_ledger)
 
 
 ########################################################################################################################
@@ -122,7 +121,7 @@ async def cmd_check_ledger(start_ledger_id=None, session: Session = None):
     if start_ledger_id:
         ledger_id = start_ledger_id
     else:
-        ledger_id = int(db_load_bot_value(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+        ledger_id = int(db_load_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
     max_ledger_id = ledger_id + 17
 
     while max_ledger_id > ledger_id:
@@ -245,7 +244,8 @@ def decode_effects_records(records, ledger):
                     result.append([op_date, record['type'], record['limit'],
                                    record.get('asset_code', 'XLM'), None, None, None, record.get('account'), None, '',
                                    record['paging_token'], ledger])
-                    if record.get('type') in ('trustline_created', 'trustline_removed'): # trustline_created notyfication
+                    if record.get('type') in (
+                            'trustline_created', 'trustline_removed'):  # trustline_created notyfication
                         result.append([op_date, record['type'], record['limit'], record.get('asset_code', 'XLM'), None,
                                        None, None, record.get('asset_issuer'), None, '',
                                        record['paging_token'] + 'x', ledger])

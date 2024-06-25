@@ -8,7 +8,7 @@ aiofiles==23.2.1
     # via
     #   -r requirements.in
     #   aiogram
-aiogram==3.4.1
+aiogram==3.8.0
     # via -r requirements.in
 aiohttp==3.9.3
     # via
@@ -311,5 +311,6 @@ yarl==1.9.2
 # setuptools
 
 tiktoken~=0.6.0
-langchain==0.1.11
-duckduckgo-search==5.0
+# langchain==0.1.11
+# duckduckgo-search==5.0
+async-tinydb

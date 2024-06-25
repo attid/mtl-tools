@@ -15,8 +15,7 @@ from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from config_reader import config
-from db.requests import db_load_bot_value, db_get_chat_ids_by_key, db_get_chat_dict_by_key, db_save_bot_user, \
-    db_load_bot_users
+from db.requests import db_save_bot_user, db_load_bot_users
 from middlewares.db import DbSessionMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
@@ -97,7 +96,7 @@ async def main():
     # Creating bot and its dispatcher
     if 'test' in sys.argv:
         bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
-        print('start test')
+        logger.info('start test')
     else:
         bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
 
@@ -105,7 +104,7 @@ async def main():
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 
-    load_globals(db_pool())
+    await load_globals(db_pool())
     from routers import (admin, all, inline, polls, start, stellar, talk_handlers, time_handlers, welcome)
 
     dp.message.middleware(DbSessionMiddleware(db_pool))
@@ -141,28 +140,28 @@ async def main():
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
-def load_globals(session: Session):
-    global_data.skynet_admins = json.loads(db_load_bot_value(session, 0, BotValueTypes.SkynetAdmins, '[]'))
-    global_data.skynet_img = json.loads(db_load_bot_value(session, 0, BotValueTypes.SkynetImg, '[]'))
-    global_data.votes = json.loads(db_load_bot_value(session, 0, BotValueTypes.Votes, '{}'))
+async def load_globals(session: Session):
+    global_data.skynet_admins = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.skynet_img = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
+    global_data.votes = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
 
-    global_data.auto_all = db_get_chat_ids_by_key(session, BotValueTypes.AutoAll)
-    global_data.reply_only = db_get_chat_ids_by_key(session, BotValueTypes.ReplyOnly)
-    global_data.captcha = db_get_chat_ids_by_key(session, BotValueTypes.Captcha)
-    global_data.listen = db_get_chat_ids_by_key(session, BotValueTypes.Listen)
-    global_data.full_data = db_get_chat_ids_by_key(session, BotValueTypes.FullData)
-    global_data.no_first_link = db_get_chat_ids_by_key(session, BotValueTypes.NoFirstLink)
-    global_data.need_decode = db_get_chat_ids_by_key(session, BotValueTypes.NeedDecode)
-    global_data.save_last_message_date = db_get_chat_ids_by_key(session, BotValueTypes.SaveLastMessageDate)
+    global_data.auto_all = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.AutoAll)
+    global_data.reply_only = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.ReplyOnly)
+    global_data.captcha = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.Captcha)
+    global_data.listen = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.Listen)
+    global_data.full_data = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.FullData)
+    global_data.no_first_link = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
+    global_data.need_decode = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
+    global_data.save_last_message_date = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.SaveLastMessageDate)
 
-    global_data.welcome_messages = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeMessage)
-    global_data.welcome_button = db_get_chat_dict_by_key(session, BotValueTypes.WelcomeButton)
-    global_data.delete_income = db_get_chat_dict_by_key(session, BotValueTypes.DeleteIncome)
-    global_data.notify_join = db_get_chat_dict_by_key(session, BotValueTypes.NotifyJoin)
-    global_data.notify_message = db_get_chat_dict_by_key(session, BotValueTypes.NotifyMessage)
-    global_data.admins = db_get_chat_dict_by_key(session, BotValueTypes.Admins, True)
-    global_data.alert_me = db_get_chat_dict_by_key(session, BotValueTypes.AlertMe, True)
-    global_data.sync = db_get_chat_dict_by_key(session, BotValueTypes.Sync, True)
+    global_data.welcome_messages = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
+    global_data.welcome_button = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
+    global_data.delete_income = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.DeleteIncome)
+    global_data.notify_join = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.NotifyJoin)
+    global_data.notify_message = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.NotifyMessage)
+    global_data.admins = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
+    global_data.alert_me = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
+    global_data.sync = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
 
     for user in db_load_bot_users(session):
         global_data.users_list[user.user_id] = user.user_type
@@ -189,3 +188,7 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.error("Exit")
+    except Exception as e:
+        if not global_data.reboot:
+            logger.exception(e)
+            raise e

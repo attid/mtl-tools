@@ -29,7 +29,7 @@ async def work_with_support():
             _, timestamp = key.decode().split(":")
             # добавляем сообщение и соответствующий timestamp в список
             messages.append((float(timestamp), message, key))
-            print(message)
+            # print(message)
 
         if len(messages) > 0:
             # сортируем сообщения по времени

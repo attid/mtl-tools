@@ -314,7 +314,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
 
         data_exist = True
         result.append(f"Прости хозяин, не понимаю")
-        print('bad xdr', idx, operation)
+        logger.info(['bad xdr', idx, operation])
     if data_exist:
         return result
     else:
@@ -1666,10 +1666,10 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
     return xdr
 
 
-def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
+async def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
                               stellar_address=MTLAddresses.public_issuer):
     result = []
-    last_id = db_load_bot_value(session, 0, value_id)
+    last_id = await global_data.json_config.load_bot_value(0, value_id)
     server = Server(horizon_url=config.horizon_url)
     tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
@@ -1694,18 +1694,18 @@ def cmd_check_new_transaction(session: requests.Session, ignore_operation: List,
         # print('****')
         # print(transaction["paging_token"])
 
-    db_save_bot_value(session, 0, value_id, last_id)
+    await global_data.json_config.save_bot_value(0, value_id, last_id)
 
     return result
 
 
-def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: int, filter_sum: int = -1,
+async def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: int, filter_sum: int = -1,
                                     filter_operation=None, issuer=MTLAddresses.public_issuer, filter_asset=None):
     if filter_operation is None:
         filter_operation = []
     result = []
 
-    last_id = db_load_bot_value(session, 0, save_id, '0')
+    last_id = await global_data.json_config.load_bot_value(0, save_id, '0')
     max_id = last_id
 
     data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
@@ -1714,7 +1714,7 @@ def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: 
         max_id = row.id
 
     if max_id > last_id:
-        db_save_bot_value(session, 0, save_id, max_id)
+        await global_data.json_config.save_bot_value(0, save_id, max_id)
 
     return result
 

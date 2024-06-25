@@ -12,8 +12,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
     URLInputFile, ReplyParameters
 from sqlalchemy.orm import Session
-from db.requests import db_load_bot_value, db_save_url, extract_url, db_save_message, db_load_user_id, \
-    db_update_user_chat_date
+from db.requests import extract_url, db_save_message, db_load_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
@@ -75,17 +74,23 @@ async def cmd_img(message: Message, bot: Bot):
         return False
 
 
+async def save_url(chat_id, msg_id, msg):
+    url = extract_url(msg)
+    await global_data.json_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
+    await global_data.json_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+
+
 @router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.text.find('eurmtl.me/sign_tools') > -1:
-        msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
+        msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         try:
             await bot.unpin_chat_message(message.chat.id, msg_id)
         except:
             pass
-        db_save_url(session, message.chat.id, message.message_id, message.text)
+        await save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
-        msg = await check_url_xdr(db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
+        msg = await check_url_xdr(await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
 
@@ -120,9 +125,9 @@ async def remind(message: Message, session: Session, bot: Bot):
                 await send_by_list(bot=bot, all_users=all_users, message=message, url=url, session=session)
 
     else:
-        msg_id = db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedId)
-        msg = db_load_bot_value(session, message.chat.id,
-                                BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+        msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+        msg = await global_data.json_config.load_bot_value(message.chat.id,
+                                                     BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
@@ -156,7 +161,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
             await message.reply('Ссылка не найдена')
     else:
         msg = await check_url_xdr(
-            db_load_bot_value(session, message.chat.id, BotValueTypes.PinnedUrl))
+            await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg[:4000])
 
@@ -305,6 +310,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
             await msg.delete()
         await cmd_sleep_and_delete(msg_d, 120)
 
+
 @rate_limit(0, 'listen')
 @router.message(ChatInOption('listen'), F.text)
 async def cmd_save_msg(message: Message, session: Session):
@@ -316,6 +322,7 @@ async def cmd_save_msg(message: Message, session: Session):
                     text=message.text, chat_id=message.chat.id)
 
     await notify_message(message)
+
 
 @rate_limit(0, 'listen')
 @router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
@@ -368,6 +375,7 @@ def contains_spam_phrases(text, phrases=None, threshold=3):
     count = sum(phrase in text for phrase in phrases)
     # print(f'count: {count}')
     return count >= threshold
+
 
 @rate_limit(0, 'listen')
 @router.message(F.entities, F.text)  # если текст с link # точно не приватное, приватные выше остановились

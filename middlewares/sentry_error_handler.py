@@ -1,6 +1,4 @@
 import sys
-
-from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ErrorEvent
 from loguru import logger
