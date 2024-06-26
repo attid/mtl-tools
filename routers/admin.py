@@ -29,6 +29,7 @@ from utils.timedelta import parse_timedelta_from_message
 
 router = Router()
 
+
 @router.message(Command(commands=["exit"]))
 @router.message(Command(commands=["restart"]))
 async def cmd_exit(message: Message, state: FSMContext):
@@ -42,6 +43,7 @@ async def cmd_exit(message: Message, state: FSMContext):
     if my_state == 'StateExit':
         await state.update_data(MyState=None)
         await message.reply(":[[[ ушла в закат =(")
+        global_data.reboot = True
         exit()
     else:
         await state.update_data(MyState='StateExit')
@@ -219,25 +221,25 @@ async def cmd_get_sha1(message: Message, bot: Bot):
     file_data = await bot.download(document)
     file_bytes = file_data.read()
 
-    #print(type(file_data), file_data)
+    # print(type(file_data), file_data)
 
     hasher = hashlib.sha1()
     hasher.update(file_bytes)
 
     # Get the SHA-1 hash and convert it into bytes
     sha1_hash = hasher.hexdigest()  # .encode('utf-8')
-    #print(sha1_hash, sha1_hash)
+    # print(sha1_hash, sha1_hash)
 
     # Encode the bytes to BASE64
     base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
-    #print(sha1_hash, base64_hash)
+    # print(sha1_hash, base64_hash)
 
     # sha256
     sha256_hasher = hashlib.sha256()
     sha256_hasher.update(file_bytes)
     sha256_hash = sha256_hasher.hexdigest()
 
-    #print(f"SHA-256: {sha256_hash}")
+    # print(f"SHA-256: {sha256_hash}")
 
     await message.reply(f'SHA-1: <code>{sha1_hash}</code>\n'
                         f'BASE64: <code>{base64_hash}</code>\n\n'
@@ -278,14 +280,14 @@ async def cmd_set_alert_me(message: Message, session: Session):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
         global_data.alert_me[message.chat.id].remove(message.from_user.id)
         await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                          json.dumps(global_data.alert_me[message.chat.id]))
+                                                     json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Removed')
     else:
         if message.chat.id not in global_data.alert_me:
             global_data.alert_me[message.chat.id] = []
         global_data.alert_me[message.chat.id].append(message.from_user.id)
         await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                          json.dumps(global_data.alert_me[message.chat.id]))
+                                                     json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -337,7 +339,7 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
                                                         'url': url})
 
         await global_data.json_config.save_bot_value(chat.id, BotValueTypes.Sync,
-                          json.dumps(global_data.sync[chat.id]))
+                                                     json.dumps(global_data.sync[chat.id]))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -348,6 +350,77 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
         logger.error(f"Error in cmd_sync_post: {e}")
         await message.reply('Произошла ошибка при синхронизации поста')
 
+
+@update_command_info("/resync", "Восстанавливает синхронизацию сообщения с постом в канале")
+@router.message(Command(commands=["resync"]))
+async def cmd_resync_post(message: Message, session: Session, bot: Bot):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return
+
+    if not message.reply_to_message or not message.reply_to_message.from_user.id == bot.id:
+        await message.reply('Нужно ответить на сообщение, отправленное ботом')
+        return
+
+    try:
+        # Получаем клавиатуру из сообщения бота
+        reply_markup = message.reply_to_message.reply_markup
+        if not reply_markup or not isinstance(reply_markup, InlineKeyboardMarkup):
+            await message.reply('Не найдена клавиатура с кнопкой редактирования')
+            return
+
+        # Извлекаем URL из кнопки Edit
+        edit_button = next((button for row in reply_markup.inline_keyboard for button in row if button.text == 'Edit'),
+                           None)
+        if not edit_button:
+            await message.reply('Не найдена кнопка Edit')
+            return
+
+        url = edit_button.url
+        # Извлекаем chat_id и post_id из URL
+        match = re.search(r'https://t\.me/c/(\d+)/(\d+)', url)
+        if not match:
+            await message.reply('Неверный формат URL')
+            return
+
+        chat_id, post_id = match.groups()
+        chat_id = int(f"-100{chat_id}")
+
+        # Проверяем, есть ли запись в БД
+        if chat_id not in global_data.sync:
+            global_data.sync[chat_id] = {}
+
+        if post_id not in global_data.sync[chat_id]:
+            global_data.sync[chat_id][post_id] = []
+
+        # Проверяем, существует ли уже запись для данного чата и сообщения
+        existing_record = next((record for record in global_data.sync[chat_id][post_id]
+                                if record['chat_id'] == message.chat.id and
+                                record['message_id'] == message.reply_to_message.message_id), None)
+
+        if existing_record:
+            await message.reply('Синхронизация для этого сообщения уже существует')
+        else:
+            # Добавляем новую запись, не затрагивая существующие
+            global_data.sync[chat_id][post_id].append({
+                'chat_id': message.chat.id,
+                'message_id': message.reply_to_message.message_id,
+                'url': url
+            })
+
+            # Сохраняем обновленные данные в БД
+            await global_data.json_config.save_bot_value(chat_id, BotValueTypes.Sync,
+                                                         json.dumps(global_data.sync[chat_id]))
+
+            await message.reply('Синхронизация восстановлена')
+
+    except Exception as e:
+        logger.error(f"Error in cmd_resync_post: {e}")
+        await message.reply('Произошла ошибка при восстановлении синхронизации')
+
+    # Удаляем команду /resync
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @router.edited_channel_post(F.text)
@@ -608,8 +681,3 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
 # async def cmd_test(message: Message, state: FSMContext):
 #     await state.update_data(state_my_test=1)
 #     await message.reply('test')
-
-
-
-
-

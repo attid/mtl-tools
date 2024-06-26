@@ -41,6 +41,7 @@ class SpamCheckCallbackData(CallbackData, prefix="SpamCheck"):
 class ReplyCallbackData(CallbackData, prefix="Reply"):
     message_id: int
     chat_id: int
+    user_id: int
 
 
 # @router.message(F.chat == MTLChats.Employment)
@@ -90,7 +91,8 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
             pass
         await save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
-        msg = await check_url_xdr(await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
+        msg = await check_url_xdr(
+            await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
 
@@ -127,7 +129,7 @@ async def remind(message: Message, session: Session, bot: Bot):
     else:
         msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         msg = await global_data.json_config.load_bot_value(message.chat.id,
-                                                     BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+                                                           BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
@@ -499,35 +501,69 @@ async def notify_message(message: Message):
         dest_topic = record[1] if len(record) > 1 else None
         if len(dest_chat) > 3:
             kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="👀",
+                InlineKeyboardButton(text="BanAndDelete",
                                      callback_data=ReplyCallbackData(chat_id=message.chat.id,
-                                                                     message_id=message.message_id).pack()),
+                                                                     message_id=message.message_id,
+                                                                     user_id=message.from_user.id).pack()),
                 InlineKeyboardButton(text="👀",
-                                     callback_data=ReplyCallbackData(chat_id=message.chat.id,
-                                                                     message_id=message.message_id).pack()),
+                                     callback_data="👀"),
             ]])
 
-            msg = await message.bot.send_message(chat_id=dest_chat,
-                                                 message_thread_id=dest_topic,
-                                                 text=f'User {get_username_link(message.from_user)}: \nChat: {html.escape(message.chat.title)}',
-                                                 reply_markup=kb_reply,
-                                                 reply_parameters=ReplyParameters(
-                                                     message_id=message.message_id,
-                                                     chat_id=message.chat.id)
-                                                 )
-            print(msg)
+            msg = await message.bot.send_message(
+                chat_id=dest_chat,
+                message_thread_id=dest_topic,
+                text=f'User {get_username_link(message.from_user)}: \nChat: {html.escape(message.chat.title)}',
+                reply_markup=kb_reply,
+                reply_parameters=ReplyParameters(
+                    message_id=message.message_id,
+                    chat_id=message.chat.id)
+            )
+            # print(msg)
 
 
 async def answer_notify_message(message: Message):
-    if (message.reply_to_message.from_user.id == message.bot.id and message.reply_to_message.reply_markup and
-            message.reply_to_message.external_reply and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
+    if (message.reply_to_message.from_user.id == message.bot.id
+            and message.reply_to_message.reply_markup
+            and message.reply_to_message.external_reply
+            and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
         info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
         # "Reply:96:-1002175508678" msg_id:chat_id
         if len(info) > 2 and info[0] == 'Reply':
-            await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
+            msg = await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
+            if message.chat.username:
+                await message.bot.send_message(
+                    chat_id=int(info[2]),
+                    text=f'Ответ из чата {message.chat.username}',
+                    reply_to_message_id=msg.message_id
+                )
 
 
-async def cq_reply(query: CallbackQuery):
+@router.callback_query(ReplyCallbackData.filter())
+async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData):
+    if not await is_admin(query.message, callback_data.chat_id):
+        await query.answer("Вы не являетесь администратором в том чате.", show_alert=True)
+        return
+
+    with suppress(TelegramBadRequest):
+        await query.bot.ban_chat_member(
+            chat_id=callback_data.chat_id,
+            user_id=callback_data.user_id
+        )
+
+    with suppress(TelegramBadRequest):
+        await query.bot.delete_message(
+            chat_id=callback_data.chat_id,
+            message_id=callback_data.message_id
+        )
+
+    with suppress(TelegramBadRequest):
+        await query.message.delete()
+
+    await query.answer("Пользователь забанен и сообщения удалены.", show_alert=True)
+
+
+@router.callback_query(F.data == "👀")
+async def cq_look(query: CallbackQuery):
     await query.answer("👀", show_alert=True)
 
 

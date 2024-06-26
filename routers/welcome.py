@@ -52,7 +52,8 @@ async def cmd_set_welcome(message: Message, session: Session):
 
     if len(message.text.split()) > 1:
         global_data.welcome_messages[message.chat.id] = message.html_text[13:]
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, message.html_text[13:])
+        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
+                                                     message.html_text[13:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -304,7 +305,18 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
 
     if callback_data.can_join:
         await query.bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
+        await query.answer("✅")
+        await query.message.edit_reply_markup(
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text=f"✅ {query.from_user.username}", callback_data="👀")]]))
+
     else:
         await query.bot.decline_chat_join_request(callback_data.chat_id, callback_data.user_id)
+        await query.answer("❌")
+        await query.message.edit_reply_markup(
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]))
 
-    await query.answer("Ready !", show_alert=True)
+    # await query.answer("Ready !", show_alert=True)
+
+

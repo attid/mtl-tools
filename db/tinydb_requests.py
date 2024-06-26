@@ -10,8 +10,7 @@ from pydantic import BaseModel
 from asynctinydb import JSONStorage, TinyDB, Query
 from asynctinydb.middlewares import CachingMiddleware
 
-DB_FILE_NAME = os.path.join(os.path.dirname(__file__), 'skynet_config.json')
-
+DB_FILE_NAME = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'skynet_config.json')
 
 # class PrettyJSONStorage(JSONStorage):
 #     """Custom JSON storage for TinyDB with pretty formatting."""
@@ -24,7 +23,7 @@ DB_FILE_NAME = os.path.join(os.path.dirname(__file__), 'skynet_config.json')
 class BotTable(BaseModel):
     chat_id: int
     chat_key: int
-    chat_value: str
+    chat_value: Optional[str]
 
 
 class BotJsonConfig:

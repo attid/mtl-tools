@@ -16,7 +16,7 @@ async def cmd_check_cron_transaction(session: Session):
         ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0]
     ]
     await process_transactions_by_assets(session, assets_config)
-    asyncio.run(asyncio.sleep(10))
+    await asyncio.sleep(10)
     address_config = [
         # address, value_id, chat
         (MTLAddresses.public_issuer, BotValueTypes.LastFondTransaction, MTLChats.SignGroup),
