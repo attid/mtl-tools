@@ -607,20 +607,25 @@ async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
         div_sum = test_sum
     else:
         div_sum = await get_balances(MTLAddresses.public_bod_eur)
-        div_sum = int(float(div_sum['EURMTL']) / 2) #50%
+        div_sum = int(float(div_sum['EURMTL']) / 2)  # 50%
         logger.info(f'div_sum = {div_sum}')
 
     accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
 
-    valid_accounts = [account for account in accounts if (await get_balances(account['account_id'], account_json=account)).get('EURMTL')]
-    one_mtlap_accounts = [account for account in valid_accounts if 1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
-    two_or_more_mtlap_accounts = [account for account in valid_accounts if (await get_balances(account['account_id'], account_json=account))['MTLAP'] >= 2]
+    valid_accounts = [account for account in accounts if
+                      (await get_balances(account['account_id'], account_json=account)).get('EURMTL')]
+    one_mtlap_accounts = [account for account in valid_accounts if
+                          1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
+    two_or_more_mtlap_accounts = [account for account in valid_accounts if
+                                  (await get_balances(account['account_id'], account_json=account))['MTLAP'] >= 2]
 
     amount_for_one_mtlap_accounts = int(div_sum * 0.2)
     amount_for_two_or_more_mtlap_accounts = int(div_sum * 0.8)
 
-    sdiv_one_mtlap = int(amount_for_one_mtlap_accounts / len(one_mtlap_accounts) * 100) / 100 if one_mtlap_accounts else 0
-    sdiv_two_mtlap = int(amount_for_two_or_more_mtlap_accounts / len(two_or_more_mtlap_accounts) * 100) / 100 if two_or_more_mtlap_accounts else 0
+    sdiv_one_mtlap = int(
+        amount_for_one_mtlap_accounts / len(one_mtlap_accounts) * 100) / 100 if one_mtlap_accounts else 0
+    sdiv_two_mtlap = int(amount_for_two_or_more_mtlap_accounts / len(
+        two_or_more_mtlap_accounts) * 100) / 100 if two_or_more_mtlap_accounts else 0
 
     mtl_accounts = []
     for account in valid_accounts:
@@ -1667,7 +1672,7 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
 
 
 async def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
-                              stellar_address=MTLAddresses.public_issuer):
+                                    stellar_address=MTLAddresses.public_issuer):
     result = []
     last_id = await global_data.json_config.load_bot_value(0, value_id)
     server = Server(horizon_url=config.horizon_url)
@@ -1700,7 +1705,7 @@ async def cmd_check_new_transaction(session: requests.Session, ignore_operation:
 
 
 async def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: int, filter_sum: int = -1,
-                                    filter_operation=None, issuer=MTLAddresses.public_issuer, filter_asset=None):
+                                          filter_operation=None, issuer=MTLAddresses.public_issuer, filter_asset=None):
     if filter_operation is None:
         filter_operation = []
     result = []
@@ -2154,15 +2159,25 @@ async def get_liquidity_pools_for_asset(asset):
         return pools
 
 
+async def test():
+    # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
+    from db.quik_pool import quik_pool
+    a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
+    print(a)
+    #'224672741436141569-2'
+
+
 if __name__ == '__main__':
     pass
+    asyncio.run(test())
+
     # a = gen_new('YMON')
-    a = asyncio.run(cmd_gen_mtl_vote_list())
+    # a = asyncio.run(cmd_gen_mtl_vote_list())
     # from db.quik_pool import quik_pool
     # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))
     #
     # # a = asyncio.run(stellar_get_orders_sum(MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset))
-    print(a)
+    # print(a)
     # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
     #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),
     #                                                     datetime.strptime('01.04.2024', '%d.%m.%Y')))

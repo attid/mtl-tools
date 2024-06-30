@@ -242,6 +242,26 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         await msg.reply('Обновление завершено')
 
 
+@router.message(F.chat.type == ChatType.PRIVATE, F.entities)
+async def handle_private_message_links(message: Message, bot: Bot):
+    telegram_links = []
+
+    for entity in message.entities:
+        if entity.type in ['url', 'text_link']:
+            url = entity.url if entity.type == 'text_link' else entity.extract_from(message.text)
+            if 't.me/c/' in url:
+                chat_id = url.split('/c/')[1].split('/')[0]
+                try:
+                    chat = await bot.get_chat(int('-100' + chat_id))
+                    telegram_links.append(f"{url} Группа \"{chat.title}\"")
+                except TelegramBadRequest:
+                    telegram_links.append(f"{url} группа \"не определена\"")
+
+    if telegram_links:
+        response = "Найдены ссылки:\n" + "\n".join(telegram_links)
+        await message.reply(response)
+
+
 @router.message(F.chat.type == ChatType.PRIVATE)
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ', 'SKYNET4', 'СКАЙНЕТ4')))
 @router.message(Command(commands=["skynet"]))
@@ -396,7 +416,7 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
 
 @rate_limit(0, 'listen')
 @router.message(ChatInOption('notify_message'))
-async def cmd_save_msg(message: Message):
+async def cmd_notify_msg(message: Message):
     await notify_message(message)
 
 
@@ -477,7 +497,7 @@ async def save_last(message, session):
 @rate_limit(0, 'listen')
 @router.callback_query(SpamCheckCallbackData.filter())
 async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session):
-    if not await is_admin(query.message):
+    if not await is_admin(query):
         await query.answer('You are not admin.', show_alert=True)
         return False
 
@@ -533,14 +553,14 @@ async def answer_notify_message(message: Message):
             if message.chat.username:
                 await message.bot.send_message(
                     chat_id=int(info[2]),
-                    text=f'Ответ из чата {message.chat.username}',
+                    text=f'Ответ из чата @{message.chat.username}',
                     reply_to_message_id=msg.message_id
                 )
 
 
 @router.callback_query(ReplyCallbackData.filter())
 async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData):
-    if not await is_admin(query.message, callback_data.chat_id):
+    if not await is_admin(query, callback_data.chat_id):
         await query.answer("Вы не являетесь администратором в том чате.", show_alert=True)
         return
 

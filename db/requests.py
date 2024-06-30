@@ -646,7 +646,11 @@ def db_get_operations_by_asset(session: Session, asset_code, dt_filter) -> List[
 if __name__ == '__main__':
     from quik_pool import quik_pool
 
-    print(db_get_operations_by_asset(quik_pool(), 'USDM', datetime.now().date()))
+    text = 'text ' * 1000
+    print (len(text))
+    db_save_message(session=quik_pool(), user_id=1, username='username', thread_id=1, text=text, chat_id=1)
+
+#    print(db_get_operations_by_asset(quik_pool(), 'USDM', datetime.now().date()))
 
     # print(db_get_new_effects_for_token(session=quik_pool(),
     #                                token='MTL',

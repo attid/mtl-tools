@@ -299,7 +299,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
 
 @router.callback_query(JoinCallbackData.filter())
 async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot):
-    if not await is_admin(query.message):
+    if not await is_admin(query, callback_data.chat_id):
         await query.answer('You are not admin.', show_alert=True)
         return False
 

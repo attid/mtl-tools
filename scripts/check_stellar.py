@@ -30,17 +30,18 @@ async def cmd_check_cron_transaction(session: Session):
 
 
 async def process_transactions_by_assets(session, assets_config):
-    for asset in assets_config:
-        result = await cmd_check_new_asset_transaction(session, asset_name=asset[0], save_id=asset[1], filter_sum=asset[3])
+    for asset_name, value_id, chat, filter_sum in assets_config:
+        result = await cmd_check_new_asset_transaction(session, asset_name=asset_name,
+                                                       save_id=value_id, filter_sum=filter_sum)
         if result:
-            result.insert(0, f"Обнаружены новые операции для {asset[0]}")
-            send_message_4000(session, asset[2], result)
+            result.insert(0, f"Обнаружены новые операции для {asset_name}")
+            send_message_4000(session, chat, result)
 
 
 async def process_specific_transactions(session, address_config, ignore_operations):
     for address, value_id, chat in address_config:
         results = await cmd_check_new_transaction(session, ignore_operation=ignore_operations,
-                                            stellar_address=address, value_id=value_id)
+                                                  stellar_address=address, value_id=value_id)
         if results:
             for result in results:
                 result.insert(0, f"Получены новые транзакции")
@@ -93,8 +94,8 @@ async def cmd_check_bot(session: Session):
     for address, selling_asset, buying_asset, order_min_sum in params:
         order_sum = await stellar_get_orders_sum(address, selling_asset, buying_asset)
         if order_sum < order_min_sum:
-            db_cmd_add_message(session, MTLChats.USDMMGroup, f'Внимание ордер {selling_asset.code}/{buying_asset.code} {order_sum} !')
-
+            db_cmd_add_message(session, MTLChats.USDMMGroup,
+                               f'Внимание ордер {selling_asset.code}/{buying_asset.code} {order_sum} !')
 
     # key rate
     # dt = fb.execsql1('select max(t.dt_add) from t_keyrate t', [], datetime.now())

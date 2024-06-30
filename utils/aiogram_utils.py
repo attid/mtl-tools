@@ -1,12 +1,15 @@
 import html
+from contextlib import suppress
 from datetime import datetime, timedelta
 
 import asyncio
 
 from aiogram import Bot
 from aiogram.client.session import aiohttp
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
-from aiogram.types import Message, User
+from aiogram.types import Message, User, CallbackQuery
+from sentry_sdk.client import get_options
 
 from config_reader import config
 from utils.global_data import MTLChats, global_data
@@ -16,17 +19,31 @@ scheduler: AsyncIOScheduler
 non_breaking_space = chr(0x00A0)
 
 
-async def is_admin(message: Message, chat_id=None):
+def get_user_id(user_id: Message | int | User | CallbackQuery):
+    if isinstance(user_id, CallbackQuery):
+        user_id = user_id.from_user.id
+    elif isinstance(user_id, Message):
+        user_id = user_id.from_user.id
+    elif isinstance(user_id, User):
+        user_id = user_id.id
+    else:
+        user_id = user_id
+
+    return user_id
+
+
+async def is_admin(event: Message | CallbackQuery, chat_id=None):
     if chat_id is None:
-        chat_id = message.chat.id
-    members = await message.bot.get_chat_administrators(chat_id=chat_id)
-    if message.from_user.id == MTLChats.GroupAnonymousBot:
+        chat_id = event.chat.id
+    user_id = get_user_id(event)
+
+    if user_id == MTLChats.GroupAnonymousBot:
         return True
-    try:
-        chat_member = next(filter(lambda member: member.user.id == message.from_user.id, members))
-    except StopIteration:
-        return False
-    return True
+
+    with suppress(TelegramBadRequest):
+        members = await event.bot.get_chat_administrators(chat_id=chat_id)
+
+    return any(member.user.id == user_id for member in members)
 
 
 def add_text(lines, num_line, text):
