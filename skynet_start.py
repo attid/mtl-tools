@@ -6,6 +6,7 @@ import sentry_sdk
 import tzlocal
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
@@ -17,6 +18,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from config_reader import config
 from db.requests import db_save_bot_user, db_load_bot_users
 from middlewares.db import DbSessionMiddleware
+from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
 from utils import aiogram_utils
@@ -94,11 +96,15 @@ async def main():
     db_pool = sessionmaker(bind=engine)
 
     # Creating bot and its dispatcher
+    session: AiohttpSession = AiohttpSession()
+    session.middleware(RetryRequestMiddleware())
     if 'test' in sys.argv:
-        bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
+        bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
+                  session=session)
         logger.info('start test')
     else:
-        bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'))
+        bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
+                  session=session)
 
     redis = Redis(host='localhost', port=6379, db=4)
     storage = RedisStorage(redis=redis)
@@ -141,7 +147,8 @@ async def main():
 
 
 async def load_globals(session: Session):
-    global_data.skynet_admins = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.skynet_admins = json.loads(
+        await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
     global_data.skynet_img = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
     global_data.votes = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
 
@@ -152,7 +159,8 @@ async def load_globals(session: Session):
     global_data.full_data = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.FullData)
     global_data.no_first_link = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
     global_data.need_decode = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
-    global_data.save_last_message_date = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.SaveLastMessageDate)
+    global_data.save_last_message_date = await global_data.json_config.get_chat_ids_by_key(
+        BotValueTypes.SaveLastMessageDate)
 
     global_data.welcome_messages = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
     global_data.welcome_button = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
@@ -167,7 +175,7 @@ async def load_globals(session: Session):
         global_data.users_list[user.user_id] = user.user_type
 
 
-def add_bot_users(session: Session, user_id: int, username: str, new_user_type: int = 0):
+def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
     # user_type = 1 if good else 2
     user_type_now = global_data.users_list.get(user_id)
     # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
