@@ -10,7 +10,6 @@ from utils.global_data import MTLChats, global_data, BotValueTypes, update_comma
 router = Router()
 
 
-
 @update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")
 @router.message(Command(commands=["all"]))
 async def cmd_all(message: Message, session: Session):
@@ -33,7 +32,7 @@ async def cmd_all(message: Message, session: Session):
 
 @update_command_info("/add_all", "Добавить пользователей в /all. запуск с параметрами /add_all @user1 @user2 итд")
 @router.message(Command(commands=["add_all"]))
-async def cmd_add_all(message: Message, session:Session):
+async def cmd_add_all(message: Message, session: Session):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False
@@ -70,7 +69,7 @@ async def cmd_del_all(message: Message, session: Session):
 
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе")
 @router.message(Command(commands=["auto_all"]))
-async def msg_save_all(message: Message, session:Session):
+async def msg_save_all(message: Message, session: Session):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return False

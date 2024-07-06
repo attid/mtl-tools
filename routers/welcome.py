@@ -1,15 +1,18 @@
 import json
 import re
+from contextlib import suppress
 
 from aiogram import Router, Bot, F
-from aiogram.enums import ParseMode
+from aiogram.enums import ParseMode, ChatMemberStatus
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER, \
-    ADMINISTRATOR
+    ADMINISTRATOR, RESTRICTED, KICKED
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
     ChatMemberUpdated, ChatMemberMember, ChatJoinRequest, User
 from sqlalchemy.orm import Session
 from db.requests import db_send_admin_message
+from skynet_start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
 from utils.stellar_utils import stellar_stop_all_exchange
@@ -129,10 +132,16 @@ async def cmd_start_exchange(message: Message, session: Session):
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
+    user_type_now = global_data.users_list.get(event.new_chat_member.user.id)
+    username = get_username_link(event.new_chat_member.user)
+    if user_type_now == 2:
+        with suppress(TelegramBadRequest):
+            await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.send_message(event.chat.id, f'{username} was banned')
+
     if event.chat.id in global_data.welcome_messages:
         if event.new_chat_member.user:
             msg = global_data.welcome_messages.get(event.chat.id, 'Hi new user')
-            username = get_username_link(event.new_chat_member.user)
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
@@ -175,6 +184,9 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
             if username in members:
                 members.remove(username)
             await global_data.json_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+    if event.new_chat_member.status == ChatMemberStatus.KICKED:
+        if is_skynet_admin(event):
+            add_bot_users(session, event.old_chat_member.user.id, None, 2)
 
 
 def contains_emoji(s: str) -> bool:
@@ -320,3 +332,35 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
     # await query.answer("Ready !", show_alert=True)
 
 
+@router.message(Command(commands=["ban"]))
+async def cmd_ban(message: Message, session: Session, bot: Bot):
+    if not is_skynet_admin(message):
+        await message.reply("You are not my admin.")
+        return False
+
+    with suppress(TelegramBadRequest):
+        if message.reply_to_message:
+            await bot.ban_chat_member(message.chat.id, message.reply_to_message.from_user.id, revoke_messages=True)
+            add_bot_users(session, message.reply_to_message.from_user.id, None, 2)
+        if len(message.text.split()) > 1:
+            await bot.ban_chat_member(message.chat.id, int(message.text.split()[1]), revoke_messages=True)
+            add_bot_users(session, int(message.text.split()[1]), None, 2)
+        else:
+            await message.reply("You need to specify user id.")
+
+
+@router.message(Command(commands=["unban"]))
+async def cmd_unban(message: Message, session: Session, bot: Bot):
+    if not is_skynet_admin(message):
+        await message.reply("You are not my admin.")
+        return False
+
+    with suppress(TelegramBadRequest):
+        if len(message.text.split()) > 1:
+            with suppress(TelegramBadRequest):
+                await bot.unban_chat_member(message.chat.id, int(message.text.split()[1]))
+            global_data.users_list.pop(int(message.text.split()[1]), None)
+            add_bot_users(session, int(message.text.split()[1]), None, 0)
+            await message.reply("User unbanned.")
+        else:
+            await message.reply("You need to specify user id.")

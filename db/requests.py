@@ -2,6 +2,7 @@ import json
 import re
 from contextlib import suppress
 from datetime import timedelta
+from enum import Enum
 from sys import argv
 from typing import List, Dict, cast, Optional
 
@@ -15,7 +16,7 @@ from db.models import *
 from utils.global_data import BotValueTypes, MTLChats
 
 
-def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int, chat_value: any):
+def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int | Enum, chat_value: any):
     """
     Update or insert a record in the BOT_TABLE.
 
@@ -24,6 +25,7 @@ def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int, chat_va
     :param chat_key: The key of the chat
     :param chat_value: The value of the chat
     """
+    chat_key = chat_key if isinstance(chat_key, int) else chat_key.value
     record = session.query(BotTable).filter(and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key)).first()
     if chat_value is None:
         # If the chat_value is None and the record exists, delete the record
@@ -40,7 +42,7 @@ def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int, chat_va
     session.commit()
 
 
-def db_load_bot_value_ext(session: Session, chat_id: int, chat_key: int, default_value: any = ''):
+def db_load_bot_value_ext(session: Session, chat_id: int, chat_key: int | Enum, default_value: any = ''):
     """
     Get a chat_value by chat_id and chat_key from the BOT_TABLE.
 
@@ -50,6 +52,7 @@ def db_load_bot_value_ext(session: Session, chat_id: int, chat_key: int, default
     :param default_value: The default value to return if no record was found
     :return: The chat_value or default_value if no record was found
     """
+    chat_key = chat_key if isinstance(chat_key, int) else chat_key.value
     result = session.query(BotTable.chat_value).filter(
         and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key)).first()
     return result[0] if result else default_value
@@ -85,7 +88,7 @@ def db_load_bot_value_ext(session: Session, chat_id: int, chat_key: int, default
 #         return {row[0]: row[1] for row in result}
 
 
-def db_save_bot_user(session: Session, user_id: int, user_name: str, user_type: int = 0):
+def db_save_bot_user(session: Session, user_id: int, user_name: str | None, user_type: int = 0):
     """
     Update or insert a user in the bot_users table.
 
@@ -101,7 +104,8 @@ def db_save_bot_user(session: Session, user_id: int, user_name: str, user_type: 
         session.add(new_user)
     else:
         # Update existing user
-        user.user_name = user_name
+        if user_name:
+            user.user_name = user_name
         user.user_type = user_type
     session.commit()
 
@@ -647,12 +651,12 @@ if __name__ == '__main__':
     from quik_pool import quik_pool
 
     text = 'text ' * 1000
-    print (len(text))
+    print(len(text))
     db_save_message(session=quik_pool(), user_id=1, username='username', thread_id=1, text=text, chat_id=1)
 
 #    print(db_get_operations_by_asset(quik_pool(), 'USDM', datetime.now().date()))
 
-    # print(db_get_new_effects_for_token(session=quik_pool(),
-    #                                token='MTL',
-    #                                last_id='1',
-    #                               amount=1))
+# print(db_get_new_effects_for_token(session=quik_pool(),
+#                                token='MTL',
+#                                last_id='1',
+#                               amount=1))

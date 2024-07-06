@@ -508,7 +508,8 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
                                        permissions=chat.permissions)
         await query.answer("Oops, bringing the message back!", show_alert=True)
     else:
-        await query.answer("Сорьки, пока не умею !", show_alert=True)
+        add_bot_users(session, callback_data.user_id, None, 2)
+        await query.answer("Забанен !", show_alert=True)
 
 
 async def notify_message(message: Message):
@@ -529,10 +530,17 @@ async def notify_message(message: Message):
                                      callback_data="👀"),
             ]])
 
+            dest_chat_member = await message.bot.get_chat_member(dest_chat, message.from_user.id)
+            username = message.from_user.username
+            if dest_chat_member.status != 'left':
+                user_mention = f"{username}" if username else f"{message.from_user.first_name}"
+            else:
+                user_mention = f"@{username}" if username else f"{message.from_user.first_name}"
+
             msg = await message.bot.send_message(
                 chat_id=dest_chat,
                 message_thread_id=dest_topic,
-                text=f'User {get_username_link(message.from_user)}: \nChat: {html.escape(message.chat.title)}',
+                text=f'User {user_mention}: \nChat: {html.escape(message.chat.title)}',
                 reply_markup=kb_reply,
                 reply_parameters=ReplyParameters(
                     message_id=message.message_id,
