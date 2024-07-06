@@ -1,8 +1,9 @@
 from datetime import datetime
+from enum import Enum
 
-from aiogram.types import Message
+from aiogram.types import Message, ChatMemberUpdated
 
-from db.tinydb_requests import BotJsonConfig
+from db.mongo import BotMongoConfig
 
 
 class MTLChats:
@@ -34,8 +35,7 @@ class MTLChats:
     MTLAAgoraGroup = -1002032873651
 
 
-
-class BotValueTypes:
+class BotValueTypes(Enum):
     PinnedUrl = 1
     LastFondTransaction = 2
     LastDebtTransaction = 3
@@ -106,16 +106,16 @@ class GlobalData:
     no_first_link = []
     save_last_message_date = []
     need_decode = []
-    json_config: BotJsonConfig
+    json_config: BotMongoConfig
     reboot = False
 
 
 global_data = GlobalData()
-global_data.json_config = BotJsonConfig()
+global_data.json_config = BotMongoConfig()
 global_tasks = []
 
 
-def is_skynet_admin(message: Message):
+def is_skynet_admin(message: Message | ChatMemberUpdated):
     return f'@{message.from_user.username.lower()}' in global_data.skynet_admins
 
 
