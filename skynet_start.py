@@ -161,6 +161,8 @@ async def load_globals(session: Session):
     global_data.need_decode = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
     global_data.save_last_message_date = await global_data.json_config.get_chat_ids_by_key(
         BotValueTypes.SaveLastMessageDate)
+    global_data.join_request_captcha = await global_data.json_config.get_chat_ids_by_key(
+        BotValueTypes.JoinRequestCaptcha)
 
     global_data.welcome_messages = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
     global_data.welcome_button = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)

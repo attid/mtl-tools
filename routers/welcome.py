@@ -305,6 +305,21 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
                 f"Новый участник {username} хочет присоединиться к чату. Требуется подтверждение.",
                 reply_markup=kb_join
             )
+        if chat_id in global_data.join_request_captcha:
+            with suppress(TelegramBadRequest):
+                edit_button_url = f'https://t.me/myMTLbot/JoinCaptcha?startapp={chat_id}'
+
+                # Создаем клавиатуру с кнопками
+                reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text='Start Captcha', url=edit_button_url)]
+                ])
+                await bot.send_message(chat_id=chat_join_request.user_chat_id,
+                                       text=f"К сожалению из-за натиска ботов в чат добавляются только "
+                                            f"те кто прошел проверку. \n\n"
+                                            f"Для того чтоб зайти в чат '{chat_join_request.chat.title}' вам "
+                                            f"надо нажать кнопку ниже и подтвердить что вы человек. ",
+                                       reply_markup=reply_markup)
+
     # Optional: Auto-approve join request
     # await bot.approve_chat_join_request(chat_id, user_id)
 

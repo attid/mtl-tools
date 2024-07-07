@@ -519,6 +519,7 @@ commands_info = {
                                "toggle", "admin"),
     "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin"),
     "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin"),
+    "join_request_captcha": (global_data.join_request_captcha, BotValueTypes.JoinRequestCaptcha, "toggle", "admin"),
 
     "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin"),
     "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin"),
@@ -536,11 +537,14 @@ commands_info = {
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
 @update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
 @update_command_info("/add_skynet_img",
-                     "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+                     "Добавить пользователей в пользователи img. запуск с параметрами "
+                     "/add_skynet_admin @user1 @user2 итд")
 @update_command_info("/del_skynet_admin",
-                     "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд")
+                     "Убрать пользователей из админов скайнета. запуск с параметрами "
+                     "/del_skynet_admin @user1 @user2 итд")
 @update_command_info("/add_skynet_admin",
-                     "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд")
+                     "Добавить пользователей в админы скайнета. запуск с параметрами "
+                     "/add_skynet_admin @user1 @user2 итд")
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @update_command_info("/notify_join_request",
                      "Оповещать о новом участнике, требующем подтверждения для присоединения. "
@@ -548,6 +552,9 @@ commands_info = {
 @update_command_info("/notify_message",
                      "Оповещать о новом сообщении в определенный чат"
                      "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками")
+@update_command_info("/join_request_captcha",
+                     "Шлет пользователю капчу для подтверждения его человечности. "
+                     "Работает только совместно с /notify_join_request")
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, session: Session, bot: Bot):
     command = message.text.lower().split()[0][1:]

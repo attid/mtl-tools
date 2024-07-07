@@ -73,6 +73,7 @@ class BotValueTypes(Enum):
     LastMTLATransaction = 35
     NotifyJoin = 36
     NotifyMessage = 37
+    JoinRequestCaptcha = 38
 
 
 class LogQuery:
@@ -96,6 +97,7 @@ class GlobalData:
     admins = {}
     alert_me = {}
     sync = {}
+    join_request_captcha = []
     skynet_admins = []
     skynet_img = []
     auto_all = []
