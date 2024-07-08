@@ -262,8 +262,8 @@ async def handle_private_message_links(message: Message, bot: Bot):
         await message.reply(response)
 
 
-@router.message(F.chat.type == ChatType.PRIVATE)
-@router.message(StartText(('SKYNET', 'СКАЙНЕТ', 'SKYNET4', 'СКАЙНЕТ4')))
+@router.message(F.chat.type == ChatType.PRIVATE, F.text)
+@router.message(StartText(('SKYNET', 'СКАЙНЕТ', 'SKYNET4', 'СКАЙНЕТ4')), F.text)
 @router.message(Command(commands=["skynet"]))
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     gpt4 = False
@@ -280,7 +280,10 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     msg = await dialog.talk(message.chat.id, msg, gpt4)
     if msg is None:
         msg = '=( connection error, retry again )='
-    msg = await message.reply(msg)
+    try:
+        msg = await message.reply(msg, parse_mode=ParseMode.MARKDOWN)
+    except:
+        msg = await message.reply(msg)
     if message.chat.type != ChatType.PRIVATE:
         # на случай вызова из /skynet
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')

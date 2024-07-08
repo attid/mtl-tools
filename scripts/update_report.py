@@ -554,10 +554,13 @@ async def update_airdrop():
             # print(val)
             # get balance
             balance_dic: dict = await get_balances(address)
-            mtl_sum = my_float(balance_dic.get('MTL', ''))
-            eurmtl_sum = my_float(balance_dic.get('EURMTL', ''))
-            xlm_sum = my_float(balance_dic.get('XLM', ''))
-            sats_sum = my_float(balance_dic.get('SATSMTL', ''))
+            if balance_dic:
+                mtl_sum = my_float(balance_dic.get('MTL', ''))
+                eurmtl_sum = my_float(balance_dic.get('EURMTL', ''))
+                xlm_sum = my_float(balance_dic.get('XLM', ''))
+                sats_sum = my_float(balance_dic.get('SATSMTL', ''))
+            else:
+                mtl_sum, eurmtl_sum, xlm_sum, sats_sum = 'D', 'D', 'D', 'D'
 
         update_list.append([xlm_sum, eurmtl_sum, mtl_sum, sats_sum])
 
@@ -831,7 +834,7 @@ if __name__ == "__main__":
     else:
         print('need more parameters')
         from db.quik_pool import quik_pool
-        asyncio.run(update_mmwb_report(quik_pool()))  # only from skynet
+        asyncio.run(update_airdrop())  # only from skynet
         # print(calculate_statistics())
 
 

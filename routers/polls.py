@@ -2,15 +2,16 @@ import json
 import math
 from contextlib import suppress
 
-from aiogram import Router, Bot
+from aiogram import Router, Bot, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer
 from sqlalchemy.orm import Session
+
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
-from utils.gspread_tools import gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote, \
-    gs_update_a_table_first, gs_check_vote_table
+from utils.gspread_tools import (gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote,
+                                 gs_update_a_table_first, gs_check_vote_table)
 from utils.stellar_utils import MTLAddresses, get_balances, address_id_to_username, get_mtlap_votes
 
 router = Router()
@@ -27,12 +28,13 @@ chat_to_address = {-1001649743884: MTLAddresses.public_issuer,
                    -1001837984392: MTLAddresses.public_issuer,
                    MTLChats.TestGroup: MTLAddresses.public_issuer,
                    MTLChats.USDMMGroup: MTLAddresses.public_usdm,
+                   -1002210483308: MTLAddresses.public_issuer,  # -1002210483308 тестовый канал
                    -1002042260878: MTLAddresses.public_mtla}
 
 
-@router.channel_post()
+@router.channel_post(F.poll)
 async def channel_post(message: Message, session: Session):
-    if message.chat.id in (-1001649743884, -1001837984392, -1002042260878):
+    if message.chat.id in (-1001649743884, -1001837984392, -1002042260878, -1002210483308):
         if message.poll:
             buttons = []
             my_buttons = []
@@ -50,7 +52,8 @@ async def channel_post(message: Message, session: Session):
             await global_data.json_config.save_bot_value(message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
 
 
-@update_command_info("/poll", "Создать голование с учетом веса голосов, надо слать в ответ на стандартное голосование")
+@update_command_info("/poll", "Создать голование с учетом веса голосов, "
+                              "надо слать в ответ на стандартное голосование")
 @router.message(Command(commands=["poll"]))
 async def cmd_poll(message: Message, session: Session):
     if message.reply_to_message and message.reply_to_message.poll:
@@ -74,25 +77,29 @@ async def cmd_poll(message: Message, session: Session):
 
 
 @update_command_info("/poll_replace_text",
-                     "Заменить в спец голосовании текст на предлагаемый далее. Использовать /poll_replace_text new_text")
+                     "Заменить в спец голосовании текст на предлагаемый далее. "
+                     "Использовать /poll_replace_text new_text")
 @router.message(Command(commands=["poll_replace_text"]))
 async def cmd_poll_rt(message: Message, session: Session):
     # print(message)
     if message.reply_to_message:
         my_poll = json.loads(
-            await global_data.json_config.load_bot_value(message.chat.id, -1 * message.reply_to_message.message_id, empty_poll))
+            await global_data.json_config.load_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
+                                                         empty_poll))
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["question"] = message.text[len('/poll_replace_text '):]
 
-            await global_data.json_config.save_bot_value(message.chat.id, -1 * message.reply_to_message.message_id, json.dumps(my_poll))
+            await global_data.json_config.save_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
+                                                         json.dumps(my_poll))
     else:
         await message.answer('Требуется в ответ на голосование')
 
 
-@update_command_info("/poll_close", "Закрыть голосование. после этого нельзя голосовать или менять его.")
+@update_command_info("/poll_close", "Закрыть голосование. "
+                                    "после этого нельзя голосовать или менять его.")
 @router.message(Command(commands=["poll_close"]))
 @router.message(Command(commands=["poll_stop"]))
 @router.message(Command(commands=["apoll_stop"]))
@@ -121,7 +128,8 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot):
 
 
 @update_command_info("/poll_check",
-                     "Проверить кто не голосовал. Слать в ответ на спец голосование. 'кто молчит', 'найди молчунов', 'найди безбилетника'")
+                     "Проверить кто не голосовал. Слать в ответ на спец голосование. "
+                     "'кто молчит', 'найди молчунов', 'найди безбилетника'")
 @router.message(Command(commands=["poll_check"]))
 async def cmd_poll_check(message: Message, session: Session):
     chat_id = message.chat.id
@@ -158,7 +166,8 @@ async def cmd_poll_check(message: Message, session: Session):
             remaining_voters = ' '.join(all_voters)
             await message.reply_to_message.reply(f'{remaining_voters}\nСмотрите голосование \ Look at the poll')
         else:
-            await message.reply_to_message.reply('Данные голосования не найдены или ключ чата отсутствует в chat_to_address')
+            await message.reply_to_message.reply(
+                'Данные голосования не найдены или ключ чата отсутствует в chat_to_address')
     else:
         await message.answer('Требуется в ответ на голосование или пересланное голосование из канала')
 
@@ -197,7 +206,8 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
             await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
             if need_close:
                 my_poll["closed"] = True
-            await global_data.json_config.save_bot_value(query.message.chat.id, -1 * query.message.message_id, json.dumps(my_poll))
+            await global_data.json_config.save_bot_value(query.message.chat.id, -1 * query.message.message_id,
+                                                         json.dumps(my_poll))
         else:
             await query.answer("You are't in list!", show_alert=True)
     return True
@@ -216,8 +226,8 @@ async def cmd_save_votes(session: Session):
             for signer in signers:
                 if signer['weight'] > 0:
                     total += signer['weight']
-                    vote_list[chat_to_address[chat_id]][address_id_to_username(signer['key'], full_data=True).lower()] = \
-                        signer['weight']
+                    key_ = address_id_to_username(signer['key'], full_data=True).lower()
+                    vote_list[chat_to_address[chat_id]][key_] = signer['weight']
             vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1,
                                                            '75': math.ceil(total * 0.75),
                                                            '100': total}
@@ -279,19 +289,10 @@ async def cmd_apoll(message: Message, session: Session):
         await message.answer('Требуется в ответ на голосование')
 
 
-# @router.poll()
-# async def cmd_test(message: Message):
-#    print(1, message)
-#    #1 id='5341722582053815395' question='test' options=[PollOption(text='a', voter_count=1), PollOption(text='b', voter_count=1), PollOption(text='c', voter_count=2)] total_voter_count=4 is_closed=False is_anonymous=False type='regular' allows_multiple_answers=False correct_option_id=None explanation=None explanation_entities=None open_period=None close_date=None
-
-
 @router.poll_answer()
 async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
-    # print(2, poll)
-    # 2 poll_id='5341722582053815395' option_ids=[1] voter_chat=None user=User(id=84131737, is_bot=False, first_name='Igor', last_name='Tolstov', username='itolstov', language_code='ru', is_premium=True, added_to_attachment_menu=None, can_join_groups=None, can_read_all_group_messages=None, supports_inline_queries=None)
-    # -1 id='5341722582053815395' question='test' options=[PollOption(text='a', voter_count=1), PollOption(text='b', voter_count=0), PollOption(text='c', voter_count=2)] total_voter_count=3 is_closed=False is_anonymous=False type='regular' allows_multiple_answers=False correct_option_id=None explanation=None explanation_entities=None open_period=None close_date=None
-    # -2 poll_id='5341722582053815395' option_ids=[] voter_chat=None user=User(id=84131737, is_bot=False, first_name='Igor', last_name='Tolstov', username='itolstov', language_code='ru', is_premium=True, added_to_attachment_menu=None, can_join_groups=None, can_read_all_group_messages=None, supports_inline_queries=None)
-    my_poll = json.loads(await global_data.json_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
+    my_poll = json.loads(
+        await global_data.json_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
     # find user
     user_address = await gs_find_user_a(f'@{poll.user.username}')
     if not user_address:
@@ -316,7 +317,8 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
 async def cmd_poll_check(message: Message, session: Session):
     if message.reply_to_message:
         my_poll = json.loads(await global_data.json_config.load_bot_value(MTLChats.MTLA_Poll,
-                                               int(message.reply_to_message.poll.id), empty_poll))
+                                                                          int(message.reply_to_message.poll.id),
+                                                                          empty_poll))
 
         # update answer
         # gs_update_a_table_vote(table_uuid, address, options):

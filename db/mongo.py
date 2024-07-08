@@ -23,9 +23,9 @@ class BotMongoConfig:
     def __init__(self):
         self.collection: AsyncIOMotorCollection = bot_config_collection
 
-    async def save_bot_value(self, chat_id: int, chat_key: Enum, chat_value: Any):
-        chat_key_name = chat_key.name
-        chat_key_value = chat_key.value
+    async def save_bot_value(self, chat_id: int, chat_key: int | Enum, chat_value: Any):
+        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+        chat_key_name = chat_key.name if isinstance(chat_key, Enum) else None
 
         if chat_value is None:
             await self.collection.delete_one({"chat_id": chat_id, "chat_key": chat_key_value})

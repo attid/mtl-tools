@@ -4,7 +4,7 @@ from contextlib import suppress
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER, \
     ADMINISTRATOR, RESTRICTED, KICKED
 from aiogram.filters.callback_data import CallbackData
@@ -306,7 +306,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
                 reply_markup=kb_join
             )
         if chat_id in global_data.join_request_captcha:
-            with suppress(TelegramBadRequest):
+            with suppress(TelegramBadRequest, TelegramForbiddenError):
                 edit_button_url = f'https://t.me/myMTLbot/JoinCaptcha?startapp={chat_id}'
 
                 # Создаем клавиатуру с кнопками
