@@ -9,11 +9,11 @@ import aiohttp
 import requests
 from aiogram import Bot
 from aiogram.types import Message
-from loguru import logger
 from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
                          AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
                          ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
+
 from config_reader import config
 from db.requests import *
 from utils.aiogram_utils import get_web_request
@@ -1405,7 +1405,9 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
         balances = account["balances"]
         balance_mtl = 0
         balance_rect = 0
-        # Токены MTL полностью теряют силу голоса с 1 января 2025 года. В период с 01.04.2024 по 30.06.2024 к ним применяется понижающий коэффициент 0,75, в период с 01.07.2024 по 30.09.2024 — 0,5, в период 01.10.2024 по 31.12.2024 — 0,25.
+        # Токены MTL полностью теряют силу голоса с 1 января 2025 года. В период с 01.04.2024 по 30.06.2024
+        # к ним применяется понижающий коэффициент 0,75, в период с 01.07.2024 по 30.09.2024 — 0,5,
+        # в период 01.10.2024 по 31.12.2024 — 0,25.
         k = 1
         if datetime.now().date() >= date(2024, 4, 1):
             k = 0.75
@@ -1446,17 +1448,34 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
                 if data_name in ('delegate', 'mtl_delegate'):
                     delegate_list[shareholder.account_id] = decode_data_value(data_value)
 
-    # account_list.append([account["account_id"], balance_mtl + balance_rect, lg, 0, account['data'], balance_mtl, balance_rect])
+    # Многошаговая делегация
+    max_steps = 3  # Максимальное количество шагов делегирования
 
-    for shareholder in shareholder_list:
-        if delegate_list.get(shareholder.account_id):
-            for delegate_for in shareholder_list:
-                if delegate_for.account_id == delegate_list[shareholder.account_id]:
-                    delegate_for.balance_delegated += shareholder.balance
+    for step in range(max_steps):
+        changes_made = False
+        temp_delegate_list = delegate_list.copy()  # Создаем копию для безопасного изменения
+
+        for shareholder in shareholder_list:
+            if shareholder.account_id in temp_delegate_list:
+                delegate_id = temp_delegate_list[shareholder.account_id]
+                delegate = next((s for s in shareholder_list if s.account_id == delegate_id), None)
+
+                if delegate:
+                    delegate.balance_delegated += shareholder.balance + shareholder.balance_delegated
+                    shareholder.balance_delegated = 0
                     shareholder.balance_mtl = 0
                     shareholder.balance_rect = 0
-                    delegate_list.pop(shareholder.account_id)
-                    break
+                    changes_made = True
+
+        # Обновляем delegate_list только после завершения итерации
+        delegate_list = temp_delegate_list
+
+        # Если изменений не было, прерываем цикл
+        if not changes_made:
+            break
+
+    # Очищаем delegate_list после завершения всех шагов
+    delegate_list.clear()
 
     # delete blacklist user
     bl = cmd_get_blacklist()
@@ -1612,7 +1631,7 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
             if arr.account_id == s.account_id:
                 arr.votes = s.weight
                 was_found = True
-        if (was_found == False) and (s.account_id != public_key):
+        if not was_found and s.account_id != public_key:
             vote_list.append(MyShareHolder(account_id=s.account_id, votes=s.weight))
 
     vote_list.sort(key=lambda k: k.calculated_votes, reverse=True)
@@ -2161,18 +2180,19 @@ async def get_liquidity_pools_for_asset(asset):
 
 async def test():
     # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-    from db.quik_pool import quik_pool
-    a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
+    # from db.quik_pool import quik_pool
+    # a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
+    # print(a)
+    # '224672741436141569-2'
+    # a = gen_new('GROW')
+    a = await cmd_gen_mtl_vote_list()
     print(a)
-    #'224672741436141569-2'
 
 
 if __name__ == '__main__':
     pass
     asyncio.run(test())
 
-    # a = gen_new('YMON')
-    # a = asyncio.run(cmd_gen_mtl_vote_list())
     # from db.quik_pool import quik_pool
     # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))
     #
