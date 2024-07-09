@@ -83,6 +83,7 @@ async def save_url(chat_id, msg_id, msg):
 
 @router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
+    await check_alert(bot, message, session)
     if message.text.find('eurmtl.me/sign_tools') > -1:
         msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         try:
@@ -138,8 +139,11 @@ async def remind(message: Message, session: Session, bot: Bot):
 async def cmd_last_check_reply_to_bot(message: Message):
     if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
         # answer on bot message
-        msg = await dialog.talk(message.chat.id, message.text)
-        msg = await message.reply(msg)
+        msg_text = await dialog.talk(message.chat.id, message.text)
+        try:
+            msg = await message.reply(msg_text, parse_mode=ParseMode.MARKDOWN)
+        except:
+            msg = await message.reply(msg_text)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
     await answer_notify_message(message)
@@ -294,6 +298,8 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
 
+    await check_alert(bot, message, session)
+
     has_hashtag = False
     if message.entities:
         for entity in message.entities:
@@ -338,9 +344,11 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
 
 @rate_limit(0, 'listen')
 @router.message(ChatInOption('listen'), F.text)
-async def cmd_save_msg(message: Message, session: Session):
+async def cmd_save_msg(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
+
+    await check_alert(bot, message, session)
 
     db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                     thread_id=message.message_thread_id if message.is_topic_message else None,
@@ -486,7 +494,7 @@ async def check_alert(bot, message, session):
                 user_id = db_load_user_id(session, username[1:])
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
-                        alert_username = '@' + message.from_user.username if message.from_user.username else message.from_user.full_name
+                        alert_username = get_username_link(message.from_user)
                         await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
                                                         f'В чате {message.chat.title}\n'
                                                         f'Ссылка на сообщение {message.get_url()}')
