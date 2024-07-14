@@ -41,6 +41,7 @@ def get_creds():
 
 agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
 
+
 async def gs_check_bim(user_id=None, user_name=None):
     agc = await agcm.authorize()
     ss = await agc.open("MTL_BIM_register")
@@ -222,7 +223,7 @@ async def gs_update_namelist():
                     key_to_desc[key] = username
                 else:
                     key_to_desc[key] = key[:4] + '__' + key[-4:]
-        #global_data.name_list = key_to_desc
+        # global_data.name_list = key_to_desc
     else:
         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
     # print(key_to_desc)
@@ -247,7 +248,6 @@ async def gs_update_namelist():
         raise ValueError("Expected 'Telegram' in column 1 and 'Stellar' in column 3 of the MTLAP worksheet")
     # print(key_to_desc)
     global_data.name_list = key_to_desc
-
 
 
 async def gs_get_assets_dict():

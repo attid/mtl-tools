@@ -23,7 +23,7 @@ async def update_main_report(session: Session):
     ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
     wks = await ss.worksheet("autodata_config")
 
-    # update main data
+    # update data
     # usd
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
     await wks.update('D3', float(rq.json()['quotes']['USDEUR']))
@@ -834,7 +834,7 @@ if __name__ == "__main__":
     else:
         print('need more parameters')
         from db.quik_pool import quik_pool
-        asyncio.run(update_airdrop())  # only from skynet
+        asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
         # print(calculate_statistics())
 
 

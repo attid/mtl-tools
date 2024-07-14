@@ -682,8 +682,57 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
 
     await message.reply("Готово.")
 
+
 # @rate_limit(5, 'test')
 # @router.message(Command(commands=["test"]))
 # async def cmd_test(message: Message, state: FSMContext):
 #     await state.update_data(state_my_test=1)
 #     await message.reply('test')
+
+
+async def cmd_kill(bot: Bot):
+    j = []
+    for item in j:
+        try:
+            print(int(item['actor_id']))
+            await bot.ban_chat_member(chat_id=-1001413354948, user_id=int(item['actor_id']))
+            await asyncio.sleep(0.1)  # https://t.me/MTL_city -1001536819420
+        except Exception as ex:
+            print(ex)
+
+
+@router.message(Command(commands=["topic"]))
+async def cmd_create_topic(message: Message):
+    # Проверяем, является ли пользователь администратором
+    if not await is_admin(message):
+        await message.reply("You are not an admin.")
+        return
+
+    # Проверяем, включены ли топики в чате
+    if not message.chat.is_forum:
+        await message.reply("Topics are not enabled in this chat.")
+        return
+
+    # Проверяем правильность формата команды
+    command_parts = message.text.split(maxsplit=2)
+    if len(command_parts) != 3:
+        await message.reply("Incorrect command format. Use: /topic 🔵 Topic Name")
+        return
+
+    emoji, topic_name = command_parts[1], command_parts[2]
+
+    # Создаем новый топик
+    try:
+        new_topic = await message.bot.create_forum_topic(name=topic_name, icon_custom_emoji_id=emoji,
+                                                         chat_id=message.chat.id)
+        await message.reply(f"New topic '{topic_name}' created successfully with ID: {new_topic.message_thread_id}")
+    except TelegramBadRequest as e:
+        if "CHAT_NOT_MODIFIED" in str(e):
+            await message.reply("Failed to create topic. Make sure the emoji is valid and the topic name is unique.")
+        else:
+            await message.reply(f"An error occurred while creating the topic: {str(e)}")
+
+
+if __name__ == "__main__":
+    tmp_bot = Bot(token=config.bot_token.get_secret_value())
+    asyncio.run(cmd_kill(tmp_bot))

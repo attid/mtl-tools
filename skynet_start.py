@@ -2,6 +2,7 @@ import asyncio
 import json
 import sys
 from contextlib import suppress
+
 import sentry_sdk
 import tzlocal
 from aiogram import Bot, Dispatcher
@@ -13,8 +14,10 @@ from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommand
 from aioredis import Redis
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
+from sentry_sdk import capture_exception
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+
 from config_reader import config
 from db.requests import db_save_bot_user, db_load_bot_users
 from middlewares.db import DbSessionMiddleware
@@ -24,6 +27,7 @@ from middlewares.throttling import ThrottlingMiddleware
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
 from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
+from utils.pyro_tools import pyro_start
 from utils.support_tools import work_with_support
 
 
@@ -65,13 +69,14 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
-    with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
+    # with suppress(TelegramBadRequest):
+    #     await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
     global_tasks.append(asyncio.create_task(work_with_support()))
     if 'test' in sys.argv:
         return
-    await asyncio.create_task(startup_update_namelist(bot))
-    await asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
+    await pyro_start()
+    _ = asyncio.create_task(startup_update_namelist(bot))
+    _ = asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
 
 
 async def startup_update_namelist(bot: Bot):

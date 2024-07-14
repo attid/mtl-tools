@@ -11,9 +11,9 @@ def rate_limit(limit: int, key=None):
     """
     Decorator for configuring rate limit and key in different functions.
 
-    :param limit:
-    :param key:
-    :return:
+    :param limit: The rate limit in requests per minute
+    :param key: Optional key for the rate limit
+    :return: Decorated function
     """
 
     def decorator(func):
@@ -99,8 +99,8 @@ class ThrottlingMiddleware(BaseMiddleware):
         delta = throttled.rate - throttled.delta
 
         # Prevent flooding
-        if throttled.exceeded_count <= 2:
-            await event.answer(f'Too many events.\nTry again in {delta:.2f} seconds.')
+        # if throttled.exceeded_count <= 2:
+        await event.answer(f'Too many events.\nTry again in {delta:.2f} seconds.')
 
 
 class ThrottleManager:

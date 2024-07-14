@@ -6,11 +6,12 @@ from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER, \
-    ADMINISTRATOR, RESTRICTED, KICKED
+    ADMINISTRATOR
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
-    ChatMemberUpdated, ChatMemberMember, ChatJoinRequest, User
+    ChatMemberUpdated, ChatMemberMember, ChatJoinRequest
 from sqlalchemy.orm import Session
+
 from db.requests import db_send_admin_message
 from skynet_start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
@@ -311,13 +312,14 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
 
                 # Создаем клавиатуру с кнопками
                 reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text='Start Captcha', url=edit_button_url)]
+                    [InlineKeyboardButton(text='Start Captcha v1', url=edit_button_url + '_1')],
+                    [InlineKeyboardButton(text='Start Captcha v2', url=edit_button_url + '_2')]
                 ])
                 await bot.send_message(chat_id=chat_join_request.user_chat_id,
                                        text=f"К сожалению из-за натиска ботов в чат добавляются только "
                                             f"те кто прошел проверку. \n\n"
                                             f"Для того чтоб зайти в чат '{chat_join_request.chat.title}' вам "
-                                            f"надо нажать кнопку ниже и подтвердить что вы человек. ",
+                                            f"надо нажать на одну из кнопок ниже и подтвердить что вы человек. ",
                                        reply_markup=reply_markup)
 
     # Optional: Auto-approve join request

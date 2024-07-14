@@ -1,19 +1,22 @@
+import asyncio
 import html
 import re
 from contextlib import suppress
 
-import asyncio
 from aiogram import F, Bot
-from aiogram.enums import ChatType, ParseMode, ChatAction, MessageEntityType
 from aiogram import Router
+from aiogram.enums import ChatType, ParseMode, ChatAction, MessageEntityType
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
     URLInputFile, ReplyParameters
+from loguru import logger
 from sqlalchemy.orm import Session
+
 from db.requests import extract_url, db_save_message, db_load_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
+from scripts.update_data import update_lab
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
     update_mmwb_report, update_bim_data
 from skynet_start import add_bot_users
@@ -22,8 +25,9 @@ from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_a
     get_username_link, cmd_sleep_and_delete
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
+from utils.pyro_tools import extract_telegram_info, pyro_update_msg_info, MessageInfo
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
-from scripts.update_data import update_lab
+from utils.telegraph_tools import telegraph
 
 router = Router()
 
@@ -246,24 +250,48 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         await msg.reply('Обновление завершено')
 
 
+@rate_limit(5, 'private_links')
 @router.message(F.chat.type == ChatType.PRIVATE, F.entities)
 async def handle_private_message_links(message: Message, bot: Bot):
     telegram_links = []
+    buttons = []
 
     for entity in message.entities:
         if entity.type in ['url', 'text_link']:
             url = entity.url if entity.type == 'text_link' else entity.extract_from(message.text)
-            if 't.me/c/' in url:
-                chat_id = url.split('/c/')[1].split('/')[0]
-                try:
-                    chat = await bot.get_chat(int('-100' + chat_id))
-                    telegram_links.append(f"{url} Группа \"{chat.title}\"")
-                except TelegramBadRequest:
-                    telegram_links.append(f"{url} группа \"не определена\"")
+            if 't.me/' in url:
+                msg_info = extract_telegram_info(url)
+                if msg_info:
+                    try:
+                        chat = await bot.get_chat(msg_info.chat_id)
+                        telegram_links.append(f"{url} Группа \"{chat.title}\"")
+
+                        chat_member = await bot.get_chat_member(msg_info.chat_id, message.from_user.id)
+                        if chat_member and chat_member.status not in ['left', 'kicked']:
+                            await pyro_update_msg_info(msg_info)
+                            if msg_info.thread_name:
+                                thread_link = '/'.join(url.split('/')[:-1])
+                                telegram_links.append(
+                                    f"Топик <a href=\"{thread_link}\"> \"{msg_info.thread_name}\"</a>")
+
+                            if msg_info.message_text:
+                                telegraph_link = await telegraph.create_uuid_page(msg_info)
+                                buttons.append([InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
+                                                                     url=telegraph_link.url)])
+                    except TelegramBadRequest as e:
+                        logger.error(f"Ошибка TelegramBadRequest при обработке {url}: {e}")
+                        telegram_links.append(f"{url} группа \"не определена\"")
+                    except Exception as e:
+                        logger.error(f"Неожиданная ошибка при обработке {url}: {e}")
+
+                    telegram_links.append(" ")
 
     if telegram_links:
         response = "Найдены ссылки:\n" + "\n".join(telegram_links)
-        await message.reply(response)
+        if buttons:
+            response += "\n\n предпросмотр сообщений : "
+        await message.reply(response, disable_web_page_preview=True,
+                            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None)
 
 
 @router.message(F.chat.type == ChatType.PRIVATE, F.text)
@@ -487,7 +515,7 @@ async def check_spam(message, session):
 
 async def check_alert(bot, message, session):
     # if user need be alert
-    if message.chat.id in global_data.alert_me:
+    if message.entities and message.chat.id in global_data.alert_me:
         for entity in message.entities:
             if entity.type == 'mention':
                 username = entity.extract_from(message.text)
@@ -495,9 +523,26 @@ async def check_alert(bot, message, session):
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
                         alert_username = get_username_link(message.from_user)
+                        msg_info = MessageInfo(chat_id=message.chat.id,
+                                               user_from=message.from_user.username,
+                                               message_id=message.message_id,
+                                               chat_name=message.chat.title,
+                                               message_text=message.html_text)
+                        if message.reply_to_message:
+                            msg_info.reply_to_message = MessageInfo(
+                                chat_id=message.chat.id,
+                                user_from=message.reply_to_message.from_user.username,
+                                message_id=message.reply_to_message.message_id,
+                                message_text=message.reply_to_message.html_text)
+
+                        telegraph_link = await telegraph.create_uuid_page(msg_info)
+                        buttons = [[InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
+                                                         url=telegraph_link.url)]]
+
                         await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
                                                         f'В чате {message.chat.title}\n'
-                                                        f'Ссылка на сообщение {message.get_url()}')
+                                                        f'Ссылка на сообщение {message.get_url()}',
+                                               reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 async def save_last(message, session):

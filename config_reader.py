@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     horizon_url: str
     coinmarketcap: SecretStr
     mongo_uri: str
+    pyro_api_id: int
+    pyro_api_hash: SecretStr
+    telegraph_token: str
 
     class Config:
         env_file = dotenv_path
