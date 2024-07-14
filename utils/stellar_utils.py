@@ -613,7 +613,7 @@ async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
     accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
 
     valid_accounts = [account for account in accounts if
-                      (await get_balances(account['account_id'], account_json=account)).get('EURMTL')]
+                      (await get_balances(account['account_id'], account_json=account)).get('EURMTL') is not None]
     one_mtlap_accounts = [account for account in valid_accounts if
                           1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
     two_or_more_mtlap_accounts = [account for account in valid_accounts if
@@ -2180,13 +2180,14 @@ async def get_liquidity_pools_for_asset(asset):
 
 async def test():
     # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-    # from db.quik_pool import quik_pool
+    from db.quik_pool import quik_pool
     # a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
     # print(a)
     # '224672741436141569-2'
     # a = gen_new('GROW')
-    a = await cmd_gen_mtl_vote_list()
-    print(a)
+    a = await cmd_calc_bim_pays(quik_pool(), 42, 200)
+    #a = (await get_balances('GA4XOEQF4VQXWGJZQBIYWGBKZXGCELLRT6NBELGEB3KHP7J362BSMSIV')).get('EURMTL')
+    print(len(a),a)
 
 
 if __name__ == '__main__':
