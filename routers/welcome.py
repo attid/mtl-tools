@@ -13,7 +13,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import db_send_admin_message
+from db.requests import db_send_admin_message, db_get_user_id
 from routers.admin import check_membership
 from skynet_start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
@@ -385,13 +385,22 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
 
     with suppress(TelegramBadRequest):
         if message.reply_to_message:
-            await bot.ban_chat_member(message.chat.id, message.reply_to_message.from_user.id, revoke_messages=True)
-            add_bot_users(session, message.reply_to_message.from_user.id, None, 2)
-        if len(message.text.split()) > 1:
-            await bot.ban_chat_member(message.chat.id, int(message.text.split()[1]), revoke_messages=True)
-            add_bot_users(session, int(message.text.split()[1]), None, 2)
+            user_id = message.reply_to_message.from_user.id
+            username = message.reply_to_message.from_user.username
+        elif len(message.text.split()) > 1:
+            try:
+                user_id = await db_get_user_id(session, message.text.split()[1])
+                username = None  # We don't have the username here, it's okay for now
+            except ValueError as e:
+                await message.reply(str(e))
+                return
         else:
-            await message.reply("You need to specify user id.")
+            await message.reply("You need to specify user ID or @username.")
+            return
+
+        await bot.ban_chat_member(message.chat.id, user_id, revoke_messages=True)
+        add_bot_users(session, user_id, username, 2)
+        await message.answer(f"User (ID: {user_id}) has been banned.")
 
 
 @router.message(Command(commands=["unban"]))
@@ -402,13 +411,19 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
 
     with suppress(TelegramBadRequest):
         if len(message.text.split()) > 1:
-            with suppress(TelegramBadRequest):
-                await bot.unban_chat_member(message.chat.id, int(message.text.split()[1]))
-            global_data.users_list.pop(int(message.text.split()[1]), None)
-            add_bot_users(session, int(message.text.split()[1]), None, 0)
-            await message.reply("User unbanned.")
+            try:
+                user_id = await db_get_user_id(session, message.text.split()[1])
+            except ValueError as e:
+                await message.reply(str(e))
+                return
+
+            await bot.unban_chat_member(message.chat.id, user_id)
+            global_data.users_list.pop(user_id, None)
+            add_bot_users(session, user_id, None, 0)
+            await message.reply(f"User (ID: {user_id}) has been unbanned.")
         else:
-            await message.reply("You need to specify user id.")
+            await message.reply("You need to specify user ID or @username.")
+
 
 
 @router.callback_query(UnbanCallbackData.filter())

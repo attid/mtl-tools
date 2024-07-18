@@ -1,6 +1,7 @@
 import sys
 import sentry_sdk
 from db.quik_pool import quik_pool
+from utils.global_data import BotValueTypes
 from utils.stellar_utils import *
 
 

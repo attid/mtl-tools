@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import math
 from copy import deepcopy
 from datetime import date
@@ -336,7 +337,7 @@ async def send_by_list(bot: Bot, all_users: list, message: Message, session: Ses
     for user in all_users:
         if len(user) > 2 and user[0] == '@':
             try:
-                chat_id = db_load_user_id(session, user[1:])
+                chat_id = db_get_user_id(session, user[1:])
                 await bot.send_message(chat_id=chat_id, text=msg)
                 good_users.append(user)
             except Exception as ex:
@@ -352,7 +353,7 @@ def cmd_check_fee() -> str:
     # print(Server(horizon_url=config.horizon_url).fetch_base_fee())
 
 
-async def stellar_get_account(account_id) -> json:
+async def stellar_get_account(account_id) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.get(f'{config.horizon_url}/accounts/{account_id}') as resp:
             # print(resp.status)

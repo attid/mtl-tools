@@ -1,4 +1,6 @@
 import sentry_sdk
+
+from utils.global_data import BotValueTypes
 from utils.stellar_utils import *
 from db.models import TLedgers, TOperations
 from db.quik_pool import quik_pool

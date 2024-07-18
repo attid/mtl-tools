@@ -14,7 +14,7 @@ from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, Inline
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import extract_url, db_save_message, db_load_user_id, db_update_user_chat_date
+from db.requests import extract_url, db_save_message, db_get_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
 from scripts.update_data import update_lab
 from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
@@ -519,7 +519,7 @@ async def check_alert(bot, message, session):
         for entity in message.entities:
             if entity.type == 'mention':
                 username = entity.extract_from(message.text)
-                user_id = db_load_user_id(session, username[1:])
+                user_id = db_get_user_id(session, username[1:])
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
                         alert_username = get_username_link(message.from_user)

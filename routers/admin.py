@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, \
-    ReactionTypeEmoji, User, ChatMember
+    ReactionTypeEmoji, User
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session

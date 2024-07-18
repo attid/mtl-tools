@@ -1,10 +1,9 @@
-import json
 import re
 from contextlib import suppress
 from datetime import timedelta
 from enum import Enum
 from sys import argv
-from typing import List, Dict, cast, Optional
+from typing import List, cast, Optional
 
 from loguru import logger
 from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast, Date
@@ -13,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import count
 
 from db.models import *
-from utils.global_data import BotValueTypes, MTLChats
+from utils.global_data import MTLChats
 
 
 def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int | Enum, chat_value: any):
@@ -110,16 +109,26 @@ def db_save_bot_user(session: Session, user_id: int, user_name: str | None, user
     session.commit()
 
 
-def db_load_user_id(session, user_name: str) -> int:
+async def db_get_user_id(session: Session, user_name: str) -> int:
     """
-    Get a user_id by user_name from the bot_users table.
+    Get a user_id by user_name or numeric ID from the bot_users table.
 
     :param session: SQLAlchemy DB session
-    :param user_name: The name of the user
-    :return: The user_id or 0 if no user was found
+    :param user_name: The name of the user (prefixed with @) or numeric user ID
+    :return: The user_id
+    :raises ValueError: If the user is not found or the input format is invalid
     """
-    result = session.query(BotUsers.user_id).filter(BotUsers.user_name == user_name).first()
-    return result[0] if result else 0
+    if user_name.startswith('@'):
+        username = user_name[1:]
+        result = session.query(BotUsers.user_id).filter(BotUsers.user_name == username).first()
+        if not result:
+            raise ValueError(f"User @{username} not found in the database.")
+        return result[0]
+    else:
+        try:
+            return int(user_name)
+        except ValueError:
+            raise ValueError("Invalid user ID or username format. Use a numeric ID or @username.")
 
 
 def db_load_bot_users(session: Session) -> List[BotUsers]:

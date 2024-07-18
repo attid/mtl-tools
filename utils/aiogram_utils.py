@@ -1,19 +1,17 @@
+import asyncio
 import html
 from contextlib import suppress
 from datetime import datetime, timedelta
-
-import asyncio
 
 from aiogram import Bot
 from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
 from aiogram.types import Message, User, CallbackQuery
-from sentry_sdk.client import get_options
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config_reader import config
 from utils.global_data import MTLChats, global_data
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler: AsyncIOScheduler
 non_breaking_space = chr(0x00A0)
