@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from aiogram.types import Message, ChatMemberUpdated
+from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 
 from db.mongo import BotMongoConfig
 
@@ -33,6 +33,8 @@ class MTLChats:
     CyberGroup = -1002079305671
     MTLAGroup = -1001892843127
     MTLAAgoraGroup = -1002032873651
+    ClubFMCGroup = -1001777233595
+    SerpicaGroup = -1001589557564
 
 
 class BotValueTypes(Enum):
@@ -117,8 +119,8 @@ global_data.json_config = BotMongoConfig()
 global_tasks = []
 
 
-def is_skynet_admin(message: Message | ChatMemberUpdated):
-    return f'@{message.from_user.username.lower()}' in global_data.skynet_admins
+def is_skynet_admin(event: Message | ChatMemberUpdated | CallbackQuery):
+    return f'@{event.from_user.username.lower()}' in global_data.skynet_admins
 
 
 def float2str(f) -> str:

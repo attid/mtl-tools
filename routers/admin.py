@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, \
-    ReactionTypeEmoji
+    ReactionTypeEmoji, User, ChatMember
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
@@ -89,12 +89,14 @@ async def cmd_push(message: Message, bot: Bot):
     await send_by_list(bot, all_users, message)
 
 
-async def check_membership(bot: Bot, chat_id: str, user_id: int) -> bool:
+async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User):
     try:
         member = await bot.get_chat_member(chat_id, user_id)
-        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
+        is_member = member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
+        return is_member, member
+
     except TelegramBadRequest:
-        return False
+        pass
 
 
 @router.message(Command(commands=["get_info"]))
@@ -121,9 +123,9 @@ async def cmd_get_info(message: Message, bot: Bot):
 
     messages = []
 
-    is_member = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
+    is_member, user = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
     if is_member:
-        messages.append("Пользователь подписан на канал Montelibero")
+        messages.append(f"Пользователь {user.username} подписан на канал Montelibero")
     else:
         messages.append("Пользователь не подписан на канал")
 

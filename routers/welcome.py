@@ -10,12 +10,14 @@ from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
     ChatMemberUpdated, ChatMemberMember, ChatJoinRequest
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_send_admin_message
+from routers.admin import check_membership
 from skynet_start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
-from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info
+from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -29,6 +31,11 @@ class JoinCallbackData(CallbackData, prefix="join"):
     user_id: int
     chat_id: int
     can_join: bool
+
+
+class UnbanCallbackData(CallbackData, prefix="unban"):
+    user_id: int
+    chat_id: int
 
 
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
@@ -138,7 +145,14 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if user_type_now == 2:
         with suppress(TelegramBadRequest):
             await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
-        await bot.send_message(event.chat.id, f'{username} was banned')
+        kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text='unban',
+                                 callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
+                                                                 chat_id=event.chat.id).pack())
+        ]])
+        await bot.send_message(event.chat.id, f'{username} was banned', reply_markup=kb_unban)
+        await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {event.chat.title}',
+                               reply_markup=kb_unban)
 
     if event.chat.id in global_data.welcome_messages:
         if event.new_chat_member.user:
@@ -187,7 +201,21 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
             await global_data.json_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
         if is_skynet_admin(event):
+            logger.info(f"{event.old_chat_member.user} kicked from {event.chat.title} by {event.from_user.username}")
+            if (check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id) or
+                    check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id) or
+                    check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)):
+                return
+
             add_bot_users(session, event.old_chat_member.user.id, None, 2)
+            username = get_username_link(event.new_chat_member.user)
+            kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text='unban',
+                                     callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
+                                                                     chat_id=event.chat.id).pack())
+            ]])
+            await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {event.chat.title}',
+                                   reply_markup=kb_unban)
 
 
 def contains_emoji(s: str) -> bool:
@@ -381,3 +409,17 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
             await message.reply("User unbanned.")
         else:
             await message.reply("You need to specify user id.")
+
+
+@router.callback_query(UnbanCallbackData.filter())
+async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_data: UnbanCallbackData):
+    if not is_skynet_admin(call):
+        await call.answer("You are not my admin.", show_alert=True)
+        return False
+
+    with suppress(TelegramBadRequest):
+        await bot.unban_chat_member(callback_data.chat_id, callback_data.user_id)
+        global_data.users_list.pop(callback_data.user_id, None)
+        add_bot_users(session, callback_data.user_id, None, 0)
+        await call.answer("User unbanned successfully.")
+        await call.message.delete_reply_markup()
