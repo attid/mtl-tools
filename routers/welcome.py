@@ -361,7 +361,8 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
         return False
 
     if callback_data.can_join:
-        await query.bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
+        with suppress(TelegramBadRequest):
+            await query.bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
         await query.answer("✅")
         await query.message.edit_reply_markup(
             reply_markup=InlineKeyboardMarkup(
@@ -389,7 +390,7 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
             username = message.reply_to_message.from_user.username
         elif len(message.text.split()) > 1:
             try:
-                user_id = await db_get_user_id(session, message.text.split()[1])
+                user_id = db_get_user_id(session, message.text.split()[1])
                 username = None  # We don't have the username here, it's okay for now
             except ValueError as e:
                 await message.reply(str(e))
@@ -412,7 +413,7 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
     with suppress(TelegramBadRequest):
         if len(message.text.split()) > 1:
             try:
-                user_id = await db_get_user_id(session, message.text.split()[1])
+                user_id = db_get_user_id(session, message.text.split()[1])
             except ValueError as e:
                 await message.reply(str(e))
                 return

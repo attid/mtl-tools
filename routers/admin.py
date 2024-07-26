@@ -93,7 +93,7 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User)
     try:
         member = await bot.get_chat_member(chat_id, user_id)
         is_member = member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
-        return is_member, member
+        return is_member, member.user
 
     except TelegramBadRequest:
         pass
@@ -125,7 +125,7 @@ async def cmd_get_info(message: Message, bot: Bot):
 
     is_member, user = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
     if is_member:
-        messages.append(f"Пользователь {user.username} подписан на канал Montelibero")
+        messages.append(f"Пользователь @{user.username} подписан на канал Montelibero")
     else:
         messages.append("Пользователь не подписан на канал")
 

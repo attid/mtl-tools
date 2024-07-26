@@ -1,11 +1,7 @@
 from datetime import datetime
 from enum import Enum
-
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
-from sqlalchemy.orm import Session
-
 from db.mongo import BotMongoConfig
-from db.requests import db_get_user_id
 
 
 class MTLChats:

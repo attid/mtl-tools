@@ -109,7 +109,7 @@ def db_save_bot_user(session: Session, user_id: int, user_name: str | None, user
     session.commit()
 
 
-async def db_get_user_id(session: Session, user_name: str) -> int:
+def db_get_user_id(session: Session, user_name: str) -> int:
     """
     Get a user_id by user_name or numeric ID from the bot_users table.
 

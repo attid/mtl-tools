@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import json
 import math
 from copy import deepcopy
 from datetime import date
@@ -337,7 +336,7 @@ async def send_by_list(bot: Bot, all_users: list, message: Message, session: Ses
     for user in all_users:
         if len(user) > 2 and user[0] == '@':
             try:
-                chat_id = db_get_user_id(session, user[1:])
+                chat_id = db_get_user_id(session, user)
                 await bot.send_message(chat_id=chat_id, text=msg)
                 good_users.append(user)
             except Exception as ex:
@@ -2179,16 +2178,85 @@ async def get_liquidity_pools_for_asset(asset):
         return pools
 
 
+async def copy_trustlines(from_address: str, to_address: str, exclude_assets: List[Asset] = None):
+    if exclude_assets is None:
+        exclude_assets = []
+
+    # Получаем балансы исходного аккаунта
+    balances = await get_balances(from_address, return_assets=True)
+
+    # Открываем трастлайны на целевом аккаунте
+    server = Server(horizon_url=config.horizon_url)
+    to_account = server.load_account(to_address)
+    transaction = TransactionBuilder(
+        source_account=to_account,
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=base_fee
+    )
+    transaction.set_timeout(60 * 60 * 24 * 7)
+
+    for asset, balance in balances.items():
+        if isinstance(asset, Asset) and asset not in exclude_assets:
+            transaction.append_change_trust_op(asset)
+
+    print("XDR для открытия трастлайнов:")
+    print(transaction.build().to_xdr())
+
+    # Переводим средства
+    from_account = server.load_account(from_address)
+    transaction = TransactionBuilder(
+        source_account=from_account,
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=base_fee
+    )
+    transaction.set_timeout(60 * 60 * 24 * 7)
+
+    for asset, balance in balances.items():
+        if isinstance(asset, Asset) and asset not in exclude_assets and float(balance) > 0:
+            transaction.append_payment_op(
+                destination=to_address,
+                asset=asset,
+                amount=str(balance)
+            )
+
+    print("XDR для перевода средств:")
+    print(transaction.build().to_xdr())
+
+    # Закрываем трастлайны на исходном аккаунте
+    from_account = server.load_account(from_address)
+    transaction = TransactionBuilder(
+        source_account=from_account,
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=base_fee
+    )
+    transaction.set_timeout(60 * 60 * 24 * 7)
+
+    for asset, balance in balances.items():
+        if isinstance(asset, Asset) and asset not in exclude_assets and float(balance) == 0:
+            transaction.append_change_trust_op(asset, limit='0')
+
+    print("XDR для закрытия трастлайнов:")
+    print(transaction.build().to_xdr())
+
+    return "XDR для операций копирования трастлайнов сгенерированы."
+
+
 async def test():
     # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-    from db.quik_pool import quik_pool
     # a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
     # print(a)
     # '224672741436141569-2'
-    # a = gen_new('GROW')
-    a = await cmd_calc_bim_pays(quik_pool(), 42, 200)
-    #a = (await get_balances('GA4XOEQF4VQXWGJZQBIYWGBKZXGCELLRT6NBELGEB3KHP7J362BSMSIV')).get('EURMTL')
-    print(len(a),a)
+    # # a = gen_new('GROW')
+    # a = await cmd_calc_bim_pays(quik_pool(), 42, 200)
+    # #a = (await get_balances('GA4XOEQF4VQXWGJZQBIYWGBKZXGCELLRT6NBELGEB3KHP7J362BSMSIV')).get('EURMTL')
+    # print(len(a),a)
+
+    from_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
+    to_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
+    exclude_assets = [MTLAssets.mtlap_asset]
+
+    result = await copy_trustlines(from_address, to_address, exclude_assets)
+    print(result)
 
 
 if __name__ == '__main__':

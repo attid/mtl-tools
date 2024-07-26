@@ -1,6 +1,6 @@
-# from utils.gspread_tools import gs_get_assets_dict, gs_get_accounts_dict
-# from utils.stellar_utils import *
-#
+from utils.gspread_tools import gs_get_assets_dict, gs_get_accounts_dict
+from utils.stellar_utils import *
+
 #
 # @logger.catch
 # async def update_bim_in_id():
@@ -138,25 +138,25 @@
 #             wks.update(f'J{idx + 2}', [[memo]])
 #
 #     logger.info(f'all done {now}')
-#
-#
-# async def update_lab():
-#     headers = {
-#         "Authorization": f"Bearer {config.eurmtl_key}",
-#         "Content-Type": "application/json"
-#     }
-#     async with aiohttp.ClientSession() as session:
-#         async with session.post("https://eurmtl.me/lab/mtl_accounts", headers=headers,
-#                                 data=json.dumps(await gs_get_accounts_dict())) as response:
-#             #print(response.status)
-#             logger.info(await response.text())
-#
-#         async with session.post("https://eurmtl.me/lab/mtl_assets", headers=headers,
-#                                 data=json.dumps(await gs_get_assets_dict())) as response:
-#             logger.info(await response.text())
-#
-#
-# if __name__ == "__main__":
-#     logger.add("update_report.log", rotation="1 MB")
-#     logger.info(datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
-#     asyncio.run(update_lab())
+
+
+async def update_lab():
+    headers = {
+        "Authorization": f"Bearer {config.eurmtl_key}",
+        "Content-Type": "application/json"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://eurmtl.me/lab/mtl_accounts", headers=headers,
+                                data=json.dumps(await gs_get_accounts_dict())) as response:
+            #print(response.status)
+            logger.info(await response.text())
+
+        async with session.post("https://eurmtl.me/lab/mtl_assets", headers=headers,
+                                data=json.dumps(await gs_get_assets_dict())) as response:
+            logger.info(await response.text())
+
+
+if __name__ == "__main__":
+    logger.add("update_report.log", rotation="1 MB")
+    logger.info(datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+    asyncio.run(update_lab())
