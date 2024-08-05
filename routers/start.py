@@ -1,6 +1,6 @@
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandStart, CommandObject
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
@@ -45,20 +45,39 @@ links_msg = f"""
 
 
 @update_command_info("/start", "начать все с чистого листа")
-@router.message(F.text.lower() == "/start", F.chat.type == "private")
+@router.message(CommandStart(deep_link=False, magic=F.args.is_(None)), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext, session: Session, bot: Bot):
     await state.clear()
     db_save_bot_user(session, message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
-    #await bot.set_message_reaction(message.chat.id, message.message_id, ["🔥"])
-    #if message.reply_to_message:
-    #    await message.reply_to_message.react([ReactionTypeEmoji(emoji="👎")])
-    #await bot.set_message_reaction(
-    #    chat_id=message.chat.id,
-    #    message_id=message.message_id,
-    #    reaction=[ReactionTypeEmoji(emoji="👍"), ReactionTypeEmoji(emoji="👎")],
-    #)
 
+
+ALL_EMOJI = """👍 👎 ❤ 🔥 🥰 👏 😁 🤔 🤯 😱 🤬 😢 🎉 🤩 🤮 💩 🙏 👌 🕊 🤡 🥱 🥴 😍 🐳 ❤‍🔥 🌚 🌭 💯 🤣 ⚡ 🍌 🏆 💔 
+               🤨 😐 🍓 🍾 💋 🖕 😈 😴 😭 🤓 👻 👨‍💻 👀 🎃 🙈 😇 😨 🤝 ✍ 🤗 🫡 🎅 🎄 ☃ 💅 🤪 🗿 🆒 💘 🙉 🦄 😘 💊 
+               🙊 😎 👾 🤷‍♂ 🤷 🤷‍♀ 😡""".split()
+
+
+@router.message(Command("emoji"), F.chat.type == "private")
+async def cmd_emoji(message: Message, state: FSMContext, session: Session, bot: Bot):
+    args = message.text.split()[1:]
+
+    if not args:
+        await message.answer("Используйте: /emoji [all | URL | URL emoji]")
+        return
+
+    if args[0] == "all":
+        await message.answer(f"Доступные эмодзи:\n{' '.join(ALL_EMOJI)}")
+    elif args[0].startswith("https://t.me/"):
+        chat_id, message_id = map(int, args[0].split('/')[-2:])
+        emoji = args[1] if len(args) > 1 and args[1] in ALL_EMOJI else "👀"
+        await bot.set_message_reaction(
+            chat_id=f"-100{chat_id}",
+            message_id=message_id,
+            reaction=[ReactionTypeEmoji(emoji=emoji)]
+        )
+        await message.answer(f"Реакция {emoji} добавлена к сообщению.")
+    else:
+        await message.answer("Неверный формат команды.")
 
 
 @router.message(Command(commands=["save"]))
