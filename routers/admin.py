@@ -9,10 +9,10 @@ from contextlib import suppress
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, \
-    ReactionTypeEmoji, User
+from aiogram.types import (Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton,
+                           ReactionTypeEmoji, User, LoginUrl)
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
@@ -733,6 +733,19 @@ async def cmd_create_topic(message: Message):
             await message.reply("Failed to create topic. Make sure the emoji is valid and the topic name is unique.")
         else:
             await message.reply(f"An error occurred while creating the topic: {str(e)}")
+
+
+@router.message(Command(commands=["eurmtl"]))
+@router.message(CommandStart(deep_link=True, magic=F.args == 'eurmtl'), F.chat.type == "private")
+async def cmd_eurmtl(message: Message):
+    url1 = LoginUrl(url='https://eurmtl.me/authorize')
+    url2 = LoginUrl(url='https://eurmtl.me/tables/authorize')
+    await message.answer("Click the button below to log in EURMTL.me:", reply_markup=InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Main", login_url=url1)],
+            [InlineKeyboardButton(text="Tables", login_url=url2)],
+        ]
+    ))
 
 
 if __name__ == "__main__":
