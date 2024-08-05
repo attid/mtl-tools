@@ -838,4 +838,3 @@ if __name__ == "__main__":
         asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
         # print(calculate_statistics())
 
-

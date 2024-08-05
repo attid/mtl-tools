@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from aiogram import Router, Bot
 from aiogram.filters import Command
 from aiogram.types import Message, FSInputFile
@@ -7,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from config_reader import start_path
 from scripts.update_report import update_airdrop, update_fest
-from utils.aiogram_utils import multi_reply, add_text, multi_answer
-from utils.global_data import MTLChats, is_skynet_admin, global_data, str2float, update_command_info
+from utils.aiogram_utils import multi_reply, add_text, multi_answer, get_web_request
+from utils.global_data import MTLChats, is_skynet_admin, global_data, update_command_info
 from utils.gspread_tools import gs_check_bim, agcm
 from utils.img_tools import create_image_with_text
 from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
@@ -16,7 +17,7 @@ from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_s
                                  cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl,
                                  get_btcmtl_xdr, float2str, cmd_show_data, get_damircoin_xdr,
                                  cmd_calc_usdm_divs, get_toc_xdr, find_stellar_public_key, check_mtlap, get_agora_xdr,
-                                 get_chicago_xdr, cmd_calc_usdm_usdm_divs)
+                                 get_chicago_xdr, cmd_calc_usdm_usdm_divs, stellar_async_submit, stellar_sign)
 
 router = Router()
 
@@ -55,6 +56,34 @@ async def cmd_show_balance(message: Message):
     result = await get_cash_balance(message.chat.id)
     create_image_with_text(result, image_size=(550, 600))
     await message.answer_photo(FSInputFile(start_path + 'output_image.png'))
+
+
+@router.message(Command(commands=["do_council"]))
+async def cmd_do_council(message: Message, session: Session):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    balance = await get_balances(MTLAddresses.public_council)
+    if int(balance.get('EURMTL', 0)) < 10:
+        await message.reply(f'Low balance at {MTLAddresses.public_council} can`t pay')
+        return
+    url = "https://distribute-e62teamaya-lm.a.run.app/distribute?address=" + MTLAddresses.public_council
+
+    status, json_data = await get_web_request('GET', url=url, return_type='json')
+
+    print(json_data)
+    print(json_data['xdr'])
+    print(json_data["distribution"])
+
+    distribution_message = "Distribution:\n"
+    for address, amount in json_data["distribution"].items():
+        shortened_address = address[:4] + '..' + address[-4:]
+        distribution_message += f"{shortened_address}: {amount}\n"
+
+    await message.answer(distribution_message)
+    await stellar_async_submit(stellar_sign(json_data['xdr']))
+    await message.answer("Work done.")
 
 
 @router.message(Command(commands=["do_bim"]))

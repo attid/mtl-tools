@@ -519,7 +519,11 @@ async def check_alert(bot, message, session):
         for entity in message.entities:
             if entity.type == 'mention':
                 username = entity.extract_from(message.text)
-                user_id = db_get_user_id(session, username)
+                try:
+                    user_id = db_get_user_id(session, username)
+                except ValueError as ex:
+                    user_id = 0
+                    logger.warning(ex)
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
                         alert_username = get_username_link(message.from_user)

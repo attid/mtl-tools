@@ -46,6 +46,7 @@ class MTLAddresses:
     public_fire = "GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE"
     public_adm = "GBSCMGJCE4DLQ6TYRNUMXUZZUXGZBM4BXVZUIHBBL5CSRRW2GWEHUADM"
     public_boss = "GC72CB75VWW7CLGXS76FGN3CC5K7EELDAQCPXYMZLNMOTC42U3XJBOSS"
+    public_council = "GC3ESR3LZGIDKYG5FFJWKYRR2324PRLUGTJMYCF7L2UG6FS4N6NWCOUN"
 
     public_exchange_eurmtl_xlm = "GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT"
     public_exchange_usdm_mtlfarm = "GDBCVYPF2MYMZDHO7HRUG24LZ3UUGROX3WVWSNVZF7Q5B3NBZ2NYVBOT"
@@ -384,7 +385,7 @@ async def get_balances(address: str, return_assets=False, return_data=False, ret
 
     assets = {}
     if account.get('type'):
-        return []
+        return {}
     else:
         if return_assets:
             for balance in account['balances']:
@@ -469,9 +470,11 @@ def stellar_stop_all_exchange():
     stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
 
-def stellar_sign(xdr, signkey):
+def stellar_sign(xdr, sign_key = None):
+    if sign_key is None:
+        sign_key = config.private_sign.get_secret_value()
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
-    transaction.sign(signkey)
+    transaction.sign(sign_key)
     return transaction.to_xdr()
 
 
@@ -2251,11 +2254,12 @@ async def test():
     # #a = (await get_balances('GA4XOEQF4VQXWGJZQBIYWGBKZXGCELLRT6NBELGEB3KHP7J362BSMSIV')).get('EURMTL')
     # print(len(a),a)
 
-    from_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
-    to_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
-    exclude_assets = [MTLAssets.mtlap_asset]
-
-    result = await copy_trustlines(from_address, to_address, exclude_assets)
+    # from_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
+    # to_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
+    # exclude_assets = [MTLAssets.mtlap_asset]
+    #
+    # result = await copy_trustlines(from_address, to_address, exclude_assets)
+    result = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
     print(result)
 
 
