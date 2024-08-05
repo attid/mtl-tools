@@ -1,9 +1,10 @@
 import sys
 from dataclasses import dataclass, field
+
 import sentry_sdk
+
 from utils.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
 from utils.stellar_utils import *
-from db.quik_pool import quik_pool
 
 max_eurmtl = 10000.0  # max offer
 # max_btcmtl = 0.1  # max offer
@@ -357,7 +358,7 @@ async def check_exchange():
 
     response = requests.get(url, headers=headers, params=parameters)
     data = response.json()
-    #print(data)
+    # print(data)
 
     xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
     btc_usdt = data['data']['BTC']['quote']['USDT']['price']
@@ -447,7 +448,8 @@ async def check_exchange_run(start_configs: list[AddressConfig]):
 
 
 async def check_exchange_one():
-    mtl_market_xlm, mtlfarm_usd = await get_one_data_mm_from_report()
+    _, mtlfarm_usd = await get_one_data_mm_from_report()
+    _, _, mtl_market_xlm = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
 
     start_configs = [
         # MTL - XLM
@@ -455,7 +457,7 @@ async def check_exchange_one():
                       asset_a=MTLAssets.mtl_asset, asset_b=MTLAssets.xlm_asset,
                       price=mtl_market_xlm
                       ),
-        # USDM - XLM
+        # mtlfarm - XLM
         AddressConfig(account_id=MTLAddresses.public_exchange_usdm_mtlfarm,
                       asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.mtlfarm_asset,
                       price=1 / mtlfarm_usd
@@ -483,16 +485,12 @@ async def check_exchange_test():
     #
     # xlm_usdt = data['data']['XLM']['quote']['USDT']['price']
 
+    eur_eur = 1.01
     start_configs = [
-        # # USDM - XLM
-        # AddressConfig(account_id=MTLAddresses.public_exchange_usdm_xlm,
-        #               asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.xlm_asset,
-        #               price=1 / xlm_usdt
-        #               ),
-        # USDM - USDC
-        AddressConfig(account_id=MTLAddresses.public_exchange_usdm_usdc,
-                      asset_a=MTLAssets.usdm_asset, asset_b=MTLAssets.usdc_asset,
-                      price=1
+        # EURMTL - EURC
+        AddressConfig(account_id=MTLAddresses.public_exchange_eurmtl_eurc,
+                      asset_a=MTLAssets.eurmtl_asset, asset_b=MTLAssets.eurc_asset,
+                      price=eur_eur
                       ),
 
     ]
@@ -515,8 +513,9 @@ if __name__ == "__main__":
         asyncio.run(check_exchange_one())
     else:
         print('need more parameters')
-        asyncio.run(check_exchange())
-        # asyncio.run(check_exchange_one())
+        # asyncio.run(check_exchange())
+        asyncio.run(check_exchange_one())
+        # asyncio.run(check_exchange_test())
 
     # place_ladder_orders(account_id=MTLAddresses.public_exchange_usdm_xlm, asset_a=MTLAssets.usdm_asset,
     #                     asset_b=MTLAssets.xlm_asset, price=7.7, offset=2, step=1, ladder_length=5,
