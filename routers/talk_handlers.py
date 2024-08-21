@@ -3,26 +3,25 @@ import html
 import re
 from contextlib import suppress
 
-from aiogram import F, Bot
-from aiogram import Router
+from aiogram import F, Bot, Router
 from aiogram.enums import ChatType, ParseMode, ChatAction, MessageEntityType
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, \
-    URLInputFile, ReplyParameters
+from aiogram.types import (Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
+                           URLInputFile, ReplyParameters)
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import extract_url, db_save_message, db_get_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
 from scripts.update_data import update_lab
-from scripts.update_report import update_guarantors_report, update_main_report, update_fire, update_donate_report, \
-    update_mmwb_report, update_bim_data
+from scripts.update_report import (update_guarantors_report, update_main_report, update_fire, update_donate_report,
+                                   update_mmwb_report, update_bim_data)
 from skynet_start import add_bot_users
 from utils import dialog
-from utils.aiogram_utils import multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption, \
-    get_username_link, cmd_sleep_and_delete
+from utils.aiogram_utils import (multi_reply, HasText, has_words, StartText, is_admin, ReplyToBot, ChatInOption,
+                                 get_username_link, cmd_sleep_and_delete)
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.pyro_tools import extract_telegram_info, pyro_update_msg_info, MessageInfo
@@ -46,6 +45,12 @@ class ReplyCallbackData(CallbackData, prefix="Reply"):
     message_id: int
     chat_id: int
     user_id: int
+
+
+class FirstMessageCallbackData(CallbackData, prefix="first"):
+    user_id: int
+    message_id: int
+    spam: bool
 
 
 # @router.message(F.chat == MTLChats.Employment)
@@ -81,15 +86,15 @@ async def cmd_img(message: Message, bot: Bot):
 
 async def save_url(chat_id, msg_id, msg):
     url = extract_url(msg)
-    await global_data.json_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
-    await global_data.json_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
+    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
 
 
 @router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
     await check_alert(bot, message, session)
     if message.text.find('eurmtl.me/sign_tools') > -1:
-        msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+        msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         try:
             await bot.unpin_chat_message(message.chat.id, msg_id)
         except:
@@ -97,7 +102,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
         await save_url(message.chat.id, message.message_id, message.text)
         await message.pin()
         msg = await check_url_xdr(
-            await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
+            await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
 
@@ -132,9 +137,9 @@ async def remind(message: Message, session: Session, bot: Bot):
                 await send_by_list(bot=bot, all_users=all_users, message=message, url=url, session=session)
 
     else:
-        msg_id = await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
-        msg = await global_data.json_config.load_bot_value(message.chat.id,
-                                                           BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+        msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+        msg = await global_data.mongo_config.load_bot_value(message.chat.id,
+                                                            BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
         await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                message_thread_id=message.message_thread_id)
 
@@ -171,7 +176,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
             await message.reply('Ссылка не найдена')
     else:
         msg = await check_url_xdr(
-            await global_data.json_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
+            await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg[:4000])
 
@@ -414,6 +419,7 @@ spam_phrases = [
     "доход",
     "без опыта",
     "лс",
+    "личку",
     "прибыль",
     "проект",
     "предложение",
@@ -423,17 +429,20 @@ spam_phrases = [
     "заработок",
     "процент",
     "связки"
-
 ]
+
+for i in range(1, 20):
+    spam_phrases.append(f'{i}oo')
+    spam_phrases.append(f'{i}оо')
 
 
 def contains_spam_phrases(text, phrases=None, threshold=3):
     if phrases is None:
         phrases = spam_phrases
 
-    text = re.findall(r'\w+', text.lower())
+    words = re.findall(r'\b\w+\b', text.lower())
 
-    count = sum(phrase in text for phrase in phrases)
+    count = sum(phrase in words for phrase in phrases)
     # print(f'count: {count}')
     return count >= threshold
 
@@ -511,6 +520,17 @@ async def check_spam(message, session):
         add_bot_users(session, message.from_user.id, message.from_user.username, 0)
     else:
         add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+        if message.chat.id in global_data.first_vote:
+            kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="Spam",
+                                     callback_data=FirstMessageCallbackData(spam=True,
+                                                                            message_id=message.message_id,
+                                                                            user_id=message.from_user.id).pack()),
+                InlineKeyboardButton(text="Good",
+                                     callback_data=FirstMessageCallbackData(spam=False,
+                                                                            message_id=message.message_id,
+                                                                            user_id=message.from_user.id).pack()), ]])
+            await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
 
 
 async def check_alert(bot, message, session):
@@ -655,9 +675,71 @@ async def cq_look(query: CallbackQuery):
     await query.answer("👀", show_alert=True)
 
 
+@router.callback_query(FirstMessageCallbackData.filter())
+async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot, session: Session):
+    key = f"{callback_data.message_id}{query.message.chat.id}"
+    data = global_data.first_vote_data.get(key, {"spam": 0, "good": 0, "users": []})
+
+    if query.from_user.id in data["users"]:
+        await query.answer('You have already voted.', show_alert=True)
+        return False
+
+    # Определяем вес голоса: 5 для администраторов, 1 для остальных
+    vote_weight = 5 if await is_admin(query) else 1
+
+    # Обновляем данные голосования
+    if callback_data.spam:
+        data["spam"] += vote_weight
+    else:
+        data["good"] += vote_weight
+
+    data["users"].append(query.from_user.id)
+    global_data.first_vote_data[key] = data
+
+    # Проверяем, достиг ли счет 5 для спама
+    if data["spam"] >= 5:
+        # Удаляем сообщение голосования и сообщение о котором голосование
+        await bot.delete_message(query.message.chat.id, callback_data.message_id)
+        await bot.delete_message(query.message.chat.id, query.message.message_id)
+
+        # Рестрикт для пользователя
+        await query.message.chat.restrict(callback_data.user_id,
+                                          permissions=ChatPermissions(
+                                              can_send_messages=False,
+                                              can_send_media_messages=False,
+                                              can_send_other_messages=False))
+        await query.answer('Message marked as spam and user restricted.', show_alert=True)
+    elif data["good"] >= 5:
+        # Если набрано 5 голосов за "Good", просто удаляем сообщение голосования
+        await bot.delete_message(query.message.chat.id, query.message.message_id)
+        await query.answer('Message marked as good.', show_alert=True)
+    else:
+        # Обновляем текст кнопок с количеством голосов
+        kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"Spam ({data['spam']})",
+                callback_data=FirstMessageCallbackData(spam=True, message_id=callback_data.message_id, user_id=callback_data.user_id).pack()
+            ),
+            InlineKeyboardButton(
+                text=f"Good ({data['good']})",
+                callback_data=FirstMessageCallbackData(spam=False, message_id=callback_data.message_id, user_id=callback_data.user_id).pack()
+            )
+        ]])
+
+        # Редактируем сообщение с новыми кнопками
+        await bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id, reply_markup=kb_reply)
+        await query.answer('Your vote has been counted.', show_alert=True)
+
+
+
 if __name__ == '__main__':
     test = '''
-Приветствую,ищу людей для взаимовыгодного партнерства на удаленке,за подробностями пишите мне
+Есть несложная 3анятость, с высокой оплатой от 2OO-7OO$/день !
+
+- 2 - 3 часа в день
+- Места ограничены
+
+Пиши "+" мне в личку
 '''
 
     print(contains_spam_phrases(test))
