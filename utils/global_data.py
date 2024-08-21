@@ -74,6 +74,7 @@ class BotValueTypes(Enum):
     NotifyJoin = 36
     NotifyMessage = 37
     JoinRequestCaptcha = 38
+    FirstVote = 39
 
 
 class LogQuery:
@@ -108,12 +109,14 @@ class GlobalData:
     no_first_link = []
     save_last_message_date = []
     need_decode = []
-    json_config: BotMongoConfig
+    first_vote = []
+    first_vote_data = {}
+    mongo_config: BotMongoConfig
     reboot = False
 
 
 global_data = GlobalData()
-global_data.json_config = BotMongoConfig()
+global_data.mongo_config = BotMongoConfig()
 global_tasks = []
 
 

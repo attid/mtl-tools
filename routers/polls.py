@@ -49,7 +49,7 @@ async def channel_post(message: Message, session: Session):
             my_poll["closed"] = False
             my_poll['message_id'] = msg.message_id
             my_poll['buttons'] = my_buttons
-            await global_data.json_config.save_bot_value(message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
+            await global_data.mongo_config.save_bot_value(message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
 
 
 @update_command_info("/poll", "Создать голование с учетом веса голосов, "
@@ -71,7 +71,7 @@ async def cmd_poll(message: Message, session: Session):
         my_poll["closed"] = False
         my_poll['message_id'] = msg.message_id
         my_poll['buttons'] = my_buttons
-        await global_data.json_config.save_bot_value(message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
+        await global_data.mongo_config.save_bot_value(message.chat.id, -1 * msg.message_id, json.dumps(my_poll))
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -84,16 +84,16 @@ async def cmd_poll_rt(message: Message, session: Session):
     # print(message)
     if message.reply_to_message:
         my_poll = json.loads(
-            await global_data.json_config.load_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
-                                                         empty_poll))
+            await global_data.mongo_config.load_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
+                                                          empty_poll))
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["question"] = message.text[len('/poll_replace_text '):]
 
-            await global_data.json_config.save_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
-                                                         json.dumps(my_poll))
+            await global_data.mongo_config.save_bot_value(message.chat.id, -1 * message.reply_to_message.message_id,
+                                                          json.dumps(my_poll))
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -115,14 +115,14 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot):
         else:
             message_id = message.reply_to_message.message_id
 
-        my_poll = json.loads(await global_data.json_config.load_bot_value(message.chat.id, -1 * message_id, empty_poll))
+        my_poll = json.loads(await global_data.mongo_config.load_bot_value(message.chat.id, -1 * message_id, empty_poll))
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["closed"] = True
 
-            await global_data.json_config.save_bot_value(message.chat.id, -1 * message_id, json.dumps(my_poll))
+            await global_data.mongo_config.save_bot_value(message.chat.id, -1 * message_id, json.dumps(my_poll))
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -144,7 +144,7 @@ async def cmd_poll_check(message: Message, session: Session):
 
     if message_id:
         my_poll = json.loads(
-            await global_data.json_config.load_bot_value(chat_id, message_id, empty_poll))
+            await global_data.mongo_config.load_bot_value(chat_id, message_id, empty_poll))
 
         # Получение ключа для votes_check из chat_to_address
         address_key = chat_to_address.get(chat_id)
@@ -177,7 +177,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
     answer = callback_data.answer
     user = '@' + query.from_user.username.lower() if query.from_user.username else query.from_user.id
     my_poll = json.loads(
-        await global_data.json_config.load_bot_value(query.message.chat.id, -1 * query.message.message_id, empty_poll))
+        await global_data.mongo_config.load_bot_value(query.message.chat.id, -1 * query.message.message_id, empty_poll))
 
     if my_poll["closed"]:
         await query.answer("This poll is closed!", show_alert=True)
@@ -206,8 +206,8 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
             await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
             if need_close:
                 my_poll["closed"] = True
-            await global_data.json_config.save_bot_value(query.message.chat.id, -1 * query.message.message_id,
-                                                         json.dumps(my_poll))
+            await global_data.mongo_config.save_bot_value(query.message.chat.id, -1 * query.message.message_id,
+                                                          json.dumps(my_poll))
         else:
             await query.answer("You are't in list!", show_alert=True)
     return True
@@ -232,7 +232,7 @@ async def cmd_save_votes(session: Session):
                                                            '75': math.ceil(total * 0.75),
                                                            '100': total}
 
-    await global_data.json_config.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
     global_data.votes = vote_list
     return vote_list
 
@@ -282,7 +282,7 @@ async def cmd_apoll(message: Message, session: Session):
         my_poll["info_message_id"] = msg2.message_id
         my_poll["google_id"] = google_id
         my_poll["google_url"] = google_url
-        await global_data.json_config.save_bot_value(MTLChats.MTLA_Poll, int(msg.poll.id), json.dumps(my_poll))
+        await global_data.mongo_config.save_bot_value(MTLChats.MTLA_Poll, int(msg.poll.id), json.dumps(my_poll))
         await message.reply_to_message.delete()
         await message.delete()
     else:
@@ -292,7 +292,7 @@ async def cmd_apoll(message: Message, session: Session):
 @router.poll_answer()
 async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
     my_poll = json.loads(
-        await global_data.json_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
+        await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
     # find user
     user_address = await gs_find_user_a(f'@{poll.user.username}')
     if not user_address:
@@ -316,9 +316,9 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
 @router.message(Command(commands=["apoll_check"]))
 async def cmd_poll_check(message: Message, session: Session):
     if message.reply_to_message:
-        my_poll = json.loads(await global_data.json_config.load_bot_value(MTLChats.MTLA_Poll,
-                                                                          int(message.reply_to_message.poll.id),
-                                                                          empty_poll))
+        my_poll = json.loads(await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll,
+                                                                           int(message.reply_to_message.poll.id),
+                                                                           empty_poll))
 
         # update answer
         # gs_update_a_table_vote(table_uuid, address, options):

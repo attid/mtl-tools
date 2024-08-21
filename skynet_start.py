@@ -154,30 +154,31 @@ async def main():
 
 async def load_globals(session: Session):
     global_data.skynet_admins = json.loads(
-        await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
-    global_data.skynet_img = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
-    global_data.votes = json.loads(await global_data.json_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
+        await global_data.mongo_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
+    global_data.skynet_img = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
+    global_data.votes = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
 
-    global_data.auto_all = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.AutoAll)
-    global_data.reply_only = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.ReplyOnly)
-    global_data.captcha = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.Captcha)
-    global_data.listen = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.Listen)
-    global_data.full_data = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.FullData)
-    global_data.no_first_link = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
-    global_data.need_decode = await global_data.json_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
-    global_data.save_last_message_date = await global_data.json_config.get_chat_ids_by_key(
+    global_data.auto_all = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.AutoAll)
+    global_data.reply_only = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.ReplyOnly)
+    global_data.first_vote = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FirstVote)
+    global_data.captcha = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Captcha)
+    global_data.listen = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Listen)
+    global_data.full_data = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FullData)
+    global_data.no_first_link = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
+    global_data.need_decode = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
+    global_data.save_last_message_date = await global_data.mongo_config.get_chat_ids_by_key(
         BotValueTypes.SaveLastMessageDate)
-    global_data.join_request_captcha = await global_data.json_config.get_chat_ids_by_key(
+    global_data.join_request_captcha = await global_data.mongo_config.get_chat_ids_by_key(
         BotValueTypes.JoinRequestCaptcha)
 
-    global_data.welcome_messages = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
-    global_data.welcome_button = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
-    global_data.delete_income = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.DeleteIncome)
-    global_data.notify_join = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.NotifyJoin)
-    global_data.notify_message = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.NotifyMessage)
-    global_data.admins = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
-    global_data.alert_me = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
-    global_data.sync = await global_data.json_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
+    global_data.welcome_messages = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
+    global_data.welcome_button = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
+    global_data.delete_income = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.DeleteIncome)
+    global_data.notify_join = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.NotifyJoin)
+    global_data.notify_message = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.NotifyMessage)
+    global_data.admins = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
+    global_data.alert_me = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
+    global_data.sync = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
 
     for user in db_load_bot_users(session):
         global_data.users_list[user.user_id] = user.user_type

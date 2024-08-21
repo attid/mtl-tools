@@ -141,15 +141,15 @@ if __name__ == "__main__":
     # xdr = stellar_remove_orders(MTLAddresses.public_exchange_usdm_usdc, None)
     # stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
-    asyncio.run(move_token(source_account=MTLAddresses.public_exchange_usdm_usdc,
-                           destination_account=MTLAddresses.public_itolstov,
-                           amount='10000', asset=MTLAssets.usdc_asset,
-                           ))
+    # asyncio.run(move_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
+    #                        destination_account=MTLAddresses.public_itolstov,
+    #                        amount='10000', asset=MTLAssets.eurmtl_asset,
+    #                        ))
 
-    # asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_usdm_usdc,
-    #                            destination_account=MTLAddresses.public_itolstov,
-    #                            amount='10000', source_asset=MTLAssets.usdc_asset,
-    #                            destination_asset=MTLAssets.eurmtl_asset))
+    asyncio.run(exchange_token(source_account=MTLAddresses.public_exchange_eurmtl_xlm,
+                               destination_account=MTLAddresses.public_exchange_mtl_xlm,
+                               amount='100', source_asset=MTLAssets.eurmtl_asset,
+                               destination_asset=MTLAssets.mtl_asset))
 
     # asyncio.run(update_main_report(quik_pool()))
     # for x in [MTLAddresses.public_exchange_eurmtl_xlm,

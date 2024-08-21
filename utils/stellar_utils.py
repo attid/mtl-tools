@@ -470,7 +470,7 @@ def stellar_stop_all_exchange():
     stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
 
 
-def stellar_sign(xdr, sign_key = None):
+def stellar_sign(xdr, sign_key=None):
     if sign_key is None:
         sign_key = config.private_sign.get_secret_value()
     transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
@@ -1696,7 +1696,7 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
 async def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
                                     stellar_address=MTLAddresses.public_issuer):
     result = []
-    last_id = await global_data.json_config.load_bot_value(0, value_id)
+    last_id = await global_data.mongo_config.load_bot_value(0, value_id)
     server = Server(horizon_url=config.horizon_url)
     tr = server.transactions().for_account(stellar_address).order(desc=True).call()
     # print(json.dumps(tr["_embedded"]["records"], indent=4))
@@ -1721,7 +1721,7 @@ async def cmd_check_new_transaction(session: requests.Session, ignore_operation:
         # print('****')
         # print(transaction["paging_token"])
 
-    await global_data.json_config.save_bot_value(0, value_id, last_id)
+    await global_data.mongo_config.save_bot_value(0, value_id, last_id)
 
     return result
 
@@ -1732,7 +1732,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset_name: str, sav
         filter_operation = []
     result = []
 
-    last_id = await global_data.json_config.load_bot_value(0, save_id, '0')
+    last_id = await global_data.mongo_config.load_bot_value(0, save_id, '0')
     max_id = last_id
 
     data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
@@ -1741,7 +1741,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset_name: str, sav
         max_id = row.id
 
     if max_id > last_id:
-        await global_data.json_config.save_bot_value(0, save_id, max_id)
+        await global_data.mongo_config.save_bot_value(0, save_id, max_id)
 
     return result
 
@@ -2244,6 +2244,270 @@ async def copy_trustlines(from_address: str, to_address: str, exclude_assets: Li
     return "XDR для операций копирования трастлайнов сгенерированы."
 
 
+text_to_save = '''### Charter of the MTLA Cyberocracy Faction ###
+
+### 1. General Provisions
+1.1 The MTLA Cyberocracy Faction (hereinafter "the Faction") is an autonomous association of enthusiasts within the broader libertarian group, the Montelibero Association.
+
+1.2 The purpose of the Faction is to create an extraterritorial contractual jurisdiction governed by artificial intelligence (hereinafter "AI") to eliminate the influence of personalities' emotions and ambitions on governance.
+
+### 2. Principles and values
+2.1 Inviolability of private property.
+
+2.2 Freedom of contract.
+
+2.3 Freedom and accessibility of information.
+
+2.4 Minimization of the human factor in decision-making. 2.5.
+
+2.5 Transparency and accountability of AI.
+
+### 3. Organizational structure
+3.1 The Faction operates on the basis of the principles of fluid democracy, where each member can delegate his/her vote.
+
+3.2 Members of the Caucus shall delegate their vote in the Caucus Association Council. The exception is when a member of the Caucus is the representative of the Caucus in the Association Council.
+
+3.3 The Caucus has a representative in the Association Council, to whom the Caucus delegates the votes of its members and is obliged to fulfill the decisions made by the Caucus, as well as to inform the Caucus about the activities of the Council.
+
+### 4. Administration and decision making
+4.1 The Faction shall endeavor to have all administrative and managerial activities performed by the AI.
+
+4.2 The AI shall be guided by the interests of the members of the Faction. Members may articulate their interests in text form to the AI.
+
+4.3 Caucus members may delegate their voice within the Caucus to the AI.
+
+4.4 The AI has a deliberative voice within the Caucus.
+
+4.5 Decisions in the Faction are divided into binding and recommended. Mandatory decisions are made by 2/3 of votes, recommended decisions - by majority of votes.
+
+4.6 If during the voting period (minimum 2 days) a member has not voted, his/her vote is transferred to the representative in the Association Council.
+
+4.7 Voting is conducted electronically on a platform approved by the Caucus Council. Participants are notified of the start of voting at least 5 days in advance.
+
+4.8 All voting results are published on the official platform of the Caucus within 24 hours after the voting is completed.
+
+4.9 An annual audit of AI actions and decisions shall be conducted by an independent commission selected by Caucus members. The auditors' report is published for public access.
+
+### 5. Membership and rights of participants
+5.1 Members of the Fraction can be any physical persons who have transferred delegation of their vote in the Council of the Association of the Fraction.
+
+5.2 Caucus members have the right to participate in the discussion and policy making of the Caucus.
+
+5.3 All members of the Faction are obliged to respect the decisions made by the AI and the Faction.
+
+5.4 The Faction undertakes to respect the confidentiality of its members' data, following modern data protection standards.
+
+5.5 Faction members are obliged to declare any possible conflicts of interest and abstain from voting in cases where their personal interests may affect the objectivity of decisions.
+
+### 6. Financial and material resources
+6.1 The financing of the Faction's activity is carried out at the expense of voluntary contributions of its members and supporters.
+
+6.2 All financial transactions must be transparent and available for inspection by the members of the Faction.
+
+6.3 The address of the Caucus is GCAYT4PKYSSCS2R7RD5PNTWSA6ZWDR52NPUUCSJAGB5GIUI53TW4AIAI.
+
+6.4 All financial transactions are subject to an annual audit by an independent audit committee. The auditors' report shall be published for public access.
+
+### 7. Supporters of the Faction
+7.1 Supporters of the Fraction can be natural and legal persons who support its goals and principles.
+
+7.2 Supporters may participate in discussions and make proposals, but have no right to vote in decision-making.
+
+7.3 Supporters may make voluntary contributions to support the activities of the Caucus and receive reports on its activities.
+
+### 8. Final provisions
+8.1 The present Charter comes into force from the moment of its adoption by the members of the Faction.
+
+8.2 Amendments and additions to the Charter can be made only by the decision of the Caucus members and must be approved by 2/3 of votes.'''
+
+
+def prepare_and_send_transaction(soroban_server, source_keypair, contract_address, function_name, parameters):
+    from stellar_sdk import Network, TransactionBuilder
+    from stellar_sdk.exceptions import PrepareTransactionException
+    from stellar_sdk.soroban_rpc import SendTransactionStatus
+    source_account = soroban_server.load_account(source_keypair.public_key)
+
+    transaction = (
+        TransactionBuilder(
+            source_account=source_account,
+            base_fee=10_000,
+            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        )
+        .append_invoke_contract_function_op(
+            contract_id=contract_address,
+            function_name=function_name,
+            parameters=parameters,
+        )
+        .set_timeout(30)
+        .build()
+    )
+
+    try:
+        prepared_transaction = soroban_server.prepare_transaction(transaction)
+    except PrepareTransactionException as e:
+        print(f"Exception preparing transaction: {e}")
+        raise e
+
+    prepared_transaction.sign(source_keypair)
+    send_response = soroban_server.send_transaction(prepared_transaction)
+
+    if send_response.status != SendTransactionStatus.PENDING:
+        raise Exception("Sending transaction failed")
+
+    return send_response.hash
+
+
+def wait_for_transaction(soroban_server, transaction_hash):
+    import time
+    from stellar_sdk.soroban_rpc import GetTransactionStatus
+    while True:
+        print("Waiting for transaction confirmation...")
+        get_response = soroban_server.get_transaction(transaction_hash)
+        if get_response.status != GetTransactionStatus.NOT_FOUND:
+            break
+        time.sleep(1)
+
+    print(f"Get transaction response: {get_response}")
+
+    if get_response.status == GetTransactionStatus.SUCCESS:
+        print("Transaction succeeded!")
+        return True
+    else:
+        print(f"Transaction failed: {get_response.result_xdr}")
+        return False
+
+
+def save_texts_to_contract(contract_address, name, texts):
+    from stellar_sdk import Keypair, SorobanServer, xdr as stellar_xdr
+
+    soroban_server = SorobanServer('https://soroban-rpc.mainnet.stellar.gateway.fm')
+    source_keypair = Keypair.from_secret(config.private_sign.get_secret_value())
+
+    lines = []
+    for line in texts:
+        lines.append(
+            stellar_xdr.SCVal(type=stellar_xdr.SCValType.SCV_STRING, str=stellar_xdr.SCString(line.encode('utf-8'))))
+
+    parameters = [
+        stellar_xdr.SCVal(stellar_xdr.SCValType.SCV_STRING,
+                          str=stellar_xdr.SCString(sc_string=name.encode('utf-8'))),
+
+        stellar_xdr.SCVal(stellar_xdr.SCValType.SCV_VEC, vec=stellar_xdr.SCVec(lines))
+    ]
+
+    transaction_hash = prepare_and_send_transaction(
+        soroban_server,
+        source_keypair,
+        contract_address,
+        "save_texts",
+        parameters
+    )
+
+    return wait_for_transaction(soroban_server, transaction_hash)
+
+
+# Пример использования
+async def test2():
+    contract_address = 'CDCUT3LZX4QP26P5TUTLESX3COFQO6X5OY5B7FIH6A44KX3YF72LLKSB'
+
+    lines = text_to_save.split('\n')
+
+    success = save_texts_to_contract(contract_address, "charter_en", lines)
+
+    if success:
+        print("Texts successfully saved to the contract.")
+    else:
+        print("Failed to save texts to the contract.")
+
+
+async def test1():
+    import time
+    from stellar_sdk import Keypair, Network, SorobanServer, TransactionBuilder, xdr as stellar_xdr
+    from stellar_sdk.exceptions import PrepareTransactionException
+    from stellar_sdk.soroban_rpc import GetTransactionStatus, SendTransactionStatus
+    source_keypair = Keypair.from_secret(config.private_sign.get_secret_value())
+    config.horizon_url = 'https://mainnet.stellar.validationcloud.io/v1/zLR8If1YxHyKtdE1EvW1EBczkjZ6Y8TVcLzBtdVeTYQ'
+    config.horizon_url = 'https://soroban-rpc.mainnet.stellar.gateway.fm'
+    soroban_server = SorobanServer(config.horizon_url)
+
+    contract_address = 'CA4F7EARNNPSFJ5GSZDROYMOLSK6X75UAIIZBLVSTXFSJO3D2YUSXJI4'
+
+    source_account = soroban_server.load_account(source_keypair.public_key)
+
+    built_transaction = (
+        TransactionBuilder(
+            source_account=source_account,
+            base_fee=10_000,
+            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        )
+
+        .append_invoke_contract_function_op(
+            contract_id=contract_address,
+            function_name="get_weight",
+            parameters=[
+                stellar_xdr.SCVal(stellar_xdr.SCValType.SCV_SYMBOL, sym=stellar_xdr.SCSymbol('Soz'.encode('utf-8'))),
+
+            ],
+        )
+        # This transaction will be valid for the next 30 seconds
+        .set_timeout(30)
+        .build()
+    )
+
+    # We use the RPC server to "prepare" the transaction. This simulating the
+    # transaction, discovering the storage footprint, and updating the transaction
+    # to include that footprint. If you know the footprint ahead of time, you could
+    # manually use `addFootprint` and skip this step.
+    print(built_transaction)
+    print(built_transaction.to_xdr())
+    try:
+        prepared_transaction = soroban_server.prepare_transaction(built_transaction)
+    except PrepareTransactionException as e:
+        print(f"Exception preparing transaction: {e}")
+        raise e
+
+    # Sign the transaction with the source account's keypair.
+    prepared_transaction.sign(source_keypair)
+
+    # Let's see the base64-encoded XDR of the transaction we just built.
+    print(f"Signed prepared transaction XDR: {prepared_transaction.to_xdr()}")
+
+    # Submit the transaction to the Soroban-RPC server. The RPC server will then
+    # submit the transaction into the network for us. Then we will have to wait,
+    # polling `getTransaction` until the transaction completes.
+    send_response = soroban_server.send_transaction(prepared_transaction)
+    print(f"Sent transaction: {send_response}")
+
+    if send_response.status != SendTransactionStatus.PENDING:
+        raise Exception("sending transaction failed")
+
+    # Poll `getTransaction` until the status is not "NOT_FOUND"
+    while True:
+        print("Waiting for transaction confirmation...")
+        # See if the transaction is complete
+        get_response = soroban_server.get_transaction(send_response.hash)
+        if get_response.status != GetTransactionStatus.NOT_FOUND:
+            break
+        # Wait one second
+        time.sleep(1)
+
+    print(f"get_transaction response: {get_response}")
+
+    if get_response.status == GetTransactionStatus.SUCCESS:
+        # Make sure the transaction's resultMetaXDR is not empty
+        assert get_response.result_meta_xdr is not None
+
+        # Find the return value from the contract and return it
+        transaction_meta = stellar_xdr.TransactionMeta.from_xdr(
+            get_response.result_meta_xdr
+        )
+        return_value = transaction_meta.v3.soroban_meta.return_value
+        #        output = return_value.u32.uint32
+        print(f"Transaction result: {return_value}")
+    else:
+        print(f"Transaction failed: {get_response.result_xdr}")
+
+
 async def test():
     # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
     # a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
@@ -2259,13 +2523,14 @@ async def test():
     # exclude_assets = [MTLAssets.mtlap_asset]
     #
     # result = await copy_trustlines(from_address, to_address, exclude_assets)
-    result = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
+    config.horizon_url = 'https://mainnet.stellar.validationcloud.io/v1/zLR8If1YxHyKtdE1EvW1EBczkjZ6Y8TVcLzBtdVeTYQ'
+    result = await cmd_get_new_vote_all_mtl('')
     print(result)
 
 
 if __name__ == '__main__':
     pass
-    asyncio.run(test())
+    asyncio.run(test2())
 
     # from db.quik_pool import quik_pool
     # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))

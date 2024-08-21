@@ -4,10 +4,11 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 from loguru import logger
 from pyrogram import Client  # pyrofork
+from pyrogram.enums import ChatMemberStatus
 from sentry_sdk import capture_exception
 
 from config_reader import config
@@ -26,6 +27,14 @@ class MessageInfo:
     message_text: Optional[str] = None
     reply_to_message: Optional['MessageInfo'] = None
     full_text: Optional[str] = None
+
+
+@dataclass
+class GroupMember:
+    user_id: int
+    username: Optional[str]
+    full_name: str
+    is_admin: bool
 
 
 if 'test' in sys.argv or __name__ == "__main__":
@@ -109,14 +118,34 @@ async def pyro_start():
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
 
 
+async def get_group_members(chat_id: int) -> List[GroupMember]:
+    members = []
+    try:
+        async for member in pyro_app.get_chat_members(chat_id):
+            if member.user.is_deleted:
+                continue
+            is_admin = member.status in (ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR)
+            members.append(GroupMember(
+                user_id=member.user.id,
+                username=member.user.username,
+                full_name=member.user.first_name + (" " + member.user.last_name if member.user.last_name else ""),
+                is_admin=is_admin
+            ))
+    except Exception as e:
+        logger.error(f"Error getting group members: {e}")
+        capture_exception(e)
+    return members
+
+
 async def main():
     await pyro_app.start()
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
-    url = 'https://t.me/c/2116208659/9538'
-    msg = extract_telegram_info(url)
-    print(msg)
-    await pyro_update_msg_info(msg)
-    print(msg)
+    # a = await get_group_members(-1001892843127)
+    # # 1798357244
+    # print(a)
+    from utils.global_data import global_data
+    await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
+
     try:
         await pyro_app.stop()
     except Exception as e:
