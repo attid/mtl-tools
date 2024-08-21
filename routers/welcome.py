@@ -1,15 +1,17 @@
+import asyncio
 import json
+import random
 import re
 from contextlib import suppress
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.filters import Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER, \
-    ADMINISTRATOR
+from aiogram.filters import (Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER,
+                             ADMINISTRATOR)
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions, \
-    ChatMemberUpdated, ChatMemberMember, ChatJoinRequest
+from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions,
+                           ChatMemberUpdated, ChatMemberMember, ChatJoinRequest)
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,7 @@ from routers.admin import check_membership
 from skynet_start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
+from utils.pyro_tools import GroupMember
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -38,6 +41,64 @@ class UnbanCallbackData(CallbackData, prefix="unban"):
     chat_id: int
 
 
+class EmojiCaptchaCallbackData(CallbackData, prefix="e_captcha"):
+    user_id: int
+    square: str
+    num: int
+
+
+
+def generate_number_with_sum(target_sum):
+    while True:
+        # Генерируем случайное четырехзначное число
+        num = random.randint(1000, 9999)
+        # Вычисляем сумму цифр этого числа
+        digits_sum = sum(int(digit) for digit in str(num))
+        # Если сумма цифр оканчивается на нужную цифру, возвращаем число
+        if digits_sum % 10 == target_sum:
+            return num
+
+
+def get_last_digit_of_sum(number):
+    digits_sum = sum(int(digit) for digit in str(number))
+    return digits_sum % 10
+
+
+emoji_pairs = [
+    ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫️", "⚪️", "🟤"],  # Круги
+    ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "⬛️", "⬜️", "🟫"]  # Квадраты
+]
+
+
+def create_emoji_captcha_keyboard(user_id, required_num):
+    random_indices = random.sample(range(9), 6)
+
+    if required_num not in random_indices:
+        random_indices[random.randint(0, 5)] = required_num
+
+    buttons = []
+
+    for index in random_indices:
+        square = emoji_pairs[1][index]
+        num = generate_number_with_sum(index)
+        if index != required_num:
+            num += 1
+        button = InlineKeyboardButton(
+            text=square,
+            callback_data=EmojiCaptchaCallbackData(user_id=user_id, square=square, num=num).pack()
+        )
+        buttons.append(button)
+
+    random.shuffle(buttons)
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        buttons[:3],
+        buttons[3:]
+    ])
+
+    return keyboard
+
+
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
 async def cmd_delete_welcome(message: Message, session: Session):
@@ -47,7 +108,7 @@ async def cmd_delete_welcome(message: Message, session: Session):
 
     if message.chat.id in global_data.welcome_messages:
         global_data.welcome_messages[message.chat.id] = None
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
 
     msg = await message.reply('Removed')
     cmd_delete_later(msg, 1)
@@ -63,8 +124,8 @@ async def cmd_set_welcome(message: Message, session: Session):
 
     if len(message.text.split()) > 1:
         global_data.welcome_messages[message.chat.id] = message.html_text[13:]
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
-                                                     message.html_text[13:])
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
+                                                      message.html_text[13:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -82,7 +143,7 @@ async def cmd_set_welcome(message: Message, session: Session):
 
     if len(message.text.split()) > 1:
         global_data.welcome_button[message.chat.id] = message.text[19:]
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
         msg = await message.reply('Added')
         cmd_delete_later(msg, 1)
     else:
@@ -102,12 +163,12 @@ async def cmd_set_captcha(message: Message, session: Session):
 
     if message.text.split()[1] == 'on':
         global_data.captcha.append(message.chat.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, 1)
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, 1)
         msg = await message.reply('captcha on')
         cmd_delete_later(msg, 1)
     elif message.text.split()[1] == 'off':
         global_data.captcha.remove(message.chat.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, None)
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, None)
         msg = await message.reply('captcha off')
         cmd_delete_later(msg, 1)
     cmd_delete_later(message, 1)
@@ -120,7 +181,7 @@ async def cmd_stop_exchange(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    await global_data.json_config.save_bot_value(0, BotValueTypes.StopExchange, 1)
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, 1)
     stellar_stop_all_exchange()
 
     await message.reply('Was stop')
@@ -133,13 +194,26 @@ async def cmd_start_exchange(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    await global_data.json_config.save_bot_value(0, BotValueTypes.StopExchange, None)
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, None)
 
     await message.reply('Was start')
 
+bad_names = ['ЧВК ВАГНЕР','ЧВК ВАГНЕР']
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
+    if event.new_chat_member.user.full_name in bad_names:
+        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.send_message(MTLChats.SpamGroup,
+                               f'{event.new_chat_member.user.mention_html()} был забанен в чате {event.chat.title}'
+                               f' за использование запрещенного никнейма')
+        return
+
+    member = GroupMember(user_id=event.new_chat_member.user.id,
+                         username=event.new_chat_member.user.username,
+                         full_name=event.new_chat_member.user.full_name,
+                         is_admin=False)
+    _ = asyncio.create_task(global_data.mongo_config.add_user_to_chat(event.chat.id, member))
     user_type_now = global_data.users_list.get(event.new_chat_member.user.id)
     username = get_username_link(event.new_chat_member.user)
     if user_type_now == 2:
@@ -166,6 +240,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                     InlineKeyboardButton(text=btn_msg,
                                          callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack())
                 ]])
+                random_color = random.randint(0, 8)
+                if msg.find('$$COLOR$$') > 0:
+                    msg = msg.replace('$$COLOR$$', emoji_pairs[0][random_color])
+                    kb_captcha = create_emoji_captcha_keyboard(event.new_chat_member.user.id, random_color)
 
                 try:
                     await event.chat.restrict(event.new_chat_member.user.id,
@@ -181,30 +259,32 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
             cmd_delete_later(answer)
 
     if event.chat.id in global_data.auto_all:
-        members = json.loads(await global_data.json_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(await global_data.mongo_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]'))
         if event.new_chat_member.user.username:
             members.append('@' + event.new_chat_member.user.username)
         else:
             await bot.send_message(event.chat.id,
                                    f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
-        await global_data.json_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+        await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
+    _ = asyncio.create_task(global_data.mongo_config.remove_user_from_chat(event.chat.id,
+                                                                           event.new_chat_member.user.id))
     if event.chat.id in global_data.auto_all:
-        members = json.loads(await global_data.json_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]'))
+        members = json.loads(await global_data.mongo_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]'))
         if event.from_user.username:
             username = '@' + event.from_user.username
             if username in members:
                 members.remove(username)
-            await global_data.json_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+            await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
         if is_skynet_admin(event):
             logger.info(f"{event.old_chat_member.user} kicked from {event.chat.title} by {event.from_user.username}")
-            if (check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id) or
-                    check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id) or
-                    check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)):
+            if (await check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id) or
+                    await check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id) or
+                    await check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)):
                 return
 
             add_bot_users(session, event.old_chat_member.user.id, None, 2)
@@ -244,15 +324,6 @@ async def msg_delete_income(message: Message):
             await message.delete()
 
 
-# new_chat_members = [
-#    User(id=5148120261, is_bot=False, first_name='Вредитель', last_name=None, username=None, language_code='ru',
-#         is_premium=None, added_to_attachment_menu=None, can_join_groups=None, can_read_all_group_messages=None,
-#         supports_inline_queries=None)]
-# left_chat_member = User(id=5148120261, is_bot=False, first_name='Вредитель', last_name=None, username=None,
-#                        language_code='ru', is_premium=None, added_to_attachment_menu=None, can_join_groups=None,
-#                        can_read_all_group_messages=None, supports_inline_queries=None)
-
-
 @router.callback_query(CaptchaCallbackData.filter())
 async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, bot: Bot):
     answer = callback_data.answer
@@ -263,6 +334,21 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
     else:
         await query.answer("For other user", show_alert=True)
     await query.answer()
+
+
+@router.callback_query(EmojiCaptchaCallbackData.filter())
+async def cq_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCallbackData, bot: Bot):
+    if query.from_user.id == callback_data.user_id:
+        index = emoji_pairs[1].index(callback_data.square)
+        if get_last_digit_of_sum(callback_data.num) == index:
+            await query.answer("Thanks !", show_alert=True)
+            chat = await bot.get_chat(query.message.chat.id)
+            await query.message.chat.restrict(query.from_user.id, permissions=chat.permissions)
+        else:
+            await query.answer("Wrong answer", show_alert=True)
+            await query.message.delete_reply_markup()
+    else:
+        await query.answer("For other user", show_alert=True)
 
 
 @router.message(Command(commands=["recaptcha"]))
@@ -300,7 +386,7 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot)
     members = await event.chat.get_administrators()
     new_admins = [member.user.id for member in members]
     global_data.admins[event.chat.id] = new_admins
-    await global_data.json_config.save_bot_value(event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
+    await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
 
 
 @router.chat_join_request()
@@ -380,7 +466,10 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
 
 @router.message(Command(commands=["ban"]))
 async def cmd_ban(message: Message, session: Session, bot: Bot):
-    if not is_skynet_admin(message):
+    skynet_admin = is_skynet_admin(message)
+    admin = is_admin(message)
+
+    if not (skynet_admin or (admin and message.reply_to_message)):
         await message.reply("You are not my admin.")
         return False
 
@@ -388,7 +477,12 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
         if message.reply_to_message:
             user_id = message.reply_to_message.from_user.id
             username = message.reply_to_message.from_user.username
-        elif len(message.text.split()) > 1:
+            cmd_delete_later(message.reply_to_message, seconds=5)
+            msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
+            spam_check = message.chat.id in global_data.no_first_link
+            await msg.reply(f"Was banned by {message.from_user.username} in {message.chat.title} chat.\n"
+                            f"Spam check: {spam_check}")
+        elif len(message.text.split()) > 1 and skynet_admin:
             try:
                 user_id = db_get_user_id(session, message.text.split()[1])
                 username = None  # We don't have the username here, it's okay for now
@@ -396,12 +490,18 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
                 await message.reply(str(e))
                 return
         else:
-            await message.reply("You need to specify user ID or @username.")
+            await message.reply("You need to specify user ID or @username and be skynet admin.")
             return
 
         await bot.ban_chat_member(message.chat.id, user_id, revoke_messages=True)
         add_bot_users(session, user_id, username, 2)
-        await message.answer(f"User (ID: {user_id}) has been banned.")
+        msg = await message.answer(f"User (ID: {user_id}) has been banned.")
+        if message.reply_to_message is None:
+            await message.bot.send_message(chat_id=MTLChats.SpamGroup,
+                                           text=f"User (ID: {user_id}) has been banned by "
+                                                f"{message.from_user.username} in {message.chat.title} chat.")
+        cmd_delete_later(message, seconds=5)
+        cmd_delete_later(msg, seconds=5)
 
 
 @router.message(Command(commands=["unban"]))
@@ -426,7 +526,6 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
             await message.reply("You need to specify user ID or @username.")
 
 
-
 @router.callback_query(UnbanCallbackData.filter())
 async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_data: UnbanCallbackData):
     if not is_skynet_admin(call):
@@ -439,3 +538,9 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
         add_bot_users(session, callback_data.user_id, None, 0)
         await call.answer("User unbanned successfully.")
         await call.message.delete_reply_markup()
+
+
+
+
+if __name__ == '__main__':
+    print(create_emoji_captcha_keyboard(1, 0))
