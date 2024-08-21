@@ -23,6 +23,7 @@ from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
+from utils.pyro_tools import get_group_members
 from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
@@ -95,8 +96,8 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User)
         is_member = member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
         return is_member, member.user
 
-    except TelegramBadRequest:
-        pass
+    except TelegramBadRequest as e:
+        return False, None
 
 
 @router.message(Command(commands=["get_info"]))
@@ -163,11 +164,11 @@ async def cmd_set_listen(message: Message, session: Session):
 
     if message.chat.id in global_data.listen:
         global_data.listen.remove(message.chat.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Listen, None)
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Listen, None)
         msg = await message.reply('Removed')
     else:
         global_data.listen.append(message.chat.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.Listen, 1)
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Listen, 1)
         msg = await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -272,7 +273,19 @@ async def cmd_get_info(message: Message, bot: Bot):
         return
 
     if message.reply_to_message:
-        await bot.send_message(chat_id=message.from_user.id, text=message.reply_to_message.html_text)
+        if message.reply_to_message.text or message.reply_to_message.caption:
+            await bot.send_message(chat_id=message.from_user.id,
+                                   text=message.reply_to_message.html_text or message.reply_to_message.caption)
+
+        if message.reply_to_message.photo:
+            photo = message.reply_to_message.photo[-1]
+            await bot.send_photo(chat_id=message.from_user.id, photo=photo.file_id,
+                                 caption=message.reply_to_message.caption)
+
+        elif message.reply_to_message.video:
+            video = message.reply_to_message.video
+            await bot.send_video(chat_id=message.from_user.id, video=video.file_id,
+                                 caption=message.reply_to_message.caption)
 
 
 @update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)")
@@ -280,15 +293,15 @@ async def cmd_get_info(message: Message, bot: Bot):
 async def cmd_set_alert_me(message: Message, session: Session):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
         global_data.alert_me[message.chat.id].remove(message.from_user.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                                                     json.dumps(global_data.alert_me[message.chat.id]))
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
+                                                      json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Removed')
     else:
         if message.chat.id not in global_data.alert_me:
             global_data.alert_me[message.chat.id] = []
         global_data.alert_me[message.chat.id].append(message.from_user.id)
-        await global_data.json_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                                                     json.dumps(global_data.alert_me[message.chat.id]))
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
+                                                      json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Added')
 
     cmd_delete_later(message, 1)
@@ -339,8 +352,8 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
                                                         'message_id': new_msg.message_id,
                                                         'url': url})
 
-        await global_data.json_config.save_bot_value(chat.id, BotValueTypes.Sync,
-                                                     json.dumps(global_data.sync[chat.id]))
+        await global_data.mongo_config.save_bot_value(chat.id, BotValueTypes.Sync,
+                                                      json.dumps(global_data.sync[chat.id]))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -410,8 +423,8 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot):
             })
 
             # Сохраняем обновленные данные в БД
-            await global_data.json_config.save_bot_value(chat_id, BotValueTypes.Sync,
-                                                         json.dumps(global_data.sync[chat_id]))
+            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Sync,
+                                                          json.dumps(global_data.sync[chat_id]))
 
             await message.reply('Синхронизация восстановлена')
 
@@ -518,6 +531,7 @@ commands_info = {
     "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin"),
     "save_last_message_date": (global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate,
                                "toggle", "admin"),
+    "set_first_vote": (global_data.first_vote, BotValueTypes.FirstVote, "toggle", "admin"),
     "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin"),
     "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin"),
     "join_request_captcha": (global_data.join_request_captcha, BotValueTypes.JoinRequestCaptcha, "toggle", "admin"),
@@ -533,6 +547,7 @@ commands_info = {
 
 
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
+@update_command_info("/set_first_vote", "Показывать ли голосованием о первом сообщении.")
 @update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата")
 @update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
@@ -598,7 +613,7 @@ async def handle_command(message: Message, session: Session, command_info):
             global_data_field.pop(chat_id)
         else:
             global_data_field.remove(chat_id)
-        await global_data.json_config.save_bot_value(chat_id, db_value_type, None)
+        await global_data.mongo_config.save_bot_value(chat_id, db_value_type, None)
         info_message = await message.reply('Removed')
     else:
         value_to_set = command_args[0] if command_args else '1'
@@ -607,7 +622,7 @@ async def handle_command(message: Message, session: Session, command_info):
         else:
             global_data_field.append(chat_id)
 
-        await global_data.json_config.save_bot_value(chat_id, db_value_type, value_to_set)
+        await global_data.mongo_config.save_bot_value(chat_id, db_value_type, value_to_set)
         info_message = await message.reply('Added')
 
     await cmd_sleep_and_delete(info_message, 5)
@@ -626,7 +641,7 @@ async def list_command_handler(message: Message, session: Session, command_info)
             await message.reply("Необходимо указать аргументы.")
         else:
             global_data_field.extend(command_args)
-            await global_data.json_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Added: {" ".join(command_args)}')
 
     elif action_type == "del_list":
@@ -636,7 +651,7 @@ async def list_command_handler(message: Message, session: Session, command_info)
             for arg in command_args:
                 if arg in global_data_field:
                     global_data_field.remove(arg)
-            await global_data.json_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Removed: {" ".join(command_args)}')
 
     elif action_type == "show_list":
@@ -748,6 +763,18 @@ async def cmd_eurmtl(message: Message):
     ))
 
 
+@router.message(Command(commands=["update_chats_info"]))
+async def cmd_chats_info(message: Message):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+    await message.answer(text="Обновление информации о чатах...")
+    for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
+        await global_data.mongo_config.update_chat_info(chat_id, await get_group_members(chat_id))
+    await message.answer(text="Обновление информации о чатах... Done.")
+
+
 if __name__ == "__main__":
     tmp_bot = Bot(token=config.bot_token.get_secret_value())
-    asyncio.run(cmd_kill(tmp_bot))
+    a = asyncio.run(check_membership(tmp_bot, MTLChats.MonteliberoChanel, int(6822818006)))
+    print(a)

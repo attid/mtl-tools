@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     sentry_report_dsn: str
     horizon_url: str
     coinmarketcap: SecretStr
-    mongo_uri: str
+    mongodb_url: str
     pyro_api_id: int
     pyro_api_hash: SecretStr
     telegraph_token: str

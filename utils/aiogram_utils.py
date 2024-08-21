@@ -51,9 +51,12 @@ def add_text(lines, num_line, text):
     return "\n".join(lines)
 
 
-def cmd_delete_later(message: Message, minutes=5):
+def cmd_delete_later(message: Message, minutes=5, seconds=None):
     current_time = datetime.now()
-    future_time = current_time + timedelta(minutes=minutes)
+    if seconds:
+        future_time = current_time + timedelta(seconds=seconds)
+    else:
+        future_time = current_time + timedelta(minutes=minutes)
     scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(message,))
 
 
