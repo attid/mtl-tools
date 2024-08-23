@@ -333,6 +333,9 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
 
     await check_alert(bot, message, session)
 
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] != 1:
+        await set_vote(message)
+
     has_hashtag = False
     if message.entities:
         for entity in message.entities:
@@ -383,6 +386,9 @@ async def cmd_save_msg(message: Message, session: Session, bot: Bot):
 
     await check_alert(bot, message, session)
 
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] != 1:
+        await set_vote(message)
+
     db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                     thread_id=message.message_thread_id if message.is_topic_message else None,
                     text=message.text, chat_id=message.chat.id)
@@ -396,7 +402,10 @@ async def cmd_save_good_user(message: Message, session: Session):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
 
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] != 1:
+        await set_vote(message)
     add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+
     # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
     await notify_message(message)
 
@@ -428,7 +437,11 @@ spam_phrases = [
     "заработка",
     "заработок",
     "процент",
+    "пишите",
+    "18",
     "связки"
+    "зарабатывать",
+    "подробности"
 ]
 
 for i in range(1, 20):
@@ -520,17 +533,21 @@ async def check_spam(message, session):
         add_bot_users(session, message.from_user.id, message.from_user.username, 0)
     else:
         add_bot_users(session, message.from_user.id, message.from_user.username, 1)
-        if message.chat.id in global_data.first_vote:
-            kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="Spam",
-                                     callback_data=FirstMessageCallbackData(spam=True,
-                                                                            message_id=message.message_id,
-                                                                            user_id=message.from_user.id).pack()),
-                InlineKeyboardButton(text="Good",
-                                     callback_data=FirstMessageCallbackData(spam=False,
-                                                                            message_id=message.message_id,
-                                                                            user_id=message.from_user.id).pack()), ]])
-            await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
+        await set_vote(message)
+
+
+async def set_vote(message):
+    if message.chat.id in global_data.first_vote:
+        kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Spam",
+                                 callback_data=FirstMessageCallbackData(spam=True,
+                                                                        message_id=message.message_id,
+                                                                        user_id=message.from_user.id).pack()),
+            InlineKeyboardButton(text="Good",
+                                 callback_data=FirstMessageCallbackData(spam=False,
+                                                                        message_id=message.message_id,
+                                                                        user_id=message.from_user.id).pack()), ]])
+        await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
 
 
 async def check_alert(bot, message, session):
@@ -677,6 +694,10 @@ async def cq_look(query: CallbackQuery):
 
 @router.callback_query(FirstMessageCallbackData.filter())
 async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot, session: Session):
+    if query.from_user.id == callback_data.user_id:
+        await query.answer("You can't vote", show_alert=True)
+        return False
+
     key = f"{callback_data.message_id}{query.message.chat.id}"
     data = global_data.first_vote_data.get(key, {"spam": 0, "good": 0, "users": []})
 
@@ -699,15 +720,19 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
     # Проверяем, достиг ли счет 5 для спама
     if data["spam"] >= 5:
         # Удаляем сообщение голосования и сообщение о котором голосование
-        await bot.delete_message(query.message.chat.id, callback_data.message_id)
-        await bot.delete_message(query.message.chat.id, query.message.message_id)
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(query.message.chat.id, callback_data.message_id)
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(query.message.chat.id, query.message.message_id)
 
         # Рестрикт для пользователя
-        await query.message.chat.restrict(callback_data.user_id,
+        with suppress(TelegramBadRequest):
+            await query.message.chat.restrict(callback_data.user_id,
                                           permissions=ChatPermissions(
                                               can_send_messages=False,
                                               can_send_media_messages=False,
                                               can_send_other_messages=False))
+        add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer('Message marked as spam and user restricted.', show_alert=True)
     elif data["good"] >= 5:
         # Если набрано 5 голосов за "Good", просто удаляем сообщение голосования
@@ -734,12 +759,7 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
 
 if __name__ == '__main__':
     test = '''
-Есть несложная 3анятость, с высокой оплатой от 2OO-7OO$/день !
-
-- 2 - 3 часа в день
-- Места ограничены
-
-Пиши "+" мне в личку
+В поиске людей для заработка в интернет сфере, если ты совершеннолетний(я), хочешь зарабатывать пассивно с телефона, тогда тебе ко мне, подробности в лс
 '''
 
     print(contains_spam_phrases(test))

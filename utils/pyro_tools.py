@@ -9,6 +9,7 @@ from typing import Optional, List
 from loguru import logger
 from pyrogram import Client  # pyrofork
 from pyrogram.enums import ChatMemberStatus
+from pyrogram.errors import FloodWait, PeerIdInvalid, UserNotMutualContact
 from sentry_sdk import capture_exception
 
 from config_reader import config
@@ -137,14 +138,69 @@ async def get_group_members(chat_id: int) -> List[GroupMember]:
     return members
 
 
+async def remove_deleted_users(chat_id: int):
+    try:
+        async for member in pyro_app.get_chat_members(chat_id):
+            if member.user.is_deleted:
+                try:
+                    await pyro_app.ban_chat_member(chat_id, member.user.id)
+                    logger.info(f"Removed deleted user with ID {member.user.id} from chat {chat_id}")
+                    await asyncio.sleep(3)
+                except FloodWait as e:
+                    logger.warning(f"FloodWait error: waiting for {e.value} seconds")
+                    await asyncio.sleep(e.value)
+                except Exception as e:
+                    logger.error(f"Error removing user {member.user.id}: {e}")
+                    capture_exception(e)
+    except Exception as e:
+        logger.error(f"Error in remove_deleted_users for chat {chat_id}: {e}")
+        capture_exception(e)
+
+async def add_contact(user_id: int):
+    try:
+        # Get user info
+        user = await pyro_app.get_users(user_id)
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return False
+
+        # Add contact
+        result = await pyro_app.add_contact(
+            user_id=user.id,
+            first_name=user.first_name or "",
+            last_name=user.last_name or "",
+            phone_number=user.phone_number or ""
+        )
+        if result:
+            logger.info(f"Successfully added user {user_id} to contacts")
+            return True
+        else:
+            logger.warning(f"Failed to add user {user_id} to contacts")
+            return False
+    except PeerIdInvalid:
+        logger.error(f"Invalid user ID: {user_id}")
+        return False
+    except UserNotMutualContact:
+        logger.warning(f"User {user_id} is not a mutual contact")
+        return False
+    except FloodWait as e:
+        logger.warning(f"FloodWait error: waiting for {e.value} seconds")
+        await asyncio.sleep(e.value)
+        return await add_contact(user_id)  # Retry after waiting
+    except Exception as e:
+        logger.error(f"Error adding user {user_id} to contacts: {e}")
+        capture_exception(e)
+        return False
+
 async def main():
     await pyro_app.start()
+    await add_contact(7394698)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
     # a = await get_group_members(-1001892843127)
     # # 1798357244
     # print(a)
-    from utils.global_data import global_data
-    await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
+    #from utils.global_data import global_data
+    #await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
 
     try:
         await pyro_app.stop()

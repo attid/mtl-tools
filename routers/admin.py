@@ -23,7 +23,7 @@ from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
-from utils.pyro_tools import get_group_members
+from utils.pyro_tools import get_group_members, remove_deleted_users
 from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
@@ -772,6 +772,35 @@ async def cmd_chats_info(message: Message):
     for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
         await global_data.mongo_config.update_chat_info(chat_id, await get_group_members(chat_id))
     await message.answer(text="Обновление информации о чатах... Done.")
+
+
+@router.message(Command(commands=["delete_dead_members"]))
+async def cmd_delete_dead_members(message: Message, state: FSMContext):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return
+
+    parts = message.text.split()
+
+    if len(parts) != 2:
+        await message.reply("Please provide a chat ID. Usage: /delete_dead_members -100xxxxxxxxx")
+        return
+
+    chat_id = parts[1]
+
+    if not (chat_id.startswith("-100") and chat_id[4:].isdigit()):
+        await message.reply("Invalid chat ID format. It should start with -100 followed by numbers.")
+        return
+
+    chat_id_int = int(chat_id)
+
+    await message.reply("Starting to remove deleted users. This may take some time...")
+    try:
+        await remove_deleted_users(chat_id_int)
+        await message.reply("Finished removing deleted users.")
+    except Exception as e:
+        logger.error(f"Error in cmd_delete_dead_members: {e}")
+        await message.reply(f"An error occurred while removing deleted users: {str(e)}")
 
 
 if __name__ == "__main__":

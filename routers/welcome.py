@@ -4,7 +4,7 @@ import random
 import re
 from contextlib import suppress
 
-from aiogram import Router, Bot, F
+from aiogram import Router, Bot, F, html
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import (Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER,
@@ -480,7 +480,8 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
             cmd_delete_later(message.reply_to_message, seconds=5)
             msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
             spam_check = message.chat.id in global_data.no_first_link
-            await msg.reply(f"Was banned by {message.from_user.username} in {message.chat.title} chat.\n"
+            chat_url = html.link(message.chat.title, message.get_url())
+            await msg.reply(f"Was banned by {message.from_user.username} in {chat_url} chat.\n"
                             f"Spam check: {spam_check}")
         elif len(message.text.split()) > 1 and skynet_admin:
             try:

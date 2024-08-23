@@ -32,7 +32,11 @@ def get_user_id(user_id: Message | int | User | CallbackQuery):
 
 async def is_admin(event: Message | CallbackQuery, chat_id=None):
     if chat_id is None:
-        chat_id = event.chat.id
+        if isinstance(event, CallbackQuery):
+            chat_id = event.message.chat.id
+        else:
+            chat_id = event.chat.id
+
     user_id = get_user_id(event)
 
     if user_id == MTLChats.GroupAnonymousBot:
