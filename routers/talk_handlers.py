@@ -456,6 +456,8 @@ def contains_spam_phrases(text, phrases=None, threshold=3):
     words = re.findall(r'\b\w+\b', text.lower())
 
     count = sum(phrase in words for phrase in phrases)
+    if '+' in text:
+        count += 1
     # print(f'count: {count}')
     return count >= threshold
 
