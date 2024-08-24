@@ -25,6 +25,7 @@ from utils.aiogram_utils import (multi_reply, HasText, has_words, StartText, is_
 from utils.dialog import talk_check_spam, add_task_to_google, generate_image
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from utils.pyro_tools import extract_telegram_info, pyro_update_msg_info, MessageInfo
+from utils.spam_cheker import is_mixed_word, contains_spam_phrases
 from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
 from utils.telegraph_tools import telegraph
 
@@ -410,56 +411,8 @@ async def cmd_save_good_user(message: Message, session: Session):
     await notify_message(message)
 
 
-def is_mixed_word(word):
-    # Проверяем наличие русских букв
-    contains_cyrillic = bool(re.search('[а-яА-Я]', word))
-    # Проверяем наличие цифр
-    contains_digit = bool(re.search('[0-9@]', word))
-    # Проверяем наличие латинских букв
-    contains_latin = bool(re.search('[a-zA-Z]', word))
-
-    # Считаем слово "смешанным", если оно содержит русские буквы и (цифры или латинские буквы)
-    return contains_cyrillic and (contains_digit or contains_latin)
 
 
-spam_phrases = [
-    "команду",
-    "команда",
-    "доход",
-    "без опыта",
-    "лс",
-    "личку",
-    "прибыль",
-    "проект",
-    "предложение",
-    "тестирование",
-    "день",
-    "заработка",
-    "заработок",
-    "процент",
-    "пишите",
-    "18",
-    "связки"
-    "зарабатывать",
-    "подробности"
-]
-
-for i in range(1, 20):
-    spam_phrases.append(f'{i}oo')
-    spam_phrases.append(f'{i}оо')
-
-
-def contains_spam_phrases(text, phrases=None, threshold=3):
-    if phrases is None:
-        phrases = spam_phrases
-
-    words = re.findall(r'\b\w+\b', text.lower())
-
-    count = sum(phrase in words for phrase in phrases)
-    if '+' in text:
-        count += 1
-    # print(f'count: {count}')
-    return count >= threshold
 
 
 @rate_limit(0, 'listen')
@@ -759,9 +712,3 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
 
 
 
-if __name__ == '__main__':
-    test = '''
-В поиске людей для заработка в интернет сфере, если ты совершеннолетний(я), хочешь зарабатывать пассивно с телефона, тогда тебе ко мне, подробности в лс
-'''
-
-    print(contains_spam_phrases(test))
