@@ -441,6 +441,7 @@ async def check_spam(message, session):
         return
 
     custom_emoji_count = 0
+    rules_name = 'xz'
     process_message = False
     for entity in message.entities:
         if entity.type in ('url', 'text_link', 'mention'):
@@ -451,14 +452,22 @@ async def check_spam(message, session):
 
     if custom_emoji_count > 3:
         process_message = True
+        rules_name = 'emoji'
 
     words = message.text.split()
     mixed_word_count = sum(is_mixed_word(word) for word in words)
     if mixed_word_count >= 3:
         process_message = True
+        rules_name = 'mixed'
 
     if contains_spam_phrases(message.text):
         process_message = True
+        rules_name = 'spam_phrases'
+
+    spam_persent = await talk_check_spam(message.text)
+    if spam_persent and spam_persent > 69:
+        process_message = True
+        rules_name = 'open AI'
 
     if process_message:
         await message.chat.restrict(message.from_user.id,
@@ -467,7 +476,7 @@ async def check_spam(message, session):
                                                                 can_send_other_messages=False))
         msg = await message.forward(MTLChats.SpamGroup)
         chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
-        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}',
+        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}',
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
                                                                    callback_data=SpamCheckCallbackData(

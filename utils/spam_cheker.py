@@ -1,4 +1,7 @@
+import asyncio
 import re
+
+from utils.dialog import talk_check_spam
 
 
 def is_mixed_word(word):
@@ -65,3 +68,4 @@ if __name__ == '__main__':
 '''
 
     print(contains_spam_phrases(test))
+    print(asyncio.run(talk_check_spam(test)))

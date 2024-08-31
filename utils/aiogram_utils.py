@@ -7,7 +7,7 @@ from aiogram import Bot
 from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
-from aiogram.types import Message, User, CallbackQuery
+from aiogram.types import Message, User, CallbackQuery, Chat
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config_reader import config
@@ -28,6 +28,13 @@ def get_user_id(user_id: Message | int | User | CallbackQuery):
         user_id = user_id
 
     return user_id
+
+
+def get_chat_link(chat: Chat):
+    if chat.username:
+        return f"@{chat.username} {chat.title}"
+
+    return f"<a href='https://t.me/c/{chat.id}/999999999999'>{chat.title}</a>"
 
 
 async def is_admin(event: Message | CallbackQuery, chat_id=None):

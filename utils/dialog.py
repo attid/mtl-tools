@@ -130,9 +130,6 @@ async def talk_open_ai_list_models(name_filter):
 
 
 async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False):
-    # list models
-    # models = openai.Model.list()
-
     if msg_data:
         messages = msg_data
     else:
@@ -140,12 +137,9 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
         if user_name:
             messages[0]["name"] = user_name
     try:
-        # print('****', messages)
         if gpt4:
             chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages)
         else:
-            # gpt-4o-2024-05-13
-            # gpt-3.5-turbo
             chat_completion_resp = await aclient.chat.completions.create(model="gpt-4o", messages=messages)
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
@@ -208,18 +202,26 @@ def get_horoscope() -> list:
 
 
 async def talk_check_spam(article):
-    messages = [{"role": "system",
-                 "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. Предоставьте свой ответ в виде процентной вероятности, что данное объявление является спамом. Ваша оценка должна быть выражена в числовом формате, например, 70.0 для 70% вероятности. Никакого текста, только 2 цифры. Верни сообщение длиной в 2 символа."},
-                {"role": "user", "content": article}]
+    messages = [
+        {"role": "system",
+         "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. Предоставьте свой ответ в виде JSON с ключом 'spam_probability' и значением вероятности в процентах, например, {\"spam_probability\": 70}."},
+        {"role": "user", "content": article}
+    ]
+
     msg = None
     while msg is None:
         msg = await talk_open_ai_async(msg_data=messages)
         if not msg:
             await asyncio.sleep(1)
-        if len(msg) > 3:
-            logger.info(msg)
-            msg = None
-    return float(msg)
+        try:
+            # Попытка преобразовать строку в JSON
+            result = json.loads(msg)
+            if 'spam_probability' in result:
+                return int(result['spam_probability'])
+            else:
+                msg = None  # Перезапуск цикла, если ключ не найден
+        except json.JSONDecodeError:
+            msg = None  # Перезапуск цикла, если строка не является JSON
 
 
 async def add_task_to_google(msg):
@@ -328,7 +330,7 @@ async def generate_image(prompt, model="dall-e-3", n=1):
 
 if __name__ == "__main__":
     pass
-    asyncio.run(talk_open_ai_list_models('gpt-4'))
+    #asyncio.run(talk_open_ai_list_models('gpt-4'))
 
     # a = asyncio.run(generate_image('красная панда'))
     # print(a)
@@ -339,8 +341,9 @@ if __name__ == "__main__":
     # print(p)
     # exit()
 
-    # article  = '''привет, ищу где купить мыло '''
-    # print(asyncio.run(talk_check_spam(article)))
+    article  = '''Ищу партнеров для заработка пассивной прибыли, много времени не занимает + хороший еженедельный доп.доход. Пишите + в личные
+ '''
+    print(asyncio.run(talk_check_spam(article)))
     # print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

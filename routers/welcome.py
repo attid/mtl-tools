@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from db.requests import db_send_admin_message, db_get_user_id
 from routers.admin import check_membership
 from skynet_start import add_bot_users
-from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link
+from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link, get_chat_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from utils.pyro_tools import GroupMember
 from utils.stellar_utils import stellar_stop_all_exchange
@@ -205,7 +205,8 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
     if event.new_chat_member.user.full_name in bad_names:
         await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
         await bot.send_message(MTLChats.SpamGroup,
-                               f'{event.new_chat_member.user.mention_html()} был забанен в чате {event.chat.title}'
+                               f'{event.new_chat_member.user.mention_html()} '
+                               f'был забанен в чате {get_chat_link(event.chat)}'
                                f' за использование запрещенного никнейма')
         return
 
@@ -224,8 +225,8 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                                  callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
                                                                  chat_id=event.chat.id).pack())
         ]])
-        await bot.send_message(event.chat.id, f'{username} was banned', reply_markup=kb_unban)
-        await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {event.chat.title}',
+        # await bot.send_message(event.chat.id, f'{username} was banned', reply_markup=kb_unban)
+        await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
                                reply_markup=kb_unban)
 
     if event.chat.id in global_data.welcome_messages:
@@ -281,7 +282,7 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
             await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
         if is_skynet_admin(event):
-            logger.info(f"{event.old_chat_member.user} kicked from {event.chat.title} by {event.from_user.username}")
+            logger.info(f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
             if (await check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id) or
                     await check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id) or
                     await check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)):
@@ -294,7 +295,7 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
                                      callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
                                                                      chat_id=event.chat.id).pack())
             ]])
-            await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {event.chat.title}',
+            await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
                                    reply_markup=kb_unban)
 
 
