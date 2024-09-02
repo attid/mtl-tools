@@ -1,6 +1,5 @@
 import asyncio
 import html
-import re
 from contextlib import suppress
 
 from aiogram import F, Bot, Router
@@ -54,19 +53,213 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
     spam: bool
 
 
-# @router.message(F.chat == MTLChats.Employment)
-async def cmd_employment(message: Message, bot: Bot):
-    spam_persent = await talk_check_spam(message.text)
-    if spam_persent > 69:
-        await message.forward(chat_id=MTLChats.TestGroup)
-        await bot.send_message(chat_id=MTLChats.TestGroup, text=f'Спам {spam_persent}% set RO')
-        await message.chat.restrict(message.from_user.id, permissions=ChatPermissions(can_send_messages=False,
-                                                                                      can_send_media_messages=False,
-                                                                                      can_send_other_messages=False))
+########################################################################################################################
+##########################################  functions  #################################################################
+########################################################################################################################
+
+async def save_url(chat_id, msg_id, msg):
+    url = extract_url(msg)
+    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
+    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+
+
+async def check_spam(message, session):
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+        return
+
+    custom_emoji_count = 0
+    rules_name = 'xz'
+    process_message = False
+    for entity in message.entities:
+        if entity.type in ('url', 'text_link', 'mention'):
+            process_message = True
+            break  # Прерываем цикл, так как нашли ссылку или упоминание
+        elif entity.type == 'custom_emoji':
+            custom_emoji_count += 1
+
+    if custom_emoji_count > 3:
+        process_message = True
+        rules_name = 'emoji'
+
+    words = message.text.split()
+    mixed_word_count = sum(is_mixed_word(word) for word in words)
+    if mixed_word_count >= 3:
+        process_message = True
+        rules_name = 'mixed'
+
+    if contains_spam_phrases(message.text):
+        process_message = True
+        rules_name = 'spam_phrases'
+
+    if not process_message:
+        spam_persent = await talk_check_spam(message.text)
+        logger.info(f"{spam_persent} {message.text}")
+        if spam_persent and spam_persent > 69:
+            process_message = True
+            rules_name = 'open AI'
+
+    if process_message:
+        await message.chat.restrict(message.from_user.id,
+                                    permissions=ChatPermissions(can_send_messages=False,
+                                                                can_send_media_messages=False,
+                                                                can_send_other_messages=False))
+        msg = await message.forward(MTLChats.SpamGroup)
+        chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
+        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}',
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
+                                                                   callback_data=SpamCheckCallbackData(
+                                                                       message_id=message.message_id,
+                                                                       chat_id=message.chat.id,
+                                                                       user_id=message.from_user.id,
+                                                                       new_message_id=msg.message_id,
+                                                                       good=True).pack())],
+                                             [InlineKeyboardButton(text='Its spam! Kick him !',
+                                                                   callback_data=SpamCheckCallbackData(
+                                                                       message_id=message.message_id,
+                                                                       chat_id=message.chat.id,
+                                                                       user_id=message.from_user.id,
+                                                                       new_message_id=msg.message_id,
+                                                                       good=False).pack())]
+                                             ]))
         await message.delete()
-    elif spam_persent > 50:
-        await message.forward(chat_id=MTLChats.TestGroup)
-        await bot.send_message(chat_id=MTLChats.TestGroup, text=f'Спам {spam_persent}% check please')
+        add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+    else:
+        add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+        await set_vote(message)
+
+
+async def remind(message: Message, session: Session, bot: Bot):
+    if message.reply_to_message and message.reply_to_message.forward_from_chat:
+        alarm_list = cmd_alarm_url(extract_url(message.reply_to_message.text))
+        msg = alarm_list + '\nСмотрите топик / Look at the topic message'
+        await message.reply(text=msg)
+        if alarm_list.find('@') != -1:
+            if is_skynet_admin(message):
+                all_users = alarm_list.split()
+                url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
+                await send_by_list(bot=bot, all_users=all_users, message=message, url=url, session=session)
+
+    else:
+        msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+        msg = await global_data.mongo_config.load_bot_value(message.chat.id,
+                                                            BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+        await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
+                               message_thread_id=message.message_thread_id)
+
+
+async def set_vote(message):
+    if message.chat.id in global_data.first_vote:
+        kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Spam",
+                                 callback_data=FirstMessageCallbackData(spam=True,
+                                                                        message_id=message.message_id,
+                                                                        user_id=message.from_user.id).pack()),
+            InlineKeyboardButton(text="Good",
+                                 callback_data=FirstMessageCallbackData(spam=False,
+                                                                        message_id=message.message_id,
+                                                                        user_id=message.from_user.id).pack()), ]])
+        await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
+
+
+async def check_alert(bot, message, session):
+    # if user need be alert
+    if message.entities and message.chat.id in global_data.alert_me:
+        for entity in message.entities:
+            if entity.type == 'mention':
+                username = entity.extract_from(message.text)
+                try:
+                    user_id = db_get_user_id(session, username)
+                except ValueError as ex:
+                    user_id = 0
+                    logger.warning(ex)
+                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
+                    with suppress(TelegramBadRequest, TelegramForbiddenError):
+                        alert_username = get_username_link(message.from_user)
+                        msg_info = MessageInfo(chat_id=message.chat.id,
+                                               user_from=message.from_user.username,
+                                               message_id=message.message_id,
+                                               chat_name=message.chat.title,
+                                               message_text=message.html_text)
+                        if message.reply_to_message:
+                            msg_info.reply_to_message = MessageInfo(
+                                chat_id=message.chat.id,
+                                user_from=message.reply_to_message.from_user.username,
+                                message_id=message.reply_to_message.message_id,
+                                message_text=message.reply_to_message.html_text)
+
+                        telegraph_link = await telegraph.create_uuid_page(msg_info)
+                        buttons = [[InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
+                                                         url=telegraph_link.url)]]
+
+                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
+                                                        f'В чате {message.chat.title}\n'
+                                                        f'Ссылка на сообщение {message.get_url()}',
+                                               reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+async def save_last(message, session):
+    if message.chat.id in global_data.save_last_message_date:
+        db_update_user_chat_date(session, message.from_user.id, message.chat.id)
+
+
+async def notify_message(message: Message):
+    if message.is_automatic_forward:
+        return
+
+    if message.chat.id in global_data.notify_message:
+        record = global_data.notify_message[message.chat.id].split(':')
+        dest_chat = record[0]
+        dest_topic = record[1] if len(record) > 1 else None
+        if len(dest_chat) > 3:
+            kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="BanAndDelete",
+                                     callback_data=ReplyCallbackData(chat_id=message.chat.id,
+                                                                     message_id=message.message_id,
+                                                                     user_id=message.from_user.id).pack()),
+                InlineKeyboardButton(text="👀",
+                                     callback_data="👀"),
+            ]])
+
+            dest_chat_member = await message.bot.get_chat_member(dest_chat, message.from_user.id)
+            username = message.from_user.username
+            if dest_chat_member.status != 'left':
+                user_mention = f"{username}" if username else f"{message.from_user.first_name}"
+            else:
+                user_mention = f"@{username}" if username else f"{message.from_user.first_name}"
+
+            msg = await message.bot.send_message(
+                chat_id=dest_chat,
+                message_thread_id=dest_topic,
+                text=f'User {user_mention}: \nChat: {html.escape(message.chat.title)}',
+                reply_markup=kb_reply,
+                reply_parameters=ReplyParameters(
+                    message_id=message.message_id,
+                    chat_id=message.chat.id)
+            )
+            # print(msg)
+
+
+async def answer_notify_message(message: Message):
+    if (message.reply_to_message.from_user.id == message.bot.id
+            and message.reply_to_message.reply_markup
+            and message.reply_to_message.external_reply
+            and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
+        info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
+        # "Reply:96:-1002175508678" msg_id:chat_id
+        if len(info) > 2 and info[0] == 'Reply':
+            msg = await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
+            if message.chat.username:
+                await message.bot.send_message(
+                    chat_id=int(info[2]),
+                    text=f'Ответ из чата @{message.chat.username}',
+                    reply_to_message_id=msg.message_id
+                )
+
+
+########################################################################################################################
+##########################################  handlers  ##################################################################
+########################################################################################################################
 
 
 @router.message(Command(commands=["img"]))
@@ -83,12 +276,6 @@ async def cmd_img(message: Message, bot: Bot):
     else:
         await message.reply('Только в канале фракции Киберократии')
         return False
-
-
-async def save_url(chat_id, msg_id, msg):
-    url = extract_url(msg)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
 
 
 @router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
@@ -124,25 +311,6 @@ async def cmd_comment(message: Message):
     msg = await dialog.talk_get_comment(message.chat.id, msg)
     msg = await message.reply_to_message.reply(msg)
     my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
-
-
-async def remind(message: Message, session: Session, bot: Bot):
-    if message.reply_to_message and message.reply_to_message.forward_from_chat:
-        alarm_list = cmd_alarm_url(extract_url(message.reply_to_message.text))
-        msg = alarm_list + '\nСмотрите топик / Look at the topic message'
-        await message.reply(text=msg)
-        if alarm_list.find('@') != -1:
-            if is_skynet_admin(message):
-                all_users = alarm_list.split()
-                url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
-                await send_by_list(bot=bot, all_users=all_users, message=message, url=url, session=session)
-
-    else:
-        msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
-        msg = await global_data.mongo_config.load_bot_value(message.chat.id,
-                                                            BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
-        await bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
-                               message_thread_id=message.message_thread_id)
 
 
 @router.message(F.text, F.reply_to_message, ReplyToBot(), F.chat.type != ChatType.PRIVATE)
@@ -380,46 +548,8 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
 
 
 @rate_limit(0, 'listen')
-@router.message(ChatInOption('listen'), F.text)
-async def cmd_save_msg(message: Message, session: Session, bot: Bot):
-    if message.chat.id in global_data.save_last_message_date:
-        await save_last(message, session)
-
-    await check_alert(bot, message, session)
-
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] != 1:
-        await set_vote(message)
-
-    db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
-                    thread_id=message.message_thread_id if message.is_topic_message else None,
-                    text=message.text, chat_id=message.chat.id)
-
-    await notify_message(message)
-
-
-@rate_limit(0, 'listen')
-@router.message(~F.entities, F.text)  # если текст без ссылок #точно не приватное, приватные выше остановились
-async def cmd_save_good_user(message: Message, session: Session):
-    if message.chat.id in global_data.save_last_message_date:
-        await save_last(message, session)
-
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] != 1:
-        await set_vote(message)
-    add_bot_users(session, message.from_user.id, message.from_user.username, 1)
-
-    # [MessageEntity(type='url', offset=33, length=5, url=None, user=None, language=None, custom_emoji_id=None), MessageEntity(type='text_link', offset=41, length=4, url='http://xbet.org/', user=None, language=None, custom_emoji_id=None), MessageEntity(type='mention', offset=48, length=8, url=None, user=None, language=None, custom_emoji_id=None)]
-    await notify_message(message)
-
-
-
-
-
-
-@rate_limit(0, 'listen')
-@router.message(F.entities, F.text)  # если текст с link # точно не приватное, приватные выше остановились
-async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
-    await check_alert(bot, message, session)
-
+@router.message(F.text)  # если текст #точно не приватное, приватные выше остановились
+async def cmd_save_good_user(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.no_first_link:
         await check_spam(message, session)
 
@@ -429,130 +559,27 @@ async def cmd_no_first_link(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.notify_message:
         await notify_message(message)
 
+    await check_alert(bot, message, session)
 
-@rate_limit(0, 'listen')
-@router.message(ChatInOption('notify_message'))
-async def cmd_notify_msg(message: Message):
+    if message.chat.id in global_data.save_last_message_date:
+        await save_last(message, session)
+
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+        await set_vote(message)
+
+    add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+
+    if message.chat.id in global_data.listen:
+        db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
+                        thread_id=message.message_thread_id if message.is_topic_message else None,
+                        text=message.text, chat_id=message.chat.id)
+
     await notify_message(message)
 
 
-async def check_spam(message, session):
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
-        return
-
-    custom_emoji_count = 0
-    rules_name = 'xz'
-    process_message = False
-    for entity in message.entities:
-        if entity.type in ('url', 'text_link', 'mention'):
-            process_message = True
-            break  # Прерываем цикл, так как нашли ссылку или упоминание
-        elif entity.type == 'custom_emoji':
-            custom_emoji_count += 1
-
-    if custom_emoji_count > 3:
-        process_message = True
-        rules_name = 'emoji'
-
-    words = message.text.split()
-    mixed_word_count = sum(is_mixed_word(word) for word in words)
-    if mixed_word_count >= 3:
-        process_message = True
-        rules_name = 'mixed'
-
-    if contains_spam_phrases(message.text):
-        process_message = True
-        rules_name = 'spam_phrases'
-
-    spam_persent = await talk_check_spam(message.text)
-    if spam_persent and spam_persent > 69:
-        process_message = True
-        rules_name = 'open AI'
-
-    if process_message:
-        await message.chat.restrict(message.from_user.id,
-                                    permissions=ChatPermissions(can_send_messages=False,
-                                                                can_send_media_messages=False,
-                                                                can_send_other_messages=False))
-        msg = await message.forward(MTLChats.SpamGroup)
-        chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
-        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}',
-                        reply_markup=InlineKeyboardMarkup(
-                            inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
-                                                                   callback_data=SpamCheckCallbackData(
-                                                                       message_id=message.message_id,
-                                                                       chat_id=message.chat.id,
-                                                                       user_id=message.from_user.id,
-                                                                       new_message_id=msg.message_id,
-                                                                       good=True).pack())],
-                                             [InlineKeyboardButton(text='Its spam! Kick him !',
-                                                                   callback_data=SpamCheckCallbackData(
-                                                                       message_id=message.message_id,
-                                                                       chat_id=message.chat.id,
-                                                                       user_id=message.from_user.id,
-                                                                       new_message_id=msg.message_id,
-                                                                       good=False).pack())]
-                                             ]))
-        await message.delete()
-        add_bot_users(session, message.from_user.id, message.from_user.username, 0)
-    else:
-        add_bot_users(session, message.from_user.id, message.from_user.username, 1)
-        await set_vote(message)
-
-
-async def set_vote(message):
-    if message.chat.id in global_data.first_vote:
-        kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Spam",
-                                 callback_data=FirstMessageCallbackData(spam=True,
-                                                                        message_id=message.message_id,
-                                                                        user_id=message.from_user.id).pack()),
-            InlineKeyboardButton(text="Good",
-                                 callback_data=FirstMessageCallbackData(spam=False,
-                                                                        message_id=message.message_id,
-                                                                        user_id=message.from_user.id).pack()), ]])
-        await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
-
-
-async def check_alert(bot, message, session):
-    # if user need be alert
-    if message.entities and message.chat.id in global_data.alert_me:
-        for entity in message.entities:
-            if entity.type == 'mention':
-                username = entity.extract_from(message.text)
-                try:
-                    user_id = db_get_user_id(session, username)
-                except ValueError as ex:
-                    user_id = 0
-                    logger.warning(ex)
-                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
-                    with suppress(TelegramBadRequest, TelegramForbiddenError):
-                        alert_username = get_username_link(message.from_user)
-                        msg_info = MessageInfo(chat_id=message.chat.id,
-                                               user_from=message.from_user.username,
-                                               message_id=message.message_id,
-                                               chat_name=message.chat.title,
-                                               message_text=message.html_text)
-                        if message.reply_to_message:
-                            msg_info.reply_to_message = MessageInfo(
-                                chat_id=message.chat.id,
-                                user_from=message.reply_to_message.from_user.username,
-                                message_id=message.reply_to_message.message_id,
-                                message_text=message.reply_to_message.html_text)
-
-                        telegraph_link = await telegraph.create_uuid_page(msg_info)
-                        buttons = [[InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
-                                                         url=telegraph_link.url)]]
-
-                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
-                                                        f'В чате {message.chat.title}\n'
-                                                        f'Ссылка на сообщение {message.get_url()}',
-                                               reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-
-
-async def save_last(message, session):
-    if message.chat.id in global_data.save_last_message_date:
-        db_update_user_chat_date(session, message.from_user.id, message.chat.id)
+########################################################################################################################
+#####################################  callback_query  #################################################################
+########################################################################################################################
 
 
 @rate_limit(0, 'listen')
@@ -571,60 +598,6 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
     else:
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer("Забанен !", show_alert=True)
-
-
-async def notify_message(message: Message):
-    if message.is_automatic_forward:
-        return
-
-    if message.chat.id in global_data.notify_message:
-        record = global_data.notify_message[message.chat.id].split(':')
-        dest_chat = record[0]
-        dest_topic = record[1] if len(record) > 1 else None
-        if len(dest_chat) > 3:
-            kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="BanAndDelete",
-                                     callback_data=ReplyCallbackData(chat_id=message.chat.id,
-                                                                     message_id=message.message_id,
-                                                                     user_id=message.from_user.id).pack()),
-                InlineKeyboardButton(text="👀",
-                                     callback_data="👀"),
-            ]])
-
-            dest_chat_member = await message.bot.get_chat_member(dest_chat, message.from_user.id)
-            username = message.from_user.username
-            if dest_chat_member.status != 'left':
-                user_mention = f"{username}" if username else f"{message.from_user.first_name}"
-            else:
-                user_mention = f"@{username}" if username else f"{message.from_user.first_name}"
-
-            msg = await message.bot.send_message(
-                chat_id=dest_chat,
-                message_thread_id=dest_topic,
-                text=f'User {user_mention}: \nChat: {html.escape(message.chat.title)}',
-                reply_markup=kb_reply,
-                reply_parameters=ReplyParameters(
-                    message_id=message.message_id,
-                    chat_id=message.chat.id)
-            )
-            # print(msg)
-
-
-async def answer_notify_message(message: Message):
-    if (message.reply_to_message.from_user.id == message.bot.id
-            and message.reply_to_message.reply_markup
-            and message.reply_to_message.external_reply
-            and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
-        info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
-        # "Reply:96:-1002175508678" msg_id:chat_id
-        if len(info) > 2 and info[0] == 'Reply':
-            msg = await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
-            if message.chat.username:
-                await message.bot.send_message(
-                    chat_id=int(info[2]),
-                    text=f'Ответ из чата @{message.chat.username}',
-                    reply_to_message_id=msg.message_id
-                )
 
 
 @router.callback_query(ReplyCallbackData.filter())
@@ -657,7 +630,8 @@ async def cq_look(query: CallbackQuery):
 
 
 @router.callback_query(FirstMessageCallbackData.filter())
-async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot, session: Session):
+async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot,
+                              session: Session):
     if query.from_user.id == callback_data.user_id:
         await query.answer("You can't vote", show_alert=True)
         return False
@@ -692,10 +666,10 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         # Рестрикт для пользователя
         with suppress(TelegramBadRequest):
             await query.message.chat.restrict(callback_data.user_id,
-                                          permissions=ChatPermissions(
-                                              can_send_messages=False,
-                                              can_send_media_messages=False,
-                                              can_send_other_messages=False))
+                                              permissions=ChatPermissions(
+                                                  can_send_messages=False,
+                                                  can_send_media_messages=False,
+                                                  can_send_other_messages=False))
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer('Message marked as spam and user restricted.', show_alert=True)
     elif data["good"] >= 5:
@@ -707,17 +681,17 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
                 text=f"Spam ({data['spam']})",
-                callback_data=FirstMessageCallbackData(spam=True, message_id=callback_data.message_id, user_id=callback_data.user_id).pack()
+                callback_data=FirstMessageCallbackData(spam=True, message_id=callback_data.message_id,
+                                                       user_id=callback_data.user_id).pack()
             ),
             InlineKeyboardButton(
                 text=f"Good ({data['good']})",
-                callback_data=FirstMessageCallbackData(spam=False, message_id=callback_data.message_id, user_id=callback_data.user_id).pack()
+                callback_data=FirstMessageCallbackData(spam=False, message_id=callback_data.message_id,
+                                                       user_id=callback_data.user_id).pack()
             )
         ]])
 
         # Редактируем сообщение с новыми кнопками
-        await bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id, reply_markup=kb_reply)
+        await bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
+                                            reply_markup=kb_reply)
         await query.answer('Your vote has been counted.', show_alert=True)
-
-
-
