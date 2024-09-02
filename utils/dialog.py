@@ -341,9 +341,14 @@ if __name__ == "__main__":
     # print(p)
     # exit()
 
-    article  = '''Ищу партнеров для заработка пассивной прибыли, много времени не занимает + хороший еженедельный доп.доход. Пишите + в личные
+    article  = '''
+Кому интересен дoxoд от 200$ в день
+Потребуется Trust Wallet 
+Затраты по времени минимальные 
+Заинтересовало? Пишите !    
  '''
-    print(asyncio.run(talk_check_spam(article)))
+    a = (asyncio.run(talk_check_spam(article)))
+    print(type(a),a)
     # print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

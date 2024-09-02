@@ -468,7 +468,7 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
 @router.message(Command(commands=["ban"]))
 async def cmd_ban(message: Message, session: Session, bot: Bot):
     skynet_admin = is_skynet_admin(message)
-    admin = is_admin(message)
+    admin = await is_admin(message)
 
     if not (skynet_admin or (admin and message.reply_to_message)):
         await message.reply("You are not my admin.")

@@ -52,9 +52,7 @@ class TelegraphAPI:
         url = f"{self.BASE_URL}/createPage"
 
         if isinstance(content, str):
-            print(content)
             content = convert_html_to_telegraph_format(content)
-            print(content)
 
         data = {
             "access_token": self.access_token,
