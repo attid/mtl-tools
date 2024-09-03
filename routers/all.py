@@ -67,7 +67,7 @@ async def cmd_del_all(message: Message, session: Session):
         await message.reply('не указаны параметры кого добавить')
 
 
-@update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе")
+@update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
 @router.message(Command(commands=["auto_all"]))
 async def msg_save_all(message: Message, session: Session):
     if not await is_admin(message):

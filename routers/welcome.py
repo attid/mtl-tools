@@ -115,7 +115,7 @@ async def cmd_delete_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
-@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$")
+@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2, "welcome_messages")
 @router.message(Command(commands=["set_welcome"]))
 async def cmd_set_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -134,7 +134,7 @@ async def cmd_set_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
-@update_command_info("/set_welcome_button", "Установить текст на кнопке капчи")
+@update_command_info("/set_welcome_button", "Установить текст на кнопке капчи", 2, "welcome_button")
 @router.message(Command(commands=["set_welcome_button"]))
 async def cmd_set_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -153,7 +153,7 @@ async def cmd_set_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
-@update_command_info("/set_captcha on", "Включает капчу")
+@update_command_info("/set_captcha on", "Включает капчу", 1, "captcha")
 @update_command_info("/set_captcha off", "Выключает капчу")
 @router.message(Command(commands=["set_captcha"]))
 async def cmd_set_captcha(message: Message, session: Session):

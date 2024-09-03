@@ -1,6 +1,8 @@
 from datetime import datetime
 from enum import Enum
+
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
+
 from db.mongo import BotMongoConfig
 
 
@@ -95,6 +97,11 @@ class GlobalData:
     name_list = {}
     users_list = {}
     info_cmd = {}
+    # info_cmd = {'/my_cmd': {'info': 'my_cmd use', 'cmd_type': 0, 'cmd_list': 'my_cmd'}'}
+    # type 0 none
+    # type 1 in list
+    # type 2 in dict
+    # type 3 in dict with dict users
     admins = {}
     alert_me = {}
     sync = {}
@@ -141,9 +148,11 @@ def str2float(f) -> float:
     return float(float2str(f))
 
 
-def update_command_info(command_name: str, info: str):
+def update_command_info(command_name: str, info: str, cmd_type: int = 0, cmd_list: str = ''):
     def decorator(func):
-        global_data.info_cmd[command_name] = info
+        global_data.info_cmd[command_name] = {'info': info,
+                                              'cmd_type': cmd_type,
+                                              'cmd_list': cmd_list}
         return func
 
     return decorator

@@ -24,6 +24,7 @@ from middlewares.db import DbSessionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
+from routers import last_handler
 from utils import aiogram_utils
 from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
 from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
@@ -134,6 +135,7 @@ async def main():
     dp.include_router(stellar.router)
     dp.include_router(welcome.router)
     dp.include_router(talk_handlers.router)  # last
+    dp.include_router(last_handler.router)  # last, last
 
     scheduler = AsyncIOScheduler(timezone=str(tzlocal.get_localzone()))
     aiogram_utils.scheduler = scheduler
@@ -162,7 +164,7 @@ async def load_globals(session: Session):
     global_data.reply_only = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.ReplyOnly)
     global_data.first_vote = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FirstVote)
     global_data.captcha = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Captcha)
-    global_data.listen = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Listen)
+    global_data.listen = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Listen) # ToDo need show to skyadmin in helpers
     global_data.full_data = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FullData)
     global_data.no_first_link = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
     global_data.need_decode = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)

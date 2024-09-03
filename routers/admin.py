@@ -156,7 +156,7 @@ async def cmd_set_ro(message: Message):
     await message.reply(f'{user} was set ro for {delta}')
 
 
-@router.message(Command(commands=["listen"]))
+@router.message(Command(commands=["set_listen"]))
 async def cmd_set_listen(message: Message, session: Session):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
@@ -288,7 +288,7 @@ async def cmd_get_info(message: Message, bot: Bot):
                                  caption=message.reply_to_message.caption)
 
 
-@update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)")
+@update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)", 3, "alert_me")
 @router.message(Command(commands=["alert_me"]))
 async def cmd_set_alert_me(message: Message, session: Session):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
@@ -546,12 +546,12 @@ commands_info = {
 }
 
 
-@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.")
-@update_command_info("/set_first_vote", "Показывать ли голосованием о первом сообщении.")
-@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата")
-@update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой")
-@update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.")
-@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате")
+@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.",1,"reply_only")
+@update_command_info("/set_first_vote", "Показывать ли голосованием о первом сообщении.", 1, "first_vote")
+@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата", 2, "delete_income")
+@update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой",1, "no_first_link")
+@update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.", 1, "need_decode")
+@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате", 1 , "save_last_message_date")
 @update_command_info("/add_skynet_img",
                      "Добавить пользователей в пользователи img. запуск с параметрами "
                      "/add_skynet_admin @user1 @user2 итд")
@@ -564,10 +564,10 @@ commands_info = {
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @update_command_info("/notify_join_request",
                      "Оповещать о новом участнике, требующем подтверждения для присоединения. "
-                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу")
+                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу", 2, "notify_join")
 @update_command_info("/notify_message",
                      "Оповещать о новом сообщении в определенный чат"
-                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками")
+                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками", 2, "notify_message")
 @update_command_info("/join_request_captcha",
                      "Шлет пользователю капчу для подтверждения его человечности. "
                      "Работает только совместно с /notify_join_request")
