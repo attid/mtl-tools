@@ -499,7 +499,7 @@ async def check_exchange_test():
 
 
 if __name__ == "__main__":
-    logger.add("mtl_exchange.log", rotation="1 MB", level="WARNING")
+    logger.add("logs/mtl_exchange.log", rotation="1 MB", level="WARNING")
 
     sentry_sdk.init(
         dsn=config.sentry_report_dsn,

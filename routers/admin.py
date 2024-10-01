@@ -17,13 +17,13 @@ from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
 
-from config_reader import config
+from utils.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
 from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
-from utils.pyro_tools import get_group_members, remove_deleted_users
+from utils.pyro_tools import get_group_members, remove_deleted_users, pyro_test
 from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
 
@@ -64,6 +64,14 @@ async def cmd_log(message: Message, state: FSMContext):
         await message.reply('You are not my admin.')
         return False
     await cmd_send_file(message, 'skynet.log')
+
+
+@router.message(Command(commands=["ping_piro"]))
+async def cmd_log(message: Message, state: FSMContext):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+    await pyro_test()
 
 
 async def cmd_send_file(message: Message, filename):
@@ -154,25 +162,6 @@ async def cmd_set_ro(message: Message):
 
     user = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username else message.reply_to_message.from_user.full_name
     await message.reply(f'{user} was set ro for {delta}')
-
-
-@router.message(Command(commands=["set_listen"]))
-async def cmd_set_listen(message: Message, session: Session):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return False
-
-    if message.chat.id in global_data.listen:
-        global_data.listen.remove(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Listen, None)
-        msg = await message.reply('Removed')
-    else:
-        global_data.listen.append(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Listen, 1)
-        msg = await message.reply('Added')
-
-    cmd_delete_later(message, 1)
-    cmd_delete_later(msg, 1)
 
 
 @router.message(Command(commands=["summary"]))
@@ -288,7 +277,8 @@ async def cmd_get_info(message: Message, bot: Bot):
                                  caption=message.reply_to_message.caption)
 
 
-@update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)", 3, "alert_me")
+@update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)", 3,
+                     "alert_me")
 @router.message(Command(commands=["alert_me"]))
 async def cmd_set_alert_me(message: Message, session: Session):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
@@ -523,35 +513,70 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
 
 commands_info = {
-    "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin"),
-    "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin"),
-    "set_no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin"),
+    "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin", 1),
+    "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin", 1),
+    "set_no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin", 1),
     # full_data - чаты с полной расшифровкой по адресу
-    "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin"),
-    "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin"),
+    "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin", 1),
+    "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin", 1),
     "save_last_message_date": (global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate,
-                               "toggle", "admin"),
-    "set_first_vote": (global_data.first_vote, BotValueTypes.FirstVote, "toggle", "admin"),
-    "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin"),
-    "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin"),
-    "join_request_captcha": (global_data.join_request_captcha, BotValueTypes.JoinRequestCaptcha, "toggle", "admin"),
+                               "toggle", "admin", 1),
+    "set_first_vote": (global_data.first_vote, BotValueTypes.FirstVote, "toggle", "admin", 1),
+    "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin", 1),
+    "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin", 1),
+    "join_request_captcha": (global_data.join_request_captcha, BotValueTypes.JoinRequestCaptcha, "toggle", "admin", 1),
+    "auto_all": (global_data.auto_all, BotValueTypes.AutoAll, "toggle", "admin", 1),
+    "set_listen": (global_data.listen, BotValueTypes.Listen, "toggle", "skynet_admin", 1),
+    # ToDo need show to skyadmin in helpers
+    "set_captcha": (global_data.captcha, BotValueTypes.Captcha, "toggle", "admin", 1),
 
-    "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin"),
-    "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin"),
-    "show_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "show_list", "skynet_admin"),
-    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin"),
-    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin"),
-    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin"),
+    "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3),
+    "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0),
+    "show_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "show_list", "skynet_admin", 0),
+    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin", 3),
+    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin", 0),
+    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin", 0),
 
 }
 
 
-@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.",1,"reply_only")
+async def command_config_loads(session: Session):
+    for command in commands_info:
+        global_data_field = commands_info[command][0]
+        global_data_key = commands_info[command][1]
+        load_type = commands_info[command][4]  # 0 none 1 - dict\list  3 - json
+
+        if load_type == 1:
+            if isinstance(global_data_field, dict):
+                global_data_field.update(await global_data.mongo_config.get_chat_dict_by_key(global_data_key))
+            else:
+                global_data_field.extend(await global_data.mongo_config.get_chat_ids_by_key(global_data_key))
+
+        if load_type == 3:
+            if isinstance(global_data_field, dict):
+                global_data_field.update(
+                    json.loads(await global_data.mongo_config.load_bot_value(0, global_data_key, '{}')))
+            else:
+                global_data_field.extend(
+                    json.loads(await global_data.mongo_config.load_bot_value(0, global_data_key, '[]')))
+
+    global_data.votes = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
+
+    global_data.welcome_messages = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
+    global_data.welcome_button = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
+    global_data.admins = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
+    global_data.alert_me = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
+    global_data.sync = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
+
+
+@update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.", 1, "reply_only")
 @update_command_info("/set_first_vote", "Показывать ли голосованием о первом сообщении.", 1, "first_vote")
-@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата", 2, "delete_income")
-@update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой",1, "no_first_link")
+@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата", 2,
+                     "delete_income")
+@update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой", 1, "no_first_link")
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.", 1, "need_decode")
-@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате", 1 , "save_last_message_date")
+@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате", 1,
+                     "save_last_message_date")
 @update_command_info("/add_skynet_img",
                      "Добавить пользователей в пользователи img. запуск с параметрами "
                      "/add_skynet_admin @user1 @user2 итд")
@@ -564,13 +589,17 @@ commands_info = {
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @update_command_info("/notify_join_request",
                      "Оповещать о новом участнике, требующем подтверждения для присоединения. "
-                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу", 2, "notify_join")
+                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу", 2,
+                     "notify_join")
 @update_command_info("/notify_message",
                      "Оповещать о новом сообщении в определенный чат"
-                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками", 2, "notify_message")
+                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками", 2,
+                     "notify_message")
 @update_command_info("/join_request_captcha",
                      "Шлет пользователю капчу для подтверждения его человечности. "
                      "Работает только совместно с /notify_join_request")
+@update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
+@update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, session: Session, bot: Bot):
     command = message.text.lower().split()[0][1:]
@@ -579,6 +608,10 @@ async def universal_command_handler(message: Message, session: Session, bot: Bot
     action_type = command_info[2]
     admin_check = command_info[3]
 
+    if action_type == "ignore":
+        await message.reply("Technical command. Ignore it.")
+        return
+
     if admin_check == "skynet_admin" and not is_skynet_admin(message):
         await message.reply("You are not my admin.")
         return
@@ -586,7 +619,7 @@ async def universal_command_handler(message: Message, session: Session, bot: Bot
         await message.reply("You are not admin.")
         return
 
-    if command_info[2] == "toggle_chat" and command_arg and len(command_arg) > 5:
+    if action_type == "toggle_chat" and command_arg and len(command_arg) > 5:
         dest_chat = command_arg.split(":")[0]
         dest_admin = await is_admin(message, dest_chat)
         if not dest_admin:
@@ -598,7 +631,7 @@ async def universal_command_handler(message: Message, session: Session, bot: Bot
 
     if action_type in ["add_list", "del_list", "show_list"]:
         await list_command_handler(message, session, command_info)
-    else:
+    else:  # toggle
         await handle_command(message, session, command_info)
 
 

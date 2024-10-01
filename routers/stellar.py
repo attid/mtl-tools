@@ -6,7 +6,7 @@ from aiogram.types import Message, FSInputFile
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from config_reader import start_path
+from utils.config_reader import start_path
 from scripts.update_report import update_airdrop, update_fest
 from utils.aiogram_utils import multi_reply, add_text, multi_answer, get_web_request
 from utils.global_data import MTLChats, is_skynet_admin, global_data, update_command_info

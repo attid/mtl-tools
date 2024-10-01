@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from db.requests import db_send_admin_message, db_get_user_id
 from routers.admin import check_membership
-from skynet_start import add_bot_users
+from start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link, get_chat_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from utils.pyro_tools import GroupMember
@@ -150,27 +150,6 @@ async def cmd_set_welcome(message: Message, session: Session):
         msg = await message.reply('need more words')
         cmd_delete_later(msg, 1)
 
-    cmd_delete_later(message, 1)
-
-
-@update_command_info("/set_captcha on", "Включает капчу", 1, "captcha")
-@update_command_info("/set_captcha off", "Выключает капчу")
-@router.message(Command(commands=["set_captcha"]))
-async def cmd_set_captcha(message: Message, session: Session):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
-    if message.text.split()[1] == 'on':
-        global_data.captcha.append(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, 1)
-        msg = await message.reply('captcha on')
-        cmd_delete_later(msg, 1)
-    elif message.text.split()[1] == 'off':
-        global_data.captcha.remove(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.Captcha, None)
-        msg = await message.reply('captcha off')
-        cmd_delete_later(msg, 1)
     cmd_delete_later(message, 1)
 
 

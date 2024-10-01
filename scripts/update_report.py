@@ -7,7 +7,7 @@ import sentry_sdk
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
-from config_reader import start_path
+from utils.config_reader import start_path
 from utils.aiogram_utils import get_debank_balance
 from utils.gspread_tools import gs_copy_sheets_with_style
 from utils.stellar_utils import *
@@ -804,7 +804,7 @@ async def update_fest(session: Session):
 async def main():
     from db.quik_pool import quik_pool
 
-    logger.add("update_report.log", rotation="1 MB")
+    logger.add("logs/update_report.log", rotation="1 MB")
 
     # await asyncio.gather( old
 
@@ -821,7 +821,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    logger.add("mtl_report.log", rotation="1 MB")
+    logger.add("logs/mtl_report.log", rotation="1 MB")
 
     if 'report' in sys.argv:
         sentry_sdk.init(
@@ -835,6 +835,6 @@ if __name__ == "__main__":
     else:
         print('need more parameters')
         from db.quik_pool import quik_pool
-        asyncio.run(update_top_holders_report(quik_pool()))  # only from skynet
+        asyncio.run(update_wallet_report2(quik_pool()))  # only from skynet
         # print(calculate_statistics())
 

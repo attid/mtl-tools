@@ -275,7 +275,7 @@ def decode_effects_records(records, ledger):
 
 
 if __name__ == "__main__":
-    logger.add("check_ledger.log", rotation="1 MB", level="WARNING")
+    logger.add("logs/check_ledger.log", rotation="1 MB", level="WARNING")
     sentry_sdk.init(
         dsn=config.sentry_dsn,
         traces_sample_rate=1.0,

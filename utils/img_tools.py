@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 
-from config_reader import start_path
+from utils.config_reader import start_path
 
 
 def create_image_with_text(text, font_path='DejaVuSansMono.ttf', font_size=30, image_size=(550, 400)):

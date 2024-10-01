@@ -5,20 +5,21 @@ from contextlib import suppress
 
 import sentry_sdk
 import tzlocal
+import uvloop
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
-from aioredis import Redis
+from redis.asyncio import Redis
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
-from sentry_sdk import capture_exception
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from config_reader import config
+from utils.config_reader import config
+from routers.admin import command_config_loads
 from db.requests import db_save_bot_user, db_load_bot_users
 from middlewares.db import DbSessionMiddleware
 from middlewares.retry import RetryRequestMiddleware
@@ -94,7 +95,7 @@ async def on_shutdown(bot: Bot):
 
 
 async def main():
-    logger.add("skynet.log", rotation="1 MB", level='INFO')
+    logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
 
     # Запуск бота
     engine = create_engine(config.db_dns, pool_pre_ping=True, max_overflow=50)
@@ -155,33 +156,7 @@ async def main():
 
 
 async def load_globals(session: Session):
-    global_data.skynet_admins = json.loads(
-        await global_data.mongo_config.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
-    global_data.skynet_img = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
-    global_data.votes = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
-
-    global_data.auto_all = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.AutoAll)
-    global_data.reply_only = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.ReplyOnly)
-    global_data.first_vote = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FirstVote)
-    global_data.captcha = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Captcha)
-    global_data.listen = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.Listen) # ToDo need show to skyadmin in helpers
-    global_data.full_data = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.FullData)
-    global_data.no_first_link = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NoFirstLink)
-    global_data.need_decode = await global_data.mongo_config.get_chat_ids_by_key(BotValueTypes.NeedDecode)
-    global_data.save_last_message_date = await global_data.mongo_config.get_chat_ids_by_key(
-        BotValueTypes.SaveLastMessageDate)
-    global_data.join_request_captcha = await global_data.mongo_config.get_chat_ids_by_key(
-        BotValueTypes.JoinRequestCaptcha)
-
-    global_data.welcome_messages = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
-    global_data.welcome_button = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
-    global_data.delete_income = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.DeleteIncome)
-    global_data.notify_join = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.NotifyJoin)
-    global_data.notify_message = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.NotifyMessage)
-    global_data.admins = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
-    global_data.alert_me = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
-    global_data.sync = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
-
+    await command_config_loads(session)
     for user in db_load_bot_users(session):
         global_data.users_list[user.user_id] = user.user_type
 
@@ -204,6 +179,7 @@ if __name__ == "__main__":
     try:
         # import logging
         # logging.basicConfig(level=logging.DEBUG)
+        uvloop.install()
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.error("Exit")

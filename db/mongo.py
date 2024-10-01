@@ -6,7 +6,7 @@ from typing import Dict, Optional, List, Any
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from pydantic import BaseModel
 
-from config_reader import config
+from utils.config_reader import config
 from utils.pyro_tools import GroupMember
 
 client = AsyncIOMotorClient(config.mongodb_url)

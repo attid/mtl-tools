@@ -127,15 +127,30 @@ async def cmd_last_check_nap(message: Message):
                 HasText(('ДЕКОДИРУЙ', 'decode')))
 async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
     if message.reply_to_message:
-        if message.reply_to_message.text.find('eurmtl.me/sign_tools') > -1:
-            msg = await check_url_xdr(extract_url(message.reply_to_message.text))
+        url = None
+        if message.reply_to_message.text:
+            if 'eurmtl.me/sign_tools' in message.reply_to_message.text:
+                url = extract_url(message.reply_to_message.text)
+
+        if not url and message.reply_to_message.entities:
+            for entity in message.reply_to_message.entities:
+                if entity.type in ['url', 'text_link']:
+                    url = entity.url if entity.type == 'text_link' else entity.extract_from(
+                        message.reply_to_message.text)
+                    if 'eurmtl.me/sign_tools' in url:
+                        break
+                    else:
+                        url = None
+
+        if url:
+            msg = await check_url_xdr(url)
             msg = f'\n'.join(msg)
             await multi_reply(message, msg)
         else:
             await message.reply('Ссылка не найдена')
     else:
-        msg = await check_url_xdr(
-            await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
+        msg = await check_url_xdr(await global_data.mongo_config.load_bot_value(
+            message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg[:4000])
 

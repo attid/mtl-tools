@@ -12,7 +12,7 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import FloodWait, PeerIdInvalid, UserNotMutualContact
 from sentry_sdk import capture_exception
 
-from config_reader import config
+from utils.config_reader import config, start_path
 
 
 # https://pyrofork.mayuri.my.id/main/api/client.html
@@ -44,7 +44,7 @@ else:
     session_name = "pyro_session"
 
 pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
-                  workdir=os.path.dirname(__file__))
+                  workdir=os.path.join(start_path, 'data'))
 
 
 def extract_telegram_info(url):
@@ -118,6 +118,9 @@ async def pyro_start():
         capture_exception(e)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
 
+
+async def pyro_test():
+    await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
 
 async def get_group_members(chat_id: int) -> List[GroupMember]:
     members = []
@@ -194,7 +197,7 @@ async def add_contact(user_id: int):
 
 async def main():
     await pyro_app.start()
-    await add_contact(7394698)
+    await pyro_test()
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
     # a = await get_group_members(-1001892843127)
     # # 1798357244

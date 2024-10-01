@@ -164,7 +164,7 @@ async def cmd_poll_check(message: Message, session: Session):
 
             # Вывод оставшихся голосов
             remaining_voters = ' '.join(all_voters)
-            await message.reply_to_message.reply(f'{remaining_voters}\nСмотрите голосование \ Look at the poll')
+            await message.reply_to_message.reply(f'{remaining_voters}\nСмотрите голосование / Look at the poll')
         else:
             await message.reply_to_message.reply(
                 'Данные голосования не найдены или ключ чата отсутствует в chat_to_address')

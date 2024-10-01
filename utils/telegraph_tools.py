@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import aiohttp
 
-from config_reader import config
+from utils.config_reader import config
 from utils.converter import convert_html_to_telegraph_format
 from utils.global_data import adv_text
 from utils.pyro_tools import MessageInfo

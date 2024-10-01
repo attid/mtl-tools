@@ -6,10 +6,10 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
-from config_reader import config
+from utils.config_reader import config
 from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count, db_load_bot_value_ext
 from scripts.mtl_exchange2 import check_mm, check_mmwb
-from utils.global_data import MTLChats, BotValueTypes, global_data
+from utils.global_data import MTLChats, BotValueTypes
 
 
 @logger.catch

@@ -1,9 +1,7 @@
 import asyncio
 import json
 from datetime import datetime
-
-from aioredis import Redis
-
+from redis.asyncio import Redis
 from utils.global_data import MTLChats
 from utils.gspread_tools import gs_save_new_support
 

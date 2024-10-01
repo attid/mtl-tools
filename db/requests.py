@@ -156,9 +156,9 @@ def db_load_new_message(session: Session) -> list[TMessage]:
 def extract_url(msg, surl='eurmtl.me'):
     try:
         if surl:
-            pattern = f"https?://{surl}[^\s]+"
+            pattern = rf"https?://{surl}[^\s]+"
         else:
-            pattern = "https?://[^\s]+"
+            pattern = r"https?://[^\s]+"
 
         search_result = re.search(pattern, msg)
 

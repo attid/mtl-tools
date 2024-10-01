@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from db.requests import extract_url, db_save_message, db_get_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
-from skynet_start import add_bot_users
+from start import add_bot_users
 from utils.aiogram_utils import (multi_reply, is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
 from utils.dialog import talk_check_spam
@@ -100,7 +100,11 @@ async def check_spam(message, session):
                                                                 can_send_other_messages=False))
         msg = await message.forward(MTLChats.SpamGroup)
         chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
-        await msg.reply(f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}',
+        msg_text =  f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}'
+        if message.reply_to_message:
+            msg_text += f'\nОтвет на сообщение: {message.reply_to_message.get_url()}'
+
+        await msg.reply(msg_text,
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
                                                                    callback_data=SpamCheckCallbackData(
@@ -261,26 +265,36 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
         await cmd_sleep_and_delete(msg_d, 120)
 
 
-########################################################################################################################
-##########################################  handlers  ##################################################################
-########################################################################################################################
-
-
-@router.message(ChatInOption('need_decode'), F.text.contains('eurmtl.me/sign_tools'))
 async def cmd_tools(message: Message, bot: Bot, session: Session):
-    await check_alert(bot, message, session)
-    if message.text.find('eurmtl.me/sign_tools') > -1:
+    url_found = False
+    url_text = message.text
+    if message.entities:
+        for entity in message.entities:
+            if entity.type in ['url', 'text_link']:
+                url = entity.url if entity.type == 'text_link' else message.text[entity.offset:entity.offset+entity.length]
+                if 'eurmtl.me/sign_tools' in url:
+                    url_found = True
+                    url_text = url
+                    break
+
+    if url_found or url_text.find('eurmtl.me/sign_tools') > -1:
         msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
-        try:
+        with suppress(TelegramBadRequest):
             await bot.unpin_chat_message(message.chat.id, msg_id)
-        except:
-            pass
-        await save_url(message.chat.id, message.message_id, message.text)
-        await message.pin()
+
+        await save_url(message.chat.id, message.message_id, url_text)
+        with suppress(TelegramBadRequest):
+            await message.pin()
         msg = await check_url_xdr(
             await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
+
+
+
+########################################################################################################################
+##########################################  handlers  ##################################################################
+########################################################################################################################
 
 
 @rate_limit(0, 'listen')
@@ -291,6 +305,9 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
         if deleted:
             # If the message was deleted during spam check, we stop processing
             return
+
+    if message.chat.id in global_data.need_decode:
+        await cmd_tools(message, bot, session)
 
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)

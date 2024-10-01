@@ -12,6 +12,7 @@ from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 
 from db.requests import add_to_watchlist
+from utils.config_reader import start_path
 from utils.global_data import float2str, global_data
 
 
@@ -23,8 +24,8 @@ from utils.global_data import float2str, global_data
 def get_creds():
     # To obtain a service account JSON file, follow these steps:
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
-    start_path = os.path.dirname(__file__)
-    key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
+
+    key_path = os.path.join(start_path, 'data','mtl-google-doc.json')
     # print(start_path, key_path)
 
     creds = Credentials.from_service_account_file(key_path)
@@ -570,7 +571,8 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
         sheet_name_to = sheet_name_from
     # sheet_data_result = await asyncio.to_thread(get_sheet_data_and_styles_sync, service, copy_from, sheet_name)
     # Настройка аутентификации для Google Sheets API
-    key_path = os.path.join(os.path.dirname(__file__), 'mtl-google-doc.json')
+    key_path = os.path.join(start_path, 'data','mtl-google-doc.json')
+
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
     service = build('sheets', 'v4', credentials=credentials)
@@ -752,7 +754,8 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    a = asyncio.run(gs_update_namelist())
+    #a = asyncio.run(gs_update_namelist())
+    get_creds()
     print(a)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
     #                           "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)

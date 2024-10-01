@@ -67,18 +67,3 @@ async def cmd_del_all(message: Message, session: Session):
         await message.reply('не указаны параметры кого добавить')
 
 
-@update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
-@router.message(Command(commands=["auto_all"]))
-async def msg_save_all(message: Message, session: Session):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
-        return False
-
-    if message.chat.id in global_data.auto_all:
-        global_data.auto_all.remove(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AutoAll, None)
-        await message.reply('Removed')
-    else:
-        global_data.auto_all.append(message.chat.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AutoAll, 1)
-        await message.reply('Added')

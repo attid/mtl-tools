@@ -3,8 +3,8 @@ import os
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
-start_path = os.path.dirname(__file__) + '/'
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+start_path = os.path.dirname(os.path.dirname(__file__)) + '/'
+dotenv_path = os.path.join(start_path, '.env')
 
 
 class Settings(BaseSettings):
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     pyro_api_id: int
     pyro_api_hash: SecretStr
     telegraph_token: str
+    grist_token: str
 
     class Config:
         env_file = dotenv_path

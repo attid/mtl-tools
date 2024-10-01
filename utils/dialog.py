@@ -3,10 +3,10 @@ import json
 import random
 from datetime import datetime, date
 import tiktoken
-from aioredis import Redis
+from redis.asyncio import Redis
 from loguru import logger
 from openai import AsyncOpenAI
-from config_reader import config
+from utils.config_reader import config
 from utils.gspread_tools import gs_save_new_task
 
 MAX_TOKENS = 4000
@@ -204,7 +204,13 @@ def get_horoscope() -> list:
 async def talk_check_spam(article):
     messages = [
         {"role": "system",
-         "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. Предоставьте свой ответ в виде JSON с ключом 'spam_probability' и значением вероятности в процентах, например, {\"spam_probability\": 70}."},
+         "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. "
+                    "Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. "
+                    "т.е. предлагают ли что-то купить, или предложение заработка или написать в личку по непонятному вопросу. "
+                    "Если говорят что-то про черногорию, Будву, Бар, Подгорицу или EURMTL то это не спам "
+                    "Если хотят обменять деньги и вежливо обращаются без ссылок и зазывания в ЛС то тоже не спам."
+                    "Предоставьте свой ответ в виде JSON с ключом 'spam_probability' и значением вероятности в процентах, "
+                    "например, {\"spam_probability\": 70}."},
         {"role": "user", "content": article}
     ]
 

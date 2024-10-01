@@ -1,6 +1,6 @@
 import json
 
-from config_reader import start_path
+from utils.config_reader import start_path
 from utils.stellar_utils import *
 
 MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EURDEBT', 'EURMTL', 'GRAFDRON',

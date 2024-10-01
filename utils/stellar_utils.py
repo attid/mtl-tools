@@ -14,7 +14,7 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
                          ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
-from config_reader import config
+from utils.config_reader import config
 from db.requests import *
 from utils.aiogram_utils import get_web_request
 from utils.global_data import float2str, global_data
@@ -843,9 +843,43 @@ def get_donate_list(account: dict):
     return donate_list
 
 
+def stellar_get_transaction_builder(xdr: str) -> TransactionBuilder:
+    # Преобразуем XDR обратно в TransactionEnvelope
+    transaction_envelope = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+
+    # Извлекаем существующую транзакцию из TransactionEnvelope
+    existing_transaction = transaction_envelope.transaction
+
+    # Загружаем исходную учетную запись
+    source_account = Account(account=existing_transaction.source.account_id,
+                             sequence=existing_transaction.sequence - 1)
+    #await server.load_account(account_id=existing_transaction.source.account_id)
+
+    # Создаем новый TransactionBuilder с той же исходной информацией
+    transaction_builder = TransactionBuilder(
+        source_account=source_account,
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=existing_transaction.fee  # Сохраняем исходную базовую комиссию
+    )
+
+    # Устанавливаем временные границы, если они были заданы
+    if existing_transaction.preconditions.time_bounds:
+        transaction_builder.set_timeout(existing_transaction.preconditions.time_bounds.max_time)
+    else:
+        # Если временные границы не заданы, задаем неограниченное время
+        transaction_builder.set_timeout(0)
+
+    # Добавляем все существующие операции из старой транзакции
+    for op in existing_transaction.operations:
+        transaction_builder.append_operation(op)
+
+    # Возвращаем объект TransactionBuilder для дальнейших модификаций
+    return transaction_builder
+
+
 def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
     if xdr:
-        transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction = stellar_get_transaction_builder(xdr)
     else:
         server = Server(horizon_url=config.horizon_url)
         root_account = server.load_account(account_id)
@@ -1290,11 +1324,15 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
 
 
 def decode_data_value(data_value: str):
-    base64_message = data_value
-    base64_bytes = base64_message.encode('ascii')
-    message_bytes = base64.b64decode(base64_bytes)
-    message = message_bytes.decode('ascii')
-    return message
+    try:
+        base64_message = data_value
+        base64_bytes = base64_message.encode('ascii')
+        message_bytes = base64.b64decode(base64_bytes)
+        message = message_bytes.decode('ascii')
+        return message
+    except Exception as ex:
+        logger.info(f"decode_data_value error: {ex}")
+        return 'decode error'
 
 
 async def cmd_show_donates(return_json=False, return_table=False):
@@ -1587,7 +1625,7 @@ def cmd_get_blacklist():
 
 def stellar_remove_orders(public_key, xdr):
     if xdr:
-        transaction = TransactionBuilder.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
+        transaction = stellar_get_transaction_builder(xdr)
     else:
         root_account = Server(horizon_url=config.horizon_url).load_account(public_key)
         transaction = TransactionBuilder(source_account=root_account,

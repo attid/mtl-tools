@@ -158,6 +158,6 @@ async def update_lab():
 
 
 if __name__ == "__main__":
-    logger.add("update_data.log", rotation="1 MB")
+    logger.add("logs/update_data.log", rotation="1 MB")
     logger.info(datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
     asyncio.run(update_lab())

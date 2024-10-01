@@ -14,14 +14,18 @@ async def inline_handler(inline_query: InlineQuery):
     query_arr = query_text.split(" ") if 0 < len(query_text) else []
     user_id = inline_query.from_user.id
     chat_id = 0
-    if len(query_arr) > 1:
+    if query_arr:
         try:
             if query_arr[0].startswith('-100'):
                 chat_id = int(query_arr[0])
             else:
                 chat_id = int(f'-100{query_arr[0]}')
+            query_text = ' '.join(query_arr[1:])
         except ValueError:
             chat_id = 0
+
+    if len(query_text) == 0:
+        query_text = ' '
 
     for key, value in global_data.info_cmd.items():
         if (key.upper().find(query_text) > -1) or (value['info'].upper().find(query_text) > -1):
