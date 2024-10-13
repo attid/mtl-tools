@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (Message, FSInputFile, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton,
-                           ReactionTypeEmoji, User, LoginUrl)
+                           ReactionTypeEmoji, User, LoginUrl, ChatMemberUpdated)
 from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
@@ -834,6 +834,47 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")
         await message.reply(f"An error occurred while removing deleted users: {str(e)}")
+
+
+@router.my_chat_member()
+async def on_my_chat_member(update: ChatMemberUpdated, bot: Bot):
+    chat = update.chat
+    old_status = update.old_chat_member.status
+    new_status = update.new_chat_member.status
+
+    if old_status != new_status:
+        if new_status == ChatMemberStatus.MEMBER:
+            logger.info(f"Bot was added to chat {chat.id}")
+            if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+                await bot.send_message(chat.id, "Thanks for adding me to this chat!")
+
+        elif new_status == ChatMemberStatus.LEFT:
+            logger.info(f"Bot was removed from chat {chat.id}")
+
+        elif new_status == ChatMemberStatus.ADMINISTRATOR:
+            logger.info(f"Bot's permissions were updated in chat {chat.id}")
+            if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+                await bot.send_message(chat.id, "Thanks for making me an admin!")
+
+        elif new_status == ChatMemberStatus.RESTRICTED:
+            logger.warning(f"Bot's permissions were restricted in chat {chat.id}")
+
+        elif new_status == ChatMemberStatus.KICKED:
+            logger.warning(f"Bot's permissions were kicked in chat {chat.id}")
+
+        else:
+            logger.info(f"Bot status changed in chat {chat.id} from {old_status} to {new_status}")
+
+    # You can add more specific logic based on your needs
+
+    # For example, you might want to update some global data:
+    # if new_status == ChatMemberStatus.MEMBER or new_status == ChatMemberStatus.ADMINISTRATOR:
+    #     if chat.id not in global_data.active_chats:
+    #         global_data.active_chats.append(chat.id)
+    # elif new_status == ChatMemberStatus.LEFT:
+    #     if chat.id in global_data.active_chats:
+    #         global_data.active_chats.remove(chat.id)
+
 
 
 if __name__ == "__main__":

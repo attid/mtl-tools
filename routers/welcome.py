@@ -297,11 +297,12 @@ async def msg_delete_income(message: Message):
     # только удаляем сообщения о входе
     """
     if message.chat.id in global_data.delete_income:
-        if global_data.delete_income[message.chat.id] == 2:
-            if contains_emoji(message.from_user.full_name):
+        with suppress(TelegramBadRequest):
+            if global_data.delete_income[message.chat.id] == 2:
+                if contains_emoji(message.from_user.full_name):
+                    await message.delete()
+            else:
                 await message.delete()
-        else:
-            await message.delete()
 
 
 @router.callback_query(CaptchaCallbackData.filter())
