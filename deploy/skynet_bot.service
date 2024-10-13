@@ -1,0 +1,21 @@
+[Unit]
+Description=skynet_bot Application
+After=network.target
+After=systemd-user-sessions.service
+After=network-online.target
+
+[Service]
+User=attid
+Group=attid
+Type=simple
+WorkingDirectory=/home/skynet_bot
+ExecStart=/home/skynet_bot/deploy/skynet_bot.start.sh
+StandardError=append:/home/skynet_bot/logs/service.skynet_bot.err.log
+StandardOutput=append:/home/skynet_bot/logs/service.skynet_bot.out.log
+TimeoutSec=30
+Restart=always
+RestartSec=15
+
+
+[Install]
+WantedBy=multi-user.target
