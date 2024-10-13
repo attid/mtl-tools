@@ -1,52 +1,46 @@
+import json
 import sys
 import sentry_sdk
 from db.quik_pool import quik_pool
-from utils.global_data import BotValueTypes
+from utils.grist_tools import load_notify_info_accounts, load_notify_info_assets, put_grist_data, grist_main_chat_info
 from utils.stellar_utils import *
 
 
 @logger.catch
 async def cmd_check_cron_transaction(session: Session):
-    assets_config = [
-        ['MMWB', BotValueTypes.LastMMWBTransaction, MTLChats.MMWBGroup, 0],
-        ['FCM', BotValueTypes.LastFCMTransaction, MTLChats.FCMGroup, 0],
-        ['MTLand', BotValueTypes.LastMTLandTransaction, MTLChats.SignGroup, 10],
-        ['MTL', BotValueTypes.LastMTLTransaction, MTLChats.SignGroup, 10],
-        ['MTLRECT', BotValueTypes.LastRectTransaction, MTLChats.SignGroup, 10],
-        ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-        ['EURDEBT', BotValueTypes.LastDebtTransaction, MTLChats.GuarantorGroup, 0]
-    ]
+    assets_config = await load_notify_info_assets()
     await process_transactions_by_assets(session, assets_config)
-    await asyncio.sleep(10)
-    address_config = [
-        # address, value_id, chat
-        (MTLAddresses.public_issuer, BotValueTypes.LastFondTransaction, MTLChats.SignGroup),
-        (MTLAddresses.public_farm, BotValueTypes.LastFarmTransaction, MTLChats.FARMGroup),
-        (MTLAddresses.public_usdm, BotValueTypes.LastUSDMFundTransaction, MTLChats.USDMMGroup),
-        (MTLAddresses.public_fin, BotValueTypes.LastFINFundTransaction, MTLChats.FinGroup),
-        (MTLAddresses.public_tfm, BotValueTypes.LastTFMFundTransaction, MTLChats.FinGroup),
-        (MTLAddresses.public_mtla, BotValueTypes.LastMTLATransaction, MTLChats.MTLAAgoraGroup)
-    ]
+    address_config = await load_notify_info_accounts()
     await process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
 
 async def process_transactions_by_assets(session, assets_config):
-    for asset_name, value_id, chat, filter_sum in assets_config:
-        result = await cmd_check_new_asset_transaction(session, asset_name=asset_name,
-                                                       save_id=value_id, filter_sum=filter_sum)
+    for asset_config in assets_config:
+        # [{'chat_id': '-1001729647273', 'chat_info': 'MMWBGroup', 'min': 0, 'asset': 'MMWB-GBSNN2SPYZB2A5RPDTO3BLX4TP5KNYI7UMUABUS3TYWWEWAAM2D7CMMW'},
+        asset = asset_config['asset']
+        asset_name = asset.split('-')[0]
+
+        result = await cmd_check_new_asset_transaction(session, asset=asset, filter_sum=int(asset_config['min']),
+                                                       chat_id=asset_config['chat_id'])
+
         if result:
             result.insert(0, f"Обнаружены новые операции для {asset_name}")
-            send_message_4000(session, chat, result)
+            send_message_4000(session, int(asset_config['chat_id']), result)
 
 
 async def process_specific_transactions(session, address_config, ignore_operations):
-    for address, value_id, chat in address_config:
-        results = await cmd_check_new_transaction(session, ignore_operation=ignore_operations,
-                                                  stellar_address=address, value_id=value_id)
+    # {'chat_id': '-1001239694752', 'account_id': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'chat_info': 'SignGroup', 'account_info': 'public_issuer'}
+    cash = {}
+    for address in address_config:
+        account_id = address['account_id']
+        results = await cmd_check_new_transaction(ignore_operation=ignore_operations,
+                                                  account_id=account_id,
+                                                  cash=cash, chat_id=address['chat_info'])
         if results:
             for result in results:
                 result.insert(0, f"Получены новые транзакции")
-                send_message_4000(session, chat, result)
+                send_message_4000(session, int(address['chat_id']), result)
+        await asyncio.sleep(3)
 
 
 def send_message_4000(session, chat_id, messages):
@@ -136,6 +130,35 @@ async def cmd_check_price(session: Session):
     db_cmd_add_message(session, MTLChats.EURMTLClubGroup, '\n'.join(msg), False, 6568, json.dumps(bt))
 
 
+async def grist_upload_users(table, data):
+    json_data = {"records": []}
+    if data:
+        for user in data:
+            json_data['records'].append({
+                "require": {
+                    "user_id": user.user_id
+                },
+                "fields": {
+                    "user_id": user.user_id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "income_at": user.created_at.strftime('%d.%m.%Y %H:%M:%S'),
+                    "left_at": user.left_at.strftime('%d.%m.%Y %H:%M:%S') if user.left_at else None
+                }
+            })
+
+        await put_grist_data(grist=grist_main_chat_info,
+                             table_name='Main_chat_income',
+                             json_data=json_data)
+
+
+async def cmd_check_grist():
+    data = await global_data.mongo_config.get_users_joined_last_day(-1001009485608)
+    await grist_upload_users('Main_chat_income', data)
+    data = await global_data.mongo_config.get_users_left_last_day(-1001009485608)
+    await grist_upload_users('Main_chat_outcome', data)
+
+
 if __name__ == "__main__":
     logger.add("logs/check_stellar.log", rotation="1 MB")
     sentry_sdk.init(
@@ -145,12 +168,12 @@ if __name__ == "__main__":
     )
 
     if 'check_transaction' in sys.argv:
-        #pass
+        # pass
         asyncio.run(cmd_check_cron_transaction(quik_pool()))
     elif 'check_bot' in sys.argv:
         asyncio.run(cmd_check_bot(quik_pool()))
-    elif 'check_price' in sys.argv:
+    elif 'check_grist' in sys.argv:
         pass
-        # asyncio.run(cmd_check_price(quik_pool()))
+        asyncio.run(cmd_check_grist())
     else:
         print('need more parameters')
