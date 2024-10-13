@@ -147,12 +147,16 @@ class BotMongoConfig:
             return False  # Чат не существует
 
         now = datetime.utcnow()
+        # Обновляем информацию о пользователе, который вышел
         update_result = await self.chats_collection.update_one(
-            {"chat_id": chat_id},
+            {"chat_id": chat_id, f"users.{user_id}": {"$exists": True}},
             {
-                "$unset": {f"users.{user_id}": ""},
-                "$pull": {"admins": user_id},
-                "$set": {"last_updated": now}
+                "$set": {
+                    f"users.{user_id}.left_at": now,  # Добавляем метку времени, когда пользователь вышел
+                    f"users.{user_id}.is_active": False,  # Отмечаем, что пользователь больше не активен
+                    "last_updated": now
+                },
+                "$pull": {"admins": user_id}  # Удаляем пользователя из списка админов
             }
         )
 
