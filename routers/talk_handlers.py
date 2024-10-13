@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from db.requests import extract_url
 from middlewares.throttling import rate_limit
-from scripts.update_data import update_lab
 from scripts.update_report import (update_guarantors_report, update_main_report, update_fire, update_donate_report,
                                    update_mmwb_report, update_bim_data)
 from utils import dialog
@@ -221,11 +220,6 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await update_donate_report(session)
-        await msg.reply('Обновление завершено')
-    if has_words(message.text, ['лабу', 'тулзу']):
-        msg = await message.reply('Зай, я запустила обновление')
-        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        await update_lab()
         await msg.reply('Обновление завершено')
 
 
