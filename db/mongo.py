@@ -1,10 +1,11 @@
+import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Dict, Optional, List, Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from utils.config_reader import config
 from utils.pyro_tools import GroupMember
@@ -13,6 +14,7 @@ client = AsyncIOMotorClient(config.mongodb_url)
 db = client['mtl_tables']
 bot_config_collection = db['bot_config']
 chats_collection = db['chats']
+bot_kv_collection = db['bot_kv']
 
 
 class BotEntry(BaseModel):
@@ -22,19 +24,39 @@ class BotEntry(BaseModel):
     chat_value: Optional[str]
 
 
+class MongoUser(BaseModel):
+    user_id: Optional[int] = None
+    username: Optional[str]
+    full_name: str
+    is_admin: bool = False
+    created_at: datetime
+    left_at: Optional[datetime] = None
+
+
+class MongoChat(BaseModel):
+    chat_id: int
+    username: Optional[str] = None
+    title: Optional[str] = None
+    created_at: Optional[datetime] = None
+    last_updated: Optional[datetime]
+    users: Dict[int, MongoUser] = Field(default_factory=dict)
+    admins: List[int] = []
+
+
 class BotMongoConfig:
     def __init__(self):
-        self.collection: AsyncIOMotorCollection = bot_config_collection
+        self.bot_config_collection: AsyncIOMotorCollection = bot_config_collection
         self.chats_collection: AsyncIOMotorCollection = chats_collection
+        self.bot_kv_collection: AsyncIOMotorCollection = bot_kv_collection
 
     async def save_bot_value(self, chat_id: int, chat_key: int | Enum, chat_value: Any):
         chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
         chat_key_name = chat_key.name if isinstance(chat_key, Enum) else None
 
         if chat_value is None:
-            await self.collection.delete_one({"chat_id": chat_id, "chat_key": chat_key_value})
+            await self.bot_config_collection.delete_one({"chat_id": chat_id, "chat_key": chat_key_value})
         else:
-            await self.collection.update_one(
+            await self.bot_config_collection.update_one(
                 {"chat_id": chat_id, "chat_key": chat_key_value},
                 {"$set": {
                     "chat_key_name": chat_key_name,
@@ -45,26 +67,43 @@ class BotMongoConfig:
 
     async def load_bot_value(self, chat_id: int, chat_key: int | Enum, default_value: Any = ''):
         chat_key = chat_key if isinstance(chat_key, int) else chat_key.value
-        result = await self.collection.find_one({"chat_id": chat_id, "chat_key": chat_key})
+        result = await self.bot_config_collection.find_one({"chat_id": chat_id, "chat_key": chat_key})
         return result['chat_value'] if result else default_value
 
     async def get_chat_ids_by_key(self, chat_key: int | Enum) -> List[int]:
         chat_key = chat_key if isinstance(chat_key, int) else chat_key.value
-        cursor = self.collection.find({"chat_key": chat_key})
+        cursor = self.bot_config_collection.find({"chat_key": chat_key})
         results = await cursor.to_list(length=None)
         return [result['chat_id'] for result in results]
 
     async def get_chat_dict_by_key(self, chat_key: int | Enum, return_json=False) -> Dict[int, Any]:
         chat_key = chat_key if isinstance(chat_key, int) else chat_key.value
-        cursor = self.collection.find({"chat_key": chat_key})
+        cursor = self.bot_config_collection.find({"chat_key": chat_key})
         results = await cursor.to_list(length=None)
         if return_json:
             return {result['chat_id']: json.loads(result['chat_value']) for result in results}
         else:
             return {result['chat_id']: result['chat_value'] for result in results}
 
+    async def update_dict_value(self, chat_id: int, chat_key: int | Enum, dict_key: str, dict_value: Any):
+        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+        await self.bot_config_collection.update_one(
+            {"chat_id": chat_id, "chat_key": chat_key_value},
+            {"$set": {f"chat_value.{dict_key}": dict_value}},
+            upsert=True
+        )
+
+    async def get_dict_value(self, chat_id: int, chat_key: int | Enum, dict_key: str,
+                             default_value: Any = None) -> Any:
+        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+        result = await self.bot_config_collection.find_one(
+            {"chat_id": chat_id, "chat_key": chat_key_value},
+            {f"chat_value.{dict_key}": 1}
+        )
+        return result['chat_value'].get(dict_key, default_value) if result else default_value
+
     async def update_chat_info(self, chat_id: int, members: List[GroupMember], clear_users=False):
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Получаем текущую информацию о чате
         current_chat_info = await self.chats_collection.find_one({"chat_id": chat_id})
@@ -109,8 +148,22 @@ class BotMongoConfig:
 
         return True
 
+    ####################################################################################################################
+    async def load_kv_value(self, kv_key: str, default_value: Any = None):
+        result = await self.bot_kv_collection.find_one({"kv_key": kv_key})
+        return result['kv_value'] if result else default_value
+
+    async def save_kv_value(self, kv_key: str, kv_value: Any):
+        await self.bot_kv_collection.update_one(
+            {"kv_key": kv_key},
+            {"$set": {"kv_value": kv_value}},
+            upsert=True
+        )
+
+    ####################################################################################################################
+
     async def add_user_to_chat(self, chat_id: int, member: GroupMember):
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         user_data = {
             "username": member.username,
             "full_name": member.full_name,
@@ -146,7 +199,7 @@ class BotMongoConfig:
         if not chat:
             return False  # Чат не существует
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         # Обновляем информацию о пользователе, который вышел
         update_result = await self.chats_collection.update_one(
             {"chat_id": chat_id, f"users.{user_id}": {"$exists": True}},
@@ -161,3 +214,55 @@ class BotMongoConfig:
         )
 
         return update_result.modified_count > 0
+
+    async def get_users_joined_last_day(self, chat_id: int) -> List[MongoUser]:
+        one_day_ago = datetime.now() - timedelta(days=1)
+
+        chat = await self.chats_collection.find_one({"chat_id": chat_id})
+        if not chat or "users" not in chat:
+            return []
+
+        joined_users = [
+            MongoUser(**user_info, user_id=user_id) for user_id, user_info in chat["users"].items()
+            if user_info.get("created_at") and user_info["created_at"] > one_day_ago
+        ]
+
+        return joined_users
+
+    async def get_users_left_last_day(self, chat_id: int) -> List[MongoUser]:
+        one_day_ago = datetime.now() - timedelta(days=1)
+
+        chat = await self.chats_collection.find_one({"chat_id": chat_id})
+        if not chat or "users" not in chat:
+            return []
+
+        left_users = [
+            MongoUser.from_dict(user_info) for user_id, user_info in chat["users"].items()
+            if user_info.get("left_at") and user_info["left_at"] > one_day_ago
+        ]
+
+        return left_users
+
+    async def get_all_chats(self) -> List[MongoChat]:
+        chats_cursor = self.chats_collection.find({})
+        chats_list = await chats_cursor.to_list(length=None)
+        result = []
+        for chat in chats_list:
+            result.append(MongoChat(**chat))
+
+        return result
+
+    async def update_chat_with_dict(self, chat_id: int, update_data: Dict) -> bool:
+        # Обновляем запись в базе данных для указанного chat_id
+        result = await self.chats_collection.update_one(
+            {"chat_id": chat_id},
+            {"$set": update_data}
+        )
+        # Возвращаем True, если хотя бы одна запись была обновлена
+        return result.modified_count > 0
+
+
+if __name__ == "__main__":
+    _ = asyncio.run(BotMongoConfig().get_users_joined_last_day(-1001009485608))
+    #_ = asyncio.run(BotMongoConfig().get_all_chats())
+    print(_)
