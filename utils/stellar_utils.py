@@ -853,7 +853,7 @@ def stellar_get_transaction_builder(xdr: str) -> TransactionBuilder:
     # Загружаем исходную учетную запись
     source_account = Account(account=existing_transaction.source.account_id,
                              sequence=existing_transaction.sequence - 1)
-    #await server.load_account(account_id=existing_transaction.source.account_id)
+    # await server.load_account(account_id=existing_transaction.source.account_id)
 
     # Создаем новый TransactionBuilder с той же исходной информацией
     transaction_builder = TransactionBuilder(
@@ -1731,25 +1731,41 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
     return xdr
 
 
-async def cmd_check_new_transaction(session: requests.Session, ignore_operation: List, value_id=None,
-                                    stellar_address=MTLAddresses.public_issuer):
+async def cmd_check_new_transaction(ignore_operation: List,
+                                    account_id=MTLAddresses.public_issuer, cash=None, chat_id=None):
     result = []
-    last_id = await global_data.mongo_config.load_bot_value(0, value_id)
-    server = Server(horizon_url=config.horizon_url)
-    tr = server.transactions().for_account(stellar_address).order(desc=True).call()
-    # print(json.dumps(tr["_embedded"]["records"], indent=4))
+
+    # Проверяем, есть ли данные в кэше
+    if cash is not None and account_id in cash:
+        tr = cash[account_id]
+    else:
+        # Если данных в кэше нет, выполняем запрос
+        server = Server(horizon_url=config.horizon_url)
+        tr = server.transactions().for_account(account_id).order(desc=True).call()
+        # Сохраняем полученные данные в кэш
+        if cash is not None:
+            cash[account_id] = tr
+
+    # Получаем last_id из базы данных
+    last_id = await global_data.mongo_config.load_kv_value(account_id + chat_id)
+
+    # Если last_id равен None, сохраняем текущий last_id и выходим
+    if last_id is None:
+        if tr["_embedded"]["records"]:
+            last_id = tr["_embedded"]["records"][0]["paging_token"]
+            await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+        return result
+
     new_transactions = []
     for record in tr["_embedded"]["records"]:
         if record["paging_token"] == last_id:
             break
         new_transactions.append(record)
 
-        # print(new_transactions)
     for transaction in new_transactions:
         if transaction["paging_token"] > last_id:
             last_id = transaction["paging_token"]
         tr = decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
-        # print(tr)
         if 0 < len(tr) < 90:
             link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
             tr = decode_xdr(transaction["envelope_xdr"])
@@ -1759,27 +1775,41 @@ async def cmd_check_new_transaction(session: requests.Session, ignore_operation:
         # print('****')
         # print(transaction["paging_token"])
 
-    await global_data.mongo_config.save_bot_value(0, value_id, last_id)
+    await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
 
     return result
 
 
-async def cmd_check_new_asset_transaction(session: Session, asset_name: str, save_id: int, filter_sum: int = -1,
-                                          filter_operation=None, issuer=MTLAddresses.public_issuer, filter_asset=None):
+async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_sum: int = -1,
+                                          filter_operation=None, filter_asset=None, chat_id=None):
     if filter_operation is None:
         filter_operation = []
     result = []
+    asset_name = asset.split('-')[0]
 
-    last_id = await global_data.mongo_config.load_bot_value(0, save_id, '0')
+    # Получаем last_id из базы данных
+    last_id = await global_data.mongo_config.load_kv_value(asset+chat_id)
+
+    # Если last_id равен None, просто сохраняем его и выходим
+    if last_id is None:
+        # Получаем данные для определения текущего max_id
+        data = db_get_new_effects_for_token(session, asset_name, '0', filter_sum)
+        if data:
+            # Сохраняем id последнего эффекта как начальный last_id
+            await global_data.mongo_config.save_kv_value(asset+chat_id, data[-1].id)
+        return result
+
     max_id = last_id
 
+    # Получаем новые эффекты для токена
     data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
     for row in data:
         result.append(decode_db_effect(row))
         max_id = row.id
 
+    # Сохраняем новый max_id, если он больше last_id
     if max_id > last_id:
-        await global_data.mongo_config.save_bot_value(0, save_id, max_id)
+        await global_data.mongo_config.save_kv_value(asset+chat_id, max_id)
 
     return result
 
@@ -2568,7 +2598,8 @@ async def test():
 
 if __name__ == '__main__':
     pass
-    asyncio.run(test2())
+    _ = asyncio.run(cmd_gen_mtl_vote_list())
+    print(_)
 
     # from db.quik_pool import quik_pool
     # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))

@@ -7,9 +7,10 @@ from aiogram import Bot
 from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
-from aiogram.types import Message, User, CallbackQuery, Chat
+from aiogram.types import Message, User, CallbackQuery, Chat, ChatMember, ReactionTypeCustomEmoji
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from middlewares.retry import logger
 from utils.config_reader import config
 from utils.global_data import MTLChats, global_data
 
@@ -159,6 +160,8 @@ async def get_web_request(method, url, json=None, headers=None, data=None, retur
             request_coroutine = web_session.post(url, json=json, headers=headers, data=data)
         elif method.upper() == 'GET':
             request_coroutine = web_session.get(url, headers=headers, params=data)
+        elif method.upper() == 'PUT':
+            request_coroutine = web_session.put(url, json=json, headers=headers)
         else:
             raise ValueError("Неизвестный метод запроса")
 
@@ -198,6 +201,60 @@ def get_username_link(user: User):
     return username
 
 
+async def get_user_info(chat_id: int, user_id: int) -> ChatMember:
+    bot = Bot(token=config.bot_token.get_secret_value())
+    try:
+        # Получение информации о пользователе
+        chat_member = await bot.get_chat_member(chat_id, user_id)
+        return chat_member
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        return None
+
+# Пример вызова функции
+async def main():
+    chat_id = -1001429770534  # Замените на реальный chat_id
+    user_id = 7539876829  # Замените на реальный user_id
+    user_id2 = 7321780032  # Замените на реальный user_id
+
+    user_info = await get_user_info(chat_id, user_id)
+    if user_info:
+        print(user_info)
+    else:
+        print("Не удалось получить информацию о пользователе.")
+
+    user_info = await get_user_info(chat_id, user_id2)
+    if user_info:
+        print(user_info)
+    else:
+        print("Не удалось получить информацию о пользователе.")
+
+
+async def main0():
+    async with Bot(
+        token=config.bot_token.get_secret_value(),
+    ) as bot:
+        await bot.set_message_reaction(chat_id='@Montelibero_ru', message_id=9544,
+                                       reaction=[ReactionTypeCustomEmoji(custom_emoji_id='5458863124947942457')])
+
+
+async def update_mongo_chats_names():
+    chats = await global_data.mongo_config.get_all_chats()
+
+    for chat in chats:
+        try:
+            async with Bot(
+                token=config.bot_token.get_secret_value(),
+            ) as bot:
+                info = await bot.get_chat(chat_id=chat.chat_id)
+                count = await global_data.mongo_config.update_chat_with_dict(chat.chat_id, {"username": info.username,
+                                                                                      "name": info.title})
+                print(count)
+                await asyncio.sleep(0.5)
+        except Exception as ex:
+            logger.warning(ex)
+
+
 if __name__ == '__main__':
-    a = asyncio.run(get_debank_balance('0x0358d265874b5cf002d1801949f1cee3b08fa2e9'))
+    a = asyncio.run(update_mongo_chats_names())
     print(a)

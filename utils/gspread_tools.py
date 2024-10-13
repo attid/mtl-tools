@@ -756,7 +756,7 @@ if __name__ == "__main__":
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
     #a = asyncio.run(gs_update_namelist())
     get_creds()
-    print(a)
+    #print(a)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
     #                           "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",

@@ -77,6 +77,7 @@ class BotValueTypes(Enum):
     NotifyMessage = 37
     JoinRequestCaptcha = 38
     FirstVote = 39
+    LastTransaction = 40
 
 
 class LogQuery:
