@@ -1,4 +1,5 @@
 import asyncio
+from loguru import logger
 from utils.aiogram_utils import get_web_request
 from utils.config_reader import config
 
@@ -24,7 +25,6 @@ async def put_grist_data(grist, table_name, json_data):
     }
     url = f'{grist}/tables/{table_name}/records'
     status, response = await get_web_request('PUT', url, headers=headers, json=json_data)
-    print(response)
     if status == 200:
         return True
     else:
@@ -33,17 +33,18 @@ async def put_grist_data(grist, table_name, json_data):
 async def load_notify_info_accounts():
     try:
         records = await fetch_grist_data(grist_notify, 'Accounts')
-        print(records)
+        return records
     except Exception as e:
-        print(f"Ошибка при загрузке данных accounts: {e}")
+        logger.warning(f"Ошибка при загрузке данных accounts: {e}")
 
 async def load_notify_info_assets():
     try:
         records = await fetch_grist_data(grist_notify, 'Assets')
-        print(records)
+        return records
     except Exception as e:
-        print(f"Ошибка при загрузке данных assets: {e}")
+        logger.warning(f"Ошибка при загрузке данных assets: {e}")
 
 
 if __name__ == '__main__':
-    asyncio.run(load_notify_info_assets())
+    _ = asyncio.run(load_notify_info_assets())
+    print(_)

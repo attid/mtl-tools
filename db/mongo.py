@@ -237,7 +237,7 @@ class BotMongoConfig:
             return []
 
         left_users = [
-            MongoUser.from_dict(user_info) for user_id, user_info in chat["users"].items()
+            MongoUser(**user_info, user_id=user_id) for user_id, user_info in chat["users"].items()
             if user_info.get("left_at") and user_info["left_at"] > one_day_ago
         ]
 
@@ -263,6 +263,6 @@ class BotMongoConfig:
 
 
 if __name__ == "__main__":
-    _ = asyncio.run(BotMongoConfig().get_users_joined_last_day(-1001009485608))
+    _ = asyncio.run(BotMongoConfig().get_users_left_last_day(-1001009485608))
     #_ = asyncio.run(BotMongoConfig().get_all_chats())
     print(_)

@@ -339,35 +339,46 @@ def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int
     session.commit()
 
 
-def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amount: float) -> list[
-    TOperations]:
+def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amount: float) -> list[TOperations]:
     """
     Get the first 10 operations with ID greater than the given ID and with a token either in code1 or code2,
     and the amount in amount1 or amount2 is greater than the given amount.
+    If last_id is '-1', return the single most recent record with the maximum ID.
 
     :param session: SQLAlchemy DB session
     :param token: The token string
-    :param last_id: The last ID string
+    :param last_id: The last ID string, or '-1' for the most recent record
     :param amount: The amount as a float
     :return: A list of TOperations objects satisfying the condition
     """
     assert len(token) <= 32, "Length of 'token' should not exceed 32 characters"
 
-    result = (
+    base_query = (
         session.query(TOperations)
-        .filter(TOperations.id > last_id)
         .filter(TOperations.operation != 'trustline_created')
         .filter(
             (TOperations.code1 == token) & (func.cast(TOperations.amount1, Float) > amount) |
             (TOperations.code2 == token) & (func.cast(TOperations.amount2, Float) > amount)
         )
-        .order_by(TOperations.id)
-        .limit(10)
-        .all()
     )
 
-    return cast(list[TOperations], result)
+    if last_id == '-1':
+        result = (
+            base_query
+            .order_by(desc(TOperations.id))
+            .limit(1)
+            .all()
+        )
+    else:
+        result = (
+            base_query
+            .filter(TOperations.id > last_id)
+            .order_by(TOperations.id)
+            .limit(10)
+            .all()
+        )
 
+    return cast(list[TOperations], result)
 
 def db_get_operations(session: Session, last_id: Optional[str] = None, limit: int = 3000) -> List[TOperations]:
     """

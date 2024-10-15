@@ -1793,7 +1793,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
     # Если last_id равен None, просто сохраняем его и выходим
     if last_id is None:
         # Получаем данные для определения текущего max_id
-        data = db_get_new_effects_for_token(session, asset_name, '0', filter_sum)
+        data = db_get_new_effects_for_token(session, asset_name, '-1', filter_sum)
         if data:
             # Сохраняем id последнего эффекта как начальный last_id
             await global_data.mongo_config.save_kv_value(asset+chat_id, data[-1].id)

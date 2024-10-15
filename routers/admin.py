@@ -881,7 +881,8 @@ async def on_migrate(message: Message, bot: Bot):
     old_chat_id = message.chat.id
     new_chat_id = message.migrate_to_chat_id
     logger.info(f"Chat {old_chat_id} migrated to {new_chat_id}")
-    await message.answer(f"Chat {old_chat_id} migrated to {new_chat_id}")
+    await message.bot.send_message(chat_id=new_chat_id,
+                                   text=f"Chat {old_chat_id} migrated to {new_chat_id}")
 
 
 if __name__ == "__main__":

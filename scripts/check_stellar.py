@@ -16,16 +16,17 @@ async def cmd_check_cron_transaction(session: Session):
 
 async def process_transactions_by_assets(session, assets_config):
     for asset_config in assets_config:
-        # [{'chat_id': '-1001729647273', 'chat_info': 'MMWBGroup', 'min': 0, 'asset': 'MMWB-GBSNN2SPYZB2A5RPDTO3BLX4TP5KNYI7UMUABUS3TYWWEWAAM2D7CMMW'},
-        asset = asset_config['asset']
-        asset_name = asset.split('-')[0]
+        if asset_config.get('enabled'):
+            ## [{'chat_id': '-1001729647273', 'chat_info': 'MMWBGroup', 'min': 0, 'asset': 'MMWB-GBSNN2SPYZB2A5RPDTO3BLX4TP5KNYI7UMUABUS3TYWWEWAAM2D7CMMW'},
+            asset = asset_config['asset']
+            asset_name = asset.split('-')[0]
 
-        result = await cmd_check_new_asset_transaction(session, asset=asset, filter_sum=int(asset_config['min']),
-                                                       chat_id=asset_config['chat_id'])
+            result = await cmd_check_new_asset_transaction(session, asset=asset, filter_sum=int(asset_config['min']),
+                                                           chat_id=asset_config['chat_id'])
 
-        if result:
-            result.insert(0, f"Обнаружены новые операции для {asset_name}")
-            send_message_4000(session, int(asset_config['chat_id']), result)
+            if result:
+                result.insert(0, f"Обнаружены новые операции для {asset_name}")
+                send_message_4000(session, int(asset_config['chat_id']), result)
 
 
 async def process_specific_transactions(session, address_config, ignore_operations):
@@ -35,7 +36,7 @@ async def process_specific_transactions(session, address_config, ignore_operatio
         account_id = address['account_id']
         results = await cmd_check_new_transaction(ignore_operation=ignore_operations,
                                                   account_id=account_id,
-                                                  cash=cash, chat_id=address['chat_info'])
+                                                  cash=cash, chat_id=address['chat_id'])
         if results:
             for result in results:
                 result.insert(0, f"Получены новые транзакции")
@@ -148,7 +149,7 @@ async def grist_upload_users(table, data):
             })
 
         await put_grist_data(grist=grist_main_chat_info,
-                             table_name='Main_chat_income',
+                             table_name=table,
                              json_data=json_data)
 
 
