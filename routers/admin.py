@@ -601,7 +601,7 @@ async def command_config_loads(session: Session):
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, session: Session, bot: Bot):
+async def universal_command_handler(message: Message, bot: Bot):
     command = message.text.lower().split()[0][1:]
     command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
@@ -630,14 +630,15 @@ async def universal_command_handler(message: Message, session: Session, bot: Bot
                                    reaction=[ReactionTypeEmoji(emoji='👀')])
 
     if action_type in ["add_list", "del_list", "show_list"]:
-        await list_command_handler(message, session, command_info)
+        await list_command_handler(message, command_info)
     else:  # toggle
-        await handle_command(message, session, command_info)
+        await handle_command(message, command_info)
 
 
-async def handle_command(message: Message, session: Session, command_info):
+async def handle_command(message: Message, command_info):
     chat_id = message.chat.id
-    global_data_field, db_value_type, action, admin_check = command_info
+    global_data_field = command_info[0]
+    db_value_type = command_info[1]
 
     command_args = message.text.split()[1:]  # Список аргументов после команды
 
@@ -665,8 +666,11 @@ async def handle_command(message: Message, session: Session, command_info):
         await message.delete()
 
 
-async def list_command_handler(message: Message, session: Session, command_info):
-    global_data_field, db_value_type, action_type, admin_check = command_info
+async def list_command_handler(message: Message, command_info):
+    global_data_field = command_info[0]
+    db_value_type = command_info[1]
+    action_type = command_info[2]
+
     command_args = message.text.lower().split()[1:]  # аргументы после команды
 
     if action_type == "add_list":
