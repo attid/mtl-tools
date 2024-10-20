@@ -132,12 +132,18 @@ async def cmd_get_info(message: Message, bot: Bot):
 
     messages = []
 
-    is_member, user = await check_membership(bot, MTLChats.MonteliberoChanel, int(user_id))
-    if is_member:
-        messages.append(f"Пользователь @{user.username} подписан на канал Montelibero")
-    else:
-        messages.append("Пользователь не подписан на канал")
+    chat_list = (
+        (MTLChats.MonteliberoChanel, "канал Montelibero ru"),
+        (MTLChats.MTLAAgoraGroup, "MTLAAgoraGroup"),
+        (-1001429770534, "chat Montelibero ru"),
+    )
 
+    for chat_id, chat_name in chat_list:
+        is_member, user = await check_membership(bot, chat_id, int(user_id))
+        if is_member:
+                messages.append(f"Пользователь @{user.username} подписан на {chat_name}")
+        else:
+                messages.append(f"Пользователь не подписан на {chat_name}")
     messages.extend(await gs_find_user(user_id))
 
     await message.reply('\n'.join(messages))
