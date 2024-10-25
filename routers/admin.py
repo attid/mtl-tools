@@ -141,9 +141,9 @@ async def cmd_get_info(message: Message, bot: Bot):
     for chat_id, chat_name in chat_list:
         is_member, user = await check_membership(bot, chat_id, int(user_id))
         if is_member:
-                messages.append(f"Пользователь @{user.username} подписан на {chat_name}")
+            messages.append(f"Пользователь @{user.username} подписан на {chat_name}")
         else:
-                messages.append(f"Пользователь не подписан на {chat_name}")
+            messages.append(f"Пользователь не подписан на {chat_name}")
     messages.extend(await gs_find_user(user_id))
 
     await message.reply('\n'.join(messages))
@@ -819,27 +819,42 @@ async def cmd_chats_info(message: Message):
 
 @router.message(Command(commands=["delete_dead_members"]))
 async def cmd_delete_dead_members(message: Message, state: FSMContext):
-    if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
         return
 
     parts = message.text.split()
 
     if len(parts) != 2:
-        await message.reply("Please provide a chat ID. Usage: /delete_dead_members -100xxxxxxxxx")
+        await message.reply("Please provide a chat ID or username. "
+                            "Usage: /delete_dead_members -100xxxxxxxxx"
+                            "or /delete_dead_members @username")
         return
 
     chat_id = parts[1]
 
-    if not (chat_id.startswith("-100") and chat_id[4:].isdigit()):
-        await message.reply("Invalid chat ID format. It should start with -100 followed by numbers.")
+    if not ((chat_id.startswith("-100") and chat_id[4:].isdigit()) or chat_id.startswith("@")):
+        await message.reply(
+            "Invalid chat ID format. It should start with -100 followed by numbers or @ followed by the channel username.")
         return
 
-    chat_id_int = int(chat_id)
+    if chat_id.startswith("@"):
+        try:
+            chat = await message.bot.get_chat(chat_id)
+            chat_id = chat.id
+        except TelegramBadRequest:
+            await message.reply("Unable to find the chat. Make sure the bot is a member of the channel/group.")
+            return
+    else:
+        chat_id = int(chat_id)
+
+    if not await is_admin(message, chat_id=chat_id):
+        await message.reply(f"You are not an admin of the chat {chat_id}.")
+        return
 
     await message.reply("Starting to remove deleted users. This may take some time...")
     try:
-        await remove_deleted_users(chat_id_int)
+        await remove_deleted_users(chat_id)
         await message.reply("Finished removing deleted users.")
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")

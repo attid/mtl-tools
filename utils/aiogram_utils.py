@@ -50,10 +50,12 @@ async def is_admin(event: Message | CallbackQuery, chat_id=None):
     if user_id == MTLChats.GroupAnonymousBot:
         return True
 
+    if user_id == chat_id:
+        return True
+
     with suppress(TelegramBadRequest):
         members = await event.bot.get_chat_administrators(chat_id=chat_id)
-
-    return any(member.user.id == user_id for member in members)
+        return any(member.user.id == user_id for member in members)
 
 
 def add_text(lines, num_line, text):

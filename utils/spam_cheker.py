@@ -1,7 +1,11 @@
 import asyncio
 import re
 
+import aiohttp
+from loguru import logger
+
 from utils.dialog import talk_check_spam
+from utils.global_data import global_data
 
 
 def is_mixed_word(word):
@@ -56,10 +60,33 @@ def contains_spam_phrases(text, phrases=None, threshold=3):
     return count >= threshold
 
 
+async def combo_check_spammer(user_id):
+    try:
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(f'https://api.cas.chat/check?user_id={user_id}', timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('ok'):
+                            # return data.get('result', False)
+                            return True
+                    else:
+                        logger.error(f"API request failed with status code: {response.status}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Network error occurred: {str(e)}")
+            except asyncio.TimeoutError:
+                logger.error("Request timed out")
+    except Exception as e:
+        logger.error(f"Unexpected error in combo_check_spam: {str(e)}")
+    return False
+
+
 if __name__ == '__main__':
     test = '''
 Ищу людей, кто заинтересован в дополнительном доходе, онлайн формат, от 18 лет. За деталями обращайтесь в лс
 '''
 
-    print(contains_spam_phrases(test))
-    print(asyncio.run(talk_check_spam(test)))
+    # print(contains_spam_phrases(test))
+    # print(asyncio.run(talk_check_spam(test)))
+    print(asyncio.run(combo_check_spammer(5953807506)))
+    print(asyncio.run(combo_check_spammer(84131737)))

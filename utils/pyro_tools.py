@@ -38,13 +38,22 @@ class GroupMember:
     is_admin: bool
 
 
-if 'test' in sys.argv or __name__ == "__main__":
-    session_name = "test_session"
-else:
-    session_name = "pyro_session"
+# if 'test' in sys.argv or __name__ == "__main__":
+#     session_name = "test_session"
+# else:
+#     session_name = "pyro_session"
+#pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
+#                  workdir=os.path.join(start_path, 'data'))
 
-pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
-                  workdir=os.path.join(start_path, 'data'))
+pyro_app = Client(
+    name="bot",
+    bot_token=config.bot_token.get_secret_value(),
+    api_id=config.pyro_api_id,
+    api_hash=config.pyro_api_hash.get_secret_value(),
+    workdir=os.path.join(start_path, 'data'),
+    no_updates=True,
+)
+
 
 
 def extract_telegram_info(url):
@@ -82,9 +91,9 @@ async def pyro_update_msg_info(msg: MessageInfo):
     msg.user_from = message.from_user.username if message.from_user.username else html.escape(
         message.from_user.full_name)
 
-    if message.topics:
-        msg.thread_id = message.topics.id
-        msg.thread_name = message.topics.title
+    if message.topic:
+        msg.thread_id = message.topic.id
+        msg.thread_name = message.topic.title
 
     if message.has_protected_content:
         return
@@ -120,7 +129,7 @@ async def pyro_start():
 
 
 async def pyro_test():
-    await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
+    await pyro_app.send_message("@itolstov", "Greetings from **SkyNet**!")
 
 async def get_group_members(chat_id: int) -> List[GroupMember]:
     members = []
@@ -198,12 +207,17 @@ async def add_contact(user_id: int):
 async def main():
     await pyro_app.start()
     await pyro_test()
+    # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
     # a = await get_group_members(-1001892843127)
     # # 1798357244
     # print(a)
-    #from utils.global_data import global_data
-    #await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
+    # from utils.global_data import global_data
+    # await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
+    # url = "https://t.me/c/1798357244/90095/95343"
+    # msg_info = extract_telegram_info(url)
+    # await pyro_update_msg_info(msg_info)
+    # print(msg_info)
 
     try:
         await pyro_app.stop()

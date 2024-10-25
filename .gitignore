@@ -136,4 +136,5 @@ members_key.json
 /polls/
 /backup/
 /.idea/
+/data/*
 *.sh

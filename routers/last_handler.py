@@ -19,7 +19,7 @@ from utils.aiogram_utils import (multi_reply, is_admin, ChatInOption,
 from utils.dialog import talk_check_spam
 from utils.global_data import MTLChats, BotValueTypes, global_data
 from utils.pyro_tools import MessageInfo
-from utils.spam_cheker import is_mixed_word, contains_spam_phrases
+from utils.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer
 from utils.stellar_utils import check_url_xdr
 from utils.telegraph_tools import telegraph
 
@@ -62,7 +62,13 @@ async def check_spam(message, session):
 
     rules_name = 'xz'
     process_message = False
-    if message.entities:
+    user_id = message.from_user.id
+
+    if await combo_check_spammer(user_id):
+        process_message = True
+        rules_name = f'<a href="https://cas.chat/query?u={user_id}">CAS ban</a>'
+
+    if not process_message and message.entities:
         custom_emoji_count = 0
         for entity in message.entities:
             if entity.type in ('url', 'text_link', 'mention'):
@@ -76,13 +82,14 @@ async def check_spam(message, session):
             process_message = True
             rules_name = 'emoji'
 
-    words = message.text.split()
-    mixed_word_count = sum(is_mixed_word(word) for word in words)
-    if mixed_word_count >= 3:
-        process_message = True
-        rules_name = 'mixed'
+    if not process_message:
+        words = message.text.split()
+        mixed_word_count = sum(is_mixed_word(word) for word in words)
+        if mixed_word_count >= 3:
+            process_message = True
+            rules_name = 'mixed'
 
-    if contains_spam_phrases(message.text):
+    if not process_message and contains_spam_phrases(message.text):
         process_message = True
         rules_name = 'spam_phrases'
 
@@ -104,7 +111,7 @@ async def check_spam(message, session):
         if message.reply_to_message:
             msg_text += f'\nОтвет на сообщение: {message.reply_to_message.get_url()}'
 
-        await msg.reply(msg_text,
+        await msg.reply(msg_text, disable_web_page_preview=True,
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
                                                                    callback_data=SpamCheckCallbackData(

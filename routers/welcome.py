@@ -21,6 +21,7 @@ from start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link, get_chat_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from utils.pyro_tools import GroupMember
+from utils.spam_cheker import combo_check_spammer
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -47,7 +48,6 @@ class EmojiCaptchaCallbackData(CallbackData, prefix="e_captcha"):
     num: int
 
 
-
 def generate_number_with_sum(target_sum):
     while True:
         # Генерируем случайное четырехзначное число
@@ -69,6 +69,12 @@ emoji_pairs = [
     ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "⬛️", "⬜️", "🟫"]  # Квадраты
 ]
 
+dal = ("🔴🟤",  # 1 9  # 0 8
+       "🟠🟢",  # 2 4   # 1 3
+       "🔵🟣")  # 5 6   # 4 5
+
+
+# первый и последний; второй и четвертый; пятый и шестой; для дальтоников сильно похожи
 
 def create_emoji_captcha_keyboard(user_id, required_num):
     random_indices = random.sample(range(9), 6)
@@ -115,7 +121,8 @@ async def cmd_delete_welcome(message: Message, session: Session):
     cmd_delete_later(message, 1)
 
 
-@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2, "welcome_messages")
+@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
+                     "welcome_messages")
 @router.message(Command(commands=["set_welcome"]))
 async def cmd_set_welcome(message: Message, session: Session):
     if not await is_admin(message):
@@ -177,10 +184,22 @@ async def cmd_start_exchange(message: Message, session: Session):
 
     await message.reply('Was start')
 
-bad_names = ['ЧВК ВАГНЕР','ЧВК ВАГНЕР']
+
+bad_names = ['ЧВК ВАГНЕР', 'ЧВК ВАГНЕР']
+
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
+    new_user_id = event.new_chat_member.user.id
+    if await combo_check_spammer(new_user_id):
+        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.send_message(MTLChats.SpamGroup,
+                               f'{event.new_chat_member.user.mention_html()} '
+                               f'был забанен в чате {get_chat_link(event.chat)}'
+                               f'Reason: <a href="https://cas.chat/query?u={new_user_id}">CAS ban</a>',
+                               disable_web_page_preview=True)
+        return
+
     if event.new_chat_member.user.full_name in bad_names:
         await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
         await bot.send_message(MTLChats.SpamGroup,
@@ -261,7 +280,8 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot)
             await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
         if is_skynet_admin(event):
-            logger.info(f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
+            logger.info(
+                f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
             if (await check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id) or
                     await check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id) or
                     await check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)):
@@ -520,8 +540,6 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
         add_bot_users(session, callback_data.user_id, None, 0)
         await call.answer("User unbanned successfully.")
         await call.message.delete_reply_markup()
-
-
 
 
 if __name__ == '__main__':
