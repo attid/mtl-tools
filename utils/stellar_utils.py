@@ -2149,7 +2149,8 @@ async def get_mtlap_votes():
                 'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
                 vote = int(float(balance['balance']))
                 break
-        result[account['id']] = {'delegate': delegate, 'vote': vote}
+        result[account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
+
     # добавляем кого нет
     find_new = True
     while find_new:
@@ -2166,21 +2167,30 @@ async def get_mtlap_votes():
                 if balances:
                     for balance in balances:
                         if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and \
-                                balance[
-                                    'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
+                                balance['asset_issuer'] == MTLAssets.mtlap_asset.issuer:
                             vote = int(float(balance['balance']))
                             break
-                result[new_account['id']] = {'delegate': delegate, 'vote': vote}
+                result[new_account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
 
     for account in list(result):
         check_mtla_delegate(account, result)
 
+    # Проверяем, может ли аккаунт голосовать
     for account in list(result):
-        if result[account]['vote'] == 0:
+        if not result[account]['can_vote']:
+            # Проверяем, есть ли делегаты с 2 или более токенами
+            if 'delegated_list' in result[account]:
+                for delegator in result[account]['delegated_list']:
+                    if result[delegator]['vote'] >= 2:
+                        result[account]['can_vote'] = True
+                        break
+
+    # Удаляем аккаунты, которые не могут голосовать
+    for account in list(result):
+        if not result[account]['can_vote']:
             del result[account]
 
     return result
-
 
 async def get_get_income():
     address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
@@ -2598,22 +2608,6 @@ async def test():
 
 if __name__ == '__main__':
     pass
-    _ = asyncio.run(cmd_gen_mtl_vote_list())
+    _ = asyncio.run(get_mtlap_votes())
     print(_)
-
-    # from db.quik_pool import quik_pool
-    # a = asyncio.run(cmd_calc_bim_pays(quik_pool(), 41, 200))
-    #
-    # # a = asyncio.run(stellar_get_orders_sum(MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset))
-    # print(a)
-    # # transactions = asyncio.run(stellar_get_transactions('GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7',
-    #                                                     datetime.strptime('15.01.2024', '%d.%m.%Y'),
-    #                                                     datetime.strptime('01.04.2024', '%d.%m.%Y')))
-    # print(transactions)
-    # xdr = None
-    # for i in range(99):
-    #     xdr = cmd_gen_data_xdr(MTLAddresses.public_exchange_eurmtl_xlm, f'{i}:', xdr=xdr)
-    #
-    # xdr = stellar_sign(xdr, config.private_sign.get_secret_value())
-    # print(stellar_sync_submit(xdr))
-    # print(asyncio.run(get_usdm_xdr(5168, 4134, 1034)))
+    print(len(_))

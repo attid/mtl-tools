@@ -36,6 +36,7 @@ class GroupMember:
     username: Optional[str]
     full_name: str
     is_admin: bool
+    is_bot: bool
 
 
 # if 'test' in sys.argv or __name__ == "__main__":
@@ -142,7 +143,8 @@ async def get_group_members(chat_id: int) -> List[GroupMember]:
                 user_id=member.user.id,
                 username=member.user.username,
                 full_name=member.user.first_name + (" " + member.user.last_name if member.user.last_name else ""),
-                is_admin=is_admin
+                is_admin=is_admin,
+                is_bot=member.user.is_bot
             ))
     except Exception as e:
         logger.error(f"Error getting group members: {e}")
@@ -207,6 +209,9 @@ async def add_contact(user_id: int):
 async def main():
     await pyro_app.start()
     await pyro_test()
+
+    a = await get_group_members(-1001784614029)
+    print(a)
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
     # a = await get_group_members(-1001892843127)
