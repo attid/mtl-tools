@@ -118,7 +118,7 @@ async def main():
     dp = Dispatcher(storage=storage)
 
     await load_globals(db_pool())
-    from routers import (admin, all, inline, polls, start_router, stellar, talk_handlers, time_handlers, welcome)
+    from routers import (admin, inline, polls, start_router, stellar, talk_handlers, time_handlers, welcome)
 
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
@@ -129,7 +129,6 @@ async def main():
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
 
     dp.include_router(admin.router)
-    dp.include_router(all.router)
     dp.include_router(inline.router)
     dp.include_router(polls.router)
     dp.include_router(start_router.router)

@@ -13,7 +13,7 @@ async def check_user_in_chats():
     user_ids = [user['TELEGRAM_ID'] for user in users]
 
     for chat in chats:
-        members = await get_group_members(chat['ID2'])
+        members = await get_group_members(chat['TELEGRAM_ID'])
         member_ids = [member.user_id for member in members if not member.is_bot]
 
         if chat['REQUIRED']:

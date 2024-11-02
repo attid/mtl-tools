@@ -8,7 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from pydantic import BaseModel, Field
 
 from utils.config_reader import config
-from utils.pyro_tools import GroupMember
+from utils.pyro_tools import GroupMember, get_group_members, pyro_app
 
 client = AsyncIOMotorClient(config.mongodb_url)
 db = client['mtl_tables']
@@ -261,8 +261,15 @@ class BotMongoConfig:
         # Возвращаем True, если хотя бы одна запись была обновлена
         return result.modified_count > 0
 
+async def update_users():
+    # обновить список пользователей в чате
+    await pyro_app.start()
+    await BotMongoConfig().update_chat_info(-1001239694752, await get_group_members(-1001239694752))
+    await pyro_app.stop()
+
+
 
 if __name__ == "__main__":
-    _ = asyncio.run(BotMongoConfig().get_users_left_last_day(-1001009485608))
+    _ = asyncio.run(update_users())
     #_ = asyncio.run(BotMongoConfig().get_all_chats())
     print(_)

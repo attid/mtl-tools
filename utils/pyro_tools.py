@@ -36,7 +36,7 @@ class GroupMember:
     username: Optional[str]
     full_name: str
     is_admin: bool
-    is_bot: bool
+    is_bot: bool = False
 
 
 # if 'test' in sys.argv or __name__ == "__main__":
@@ -210,7 +210,7 @@ async def main():
     await pyro_app.start()
     await pyro_test()
 
-    a = await get_group_members(-1001784614029)
+    a = await get_group_members(-1001239694752)
     print(a)
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
@@ -223,6 +223,7 @@ async def main():
     # msg_info = extract_telegram_info(url)
     # await pyro_update_msg_info(msg_info)
     # print(msg_info)
+
 
     try:
         await pyro_app.stop()

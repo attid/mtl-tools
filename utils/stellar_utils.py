@@ -1788,7 +1788,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
     asset_name = asset.split('-')[0]
 
     # Получаем last_id из базы данных
-    last_id = await global_data.mongo_config.load_kv_value(asset+chat_id)
+    last_id = await global_data.mongo_config.load_kv_value(asset + chat_id)
 
     # Если last_id равен None, просто сохраняем его и выходим
     if last_id is None:
@@ -1796,7 +1796,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         data = db_get_new_effects_for_token(session, asset_name, '-1', filter_sum)
         if data:
             # Сохраняем id последнего эффекта как начальный last_id
-            await global_data.mongo_config.save_kv_value(asset+chat_id, data[-1].id)
+            await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
         return result
 
     max_id = last_id
@@ -1809,7 +1809,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
 
     # Сохраняем новый max_id, если он больше last_id
     if max_id > last_id:
-        await global_data.mongo_config.save_kv_value(asset+chat_id, max_id)
+        await global_data.mongo_config.save_kv_value(asset + chat_id, max_id)
 
     return result
 
@@ -2190,7 +2190,11 @@ async def get_mtlap_votes():
         if not result[account]['can_vote']:
             del result[account]
 
+    del result['GDGC46H4MQKRW3TZTNCWUU6R2C7IPXGN7HQLZBJTNQO6TW7ZOS6MSECR']
+    del result['GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA']
+
     return result
+
 
 async def get_get_income():
     address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'

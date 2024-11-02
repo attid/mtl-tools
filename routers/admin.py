@@ -910,6 +910,26 @@ async def on_migrate(message: Message, bot: Bot):
                                    text=f"Chat {old_chat_id} migrated to {new_chat_id}")
 
 
+@update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")
+@router.message(Command(commands=["all"]))
+async def cmd_all(message: Message, session: Session):
+    # [GroupMember(user_id=191153115, username='SomeoneAny', full_name='Антон Ехин', is_admin=True, is_bot=False), GroupMember(user_id=84131737, username='itolstov', full_name='Igor Tolstov', is_admin=True, is_bot=False), GroupMember(user_id=2134695152, username='myMTLbot', full_name='SkyNet', is_admin=True, is_bot=True), GroupMember(user_id=1365715447, username='DimaBuilder', full_name='Dmitriy Sergeevich', is_admin=False, is_bot=False), GroupMember(user_id=330418643, username='poutru', full_name='Valerij Utrosin', is_admin=True, is_bot=False), GroupMember(user_id=6613318, username='maximsivokon', full_name='Maxim V. Sivokoñ (@BadFoxLab)', is_admin=False, is_bot=False), GroupMember(user_id=821795233, username='bushnew', full_name='alex', is_admin=False, is_bot=False), GroupMember(user_id=7394698, username='KorbVV', full_name='Victor Korb', is_admin=True, is_bot=False), GroupMember(user_id=601751247, username='atkachuk', full_name='ALEKSEI T.', is_admin=True, is_bot=False), GroupMember(user_id=201496385, username='LisozTech', full_name='Lisoz Tech', is_admin=False, is_bot=False), GroupMember(user_id=5671789703, username='mtl_accelerator_bot', full_name='MABIZ', is_admin=True, is_bot=True), GroupMember(user_id=1005904185, username='lena_masterica', full_name='Elena Smirnova', is_admin=False, is_bot=False), GroupMember(user_id=1500022467, username='lss_me', full_name='Henrik Crna Gora(Montelibero)', is_admin=False, is_bot=False), GroupMember(user_id=988654481, username='Ageris', full_name='Agéris', is_admin=False, is_bot=False), GroupMember(user_id=376413542, username='ayr_san', full_name='Fox Malder', is_admin=False, is_bot=False), GroupMember(user_id=874520, username='AduchiMergen', full_name='☮️🦄 Artem Kanarev', is_admin=False, is_bot=False), GroupMember(user_id=24275128, username='petrov1c', full_name='dima petrov', is_admin=True, is_bot=False), GroupMember(user_id=1335526, username='Serregan', full_name='Serregan', is_admin=False, is_bot=False), GroupMember(user_id=129337418, username='AjayFSM', full_name='Flying Spaghetti Monster', is_admin=True, is_bot=False), GroupMember(user_id=62397851, username='sondreb', full_name='Sondre Bjellås', is_admin=False, is_bot=False), GroupMember(user_id=224228995, username='GoodJobMaster', full_name='Damir', is_admin=False, is_bot=False), GroupMember(user_id=636707173, username='Hthew', full_name='Htheu', is_admin=False, is_bot=False)]
+    user_list = await get_group_members(message.chat.id)
+
+    members = [f'@{user.username}' for user in user_list if not user.is_bot and user.username]
+    await message.reply(' '.join(members))
+
+
+@router.message(Command(commands=["test2"]))
+async def cmd_all(message: Message, session: Session):
+    await message.bot.promote_chat_member(chat_id=message.chat.id,
+                                          user_id=3718221,
+                                          can_pin_messages=True)
+    await message.bot.set_chat_administrator_custom_title(chat_id=message.chat.id,
+                                                          user_id=3718221,
+                                                          custom_title="мой кожаный")
+
+
 if __name__ == "__main__":
     tmp_bot = Bot(token=config.bot_token.get_secret_value())
     a = asyncio.run(check_membership(tmp_bot, MTLChats.MonteliberoChanel, int(6822818006)))

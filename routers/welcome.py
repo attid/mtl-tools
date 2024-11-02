@@ -542,5 +542,6 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
         await call.message.delete_reply_markup()
 
 
+
 if __name__ == '__main__':
     print(create_emoji_captcha_keyboard(1, 0))
