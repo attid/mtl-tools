@@ -25,7 +25,7 @@ def get_creds():
     # To obtain a service account JSON file, follow these steps:
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
 
-    key_path = os.path.join(start_path, 'data','mtl-google-doc.json')
+    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
     # print(start_path, key_path)
 
     creds = Credentials.from_service_account_file(key_path)
@@ -512,7 +512,7 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
 async def gs_check_vote_table(table_uuid):
     # Авторизация и получение данных из первой таблицы
     agc = await agcm.authorize()
-    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")  # MTLA Members
     ws = await ss.worksheet("MTLAP")
     data = await ws.get_all_values()
 
@@ -523,14 +523,23 @@ async def gs_check_vote_table(table_uuid):
     ss = await agc.open_by_key(table_uuid)
     wks = await ss.worksheet("Members")
     who_in = await wks.col_values(1)
+    delegate_to = await wks.col_values(2)
 
-    # Фильтрация адресов, проверка их наличия в обеих таблицах
+    # Создание словарей для хранения адресов
     matched_addresses = {}
-    for address in who_in[1:]:
+    matched_addresses_delegated = {}
+
+    for i, address in enumerate(who_in[1:], start=1):
         if address in address_dict:
-            matched_addresses[address] = address_dict[address]
+            if i < len(delegate_to) and delegate_to[i].strip():
+                matched_addresses_delegated[address] = address_dict[address]
+            else:
+                matched_addresses[address] = address_dict[address]
         else:
-            matched_addresses[address] = f"{address[:4]}..{address[-4:]}"
+            if i < len(delegate_to) and delegate_to[i].strip():
+                matched_addresses_delegated[address] = f"{address[:4]}..{address[-4:]}"
+            else:
+                matched_addresses[address] = f"{address[:4]}..{address[-4:]}"
 
     # проголосовали
     wks = await ss.worksheet("Log")
@@ -539,8 +548,10 @@ async def gs_check_vote_table(table_uuid):
     for address in who_vote[1:]:
         if address in matched_addresses:
             matched_addresses.pop(address)
+        elif address in matched_addresses_delegated:
+            matched_addresses_delegated.pop(address)
 
-    return matched_addresses.values()
+    return list(matched_addresses.values()), list(matched_addresses_delegated.values())
 
 
 async def gs_test():
@@ -571,7 +582,7 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
         sheet_name_to = sheet_name_from
     # sheet_data_result = await asyncio.to_thread(get_sheet_data_and_styles_sync, service, copy_from, sheet_name)
     # Настройка аутентификации для Google Sheets API
-    key_path = os.path.join(start_path, 'data','mtl-google-doc.json')
+    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
@@ -746,6 +757,10 @@ async def gs_get_update_mtlap_skynet_row(data):
 
 if __name__ == "__main__":
     pass
+
+    _ = asyncio.run(gs_check_vote_table('1rq_pHd3FUpcYIhPzw20muVxEpChX243B-5IgtDg0r3A'))
+    print(_)
+
     # a = asyncio.run(gs_check_bim(user_name='itolstov'))
     # a = asyncio.run(gs_find_user('710700915'))
     # from db.quik_pool import quik_pool
@@ -754,9 +769,9 @@ if __name__ == "__main__":
     # ('https://docs.google.com/spreadsheets/d/1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4', '1FxCMie193zD3EH8zrMgDh4jS-zsXmLhPFRKNISkASa4')
     # a = asyncio.run(gs_update_a_table_first('1eosWKqeq3sMB9FCIShn0YcuzzDOR40fAgeTGCqMfhO8', 'question',
     #                                        ['dasd adsd asd', 'asdasdsadsad asdsad asd', 'sdasdasd dsf'], []))
-    #a = asyncio.run(gs_update_namelist())
-    get_creds()
-    #print(a)
+    # a = asyncio.run(gs_update_namelist())
+    # get_creds()
+    # print(a)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
     #                           "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",

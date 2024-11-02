@@ -6,7 +6,8 @@ from aiogram import Router, Bot, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer, \
+    ReactionTypeEmoji
 from sqlalchemy.orm import Session
 
 from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
@@ -264,6 +265,7 @@ async def cmd_poll_reload_vote(message: Message, session: Session):
 @router.message(Command(commands=["apoll"]))
 async def cmd_apoll(message: Message, session: Session):
     if message.reply_to_message and message.reply_to_message.poll:
+        await message.react([ReactionTypeEmoji(emoji="👾")])
         my_poll = {}
         google_url, google_id = await gs_copy_a_table(message.reply_to_message.poll.question)
         options = []
@@ -316,14 +318,17 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
 @router.message(Command(commands=["apoll_check"]))
 async def cmd_poll_check(message: Message, session: Session):
     if message.reply_to_message:
+        await message.react([ReactionTypeEmoji(emoji="👾")])
         my_poll = json.loads(await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll,
                                                                            int(message.reply_to_message.poll.id),
                                                                            empty_poll))
 
         # update answer
         # gs_update_a_table_vote(table_uuid, address, options):
-        result = await gs_check_vote_table(my_poll["google_id"])
+        result, delegates = await gs_check_vote_table(my_poll["google_id"])
         msg_text = ' '.join(result)
+        msg_text2 = ' '.join(delegates)
+        msg_text = f"{msg_text} \n --------- delegates --------- \n {msg_text2}"
         if result:
             with suppress(TelegramBadRequest):
                 await message.reply(msg_text)
