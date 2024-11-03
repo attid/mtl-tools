@@ -43,24 +43,6 @@ async def check_user_in_sp_chats():
 
 
 async def check_consul_mtla_chats(bot: Bot):
-    # Смотрим пример в check_user_in_sp_chats
-    # вызываем load_mtla_chats получим -
-    # [{'TELEGRAM_ID': -1001998432893, 'TITLE': '2\xa0MTLAP Club', 'NEED_SET_COUNCIL_TITLE': True}, {'TELEGRAM_ID': -1002446981251, 'TITLE': '1\xa0MTLAP Club', 'NEED_SET_COUNCIL_TITLE': True}, {'TELEGRAM_ID': -1002034958562, 'TITLE': '3\xa0MTLAP Club', 'NEED_SET_COUNCIL_TITLE': True}, {'TELEGRAM_ID': -1002013470654, 'TITLE': '4\xa0MTLAP Club', 'NEED_SET_COUNCIL_TITLE': True}, {'TELEGRAM_ID': -1002380723477, 'TITLE': '5\xa0MTLAP Club', 'NEED_SET_COUNCIL_TITLE': True}, {'TELEGRAM_ID': -1001892843127, 'TITLE': 'MTLA: Assembly | Собрание Ассоциации', 'NEED_SET_COUNCIL_TITLE': True}]
-    # потом вызываем
-    # # load_mtla_councils получим
-    # # [{'TELEGRAM_ID': 84131737, 'USERNAME': 'itolstov', 'STELLAR': 'GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI', 'EMAIL': 'attid0@gmail.com', 'DISABLED': False, 'WEIGHT': 0, 'CHAT_TITLE': 'Council'},
-    # для каждого чата вызываем get_group_members
-    # потом надо сделать 3 шага для каждого чата
-    # 1 - проверить что все советы есть в чате, если нет то пишем сообщение что не нашли такого
-    # 2 - смотрим чтоб админы были в списке консулов, если кто-то админ не консул пробуем отобрать права если не выходит то ругаемся.
-    # 3 - если консул не админ в чате то делаем админом,с правом только пинить, и даем титл который пописан. 'CHAT_TITLE': 'Council'
-    # вот пример команд для тутла и становления админом
-    # await bot.promote_chat_member(chat_id=message.chat.id,
-    #                                       user_id=3718221,
-    #                                       can_pin_messages=True)
-    # await bot.set_chat_administrator_custom_title(chat_id=message.chat.id,
-    #                                                       user_id=3718221,
-    #                                                       custom_title="мой кожаный")
     chats = await load_mtla_chats()
     councils = await load_mtla_councils()
     alerts = []
