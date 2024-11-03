@@ -17,6 +17,7 @@ class MTLChats:
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
     GroupAnonymousBot = 1087968824
+    Channel_Bot = 136817688
     FARMGroup = -1001876391583
     LandLordGroup = -1001757912662
     SignGroupForChanel = -1001784614029

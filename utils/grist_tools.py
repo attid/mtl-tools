@@ -6,6 +6,7 @@ from utils.config_reader import config
 grist_notify = "https://montelibero.getgrist.com/api/docs/oNYTdHkEstf9X7dkh7yH11"
 grist_main_chat_info = "https://montelibero.getgrist.com/api/docs/gnXfashifjtdExQoeQeij6"
 grist_sp = "https://montelibero.getgrist.com/api/docs/3sFtdPU7Dcfw2XwTioLcJD"
+grist_mtla = "https://montelibero.getgrist.com/api/docs/aYk6cpKAp9CDPJe51sP3AT"
 
 
 async def fetch_grist_data(grist, table_name):
@@ -66,6 +67,22 @@ async def load_notify_sp_chats():
         logger.warning(f"Ошибка при загрузке данных assets: {e}")
 
 
+async def load_mtla_chats():
+    try:
+        records = await fetch_grist_data(grist_mtla, 'MTLA_CHATS')
+        return records
+    except Exception as e:
+        logger.warning(f"Ошибка при загрузке данных assets: {e}")
+
+
+async def load_mtla_councils():
+    try:
+        records = await fetch_grist_data(grist_mtla, 'MTLA_COUNCILS')
+        return records
+    except Exception as e:
+        logger.warning(f"Ошибка при загрузке данных assets: {e}")
+
+
 if __name__ == '__main__':
-    _ = asyncio.run(load_notify_sp_users())
+    _ = asyncio.run(load_mtla_councils())
     print(_)

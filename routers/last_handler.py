@@ -32,6 +32,7 @@ class SpamCheckCallbackData(CallbackData, prefix="SpamCheck"):
     user_id: int
     good: bool
     new_message_id: int
+    message_thread_id: int
 
 
 class ReplyCallbackData(CallbackData, prefix="Reply"):
@@ -54,6 +55,40 @@ async def save_url(chat_id, msg_id, msg):
     url = extract_url(msg)
     await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
     await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+
+
+async def delete_and_log_spam(message, session, rules_name):
+    await message.chat.restrict(message.from_user.id,
+                                permissions=ChatPermissions(can_send_messages=False,
+                                                            can_send_media_messages=False,
+                                                            can_send_other_messages=False))
+    msg = await message.forward(MTLChats.SpamGroup)
+    chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
+    msg_text = f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}'
+    if message.reply_to_message:
+        msg_text += f'\nОтвет на сообщение: {message.reply_to_message.get_url()}'
+
+    await msg.reply(msg_text, disable_web_page_preview=True,
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
+                                                               callback_data=SpamCheckCallbackData(
+                                                                   message_id=message.message_id,
+                                                                   chat_id=message.chat.id,
+                                                                   user_id=message.from_user.id,
+                                                                   new_message_id=msg.message_id,
+                                                                   message_thread_id=message.message_thread_id if message.message_thread_id else 0,
+                                                                   good=True).pack())],
+                                         [InlineKeyboardButton(text='Its spam! Kick him !',
+                                                               callback_data=SpamCheckCallbackData(
+                                                                   message_id=message.message_id,
+                                                                   chat_id=message.chat.id,
+                                                                   user_id=message.from_user.id,
+                                                                   new_message_id=msg.message_id,
+                                                                   message_thread_id=message.message_thread_id if message.message_thread_id else 0,
+                                                                   good=False).pack())]
+                                         ]))
+    await message.delete()
+    add_bot_users(session, message.from_user.id, message.from_user.username, 0)
 
 
 async def check_spam(message, session):
@@ -101,35 +136,7 @@ async def check_spam(message, session):
             rules_name = 'open AI'
 
     if process_message:
-        await message.chat.restrict(message.from_user.id,
-                                    permissions=ChatPermissions(can_send_messages=False,
-                                                                can_send_media_messages=False,
-                                                                can_send_other_messages=False))
-        msg = await message.forward(MTLChats.SpamGroup)
-        chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
-        msg_text =  f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}'
-        if message.reply_to_message:
-            msg_text += f'\nОтвет на сообщение: {message.reply_to_message.get_url()}'
-
-        await msg.reply(msg_text, disable_web_page_preview=True,
-                        reply_markup=InlineKeyboardMarkup(
-                            inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
-                                                                   callback_data=SpamCheckCallbackData(
-                                                                       message_id=message.message_id,
-                                                                       chat_id=message.chat.id,
-                                                                       user_id=message.from_user.id,
-                                                                       new_message_id=msg.message_id,
-                                                                       good=True).pack())],
-                                             [InlineKeyboardButton(text='Its spam! Kick him !',
-                                                                   callback_data=SpamCheckCallbackData(
-                                                                       message_id=message.message_id,
-                                                                       chat_id=message.chat.id,
-                                                                       user_id=message.from_user.id,
-                                                                       new_message_id=msg.message_id,
-                                                                       good=False).pack())]
-                                             ]))
-        await message.delete()
-        add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+        await delete_and_log_spam(message, session, rules_name)
         return True
     else:
         add_bot_users(session, message.from_user.id, message.from_user.username, 1)
@@ -278,7 +285,8 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
     if message.entities:
         for entity in message.entities:
             if entity.type in ['url', 'text_link']:
-                url = entity.url if entity.type == 'text_link' else message.text[entity.offset:entity.offset+entity.length]
+                url = entity.url if entity.type == 'text_link' else message.text[
+                                                                    entity.offset:entity.offset + entity.length]
                 if 'eurmtl.me/sign_tools' in url:
                     url_found = True
                     url_text = url
@@ -296,7 +304,6 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
             await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
-
 
 
 ########################################################################################################################
@@ -341,9 +348,23 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
                         text=message.text, chat_id=message.chat.id)
 
 
+@router.message(ChatInOption('no_first_link'))  # точно не текс, выше остановились
+async def cmd_last_check_other(message: Message, session: Session, bot: Bot):
+    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+        return False
+
+    await delete_and_log_spam(message, session, 'not text')
+
+
 ########################################################################################################################
 #####################################  callback_query  #################################################################
 ########################################################################################################################
+
+def get_named_reply_markup(button_text):
+    reply_markup = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=button_text,
+                             callback_data="👀")]])
+    return reply_markup
 
 
 @rate_limit(0, 'listen')
@@ -359,9 +380,12 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         await bot.restrict_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id,
                                        permissions=chat.permissions)
         await query.answer("Oops, bringing the message back!", show_alert=True)
+        add_bot_users(session, callback_data.user_id, None, 1)
+        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.url}"))
     else:
         add_bot_users(session, callback_data.user_id, None, 2)
-        await query.answer("Забанен !", show_alert=True)
+        await query.answer("Banned !", show_alert=True)
+        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
 
 
 @router.callback_query(ReplyCallbackData.filter())

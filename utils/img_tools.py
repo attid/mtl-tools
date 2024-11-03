@@ -23,4 +23,4 @@ def create_image_with_text(text, font_path='DejaVuSansMono.ttf', font_size=30, i
     draw.text((x, y), text, font=font, fill='black')
 
     # Сохранение или отображение изображения
-    image.save(start_path + 'output_image.png')
+    image.save(start_path + 'data/output_image.png')

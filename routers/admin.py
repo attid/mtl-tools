@@ -920,6 +920,22 @@ async def cmd_all(message: Message, session: Session):
     await message.reply(' '.join(members))
 
 
+@update_command_info("/calc", "Посчитать сообщения от ответного")
+@router.message(Command(commands=["calc"]))
+async def cmd_calc(message: Message):
+    if not message.reply_to_message:
+        await message.reply("This command must be used in reply to a message.")
+        return
+
+    current_message_id = message.message_id
+    replied_message_id = message.reply_to_message.message_id
+    difference = current_message_id - replied_message_id
+
+    with suppress(TelegramBadRequest):
+        await message.reply_to_message.reply(f"This message was {difference} messages ago.")
+        await message.delete()
+
+
 @router.message(Command(commands=["test2"]))
 async def cmd_all(message: Message, session: Session):
     await message.bot.promote_chat_member(chat_id=message.chat.id,
