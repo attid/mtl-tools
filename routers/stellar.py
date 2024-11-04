@@ -1,4 +1,5 @@
 from datetime import datetime
+from urllib.parse import quote_plus, quote
 
 from aiogram import Router, Bot
 from aiogram.filters import Command
@@ -393,7 +394,13 @@ async def cmd_get_damircoin_xdr(message: Message):
     result = await get_chicago_xdr()
     xdr = result[-1]
     await multi_answer(message, '\n'.join(result[:-1]))
-    await multi_answer(message, xdr)
+    if len(xdr) < 4000:
+        await multi_answer(message, xdr)
+    else:
+        text = (f'Не могу отправить xdr вы можете получить его по ссылке ' +
+                f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>')
+        print(text)
+        await message.answer(text)
     await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
 
 
