@@ -388,7 +388,7 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.url}"))
     else:
         add_bot_users(session, callback_data.user_id, None, 2)
-        await query.answer("Banned !", show_alert=True)
+        await query.answer("Banned !")
         await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
 
 
