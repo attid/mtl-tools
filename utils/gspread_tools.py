@@ -559,29 +559,6 @@ async def gs_check_vote_table(table_uuid):
     return list(matched_addresses.values()), list(matched_addresses_delegated.values())
 
 
-async def gs_test():
-    gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                              "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report")
-    return
-    agc = await agcm.authorize()
-    data = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
-    public = await agc.open_by_key("1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc")
-    data_report = await data.worksheet("report")
-    public_report = await public.worksheet("report")
-
-    # copy data
-    data_report_data = await data_report.get_all_values()
-    print(data_report_data)
-    await public_report.update('A1', data_report_data)
-
-    q = await data_report.get()
-    print(q)
-    # result = service.spreadsheets().get(spreadsheetId=spreadsheet_id, ranges=sheet_name, includeGridData=True).execute()
-    # sheet_data = result['sheets'][0]['data'][0]
-    # styles = [[cell.get('userEnteredFormat') for cell in row.get('values', [])] for row in sheet_data.get('rowData', [])]
-    # return styles
-
-
 def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to=None):
     if sheet_name_to is None:
         sheet_name_to = sheet_name_from
@@ -760,10 +737,29 @@ async def gs_get_update_mtlap_skynet_row(data):
     await ws.update(cell_range, values)
 
 
+async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=False):
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key(table_id)
+
+    # To remove permissions
+    if remove_permissions:
+        permissions = await ss.list_permissions()
+        for permission in permissions:
+            if permission.get('emailAddress') == email:
+                await ss.remove_permissions(permission['id'])
+    else:
+        await agc.insert_permission(
+            ss.id,
+            email,
+            perm_type='user',
+            role='writer'
+        )
+
+
 if __name__ == "__main__":
     pass
 
-    _ = asyncio.run(gs_check_vote_table('1rq_pHd3FUpcYIhPzw20muVxEpChX243B-5IgtDg0r3A'))
+    _ = asyncio.run(gs_permission(True))
     print(_)
 
     # a = asyncio.run(gs_check_bim(user_name='itolstov'))

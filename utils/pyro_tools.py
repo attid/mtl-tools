@@ -154,11 +154,13 @@ async def get_group_members(chat_id: int) -> List[GroupMember]:
 
 async def remove_deleted_users(chat_id: int):
     try:
+        total_removals = 0
         async for member in pyro_app.get_chat_members(chat_id):
             if member.user.is_deleted:
                 try:
                     await pyro_app.ban_chat_member(chat_id, member.user.id)
                     logger.info(f"Removed deleted user with ID {member.user.id} from chat {chat_id}")
+                    total_removals += 1
                     await asyncio.sleep(3)
                 except FloodWait as e:
                     logger.warning(f"FloodWait error: waiting for {e.value} seconds")
@@ -166,6 +168,7 @@ async def remove_deleted_users(chat_id: int):
                 except Exception as e:
                     logger.error(f"Error removing user {member.user.id}: {e}")
                     capture_exception(e)
+        return total_removals
     except Exception as e:
         logger.error(f"Error in remove_deleted_users for chat {chat_id}: {e}")
         capture_exception(e)

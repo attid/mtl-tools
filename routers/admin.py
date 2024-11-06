@@ -854,8 +854,8 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext):
 
     await message.reply("Starting to remove deleted users. This may take some time...")
     try:
-        await remove_deleted_users(chat_id)
-        await message.reply("Finished removing deleted users.")
+        count = await remove_deleted_users(chat_id)
+        await message.reply(f"Finished removing deleted users. \n Total deleted users: {count}")
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")
         await message.reply(f"An error occurred while removing deleted users: {str(e)}")
