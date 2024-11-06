@@ -81,6 +81,27 @@ async def combo_check_spammer(user_id):
     return False
 
 
+async def lols_check_spammer(user_id):
+    try:
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(f'https://api.lols.bot/account?id={user_id}', timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # {"ok":true,"user_id":8099459603,"banned":true}
+                        if data.get('ok') and data.get('banned'):
+                            return True
+                    else:
+                        logger.error(f"API request failed with status code: {response.status}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Network error occurred: {str(e)}")
+            except asyncio.TimeoutError:
+                logger.error("Request timed out")
+    except Exception as e:
+        logger.error(f"Unexpected error in combo_check_spam: {str(e)}")
+    return False
+
+
 if __name__ == '__main__':
     test = '''
 Ищу людей, кто заинтересован в дополнительном доходе, онлайн формат, от 18 лет. За деталями обращайтесь в лс
@@ -88,5 +109,5 @@ if __name__ == '__main__':
 
     # print(contains_spam_phrases(test))
     # print(asyncio.run(talk_check_spam(test)))
-    print(asyncio.run(combo_check_spammer(5953807506)))
-    print(asyncio.run(combo_check_spammer(84131737)))
+    print(asyncio.run(lols_check_spammer(5953807506)))
+    print(asyncio.run(lols_check_spammer(84131737)))

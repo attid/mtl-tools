@@ -468,6 +468,11 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         ss = await agc.open_by_key(table_uuid)
         wks = await ss.worksheet("Log")
 
+    # Проверка наличия адреса на странице Members
+    members_addresses = await (await ss.worksheet("Members")).col_values(1)
+    if address not in members_addresses:
+        return
+
     # Удаляем голос если был
     data = await wks.find(str(address), in_column=1, case_sensitive=False)
     if data and delegated:

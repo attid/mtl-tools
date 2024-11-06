@@ -21,7 +21,7 @@ from start import add_bot_users
 from utils.aiogram_utils import is_admin, cmd_delete_later, get_username_link, get_chat_link
 from utils.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from utils.pyro_tools import GroupMember
-from utils.spam_cheker import combo_check_spammer
+from utils.spam_cheker import combo_check_spammer, lols_check_spammer
 from utils.stellar_utils import stellar_stop_all_exchange
 
 router = Router()
@@ -197,6 +197,15 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                                f'{event.new_chat_member.user.mention_html()} '
                                f'был забанен в чате {get_chat_link(event.chat)}'
                                f'Reason: <a href="https://cas.chat/query?u={new_user_id}">CAS ban</a>',
+                               disable_web_page_preview=True)
+        return
+
+    if await lols_check_spammer(new_user_id):
+        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.send_message(MTLChats.SpamGroup,
+                               f'{event.new_chat_member.user.mention_html()} '
+                               f'был забанен в чате {get_chat_link(event.chat)}'
+                               f'Reason: <a href="https://lols.bot/?u={new_user_id}">LOLS base</a>',
                                disable_web_page_preview=True)
         return
 

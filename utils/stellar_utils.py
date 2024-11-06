@@ -370,8 +370,9 @@ async def stellar_get_issuer_assets(account_id) -> dict:
                 return {}
             else:
                 for balance in data['_embedded']['records']:
+                    balances = balance['balances']
                     assets[balance['asset_code']] = (
-                            float(balance['amount']) +
+                            float(balances['authorized']) +
                             float(balance.get('claimable_balances_amount', 0)) +
                             float(balance.get('liquidity_pools_amount', 0)))
                 return assets
@@ -2611,6 +2612,6 @@ async def test():
 
 if __name__ == '__main__':
     pass
-    _ = asyncio.run(get_mtlap_votes())
+    _ = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
     print(_)
     print(len(_))

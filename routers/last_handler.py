@@ -19,7 +19,7 @@ from utils.aiogram_utils import (multi_reply, is_admin, ChatInOption,
 from utils.dialog import talk_check_spam
 from utils.global_data import MTLChats, BotValueTypes, global_data
 from utils.pyro_tools import MessageInfo
-from utils.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer
+from utils.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from utils.stellar_utils import check_url_xdr
 from utils.telegraph_tools import telegraph
 
@@ -102,6 +102,10 @@ async def check_spam(message, session):
     if await combo_check_spammer(user_id):
         process_message = True
         rules_name = f'<a href="https://cas.chat/query?u={user_id}">CAS ban</a>'
+
+    if await lols_check_spammer(user_id):
+        process_message = True
+        rules_name = f'<a href="https://lols.bot/?u={user_id}">LOLS base</a>',
 
     if not process_message and message.entities:
         custom_emoji_count = 0
