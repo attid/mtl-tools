@@ -23,6 +23,7 @@ from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
 from utils.dialog import talk_get_summary
 from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
+from utils.mtl_tools import check_consul_mtla_chats
 from utils.pyro_tools import get_group_members, remove_deleted_users, pyro_test
 from utils.stellar_utils import send_by_list
 from utils.timedelta import parse_timedelta_from_message
@@ -258,7 +259,7 @@ async def cmd_get_info(message: Message, bot: Bot):
 
 @router.message(Command(commands=["s"]))
 @router.message(Command(commands=["send_me"]))
-async def cmd_get_info(message: Message, bot: Bot):
+async def cmd_send_me(message: Message, bot: Bot):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -740,7 +741,14 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
 
     await gs_get_update_mtlap_skynet_row(results)
 
-    await message.reply("Готово.")
+    await message.reply("Готово 1")
+
+    result = await check_consul_mtla_chats(message.bot)
+
+    if result:
+        await message.reply('\n'.join(result))
+
+    await message.reply("Готово 2")
 
 
 # @rate_limit(5, 'test')

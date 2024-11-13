@@ -23,21 +23,21 @@ async def check_user_in_sp_chats():
                 if user_id not in member_ids:
                     user = next((u for u in users if u['TELEGRAM_ID'] == user_id), None)
                     username = user['USERNAME'] if user else 'Unknown'
-                    alerts.append(f"Need Add User @{username} (ID: {user_id}) in chat: {chat['NAME']}")
+                    alerts.append(f"Need Add User @{username} (ID: {user_id}) in chat: {chat['TITLE']}")
 
             # Check if there are any unexpected members in the required chat
             for member_id in member_ids:
                 if member_id not in user_ids:
                     member = next((m for m in members if m.user_id == member_id), None)
                     username = member.username if member else 'Unknown'
-                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['NAME']}")
+                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
         else:
             # Check if there are any unexpected members in the required chat
             for member_id in member_ids:
                 if member_id not in user_ids:
                     member = next((m for m in members if m.user_id == member_id), None)
                     username = member.username if member else 'Unknown'
-                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['NAME']}")
+                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
 
     return alerts
 
@@ -60,8 +60,9 @@ async def check_consul_mtla_chats(bot: Bot):
         # Step 1: Check if all council members are in the chat
         for council in councils:
             if council['TELEGRAM_ID'] not in member_ids:
-                alerts.append(f"Council member @{council['USERNAME']} "
-                              f"(ID: {council['TELEGRAM_ID']}) not found in chat: {chat['TITLE']}")
+                pass
+                # alerts.append(f"Council member @{council['USERNAME']} "
+                #              f"(ID: {council['TELEGRAM_ID']}) not found in chat: {chat['TITLE']}")
 
         # Step 2: Check if admins are council members
         for admin in admins:
@@ -102,6 +103,7 @@ async def main():
     async with Bot(
             token=config.bot_token.get_secret_value(),
     ) as bot:
+        # a = await check_user_in_sp_chats()
         a = await check_consul_mtla_chats(bot)
         print('\n'.join(a))
 
