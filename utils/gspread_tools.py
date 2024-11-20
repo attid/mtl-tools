@@ -6,6 +6,7 @@ from datetime import datetime
 from itertools import zip_longest
 
 import gspread_asyncio
+from google.oauth2 import service_account
 # from google-auth package
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -35,7 +36,6 @@ def get_creds():
         "https://www.googleapis.com/auth/drive",
     ])
     return scoped
-
 
 # Create an AsyncioGspreadClientManager object which
 # will give us access to the Spreadsheet API.
@@ -754,6 +754,7 @@ async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=F
             perm_type='user',
             role='writer'
         )
+
 
 
 if __name__ == "__main__":

@@ -385,11 +385,13 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
                                        permissions=chat.permissions)
         await query.answer("Oops, bringing the message back!", show_alert=True)
         add_bot_users(session, callback_data.user_id, None, 1)
-        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.url}"))
+        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.username}"))
     else:
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer("Banned !")
         await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
+        with suppress(TelegramBadRequest):
+            await query.bot.ban_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id)
 
 
 @router.callback_query(ReplyCallbackData.filter())
