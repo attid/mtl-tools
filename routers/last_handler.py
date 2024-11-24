@@ -58,7 +58,10 @@ async def save_url(chat_id, msg_id, msg):
 
 
 async def delete_and_log_spam(message, session, rules_name):
-    await message.chat.restrict(message.from_user.id,
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
+    user_username = message.sender_chat.username if message.sender_chat else message.from_user.username
+    with suppress(TelegramBadRequest):
+        await message.chat.restrict(user_id,
                                 permissions=ChatPermissions(can_send_messages=False,
                                                             can_send_media_messages=False,
                                                             can_send_other_messages=False))
@@ -74,7 +77,7 @@ async def delete_and_log_spam(message, session, rules_name):
                                                                callback_data=SpamCheckCallbackData(
                                                                    message_id=message.message_id,
                                                                    chat_id=message.chat.id,
-                                                                   user_id=message.from_user.id,
+                                                                   user_id=user_id,
                                                                    new_message_id=msg.message_id,
                                                                    message_thread_id=message.message_thread_id if message.message_thread_id else 0,
                                                                    good=True).pack())],
@@ -82,22 +85,22 @@ async def delete_and_log_spam(message, session, rules_name):
                                                                callback_data=SpamCheckCallbackData(
                                                                    message_id=message.message_id,
                                                                    chat_id=message.chat.id,
-                                                                   user_id=message.from_user.id,
+                                                                   user_id=user_id,
                                                                    new_message_id=msg.message_id,
                                                                    message_thread_id=message.message_thread_id if message.message_thread_id else 0,
                                                                    good=False).pack())]
                                          ]))
     await message.delete()
-    add_bot_users(session, message.from_user.id, message.from_user.username, 0)
+    add_bot_users(session, user_id, message.from_user.username, 0)
 
 
 async def check_spam(message, session):
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
+    if user_id in global_data.users_list and global_data.users_list[user_id] == 1:
         return False
 
     rules_name = 'xz'
     process_message = False
-    user_id = message.from_user.id
 
     if await combo_check_spammer(user_id):
         process_message = True
@@ -143,22 +146,23 @@ async def check_spam(message, session):
         await delete_and_log_spam(message, session, rules_name)
         return True
     else:
-        add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+        add_bot_users(session, user_id, message.from_user.username, 1)
         await set_vote(message)
         return False
 
 
 async def set_vote(message):
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
     if message.chat.id in global_data.first_vote:
         kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="Spam",
                                  callback_data=FirstMessageCallbackData(spam=True,
                                                                         message_id=message.message_id,
-                                                                        user_id=message.from_user.id).pack()),
+                                                                        user_id=user_id).pack()),
             InlineKeyboardButton(text="Good",
                                  callback_data=FirstMessageCallbackData(spam=False,
                                                                         message_id=message.message_id,
-                                                                        user_id=message.from_user.id).pack()), ]])
+                                                                        user_id=user_id).pack()), ]])
         await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
 
 
@@ -341,13 +345,14 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
 
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 0:
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
+    if user_id in global_data.users_list and global_data.users_list[user_id] == 0:
         await set_vote(message)  ##########
 
-    add_bot_users(session, message.from_user.id, message.from_user.username, 1)
+    add_bot_users(session, user_id, message.from_user.username, 1)
 
     if message.chat.id in global_data.listen:
-        db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
+        db_save_message(session=session, user_id=user_id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
 

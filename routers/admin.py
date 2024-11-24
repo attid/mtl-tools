@@ -945,13 +945,8 @@ async def cmd_calc(message: Message):
 
 
 @router.message(Command(commands=["test2"]))
-async def cmd_all(message: Message, session: Session):
-    await message.bot.promote_chat_member(chat_id=message.chat.id,
-                                          user_id=3718221,
-                                          can_pin_messages=True)
-    await message.bot.set_chat_administrator_custom_title(chat_id=message.chat.id,
-                                                          user_id=3718221,
-                                                          custom_title="мой кожаный")
+async def cmd_test(message: Message, session: Session):
+    pass
 
 
 if __name__ == "__main__":
