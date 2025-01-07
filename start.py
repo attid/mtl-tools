@@ -137,7 +137,7 @@ async def main():
     dp.include_router(talk_handlers.router)  # last
     dp.include_router(last_handler.router)  # last, last
 
-    scheduler = AsyncIOScheduler(timezone=str(tzlocal.get_localzone()))
+    scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')#str(tzlocal.get_localzone()))
     aiogram_utils.scheduler = scheduler
     scheduler.start()
     if 'test' not in sys.argv:
@@ -162,11 +162,12 @@ async def load_globals(session: Session):
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
     # user_type = 1 if good else 2
-    user_type_now = global_data.users_list.get(user_id)
-    # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
-    if not user_type_now or (new_user_type > user_type_now):
-        global_data.users_list[user_id] = new_user_type
-        db_save_bot_user(session, user_id, username, new_user_type)
+    # -1 one mistake -2 two mistake
+    ### user_type_now = global_data.users_list.get(user_id)
+    ### # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
+    ### if not user_type_now or (new_user_type > user_type_now):
+    global_data.users_list[user_id] = new_user_type
+    db_save_bot_user(session, user_id, username, new_user_type)
 
 
 if __name__ == "__main__":
