@@ -95,7 +95,11 @@ async def delete_and_log_spam(message, session, rules_name):
 
 
 async def check_spam(message, session):
-    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
+    if message.from_user.id == MTLChats.Telegram_Repost_Bot:
+        return False
+
+    user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
+
     if user_id in global_data.users_list and global_data.users_list[user_id] == 1:
         return False
 

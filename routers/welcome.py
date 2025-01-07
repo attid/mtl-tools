@@ -521,20 +521,60 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
         await message.reply("You are not my admin.")
         return False
 
-    with suppress(TelegramBadRequest):
-        if len(message.text.split()) > 1:
-            try:
-                user_id = db_get_user_id(session, message.text.split()[1])
-            except ValueError as e:
-                await message.reply(str(e))
-                return
+    if len(message.text.split()) > 1:
+        try:
+            param = message.text.split()[1]
+            if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
+                user_id = int(param)
+            else:
+                user_id = db_get_user_id(session, param)
+        except ValueError as e:
+            await message.reply(str(e))
+            return
 
-            await bot.unban_chat_member(message.chat.id, user_id)
-            global_data.users_list.pop(user_id, None)
-            add_bot_users(session, user_id, None, 0)
-            await message.reply(f"User (ID: {user_id}) has been unbanned.")
+        with suppress(TelegramBadRequest):
+            if user_id > 0:
+                await bot.unban_chat_member(message.chat.id, user_id)
+            else: #-100xxxxxxxxxx
+                await bot.unban_chat_sender_chat(message.chat.id, user_id)
+
+        global_data.users_list.pop(user_id, None)
+        add_bot_users(session, user_id, None, 0)
+        await message.reply(f"User (ID: {user_id}) has been unbanned.")
+    else:
+        await message.reply("You need to specify user ID or @username.")
+
+
+@update_command_info("/test_id", "Узнать статус ID в списке заблокированных\nПример: /test_id id или /test_id -100id")
+@router.message(Command(commands=["test_id"]))
+async def cmd_test_id(message: Message, session: Session, bot: Bot):
+    if len(message.text.split()) > 1:
+        param = message.text.split()[1]
+        try:
+            if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
+                user_id = int(param)
+            else:
+                user_id = db_get_user_id(session, param)
+        except ValueError as e:
+            await message.reply(str(e))
+            return
+    else:
+        user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
+
+    if user_id in global_data.users_list:
+        user_type = global_data.users_list[user_id]
+        if user_type == 0:
+            message_text = "New User"
+        elif user_type == 1:
+            message_text = "Good User"
+        elif user_type == 2:
+            message_text = "Bad User"
         else:
-            await message.reply("You need to specify user ID or @username.")
+            message_text = f"unknown status {user_type}"
+
+        await message.reply(f"User ID: {user_id}, Type: {message_text}")
+    else:
+        await message.reply(f"ID {user_id} not found in user list.")
 
 
 @router.callback_query(UnbanCallbackData.filter())

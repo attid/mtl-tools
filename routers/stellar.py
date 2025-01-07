@@ -341,6 +341,22 @@ async def cmd_do_usdm_usdm_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
 
 
+@update_command_info("/do_usdm_usdm_div_test", "test выплата дивидентов в usdm от usdm")
+@router.message(Command(commands=["do_usdm_usdm_div_test"]))
+async def cmd_do_usdm_usdm_div(message: Message, session: Session):
+    if message.chat.id != MTLChats.USDMMGroup:
+        await message.reply('Wrong chat')
+        return
+
+    test_sum = float(message.text.split()[1]) if len(message.text.split()) > 1 else 1000
+
+    calc = await cmd_calc_usdm_usdm_divs(session=session, div_list_id=0,
+                                         test_sum=test_sum,
+                                         test_for_address='GCLQ6TKOOJW33ABVG5D5KKJBZANSDW46BCXTSQ3TKLRYFPAVFZENUMON')
+    # [['GCLQ6TKOOJW33ABVG5D5KKJBZANSDW46BCXTSQ3TKLRYFPAVFZENUMON', 1000.0, 5.97253, 5.97253, 0]]
+    await message.answer(f"current balance {calc[0][1]}\npay from {test_sum} will be {calc[0][2]}")
+
+
 @update_command_info("/get_vote_fund_xdr", "сделать транзакцию на обновление голосов фонда")
 @router.message(Command(commands=["get_vote_fund_xdr"]))
 async def cmd_get_vote_fund_xdr(message: Message):
