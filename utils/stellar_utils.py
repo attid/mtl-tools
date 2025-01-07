@@ -3,6 +3,7 @@ import base64
 import math
 from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 from time import time
 
 import aiohttp
@@ -56,6 +57,7 @@ class MTLAddresses:
     public_exchange_mtl_xlm = "GDLIKJG7G3DDGK53TCWMXIEJF3D2U4MBUGINZJFPLHI2JLJBNBE3GBOT"
     public_exchange_usdm_xlm = "GARRQAITJSDKJ7QXVHTHGQX4FMQRJJBQ5ZXKZK57AVIMHMPS5FDRZBOT"
     public_exchange_eurmtl_eurc = "GAEMIYH3JPPL54IMXFF42R7T7BTGA25Z5TY3QOBNACFLXATDO2RDXBOT"
+    public_exchange_pool = "GCWJOBIPJQRZLFGQ5RQKE4J3H2QXHAOHCFVDM3FH37APAM3QXQR7POOL"
 
     # user
     public_itolstov = "GDLTH4KKMA4R2JGKA7XKI5DLHJBUT42D5RHVK6SS6YHZZLHVLCWJAYXI"
@@ -93,9 +95,12 @@ class MTLAssets:
 
 pack_count = 70  # for select first pack_count - to pack to xdr
 
-exchange_bots = (MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_usdm_mtlfarm,
-                 MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire,
-                 MTLAddresses.public_exchange_usdm_sats)
+exchange_bots = ()
+
+
+# exchange_bots = ()(MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_usdm_mtlfarm,
+#                  MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire,
+#                  MTLAddresses.public_exchange_usdm_sats)
 
 
 async def check_url_xdr(url, full_data=True):
@@ -365,6 +370,7 @@ async def stellar_get_issuer_assets(account_id) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.get(f'{config.horizon_url}/assets?asset_issuer={account_id}') as resp:
             data = await resp.json()
+            # print(data)  # 'liquidity_pools_amount': '1807570.6061503',
             assets = {}
             if assets.get('type'):
                 return {}
@@ -403,6 +409,70 @@ async def get_balances(address: str, return_assets=False, return_data=False, ret
         if return_signers:
             return assets, account.get('signers')
         return assets
+
+
+async def get_pool_info(pool_id: str, session) -> dict:
+    async with session.get(f'{config.horizon_url}/liquidity_pools/{pool_id}') as resp:
+        return await resp.json()
+
+
+async def get_pool_balances(address: str) -> list:
+    """
+    Получает информацию о пулах ликвидности для заданного адреса
+
+    Args:
+        address (str): Stellar адрес аккаунта
+
+    Returns:
+        dict: Словарь с информацией о пулах в формате:
+        {
+            pool_id: {
+                'name': 'TOKEN1-TOKEN2',
+                'shares': float,
+                'token1_amount': float,
+                'token2_amount': float
+            }
+        }
+    """
+
+    account = await stellar_get_account(address)
+    pools = []
+
+    async with aiohttp.ClientSession() as session:
+        for balance in account['balances']:
+            if balance['asset_type'] == 'liquidity_pool_shares':
+                pool_id = balance['liquidity_pool_id']
+                user_shares = float(balance['balance'])
+
+                # Получаем детальную информацию о пуле
+                pool_info = await get_pool_info(pool_id, session)
+                total_shares = float(pool_info['total_shares'])
+
+                # Вычисляем долю пользователя
+                user_share_percentage = user_shares / total_shares
+
+                # Извлекаем информацию о резервах
+                reserves = pool_info['reserves']
+                token1 = reserves[0]
+                token2 = reserves[1]
+
+                # Вычисляем токены пользователя
+                user_token1_amount = float(token1['amount']) * user_share_percentage
+                user_token2_amount = float(token2['amount']) * user_share_percentage
+                # Формируем название пула
+                token1_code = token1['asset'].split(':')[0]
+                token2_code = token2['asset'].split(':')[0]
+                pool_name = f"{token1_code}-{token2_code}"
+
+                pools.append({
+                    'pool_id': pool_id,
+                    'name': pool_name,
+                    'shares': user_shares,
+                    'token1_amount': user_token1_amount,
+                    'token2_amount': user_token2_amount
+                })
+
+    return pools
 
 
 async def stellar_get_offers(account_id: str):
@@ -545,19 +615,21 @@ async def cmd_show_bim(session: Session):
 async def get_cash_balance(chat_id):
     total_cash = 0
     total_eurmtl = 0
-    result = '============================\n'
+    line = '============================\n'
+    result = line
     result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = [
+        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
+        ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
+        ['GDMH3NZSKNWLYYGX7AMIG6QDOVZ3KDVNBEL7KHNGSXBWUBKU5ARMVOED', 'Егора'],
+        ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
+        ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
+        [],
         ['GAOIY67QNDNFSOKTLSBGI4ZDLIEEPNKYBS7ZNJSSM7FRE6XX2MKSEZYW', 'Алексея'],
         ['GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN', 'Антона'],
-        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
         ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
-        ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
-        ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
-        ['GDMH3NZSKNWLYYGX7AMIG6QDOVZ3KDVNBEL7KHNGSXBWUBKU5ARMVOED', 'Егора'],
         ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
-        ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
         ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
         ['GAAGBEUVMKO7D672X7FCNIYCBWDNWNEMFICMEKNCHUAWUZ2XCDWMTORT', 'Тортуга']
     ]
@@ -572,14 +644,17 @@ async def get_cash_balance(chat_id):
     """
 
     for treasure in treasure_list:
-        assets = await get_balances(treasure[0])
-        diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-        name = treasure[1] if chat_id == MTLChats.GuarantorGroup else treasure[1][0]
-        s_cash = f'{diff} '.rjust(8)
-        s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
-        result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
-        total_cash += diff
-        total_eurmtl += int(assets['EURMTL'])
+        if treasure:
+            assets = await get_balances(treasure[0])
+            diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+            name = treasure[1] if chat_id == MTLChats.GuarantorGroup else treasure[1][0]
+            s_cash = f'{diff} '.rjust(8)
+            s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
+            result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
+            total_cash += diff
+            total_eurmtl += int(assets['EURMTL'])
+        else:
+            result += line
 
     assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
     # result += f"А у Skynet {int(assets['USDM'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
@@ -587,12 +662,12 @@ async def get_cash_balance(chat_id):
     s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
     result += f"|{'SkyNet'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
 
-    result += '============================\n'
+    result += line
     s_cash = f'{total_cash} '.rjust(8)
     s_eurmtl = f'{total_eurmtl} '.rjust(8)
     result += f"|{'Итого'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
 
-    result += '============================\n'
+    result += line
 
     return result
 
@@ -744,25 +819,39 @@ async def stellar_async_submit(xdr: str):
 
 
 async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int, test_sum=0):
-    all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
-    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
-
     div_accounts = []
     donates = []
+
+    # Получаем все аккаунты с MTL
+    accounts = await stellar_get_all_mtl_holders()
+
+    # Считаем общую сумму MTL и MTLRECT
+    mtl_sum = 0.0
+    for account in accounts:
+        balances = account["balances"]
+        for balance in balances:
+            if balance["asset_type"][0:15] == "credit_alphanum":
+                if balance["asset_issuer"] == MTLAddresses.public_issuer:
+                    if balance["asset_code"] == "MTL":
+                        mtl_sum += float(balance["balance"])
+                    elif balance["asset_code"] == "MTLRECT":
+                        mtl_sum += float(balance["balance"])
+
+    # Определяем сумму для распределения
     if test_sum > 0:
         div_sum = test_sum
     else:
-        # get balance
         div_sum = await get_balances(MTLAddresses.public_div)
         div_sum = float(div_sum['EURMTL']) - 0.1
         logger.info(f'div_sum = {div_sum}')
-        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS:{div_sum}'),
-                                                config.private_sign.get_secret_value()))
+        await stellar_async_submit(
+            stellar_sign(
+                cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS:{div_sum}'),
+                config.private_sign.get_secret_value()
+            )
+        )
 
-    sponsor_sum = 0.0
-
-    # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_all_mtl_holders()
+    # Обрабатываем каждый аккаунт
     for account in accounts:
         # print(json.dumps(account,indent=4))
         # print('***')
@@ -773,28 +862,28 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
         # check all balance
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "EURMTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    eur = 1
-        div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
-        # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
-        # check sponsor
+                if balance["asset_issuer"] == MTLAddresses.public_issuer:
+                    if balance["asset_code"] == "MTL":
+                        balance_mtl = round(float(balance["balance"]), 7)
+                    elif balance["asset_code"] == "MTLRECT":
+                        balance_rect = round(float(balance["balance"]), 7)
+                    elif balance["asset_code"] == "EURMTL":
+                        eur = 1
+
+        total_balance = balance_mtl + balance_rect
+        div = round(div_sum / mtl_sum * total_balance, 7)
         donates.extend(get_donate_list(account))
 
-        if (eur > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
-                and (account["account_id"] != MTLAddresses.public_pawnshop):
-            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
+        if (eur > 0) and (div > 0.0001) and \
+                (account["account_id"] not in [MTLAddresses.public_issuer, MTLAddresses.public_pawnshop]):
+            div_accounts.append([account["account_id"], total_balance, div, div, div_list_id])
 
     # calc donate # ['GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 56428.7, 120.9, 96.7, 26]
     donate_list = []
     for mtl_account in div_accounts:
         found_list = list(filter(lambda x: x[0] == mtl_account[0], donates))
-        for donate_rules in found_list:  # ['GACBSNMGR32HMG2AXTE4CSJHTEZ7LUDBU3SNPCG4TBBE4XKVBQZ55I5M', 'GACNFOLV3ATA6N6AHMO3IBZCYMHUMFCT6O452DW3RTU254TZJ5CP3V3Q', '5']
+        for donate_rules in found_list:
             calc_sum = round(float(donate_rules[2]) * float(mtl_account[2]) / 100, 7)
-            # print(f'{calc_sum=}')
             if mtl_account[3] >= calc_sum:
                 found_calc = list(filter(lambda x: x[0] == donate_rules[1], donate_list))
                 if found_calc:
@@ -808,6 +897,8 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
 
     div_accounts.sort(key=get_key_1, reverse=True)
     div_accounts.extend(donate_list)
+
+    # Сохранение в БД
     payments = [
         TPayments(
             user_key=item[0],
@@ -901,143 +992,141 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr=None):
 
 async def cmd_calc_sats_divs(session: Session, div_list_id: int, test_sum=0):
     all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
-    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
-
-    div_accounts = []
-    donates = []
-    if test_sum > 0:
-        div_sum = test_sum
-    else:
-        # get balance
-        div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = float(div_sum['SATSMTL']) - 1
-        logger.info(f"div_sum = {div_sum}")
-        await stellar_async_submit(
-            stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_SATSMTL:{div_sum}'),
-                         config.private_sign.get_secret_value()))
-
-    sponsor_sum = 0.0
-
-    # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_all_mtl_holders()
-    for account in accounts:
-        # print(json.dumps(account,indent=4))
-        # print('***')
-        balances = account["balances"]
-        balance_mtl = 0
-        balance_rect = 0
-        sats_open = 0
-        # check all balance
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "SATSMTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    sats_open = 1
-        div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
-        # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
-        # check sponsor
-        donates.extend(get_donate_list(account))
-
-        if (sats_open > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
-                and (account["account_id"] != MTLAddresses.public_pawnshop):
-            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
-
-    div_accounts.sort(key=get_key_1, reverse=True)
-    payments = [
-        TPayments(
-            user_key=item[0],
-            mtl_sum=item[1],
-            user_calc=item[2],
-            user_div=item[3],
-            id_div_list=item[4]
-        )
-        for item in div_accounts
-    ]
-    session.add_all(payments)
-    session.commit()
-
-    return div_accounts
+    # mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
+    #
+    # div_accounts = []
+    # donates = []
+    # if test_sum > 0:
+    #     div_sum = test_sum
+    # else:
+    #     # get balance
+    #     div_sum = await get_balances(MTLAddresses.public_div)
+    #     div_sum = float(div_sum['SATSMTL']) - 1
+    #     logger.info(f"div_sum = {div_sum}")
+    #     await stellar_async_submit(
+    #         stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_SATSMTL:{div_sum}'),
+    #                      config.private_sign.get_secret_value()))
+    #
+    # sponsor_sum = 0.0
+    #
+    # # print(json.dumps(response, indent=4))
+    # accounts = await stellar_get_all_mtl_holders()
+    # for account in accounts:
+    #     # print(json.dumps(account,indent=4))
+    #     # print('***')
+    #     balances = account["balances"]
+    #     balance_mtl = 0
+    #     balance_rect = 0
+    #     sats_open = 0
+    #     # check all balance
+    #     for balance in balances:
+    #         if balance["asset_type"][0:15] == "credit_alphanum":
+    #             if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+    #                 balance_mtl = round(float(balance["balance"]), 7)
+    #             if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+    #                 balance_rect = round(float(balance["balance"]), 7)
+    #             if balance["asset_code"] == "SATSMTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+    #                 sats_open = 1
+    #     div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
+    #     # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
+    #     # check sponsor
+    #     donates.extend(get_donate_list(account))
+    #
+    #     if (sats_open > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
+    #             and (account["account_id"] != MTLAddresses.public_pawnshop):
+    #         div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
+    #
+    # div_accounts.sort(key=get_key_1, reverse=True)
+    # payments = [
+    #     TPayments(
+    #         user_key=item[0],
+    #         mtl_sum=item[1],
+    #         user_calc=item[2],
+    #         user_div=item[3],
+    #         id_div_list=item[4]
+    #     )
+    #     for item in div_accounts
+    # ]
+    # session.add_all(payments)
+    # session.commit()
+    #
+    # return div_accounts
     # print(*mtl_accounts, sep='\n')
 
 
 async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
-    all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
-    mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
-
-    div_accounts = []
-    donates = []
-    if test_sum > 0:
-        div_sum = test_sum
-    else:
-        # get balance
-        div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = float(div_sum['USDM']) - 0.1
-        logger.info(f"div_sum = {div_sum}")
-        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
-                                                config.private_sign.get_secret_value()))
-
-    # print(json.dumps(response, indent=4))
-    accounts = await stellar_get_all_mtl_holders()
-    for account in accounts:
-        # print(json.dumps(account,indent=4))
-        # print('***')
-        balances = account["balances"]
-        balance_mtl = 0
-        balance_rect = 0
-        usdm_open = 0
-        # check all balance
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_mtl = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_rect = round(float(balance["balance"]), 7)
-                if balance["asset_code"] == "USDM" and balance["asset_issuer"] == MTLAddresses.public_usdm:
-                    usdm_open = 1
-        div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
-        # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
-        # check sponsor
-        donates.extend(get_donate_list(account))
-
-        if (usdm_open > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
-                and (account["account_id"] != MTLAddresses.public_pawnshop):
-            div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
-
-    div_accounts.sort(key=get_key_1, reverse=True)
-    payments = [
-        TPayments(
-            user_key=item[0],
-            mtl_sum=item[1],
-            user_calc=item[2],
-            user_div=item[3],
-            id_div_list=item[4]
-        )
-        for item in div_accounts
-    ]
-    session.add_all(payments)
-    session.commit()
-
-    return div_accounts
+    pass
+    # all_issuer = await stellar_get_issuer_assets(MTLAddresses.public_issuer)
+    # mtl_sum = float(all_issuer['MTL']) + float(all_issuer['MTLRECT'])
+    #
+    # div_accounts = []
+    # donates = []
+    # if test_sum > 0:
+    #     div_sum = test_sum
+    # else:
+    #     # get balance
+    #     div_sum = await get_balances(MTLAddresses.public_div)
+    #     div_sum = float(div_sum['USDM']) - 0.1
+    #     logger.info(f"div_sum = {div_sum}")
+    #     await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
+    #                                             config.private_sign.get_secret_value()))
+    #
+    # # print(json.dumps(response, indent=4))
+    # accounts = await stellar_get_all_mtl_holders()
+    # for account in accounts:
+    #     # print(json.dumps(account,indent=4))
+    #     # print('***')
+    #     balances = account["balances"]
+    #     balance_mtl = 0
+    #     balance_rect = 0
+    #     usdm_open = 0
+    #     # check all balance
+    #     for balance in balances:
+    #         if balance["asset_type"][0:15] == "credit_alphanum":
+    #             if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+    #                 balance_mtl = round(float(balance["balance"]), 7)
+    #             if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+    #                 balance_rect = round(float(balance["balance"]), 7)
+    #             if balance["asset_code"] == "USDM" and balance["asset_issuer"] == MTLAddresses.public_usdm:
+    #                 usdm_open = 1
+    #     div = round(div_sum / mtl_sum * (balance_mtl + balance_rect), 7)
+    #     # print(f'{div_sum=},{mtl_sum},{balance_mtl},{balance_rect}')
+    #     # check sponsor
+    #     donates.extend(get_donate_list(account))
+    #
+    #     if (usdm_open > 0) and (div > 0.0001) and (account["account_id"] != MTLAddresses.public_issuer) \
+    #             and (account["account_id"] != MTLAddresses.public_pawnshop):
+    #         div_accounts.append([account["account_id"], balance_mtl + balance_rect, div, div, div_list_id])
+    #
+    # div_accounts.sort(key=get_key_1, reverse=True)
+    # payments = [
+    #     TPayments(
+    #         user_key=item[0],
+    #         mtl_sum=item[1],
+    #         user_calc=item[2],
+    #         user_div=item[3],
+    #         id_div_list=item[4]
+    #     )
+    #     for item in div_accounts
+    # ]
+    # session.add_all(payments)
+    # session.commit()
+    #
+    # return div_accounts
     # print(*mtl_accounts, sep='\n')
 
-
-async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0):
-    # all_usdm_sum = await stellar_get_issuer_assets(MTLAddresses.public_usdm)
-    # all_usdm_sum = float(all_usdm_sum['USDM'])
-
+async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0, test_for_address=None):
     div_accounts = []
     if test_sum > 0:
         div_sum = test_sum
     else:
-        # get balance
         div_sum = await get_balances(MTLAddresses.public_usdm_div)
         div_sum = float(div_sum['USDM']) - 0.1
         logger.info(f"div_sum = {div_sum}")
-        await stellar_async_submit(stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS_USDM:{div_sum}'),
-                                                config.private_sign.get_secret_value()))
+        if not test_for_address:  # Записываем в блокчейн только если это не тестовый расчет
+            await stellar_async_submit(
+                stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f'LAST_DIVS_USDM:{div_sum}'),
+                             config.private_sign.get_secret_value()))
 
     # print(json.dumps(response, indent=4))
     accounts = await stellar_get_holders(MTLAssets.usdm_asset)
@@ -1122,21 +1211,29 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
 
     # Фильтруем список div_accounts, оставляя только те элементы, которые удовлетворяют условию
     div_accounts = [record for record in div_accounts if round(record[2], 5) > 0]
-    payments = [
-        TPayments(
-            user_key=item[0],
-            mtl_sum=item[1],
-            user_calc=item[2],
-            user_div=item[3],
-            id_div_list=item[4]
-        )
-        for item in div_accounts
-    ]
-    session.add_all(payments)
-    session.commit()
 
-    return div_accounts
-    # print(*mtl_accounts, sep='\n')
+    if test_for_address:
+        # Ищем запись для тестового адреса
+        test_account_data = next((record for record in div_accounts if record[0] == test_for_address), None)
+        if test_account_data:
+            return [test_account_data]  # Возвращаем только данные тестового адреса
+        return []  # Если адрес не найден
+    else:
+        # Стандартное сохранение в БД только если это не тестовый расчет
+        payments = [
+            TPayments(
+                user_key=item[0],
+                mtl_sum=item[1],
+                user_calc=item[2],
+                user_div=item[3],
+                id_div_list=item[4]
+            )
+            for item in div_accounts
+        ]
+        session.add_all(payments)
+        session.commit()
+        return div_accounts
+
 
 
 async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
@@ -2610,8 +2707,113 @@ async def test():
     print(result)
 
 
+async def pay_ny():
+    # need pay from MTLAddresses.public_div
+    # get address by     accounts = await stellar_get_all_mtl_holders()
+    # create transaction for 0.002025 MTLAssets.mtl_asset
+    # add memo Happy New Year and send
+    server = Server(horizon_url=config.horizon_url)
+    last = 'GCAVQ52ST23HPZX2QOF3PIDG6ZPPNWKHJIG3FZFU44GQKLD52D6RK7RD'
+    need_send = False
+    num = 0
+
+    accounts = await stellar_get_holders(MTLAssets.mtl_asset)
+    for account in accounts:
+        num += 1
+        if account["account_id"] == last:
+            need_send = True
+        print(num, account["account_id"])
+
+        if not need_send:
+            continue
+
+        source_account = server.load_account(MTLAddresses.public_div)
+        transaction = TransactionBuilder(
+            source_account=source_account,
+            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+            base_fee=base_fee
+        )
+        transaction.set_timeout(60 * 60 * 24 * 7)
+        transaction.add_text_memo("Happy New Year")
+        transaction.append_payment_op(
+            destination=account["account_id"],
+            asset=MTLAssets.mtl_asset,
+            amount="0.002025"
+        )
+
+        transaction = transaction.build()
+        transaction.sign(get_private_sign())
+
+        server.submit_transaction(transaction)
+
+
+async def get_market_price(
+        asset1: Asset,
+        asset2: Asset,
+        amount: str = "1"
+) -> Optional[dict]:
+    """
+    Получает детальную информацию о ценах на рынке между двумя активами.
+
+    Returns:
+        dict: Словарь с деталями цен или None в случае ошибки
+    """
+    async with ServerAsync(
+            horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        try:
+            # Получаем цены в обоих направлениях
+            forward_result = await server.strict_send_paths(
+                asset1,
+                amount,
+                [asset2]
+            ).call()
+            reverse_result = await server.strict_send_paths(
+                asset2,
+                amount,
+                [asset1]
+            ).call()
+
+            if (not forward_result['_embedded']['records'] or
+                    not reverse_result['_embedded']['records']):
+                return None
+
+            # Извлекаем данные
+            forward_amount = Decimal(
+                forward_result['_embedded']['records'][0]['destination_amount']
+            )
+            reverse_amount = Decimal(
+                reverse_result['_embedded']['records'][0]['destination_amount']
+            )
+
+            forward_price = forward_amount / Decimal(amount)
+            reverse_price = Decimal(amount) / reverse_amount
+            average_price = (forward_price + reverse_price) / Decimal('2')
+
+            return {
+                'forward_price': forward_price,
+                'reverse_price': reverse_price,
+                'average_price': average_price,
+                'forward_amount': forward_amount,
+                'reverse_amount': reverse_amount,
+                'input_amount': Decimal(amount),
+                #'timestamp': datetime.utcnow().isoformat(),
+                'asset1': asset1.code,
+                'asset2': asset2.code
+            }
+
+        except Exception as ex:
+            logger.exception(
+                f"Error getting market price details for {asset1.code}/{asset2.code}: {ex}"
+            )
+            return None
+
+
 if __name__ == '__main__':
     pass
-    _ = asyncio.run(stellar_get_issuer_assets('GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V'))
+    from db.quik_pool import quik_pool
+    _ = asyncio.run(get_market_price(MTLAssets.mtl_asset, MTLAssets.eurmtl_asset))
     print(_)
-    print(len(_))
+    # print(len(_))
+    # _ = asyncio.run(get_pool_balances(MTLAddresses.public_itolstov))
+    # print(_)

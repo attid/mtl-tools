@@ -213,7 +213,9 @@ async def main():
     await pyro_app.start()
     await pyro_test()
 
-    a = await get_group_members(-1001239694752)
+    a = await get_group_members(-1001589557564)
+    for w in a:
+        print(w.user_id)
     print(a)
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")

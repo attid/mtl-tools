@@ -16,11 +16,17 @@ openai_key = config.openai_key.get_secret_value()
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 # client = OpenAI(api_key=openai_key)
-aclient = AsyncOpenAI(api_key=openai_key)
+aclient = AsyncOpenAI(api_key=openai_key,
+                      base_url="https://openrouter.ai/api/v1",
+                      )
+
+extra_headers = {
+    "HTTP-Referer": 'https://montelibero.org',  # Optional, for including your app on openrouter.ai rankings.
+    "X-Title": 'Montelibero Bot',  # Optional. Shows in rankings on openrouter.ai.
+}
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
-
 
 async def save_to_redis(chat_id, msg, is_answer=False):
     data_name = f'{chat_id}:{round(datetime.now().timestamp())}'
@@ -138,9 +144,9 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
             messages[0]["name"] = user_name
     try:
         if gpt4:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages)
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages, extra_headers=extra_headers)
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4o", messages=messages)
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4o", messages=messages, extra_headers=extra_headers)
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
         logger.info(e.args)
@@ -271,6 +277,7 @@ async def add_task_to_google(msg):
     ]
     response = await aclient.chat.completions.create(model=model,
                                                      messages=messages,
+                                                     extra_headers=extra_headers,
                                                      functions=functions,
                                                      function_call="auto")
     response_message = response.choices[0].message
@@ -308,6 +315,7 @@ async def add_task_to_google(msg):
             "content": "Пожалуйста, избегайте использования ссылок в вашем ответе."
         })
         second_response = await aclient.chat.completions.create(model=model,
+                                                                extra_headers=extra_headers,
                                                                 messages=messages)  # get a new response from GPT where it can see the function response
         return second_response.choices[0].message.content
 
@@ -328,7 +336,8 @@ async def talk_get_summary(article):
 async def generate_image(prompt, model="dall-e-3", n=1):
     response = await aclient.images.generate(prompt=prompt,
                                              n=n,
-                                             model=model)
+                                             model=model,
+                                             extra_headers=extra_headers)
 
     # Это вернет список URL изображений
     return [image.url for image in response.data]
@@ -336,7 +345,8 @@ async def generate_image(prompt, model="dall-e-3", n=1):
 
 if __name__ == "__main__":
     pass
-    #asyncio.run(talk_open_ai_list_models('gpt-4'))
+    # asyncio.run(talk_open_ai_list_models('gpt-4'))
+    # exit()
 
     # a = asyncio.run(generate_image('красная панда'))
     # print(a)
@@ -347,14 +357,14 @@ if __name__ == "__main__":
     # print(p)
     # exit()
 
-    article  = '''
+    article = '''
 Кому интересен дoxoд от 200$ в день
 Потребуется Trust Wallet 
 Затраты по времени минимальные 
 Заинтересовало? Пишите !    
  '''
     a = (asyncio.run(talk_check_spam(article)))
-    print(type(a),a)
+    print(type(a), a)
     # print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

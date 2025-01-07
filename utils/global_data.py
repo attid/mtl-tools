@@ -7,7 +7,7 @@ from db.mongo import BotMongoConfig
 
 
 class MTLChats:
-    System = 0  # системный "чат" храннение всего подряд
+    System = 0  # системный "чат" хранение всего подряд
     Poll = 1  # под опросы
     MTLA_Poll = -1  # под опросы MTLA
     Employment = -1001424237819  # чат поиска работы
@@ -16,8 +16,9 @@ class MTLChats:
     GuarantorGroup = -1001169382324  # Guarantors EURMTL
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
-    GroupAnonymousBot = 1087968824
-    Channel_Bot = 136817688
+    GroupAnonymousBot = 1087968824 # анонимный админ
+    Channel_Bot = 136817688 # от всех каналов приходит с этим ID
+    Telegram_Repost_Bot = 777000 # репост из канала в чат
     FARMGroup = -1001876391583
     LandLordGroup = -1001757912662
     SignGroupForChanel = -1001784614029

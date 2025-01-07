@@ -1,11 +1,10 @@
 import os
 
 from pydantic import SecretStr
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 start_path = os.path.dirname(os.path.dirname(__file__)) + '/'
 dotenv_path = os.path.join(start_path, '.env')
-
 
 class Settings(BaseSettings):
     bot_token: SecretStr
@@ -28,9 +27,12 @@ class Settings(BaseSettings):
     telegraph_token: str
     grist_token: str
 
-    class Config:
-        env_file = dotenv_path
-        env_file_encoding = 'utf-8'
+    model_config = SettingsConfigDict(
+        env_file=dotenv_path,
+        env_file_encoding='utf-8',
+        extra='allow',
+        case_sensitive=False
+    )
 
 
 config = Settings()
