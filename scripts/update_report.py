@@ -57,7 +57,7 @@ async def update_main_report(session: Session):
             try:
                 address_sheet = await ss.worksheet(sheet_name)
             except WorksheetNotFound:
-                address_sheet = await ss.add_worksheet(title=sheet_name, rows=100, cols=6)
+                address_sheet = await ss.add_worksheet(title=sheet_name, rows=100, cols=10)
 
             assets, data = await get_balances(address[0], return_data=True)
 
@@ -77,11 +77,19 @@ async def update_main_report(session: Session):
             await address_sheet.update('A1', update_data)
 
             assets = await stellar_get_issuer_assets(address[0])
-            update_data = [['ISSUER']]
+            update_data = [['ISSUER', 'AMOUNT', 'COST']]
             for key in assets:
                 update_data.append([key, float(assets.get(key, 0)),
                                     db_get_last_trade_operation(session=session, asset_code=key)])
             await address_sheet.update('E1', update_data)
+
+            pools = await get_pool_balances(address[0])
+            update_data = [['POOLS', 'SHARES', 'AMOUNT1', 'AMOUNT2']]
+            for pool in pools:
+                #[{'pool_id': '1b492b669959d3f082b5fb7dcc847d43371fd1f586209899603b93ac1a39b7f8', 'name': 'MTL-EURMTL', 'shares': 761437.8395765, 'token1_amount': 348606.2247324, 'token2_amount': 1685938.1857397}]
+                update_data.append([pool['name'], float(pool['shares']), float(pool['token1_amount']), float(pool['token2_amount'])])
+            await address_sheet.update('H1', update_data)
+
 
     await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
@@ -835,6 +843,6 @@ if __name__ == "__main__":
     else:
         print('need more parameters')
         from db.quik_pool import quik_pool
-        asyncio.run(update_wallet_report2(quik_pool()))  # only from skynet
-        # print(calculate_statistics())
 
+        asyncio.run(update_main_report(quik_pool()))  # only from skynet
+        # print(calculate_statistics())

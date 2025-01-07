@@ -265,6 +265,8 @@ def decode_effects_records(records, ledger):
                     result.append([op_date, record['type'], None,
                                    record.get('name'), None, data_value, None, record.get('account'), None, '',
                                    record['paging_token'], ledger])
+                    # if len(data_value) == 56:
+
                 continue
         except Exception as e:
             logger.error(f"{type(e).__name__}: {e}")
