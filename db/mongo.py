@@ -7,8 +7,8 @@ from typing import Dict, Optional, List, Any
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from pydantic import BaseModel, Field
 
-from utils.config_reader import config
-from utils.pyro_tools import GroupMember, get_group_members, pyro_app
+from other.config_reader import config
+from other.pyro_tools import GroupMember, get_group_members, pyro_app
 
 client = AsyncIOMotorClient(config.mongodb_url)
 db = client['mtl_tables']

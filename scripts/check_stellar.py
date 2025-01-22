@@ -2,15 +2,15 @@ import json
 import sys
 import sentry_sdk
 from db.quik_pool import quik_pool
-from utils.grist_tools import load_notify_info_accounts, load_notify_info_assets, put_grist_data, grist_main_chat_info
-from utils.stellar_utils import *
+from other.grist_tools import grist_manager, MTLGrist
+from other.stellar_tools import *
 
 
 @logger.catch
 async def cmd_check_cron_transaction(session: Session):
-    assets_config = await load_notify_info_assets()
+    assets_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ASSETS)
     await process_transactions_by_assets(session, assets_config)
-    address_config = await load_notify_info_accounts()
+    address_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ACCOUNTS)
     await process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
 
@@ -26,29 +26,30 @@ async def process_transactions_by_assets(session, assets_config):
 
             if result:
                 result.insert(0, f"Обнаружены новые операции для {asset_name}")
-                send_message_4000(session, int(asset_config['chat_id']), result)
+                send_message_4000(session, int(asset_config['chat_id']), result, topic_id=asset_config['topic_id'])
 
 
 async def process_specific_transactions(session, address_config, ignore_operations):
     # {'chat_id': '-1001239694752', 'account_id': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'chat_info': 'SignGroup', 'account_info': 'public_issuer'}
     cash = {}
     for address in address_config:
-        account_id = address['account_id']
-        results = await cmd_check_new_transaction(ignore_operation=ignore_operations,
-                                                  account_id=account_id,
-                                                  cash=cash, chat_id=address['chat_id'])
-        if results:
-            for result in results:
-                result.insert(0, f"Получены новые транзакции")
-                send_message_4000(session, int(address['chat_id']), result)
-        await asyncio.sleep(3)
+        if address.get('enabled'):
+            account_id = address['account_id']
+            results = await cmd_check_new_transaction(ignore_operation=ignore_operations,
+                                                      account_id=account_id,
+                                                      cash=cash, chat_id=address['chat_id'])
+            if results:
+                for result in results:
+                    result.insert(0, f"Получены новые транзакции")
+                    send_message_4000(session, int(address['chat_id']), result, topic_id=address['topic_id'])
+            await asyncio.sleep(3)
 
 
-def send_message_4000(session, chat_id, messages):
+def send_message_4000(session, chat_id, messages, topic_id=None):
     msg = '\n'.join(messages)
     if len(msg) > 4096:
         msg = "Слишком много операций показаны первые . . . \n" + msg[:4000]
-    db_cmd_add_message(session, chat_id, msg)
+    db_cmd_add_message(session, chat_id, msg, topic_id=topic_id)
 
 
 @logger.catch
@@ -148,16 +149,14 @@ async def grist_upload_users(table, data):
                 }
             })
 
-        await put_grist_data(grist=grist_main_chat_info,
-                             table_name=table,
-                             json_data=json_data)
+        await grist_manager.put_data(table, json_data=json_data)
 
 
 async def cmd_check_grist():
     data = await global_data.mongo_config.get_users_joined_last_day(-1001009485608)
-    await grist_upload_users('Main_chat_income', data)
+    await grist_upload_users(MTLGrist.MAIN_CHAT_INCOME, data)
     data = await global_data.mongo_config.get_users_left_last_day(-1001009485608)
-    await grist_upload_users('Main_chat_outcome', data)
+    await grist_upload_users(MTLGrist.MAIN_CHAT_OUTCOME, data)
 
 
 if __name__ == "__main__":

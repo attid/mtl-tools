@@ -34,6 +34,7 @@ class TMessage(Base):
     __tablename__ = 'T_MESSAGE'
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger)
+    topic_id = Column(BigInteger, default=0)
     text = Column(String(4000))
     was_send = Column(Integer, default=0)
     dt_add = Column(DateTime, default=datetime.now)

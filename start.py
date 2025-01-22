@@ -1,10 +1,8 @@
 import asyncio
-import json
 import sys
 from contextlib import suppress
 
 import sentry_sdk
-import tzlocal
 import uvloop
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -18,7 +16,8 @@ from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from utils.config_reader import config
+from other import aiogram_tools
+from other.config_reader import config
 from routers.admin import command_config_loads
 from db.requests import db_save_bot_user, db_load_bot_users
 from middlewares.db import DbSessionMiddleware
@@ -26,11 +25,10 @@ from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
 from routers import last_handler
-from utils import aiogram_utils
-from utils.global_data import global_data, BotValueTypes, MTLChats, global_tasks
-from utils.gspread_tools import gs_update_namelist, gs_update_watchlist
-from utils.pyro_tools import pyro_start
-from utils.support_tools import work_with_support
+from other.global_data import global_data, MTLChats, global_tasks
+from other.gspread_tools import gs_update_namelist, gs_update_watchlist
+from other.pyro_tools import pyro_start
+from other.support_tools import work_with_support
 
 
 async def set_commands(bot):
@@ -138,7 +136,7 @@ async def main():
     dp.include_router(last_handler.router)  # last, last
 
     scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')#str(tzlocal.get_localzone()))
-    aiogram_utils.scheduler = scheduler
+    aiogram_tools.scheduler = scheduler
     scheduler.start()
     if 'test' not in sys.argv:
         time_handlers.scheduler_jobs(scheduler, bot, db_pool)

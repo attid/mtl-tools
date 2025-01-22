@@ -6,15 +6,14 @@ from datetime import datetime
 from itertools import zip_longest
 
 import gspread_asyncio
-from google.oauth2 import service_account
 # from google-auth package
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 
 from db.requests import add_to_watchlist
-from utils.config_reader import start_path
-from utils.global_data import float2str, global_data
+from other.config_reader import start_path
+from other.global_data import float2str, global_data
 
 
 # https://gspread-asyncio.readthedocs.io/en/latest/index.html#

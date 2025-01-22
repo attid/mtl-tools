@@ -15,12 +15,12 @@ from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMe
                          ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
-from utils.config_reader import config
+from other.config_reader import config
 from db.requests import *
-from utils.aiogram_utils import get_web_request
-from utils.global_data import float2str, global_data
-from utils.gspread_tools import agcm, gs_get_chicago_premium, gs_get_accounts_multi_list
-from utils.mytypes import MyShareHolder
+from other.global_data import float2str, global_data
+from other.gspread_tools import agcm, gs_get_chicago_premium, gs_get_accounts_multi_list
+from other.mytypes import MyShareHolder
+from other.web_tools import get_eurmtl_xdr
 
 base_fee = config.base_fee
 
@@ -106,21 +106,6 @@ exchange_bots = ()
 async def check_url_xdr(url, full_data=True):
     xdr = await get_eurmtl_xdr(url)
     return decode_xdr(xdr, full_data=full_data)
-
-
-async def get_eurmtl_xdr(url):
-    try:
-        url = 'https://eurmtl.me/remote/get_xdr/' + url.split('/')[-1]
-        status, response_json = await get_web_request('GET', url=url)
-
-        if 'xdr' in response_json:
-            return response_json['xdr']
-        else:
-            return 'Invalid response format: missing "xdr" field.'
-
-    except Exception as ex:
-        logger.info(['get_eurmtl_xdr', ex])
-        return 'An error occurred during the request.'
 
 
 def cleanhtml(raw_html):

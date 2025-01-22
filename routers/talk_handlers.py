@@ -10,13 +10,12 @@ from db.requests import extract_url
 from middlewares.throttling import rate_limit
 from scripts.update_report import (update_guarantors_report, update_main_report, update_fire, update_donate_report,
                                    update_mmwb_report, update_bim_data)
-from utils import dialog
-from utils.aiogram_utils import (multi_reply, HasText, has_words, StartText, ReplyToBot)
-from utils.dialog import add_task_to_google, generate_image
-from utils.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
-from utils.pyro_tools import extract_telegram_info, pyro_update_msg_info
-from utils.stellar_utils import check_url_xdr, cmd_alarm_url, send_by_list
-from utils.telegraph_tools import telegraph
+from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
+from other.open_ai_tools import add_task_to_google, generate_image, talk_get_comment, talk, get_horoscope
+from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
+from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
+from other.stellar_tools import check_url_xdr, cmd_alarm_url, send_by_list
+from other.telegraph_tools import telegraph
 
 router = Router()
 
@@ -97,7 +96,7 @@ async def cmd_comment(message: Message):
         await message.delete()
     except:
         pass
-    msg = await dialog.talk_get_comment(message.chat.id, msg)
+    msg = await talk_get_comment(message.chat.id, msg)
     msg = await message.reply_to_message.reply(msg)
     my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
@@ -106,7 +105,7 @@ async def cmd_comment(message: Message):
 async def cmd_last_check_reply_to_bot(message: Message):
     if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
         # answer on bot message
-        msg_text = await dialog.talk(message.chat.id, message.text)
+        msg_text = await talk(message.chat.id, message.text)
         try:
             msg = await message.reply(msg_text, parse_mode=ParseMode.MARKDOWN)
         except:
@@ -184,7 +183,7 @@ async def cmd_last_check_task(message: Message, session: Session, bot: Bot):
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('гороскоп',)))
 async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot):
-    await message.answer('\n'.join(dialog.get_horoscope()), parse_mode=ParseMode.MARKDOWN)
+    await message.answer('\n'.join(get_horoscope()), parse_mode=ParseMode.MARKDOWN)
 
 
 @update_command_info("Скайнет обнови отчёт", "Попросить Скайнет обновить файл отчета. Только в рабочем чате.")
@@ -282,7 +281,7 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     if message.reply_to_message and message.reply_to_message.text:
         msg = f"{message.reply_to_message.text} \n================\n{message.text}"
 
-    msg = await dialog.talk(message.chat.id, msg, gpt4)
+    msg = await talk(message.chat.id, msg, gpt4)
     if msg is None:
         msg = '=( connection error, retry again )='
     try:

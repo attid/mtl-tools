@@ -1,7 +1,6 @@
 # encoding=utf8
 import json
 import re
-import sys
 from lxml import html
 from lxml.html.clean import Cleaner
 from urllib.parse import urlparse, quote_plus

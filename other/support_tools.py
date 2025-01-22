@@ -2,8 +2,8 @@ import asyncio
 import json
 from datetime import datetime
 from redis.asyncio import Redis
-from utils.global_data import MTLChats
-from utils.gspread_tools import gs_save_new_support
+from other.global_data import MTLChats
+from other.gspread_tools import gs_save_new_support
 
 redis = Redis(host='localhost', port=6379, db=7)
 

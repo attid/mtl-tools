@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import count
 
 from db.models import *
-from utils.global_data import MTLChats
+from other.global_data import MTLChats
 
 
 def db_save_bot_value_ext(session: Session, chat_id: int, chat_key: int | Enum, chat_value: any):
@@ -321,10 +321,11 @@ def db_get_ledger_count(session: Session) -> int:
 
 
 def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int = 0, update_id: int = None,
-                       button_json: str = None) -> None:
+                       button_json: str = None, topic_id: int = 0) -> None:
     """
     Insert a new message into the t_message table.
 
+    :param topic_id: The ID of the topic
     :param session: SQLAlchemy DB session
     :param user_id: The ID of the user
     :param text: The message text
@@ -334,7 +335,7 @@ def db_cmd_add_message(session: Session, user_id: int, text: str, use_alarm: int
     """
     logger.info(f"db_cmd_add_message: {text}")
     new_message = TMessage(user_id=user_id, text=text, use_alarm=use_alarm, update_id=update_id,
-                           button_json=button_json)
+                           button_json=button_json, topic_id=topic_id)
     session.add(new_message)
     session.commit()
 
@@ -379,6 +380,7 @@ def db_get_new_effects_for_token(session: Session, token: str, last_id: str, amo
         )
 
     return cast(list[TOperations], result)
+
 
 def db_get_operations(session: Session, last_id: Optional[str] = None, limit: int = 3000) -> List[TOperations]:
     """

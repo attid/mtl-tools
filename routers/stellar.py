@@ -1,5 +1,5 @@
 from datetime import datetime
-from urllib.parse import quote_plus, quote
+from urllib.parse import quote
 
 from aiogram import Router, Bot
 from aiogram.filters import Command
@@ -7,13 +7,14 @@ from aiogram.types import Message, FSInputFile
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from utils.config_reader import start_path
+from other.config_reader import start_path
+from other.web_tools import http_session_manager
 from scripts.update_report import update_airdrop, update_fest
-from utils.aiogram_utils import multi_reply, add_text, multi_answer, get_web_request
-from utils.global_data import MTLChats, is_skynet_admin, global_data, update_command_info
-from utils.gspread_tools import gs_check_bim, agcm
-from utils.img_tools import create_image_with_text
-from utils.stellar_utils import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
+from other.aiogram_tools import multi_reply, add_text, multi_answer
+from other.global_data import MTLChats, is_skynet_admin, global_data, update_command_info
+from other.gspread_tools import gs_check_bim, agcm
+from other.img_tools import create_image_with_text
+from other.stellar_tools import (cmd_check_fee, check_url_xdr, decode_xdr, cmd_show_bim, get_cash_balance, get_balances,
                                  MTLAddresses, cmd_create_list, cmd_calc_bim_pays, cmd_gen_xdr, cmd_send_by_list_id,
                                  cmd_calc_divs, cmd_calc_sats_divs, cmd_get_new_vote_all_mtl,
                                  get_btcmtl_xdr, float2str, cmd_show_data, get_damircoin_xdr,
@@ -71,19 +72,19 @@ async def cmd_do_council(message: Message, session: Session):
         return
     url = "https://distribute-e62teamaya-lm.a.run.app/distribute?address=" + MTLAddresses.public_council
 
-    status, json_data = await get_web_request('GET', url=url, return_type='json')
+    response = await http_session_manager.get_web_request('GET', url=url, return_type='json')
 
-    print(json_data)
-    print(json_data['xdr'])
-    print(json_data["distribution"])
+    #//print(json_data)
+    #//print(json_data['xdr'])
+    #//print(json_data["distribution"])
 
     distribution_message = "Distribution:\n"
-    for address, amount in json_data["distribution"].items():
+    for address, amount in response.data["distribution"].items():
         shortened_address = address[:4] + '..' + address[-4:]
         distribution_message += f"{shortened_address}: {amount}\n"
 
     await message.answer(distribution_message)
-    await stellar_async_submit(stellar_sign(json_data['xdr']))
+    await stellar_async_submit(stellar_sign(response.data['xdr']))
     await message.answer("Work done.")
 
 

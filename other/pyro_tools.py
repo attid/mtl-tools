@@ -2,7 +2,6 @@ import asyncio
 import html
 import os
 import re
-import sys
 from dataclasses import dataclass
 from typing import Optional, List
 
@@ -12,7 +11,7 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import FloodWait, PeerIdInvalid, UserNotMutualContact
 from sentry_sdk import capture_exception
 
-from utils.config_reader import config, start_path
+from other.config_reader import config, start_path
 
 
 # https://pyrofork.mayuri.my.id/main/api/client.html
@@ -222,7 +221,7 @@ async def main():
     # a = await get_group_members(-1001892843127)
     # # 1798357244
     # print(a)
-    # from utils.global_data import global_data
+    # from other.global_data import global_data
     # await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
     # url = "https://t.me/c/1798357244/90095/95343"
     # msg_info = extract_telegram_info(url)

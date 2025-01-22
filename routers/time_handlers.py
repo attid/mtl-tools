@@ -6,10 +6,11 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
-from utils.config_reader import config
+
+from other.config_reader import config
 from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count, db_load_bot_value_ext
 from scripts.mtl_exchange2 import check_mm, check_mmwb
-from utils.global_data import MTLChats, BotValueTypes
+from other.global_data import MTLChats, BotValueTypes
 
 
 @logger.catch
@@ -41,30 +42,23 @@ async def cmd_send_message_1m(bot: Bot, session_pool):
     with session_pool() as session:
         for record in db_load_new_message(session):
             try:
-                #    for record in fb.execsql('select first 10 m.id, m.user_id, m.text, m.use_alarm, m.update_id, m.button_json '
-                if record.user_id == MTLChats.SignGroup:
-                    await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
-                                           message_thread_id=59558, disable_web_page_preview=True)
-                elif record.user_id == MTLChats.MTLAAgoraGroup:
-                    await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
-                                           message_thread_id=5418, disable_web_page_preview=True)
-                else:
-                    if record.update_id > 0:
-                        reply_markup = None
-                        if len(record.button_json) > 10:
-                            button_json = json.loads(record.button_json)
-                            reply_markup = InlineKeyboardMarkup(inline_keyboard=[[
-                                InlineKeyboardButton(text=button_json['text'],
-                                                     url=button_json['link'])
-                            ]])
+                if record.update_id > 0:
+                    reply_markup = None
+                    if len(record.button_json) > 10:
+                        button_json = json.loads(record.button_json)
+                        reply_markup = InlineKeyboardMarkup(inline_keyboard=[[
+                            InlineKeyboardButton(text=button_json['text'],
+                                                 url=button_json['link'])
+                        ]])
 
-                        await bot.edit_message_text(chat_id=record.user_id, message_id=record.update_id,
-                                                    text=record.text,
-                                                    disable_web_page_preview=True,
-                                                    reply_markup=reply_markup)
-                    else:
-                        await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
-                                               disable_web_page_preview=True)
+                    await bot.edit_message_text(chat_id=record.user_id, message_id=record.update_id,
+                                                text=record.text,
+                                                disable_web_page_preview=True,
+                                                reply_markup=reply_markup)
+                else:
+                    topic_id = record.topic_id if record.topic_id > 0 else None
+                    await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
+                                           disable_web_page_preview=True, message_thread_id=topic_id)
 
                 record.was_send = 1
                 session.commit()

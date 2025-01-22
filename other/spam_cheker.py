@@ -4,8 +4,6 @@ import re
 import aiohttp
 from loguru import logger
 
-from utils.dialog import talk_check_spam
-from utils.global_data import global_data
 
 
 def is_mixed_word(word):

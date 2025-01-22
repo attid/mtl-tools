@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 
-from utils.global_data import global_data
+from other.global_data import global_data
 
 router = Router()
 

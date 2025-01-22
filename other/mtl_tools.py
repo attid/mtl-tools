@@ -1,13 +1,13 @@
 import asyncio
 from aiogram import Bot
-from utils.config_reader import config
-from utils.grist_tools import load_notify_sp_chats, load_notify_sp_users, load_mtla_chats, load_mtla_councils
-from utils.pyro_tools import get_group_members, pyro_app
+from other.config_reader import config
+from other.grist_tools import MTLGrist, grist_manager
+from other.pyro_tools import get_group_members, pyro_app
 
 
-async def check_user_in_sp_chats():
-    chats = await load_notify_sp_chats()
-    all_users = await load_notify_sp_users()
+async def check_user_in_sp_chats(bot: Bot, need_remove: bool = False):
+    chats = await grist_manager.load_table_data(MTLGrist.SP_CHATS)
+    all_users = await grist_manager.load_table_data(MTLGrist.SP_USERS)
     users = [user for user in all_users if not user['DISABLED']]
     alerts = []
 
@@ -31,6 +31,11 @@ async def check_user_in_sp_chats():
                     member = next((m for m in members if m.user_id == member_id), None)
                     username = member.username if member else 'Unknown'
                     alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
+                    if need_remove:
+                        try:
+                            await bot.unban_chat_member(chat_id=chat['TELEGRAM_ID'], user_id=member_id)
+                        except Exception as e:
+                            alerts.append(f"Error removing user @{username} (ID: {member_id}) from chat {chat['TITLE']}: {str(e)}")
         else:
             # Check if there are any unexpected members in the required chat
             for member_id in member_ids:
@@ -38,13 +43,17 @@ async def check_user_in_sp_chats():
                     member = next((m for m in members if m.user_id == member_id), None)
                     username = member.username if member else 'Unknown'
                     alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
+                    try:
+                        await bot.unban_chat_member(chat_id=chat['TELEGRAM_ID'], user_id=member_id)
+                    except Exception as e:
+                        alerts.append(f"Error removing user @{username} (ID: {member_id}) from chat {chat['TITLE']}: {str(e)}")
 
     return alerts
 
 
 async def check_consul_mtla_chats(bot: Bot):
-    chats = await load_mtla_chats()
-    councils = await load_mtla_councils()
+    chats = await grist_manager.load_table_data(MTLGrist.MTLA_CHATS)
+    councils = await grist_manager.load_table_data(MTLGrist.MTLA_COUNCILS)
     alerts = []
     councils = [council for council in councils if not council['DISABLED']]
 
@@ -104,7 +113,7 @@ async def main():
             token=config.bot_token.get_secret_value(),
     ) as bot:
         # a = await check_user_in_sp_chats()
-        a = await check_consul_mtla_chats(bot)
+        a = await check_user_in_sp_chats(bot, True)
         print('\n'.join(a))
 
     try:

@@ -6,8 +6,8 @@ import tiktoken
 from redis.asyncio import Redis
 from loguru import logger
 from openai import AsyncOpenAI
-from utils.config_reader import config
-from utils.gspread_tools import gs_save_new_task
+from other.config_reader import config
+from other.gspread_tools import gs_save_new_task
 
 MAX_TOKENS = 4000
 save_time_long = 60 * 60 * 2

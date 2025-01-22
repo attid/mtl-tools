@@ -14,14 +14,14 @@ from sqlalchemy.orm import Session
 from db.requests import extract_url, db_save_message, db_get_user_id, db_update_user_chat_date
 from middlewares.throttling import rate_limit
 from start import add_bot_users
-from utils.aiogram_utils import (multi_reply, is_admin, ChatInOption,
+from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
-from utils.dialog import talk_check_spam
-from utils.global_data import MTLChats, BotValueTypes, global_data
-from utils.pyro_tools import MessageInfo
-from utils.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
-from utils.stellar_utils import check_url_xdr
-from utils.telegraph_tools import telegraph
+from other.open_ai_tools import talk_check_spam
+from other.global_data import MTLChats, BotValueTypes, global_data
+from other.pyro_tools import MessageInfo
+from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
+from other.stellar_tools import check_url_xdr
+from other.telegraph_tools import telegraph
 
 router = Router()
 

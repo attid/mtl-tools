@@ -4,15 +4,14 @@ from contextlib import suppress
 from datetime import datetime, timedelta
 
 from aiogram import Bot
-from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
 from aiogram.types import Message, User, CallbackQuery, Chat, ChatMember, ReactionTypeCustomEmoji
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from middlewares.retry import logger
-from utils.config_reader import config
-from utils.global_data import MTLChats, global_data
+from other.config_reader import config
+from other.global_data import MTLChats, global_data
 
 scheduler: AsyncIOScheduler
 non_breaking_space = chr(0x00A0)
@@ -156,42 +155,6 @@ class ChatInOption(Filter):
         return message.chat.id in self.attr_name
 
 
-async def get_web_request(method, url, json=None, headers=None, data=None, return_type=None):
-    async with aiohttp.ClientSession() as web_session:
-        if method.upper() == 'POST':
-            request_coroutine = web_session.post(url, json=json, headers=headers, data=data)
-        elif method.upper() == 'GET':
-            request_coroutine = web_session.get(url, headers=headers, params=data)
-        elif method.upper() == 'PUT':
-            request_coroutine = web_session.put(url, json=json, headers=headers)
-        else:
-            raise ValueError("Неизвестный метод запроса")
-
-        async with request_coroutine as response:
-            content_type = response.headers.get('Content-Type', '')
-            if 'application/json' in content_type or return_type == 'json':
-                return response.status, await response.json()
-            else:
-                return response.status, await response.text()
-
-async def get_debank_balance(account_id, chain='bsc'):
-    url = ("https://pro-openapi.debank.com/v1/user/chain_balance"
-           f"?id={account_id}"
-           f"&chain_id={chain}")
-    # url = ('https://pro-openapi.debank.com/v1/user/total_balance'
-    #        '?id=0x0358d265874b5cf002d1801949f1cee3b08fa2e9'
-    #        '&chain_id=bsc')
-
-    headers = {
-        'accept': 'application/json',
-        'AccessKey': config.debank.get_secret_value()
-    }
-    status, response = await get_web_request('GET', url, headers=headers)
-    if status == 200:
-        # {'usd_value': 253279.1102783137}
-        return float(response.get('usd_value'))
-    else:
-        raise Exception(f'Ошибка запроса: Статус {status}')
 
 
 def get_username_link(user: User):

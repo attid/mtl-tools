@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 
 import sentry_sdk
 
-from utils.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
-from utils.stellar_utils import *
+from other.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
+from other.stellar_tools import *
 
 max_eurmtl = 10000.0  # max offer
 # max_btcmtl = 0.1  # max offer

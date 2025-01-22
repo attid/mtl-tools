@@ -7,8 +7,8 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_save_bot_user
-from utils.global_data import MTLChats, update_command_info
-from utils.stellar_utils import MTLAddresses
+from other.global_data import MTLChats, update_command_info
+from other.stellar_tools import MTLAddresses
 
 router = Router()
 

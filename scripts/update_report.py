@@ -7,10 +7,10 @@ import sentry_sdk
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
-from utils.config_reader import start_path
-from utils.aiogram_utils import get_debank_balance
-from utils.gspread_tools import gs_copy_sheets_with_style
-from utils.stellar_utils import *
+from other.config_reader import start_path
+from other.gspread_tools import gs_copy_sheets_with_style
+from other.stellar_tools import *
+from other.web_tools import get_debank_balance
 from scripts.mtl_exchange import check_fire
 
 
@@ -361,7 +361,7 @@ async def update_top_holders_report(session: Session):
     for record in records:
         if record[0] != '0':
             text = f'You need update votes <a href="{gd_link}">more info</a>'
-            db_cmd_add_message(session, MTLChats.SignGroup, text, True)
+            db_cmd_add_message(session, MTLChats.SignGroup, text, use_alarm=True, topic_id=59558)
             break
 
     logger.info(f'report topholders all done {now}')

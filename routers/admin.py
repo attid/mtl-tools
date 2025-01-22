@@ -17,16 +17,16 @@ from loguru import logger
 from sentry_sdk.integrations import aiohttp
 from sqlalchemy.orm import Session
 
-from utils.config_reader import config
+from other.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
-from utils.aiogram_utils import is_admin, cmd_delete_later, cmd_sleep_and_delete
-from utils.dialog import talk_get_summary
-from utils.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
-from utils.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
-from utils.mtl_tools import check_consul_mtla_chats
-from utils.pyro_tools import get_group_members, remove_deleted_users, pyro_test
-from utils.stellar_utils import send_by_list
-from utils.timedelta import parse_timedelta_from_message
+from other.aiogram_tools import is_admin, cmd_delete_later, cmd_sleep_and_delete
+from other.open_ai_tools import talk_get_summary
+from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
+from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
+from other.mtl_tools import check_consul_mtla_chats
+from other.pyro_tools import get_group_members, remove_deleted_users, pyro_test
+from other.stellar_tools import send_by_list
+from other.timedelta import parse_timedelta_from_message
 
 router = Router()
 
