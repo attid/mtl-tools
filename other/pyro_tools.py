@@ -208,13 +208,20 @@ async def add_contact(user_id: int):
         capture_exception(e)
         return False
 
+
+async def common_chats(user_id: int|str):
+    try:
+        chats = await pyro_app.get_common_chats(user_id=user_id)
+        print(chats)
+    except Exception as e:
+        logger.error(f"Error for chat {user_id}: {e}")
+        capture_exception(e)
+
 async def main():
     await pyro_app.start()
     await pyro_test()
 
-    a = await get_group_members(-1001589557564)
-    for w in a:
-        print(w.user_id)
+    a = await common_chats('itolstov')
     print(a)
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")

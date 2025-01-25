@@ -18,6 +18,7 @@ from stellar_sdk.sep.federation import resolve_account_id_async
 from other.config_reader import config
 from db.requests import *
 from other.global_data import float2str, global_data
+from other.grist_tools import grist_manager, MTLGrist
 from other.gspread_tools import agcm, gs_get_chicago_premium, gs_get_accounts_multi_list
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
@@ -604,7 +605,8 @@ async def get_cash_balance(chat_id):
     result = line
     result += '|Кубышка |Наличных| EURMTL |\n'
 
-    treasure_list = [
+    treasure_list = await grist_manager.load_table_data(MTLGrist.NOTIFY_TREASURY, sort='order')
+    treasure_list_ = [
         ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
         ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
         ['GDMH3NZSKNWLYYGX7AMIG6QDOVZ3KDVNBEL7KHNGSXBWUBKU5ARMVOED', 'Егора'],
@@ -618,6 +620,17 @@ async def get_cash_balance(chat_id):
         ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
         ['GAAGBEUVMKO7D672X7FCNIYCBWDNWNEMFICMEKNCHUAWUZ2XCDWMTORT', 'Тортуга']
     ]
+    #[
+  # {
+  #   "account_id": "GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL",
+  #   "name": "\u0412\u0430\u043b\u0435\u0440\u044b",
+  #   "order": 1
+  # },
+  # {
+  #   "account_id": "GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM",
+  #   "name": "\u0414\u0430\u043c\u0438\u0440\u0430",
+  #   "order": 2
+  # },
 
     t = """
     ==============================
@@ -629,10 +642,10 @@ async def get_cash_balance(chat_id):
     """
 
     for treasure in treasure_list:
-        if treasure:
-            assets = await get_balances(treasure[0])
+        if len(treasure['account_id']) == 56:
+            assets = await get_balances(treasure['account_id'])
             diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
-            name = treasure[1] if chat_id == MTLChats.GuarantorGroup else treasure[1][0]
+            name = treasure['name'] if chat_id == MTLChats.GuarantorGroup else treasure['name'][0]
             s_cash = f'{diff} '.rjust(8)
             s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
             result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
@@ -2797,7 +2810,7 @@ async def get_market_price(
 if __name__ == '__main__':
     pass
     from db.quik_pool import quik_pool
-    _ = asyncio.run(get_market_price(MTLAssets.mtl_asset, MTLAssets.eurmtl_asset))
+    _ = asyncio.run(get_cash_balance(5))
     print(_)
     # print(len(_))
     # _ = asyncio.run(get_pool_balances(MTLAddresses.public_itolstov))

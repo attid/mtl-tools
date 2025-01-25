@@ -155,8 +155,6 @@ class ChatInOption(Filter):
         return message.chat.id in self.attr_name
 
 
-
-
 def get_username_link(user: User):
     full_name = html.unescape(user.full_name)
     if user.username:
@@ -175,6 +173,7 @@ async def get_user_info(chat_id: int, user_id: int) -> ChatMember:
     except Exception as e:
         print(f"Произошла ошибка: {e}")
         return None
+
 
 # Пример вызова функции
 async def main():
@@ -197,7 +196,7 @@ async def main():
 
 async def main0():
     async with Bot(
-        token=config.bot_token.get_secret_value(),
+            token=config.bot_token.get_secret_value(),
     ) as bot:
         await bot.set_message_reaction(chat_id='@Montelibero_ru', message_id=9544,
                                        reaction=[ReactionTypeCustomEmoji(custom_emoji_id='5458863124947942457')])
@@ -206,18 +205,19 @@ async def main0():
 async def update_mongo_chats_names():
     chats = await global_data.mongo_config.get_all_chats()
 
-    for chat in chats:
-        try:
-            async with Bot(
-                token=config.bot_token.get_secret_value(),
-            ) as bot:
+    async with Bot(token=config.bot_token.get_secret_value()) as bot:
+        for chat in chats:
+            try:
                 info = await bot.get_chat(chat_id=chat.chat_id)
-                count = await global_data.mongo_config.update_chat_with_dict(chat.chat_id, {"username": info.username,
-                                                                                      "name": info.title})
+                count = await global_data.mongo_config.update_chat_with_dict(chat.chat_id, {
+                    "username": info.username,
+                    "title": info.title,
+                    "name": None
+                })
                 print(count)
-                await asyncio.sleep(0.5)
-        except Exception as ex:
-            logger.warning(ex)
+                await asyncio.sleep(0.3)
+            except Exception as ex:
+                logger.warning(ex)
 
 
 if __name__ == '__main__':
