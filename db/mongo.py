@@ -32,16 +32,14 @@ class MongoUser(BaseModel):
     created_at: datetime
     left_at: Optional[datetime] = None
 
-
 class MongoChat(BaseModel):
     chat_id: int
     username: Optional[str] = None
     title: Optional[str] = None
     created_at: Optional[datetime] = None
-    last_updated: Optional[datetime]
-    users: Dict[int, MongoUser] = Field(default_factory=dict)
-    admins: List[int] = []
-
+    last_updated: Optional[datetime] = None
+    users: Dict[str, MongoUser] = Field(default_factory=dict)
+    admins: List[int] = Field(default_factory=list)
 
 class BotMongoConfig:
     def __init__(self):
@@ -252,6 +250,26 @@ class BotMongoConfig:
 
         return result
 
+    async def get_all_chats_by_user(self, user_id: int) -> List[MongoChat]:
+        # Формируем запрос: ищем чаты, где есть пользователь с заданным ID
+        query = {f"users.{user_id}": {"$exists": True}}
+
+        # Указываем проекцию: возвращаем только нужные поля
+        projection = {
+            "_id": 1,
+            "chat_id": 1,
+            "title": 1,
+            "username": 1,
+            f"users.{user_id}": 1,
+        }
+
+        # Выполняем запрос к коллекции с проекцией
+        chats_cursor = self.chats_collection.find(query, projection)
+        chats_list = await chats_cursor.to_list(length=None)
+
+        # Конвертируем результаты в объекты MongoChat
+        return [MongoChat(**chat) for chat in chats_list]
+
     async def update_chat_with_dict(self, chat_id: int, update_data: Dict) -> bool:
         # Обновляем запись в базе данных для указанного chat_id
         result = await self.chats_collection.update_one(
@@ -261,6 +279,7 @@ class BotMongoConfig:
         # Возвращаем True, если хотя бы одна запись была обновлена
         return result.modified_count > 0
 
+
 async def update_users():
     # обновить список пользователей в чате
     await pyro_app.start()
@@ -268,8 +287,8 @@ async def update_users():
     await pyro_app.stop()
 
 
-
 if __name__ == "__main__":
-    _ = asyncio.run(update_users())
-    #_ = asyncio.run(BotMongoConfig().get_all_chats())
+    # _ = asyncio.run(update_users(''))
+    _ = asyncio.run(BotMongoConfig().get_all_chats_by_user(6227392660))
     print(_)
+
