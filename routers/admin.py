@@ -4,7 +4,9 @@ import hashlib
 import json
 import os
 import re
+import uuid
 from contextlib import suppress
+from datetime import datetime
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
@@ -20,6 +22,7 @@ from sqlalchemy.orm import Session
 from other.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
 from other.aiogram_tools import is_admin, cmd_delete_later, cmd_sleep_and_delete
+from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
@@ -812,6 +815,47 @@ async def cmd_eurmtl(message: Message):
             [InlineKeyboardButton(text="Tables", login_url=url2)],
         ]
     ))
+
+
+@router.message(Command(commands=["grist"]))
+@router.message(CommandStart(deep_link=True, magic=F.args == 'grist'), F.chat.type == "private")
+async def cmd_grist(message: Message):
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.full_name
+
+    try:
+        # Получаем данные из таблицы GRIST_access
+        access_records = await grist_manager.load_table_data(MTLGrist.GRIST_access)
+        for r in access_records:
+            print(r)
+
+        # Ищем пользователя в таблице
+        user_record = next((r for r in access_records if r.get('user_id') == user_id), None)
+
+        if not user_record:
+            await message.answer("❌ У вас нет доступа к Grist.")
+            return
+
+        # Генерируем новый ключ
+        new_key = str(uuid.uuid4())
+
+        # Обновляем запись пользователя
+        update_data = {
+            "records": [{
+                "id": user_record['id'],
+                "fields": {
+                    "key": new_key,
+                    "dt_update": datetime.now().isoformat()
+                }
+            }]
+        }
+
+        await grist_manager.patch_data(MTLGrist.GRIST_access, update_data)
+        await message.answer(f"✅ Новый ключ доступа:\n<code>{new_key}</code>")
+
+    except Exception as e:
+        logger.error(f"Grist access error: {e}")
+        await message.answer("⚠️ Произошла ошибка при обработке запроса. Попробуйте позже.")
 
 
 @router.message(Command(commands=["update_chats_info"]))
