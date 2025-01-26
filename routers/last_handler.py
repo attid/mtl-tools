@@ -100,7 +100,8 @@ async def check_spam(message, session):
 
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    if user_id in global_data.users_list and global_data.users_list[user_id] == 1:
+    #if user_id in global_data.users_list:
+    if global_data.check_user(user_id) == 1:
         return False
 
     rules_name = 'xz'
@@ -350,7 +351,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
         await save_last(message, session)
 
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    if user_id in global_data.users_list and global_data.users_list[user_id] == 0:
+    if global_data.check_user(user_id) == 0:
         await set_vote(message)  ##########
 
     add_bot_users(session, user_id, message.from_user.username, 1)
@@ -363,7 +364,9 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
 
 @router.message(ChatInOption('no_first_link'))  # точно не текс, выше остановились
 async def cmd_last_check_other(message: Message, session: Session, bot: Bot):
-    if message.from_user.id in global_data.users_list and global_data.users_list[message.from_user.id] == 1:
+    user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
+
+    if global_data.check_user(user_id) == 1:
         return False
 
     await delete_and_log_spam(message, session, 'not text')

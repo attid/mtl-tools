@@ -1,5 +1,7 @@
 from datetime import datetime
 from enum import Enum
+from threading import Lock
+from loguru import logger
 
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 
@@ -99,6 +101,23 @@ class GlobalData:
     notify_message = {}
     name_list = {}
     users_list = {}
+    users_lock = Lock()
+
+    @classmethod
+    def check_user(cls, user_id: int) -> int:
+        """Возвращает статус пользователя из списка или -1 если не найден"""
+        with cls.users_lock:
+            user_type = cls.users_list.get(user_id, -1)
+            logger.debug(f"Check user {user_id}: type {user_type}")
+            return user_type
+
+    @classmethod
+    def add_user(cls, user_id: int, user_type: int) -> int:
+        """Возвращает статус пользователя из списка или -1 если не найден"""
+        with cls.users_lock:
+            cls.users_list[user_id] = user_type
+            logger.debug(f"Add user {user_id}: type {user_type}")
+            return user_type
     info_cmd = {}
     # info_cmd = {'/my_cmd': {'info': 'my_cmd use', 'cmd_type': 0, 'cmd_list': 'my_cmd'}'}
     # type 0 none

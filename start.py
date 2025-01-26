@@ -159,12 +159,13 @@ async def load_globals(session: Session):
 
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
+    """Добавляет или обновляет пользователя в списке с логированием"""
+    global_data.add_user(user_id, new_user_type)
     # user_type = 1 if good else 2
     # -1 one mistake -2 two mistake
     ### user_type_now = global_data.users_list.get(user_id)
     ### # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
     ### if not user_type_now or (new_user_type > user_type_now):
-    global_data.users_list[user_id] = new_user_type
     db_save_bot_user(session, user_id, username, new_user_type)
 
 

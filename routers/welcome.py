@@ -222,7 +222,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                          full_name=event.new_chat_member.user.full_name,
                          is_admin=False)
     _ = asyncio.create_task(global_data.mongo_config.add_user_to_chat(event.chat.id, member))
-    user_type_now = global_data.users_list.get(event.new_chat_member.user.id)
+    user_type_now = global_data.check_user(event.new_chat_member.user.id)
     username = get_username_link(event.new_chat_member.user)
     if user_type_now == 2:
         with suppress(TelegramBadRequest):
@@ -538,7 +538,6 @@ async def cmd_unban(message: Message, session: Session, bot: Bot):
             else: #-100xxxxxxxxxx
                 await bot.unban_chat_sender_chat(message.chat.id, user_id)
 
-        global_data.users_list.pop(user_id, None)
         add_bot_users(session, user_id, None, 0)
         await message.reply(f"User (ID: {user_id}) has been unbanned.")
     else:
@@ -561,20 +560,19 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot):
     else:
         user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    if user_id in global_data.users_list:
-        user_type = global_data.users_list[user_id]
-        if user_type == 0:
-            message_text = "New User"
-        elif user_type == 1:
-            message_text = "Good User"
-        elif user_type == 2:
-            message_text = "Bad User"
-        else:
-            message_text = f"unknown status {user_type}"
-
-        await message.reply(f"User ID: {user_id}, Type: {message_text}")
+    user_type = global_data.check_user(user_id)
+    if user_type == 0:
+        message_text = "New User"
+    elif user_type == 1:
+        message_text = "Good User"
+    elif user_type == 2:
+        message_text = "Bad User"
     else:
-        await message.reply(f"ID {user_id} not found in user list.")
+        message_text = f"unknown status {user_type}"
+
+    await message.reply(f"User ID: {user_id}, Type: {message_text}")
+    # else:
+    #     await message.reply(f"ID {user_id} not found in user list.")
 
 
 @router.callback_query(UnbanCallbackData.filter())
@@ -585,7 +583,7 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
 
     with suppress(TelegramBadRequest):
         await bot.unban_chat_member(callback_data.chat_id, callback_data.user_id)
-        global_data.users_list.pop(callback_data.user_id, None)
+        # global_data.users_list.pop(callback_data.user_id, None)
         add_bot_users(session, callback_data.user_id, None, 0)
         await call.answer("User unbanned successfully.")
         await call.message.delete_reply_markup()
