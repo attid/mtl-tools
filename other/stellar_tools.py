@@ -606,31 +606,6 @@ async def get_cash_balance(chat_id):
     result += '|Кубышка |Наличных| EURMTL |\n'
 
     treasure_list = await grist_manager.load_table_data(MTLGrist.NOTIFY_TREASURY, sort='order')
-    treasure_list_ = [
-        ['GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL', 'Валеры'],
-        ['GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM', 'Дамира'],
-        ['GDMH3NZSKNWLYYGX7AMIG6QDOVZ3KDVNBEL7KHNGSXBWUBKU5ARMVOED', 'Егора'],
-        ['GDLCYXJLCUBJQ53ZMLTSDTDKR5R4IFRIL4PWEGDPHPIOQMFYHJ3HTVCP', 'Дмитрия'],
-        ['GDRLWWDXSRBVI7YZFVD2M3CON56Q3JDFGIJU5YL7VUJWUM4HWIGINBEL', 'Сергей'],
-        [],
-        ['GAOIY67QNDNFSOKTLSBGI4ZDLIEEPNKYBS7ZNJSSM7FRE6XX2MKSEZYW', 'Алексея'],
-        ['GB2ZUCM6YWQET4HHLJKMQP7FGUES4TF32VCUYHVNICGNVISAXBSARGUN', 'Антона'],
-        ['GC624CN4PZJX3YPMGRAWN4B75DJNT3AWIOLYY5IW3TWLPUAG6ER6IFE6', 'Генриха'],
-        ['GAJIOTDOP25ZMXB5B7COKU3FGY3QQNA5PPOKD5G7L2XLGYJ3EDKB2SSS', 'Игоря'],
-        ['GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O', 'Соза'],
-        ['GAAGBEUVMKO7D672X7FCNIYCBWDNWNEMFICMEKNCHUAWUZ2XCDWMTORT', 'Тортуга']
-    ]
-    #[
-  # {
-  #   "account_id": "GDQJN5QGDXWWZJWNO6FLM3PZVQZ4BUG2YID2TVP3SS5DJRI4XBB53BOL",
-  #   "name": "\u0412\u0430\u043b\u0435\u0440\u044b",
-  #   "order": 1
-  # },
-  # {
-  #   "account_id": "GAATY6RRLYL4CB6SCSUSSEELPTOZONJZ5WQRZQKSIWFKB4EXCFK4BDAM",
-  #   "name": "\u0414\u0430\u043c\u0438\u0440\u0430",
-  #   "order": 2
-  # },
 
     t = """
     ==============================
@@ -643,6 +618,8 @@ async def get_cash_balance(chat_id):
 
     for treasure in treasure_list:
         if len(treasure['account_id']) == 56:
+            if not treasure['enabled']:
+                continue
             assets = await get_balances(treasure['account_id'])
             diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
             name = treasure['name'] if chat_id == MTLChats.GuarantorGroup else treasure['name'][0]
