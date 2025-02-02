@@ -29,6 +29,7 @@ from other.global_data import global_data, MTLChats, global_tasks
 from other.gspread_tools import gs_update_namelist, gs_update_watchlist
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
+from routers.monitoring import register_handlers  # Импорт функции для регистрации роутера
 
 
 async def set_commands(bot):
@@ -124,6 +125,7 @@ async def main():
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
+
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
 
     dp.include_router(admin.router)
@@ -134,6 +136,8 @@ async def main():
     dp.include_router(welcome.router)
     dp.include_router(talk_handlers.router)  # last
     dp.include_router(last_handler.router)  # last, last
+
+    register_handlers(dp, bot)  # Регистрация роутера
 
     scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')#str(tzlocal.get_localzone()))
     aiogram_tools.scheduler = scheduler

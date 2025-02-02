@@ -39,6 +39,7 @@ class MTLChats:
     MTLAAgoraGroup = -1002032873651
     ClubFMCGroup = -1001777233595
     SerpicaGroup = -1001589557564
+    BotsChanel = -1002263825546
 
 
 class BotValueTypes(Enum):
@@ -137,6 +138,7 @@ class GlobalData:
     full_data = []
     no_first_link = []
     save_last_message_date = []
+    last_pong_response: datetime = datetime.now()
     need_decode = []
     first_vote = []
     first_vote_data = {}
