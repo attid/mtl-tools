@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from other.config_reader import start_path
 from other.web_tools import http_session_manager
 from scripts.update_report import update_airdrop, update_fest
-from other.aiogram_tools import multi_reply, add_text, multi_answer
+from other.aiogram_tools import multi_reply, add_text, multi_answer, answer_text_file
 from other.global_data import MTLChats, is_skynet_admin, global_data, update_command_info
 from other.gspread_tools import gs_check_bim, agcm
 from other.img_tools import create_image_with_text
@@ -363,12 +363,18 @@ async def cmd_do_usdm_usdm_div(message: Message, session: Session):
 async def cmd_get_vote_fund_xdr(message: Message):
     if len(message.text.split()) > 1:
         arr2 = await cmd_get_new_vote_all_mtl(message.text.split()[1])
-        await message.answer(arr2[0])
+        if len(arr2[0]) > 4000:
+            await answer_text_file(message, arr2[0], "vote_fund_xdr.txt")
+        else:
+            await message.answer(arr2[0])
     else:
         await message.answer('Делаю транзакции подождите несколько секунд')
         arr2 = await cmd_get_new_vote_all_mtl('')
         await message.answer('for FUND')
-        await multi_answer(message, arr2[0])
+        if len(arr2[0]) > 4000:
+            await answer_text_file(message, arr2[0], "vote_fund_xdr.txt")
+        else:
+            await multi_answer(message, arr2[0])
 
 
 @update_command_info("/get_btcmtl_xdr",
@@ -407,7 +413,7 @@ async def cmd_get_damircoin_xdr(message: Message):
 
 @update_command_info("/get_chicago_xdr", "Делает транзакцию кешбека для chicago")
 @router.message(Command(commands=["get_chicago_xdr"]))
-async def cmd_get_damircoin_xdr(message: Message):
+async def cmd_get_chicago_xdr(message: Message):
     result = await get_chicago_xdr()
     xdr = result[-1]
     await multi_answer(message, '\n'.join(result[:-1]))
@@ -416,7 +422,6 @@ async def cmd_get_damircoin_xdr(message: Message):
     else:
         text = (f'Не могу отправить xdr вы можете получить его по ссылке ' +
                 f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>')
-        print(text)
         await message.answer(text)
     await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
 

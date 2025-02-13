@@ -11,7 +11,7 @@ router = Router()
 router.message.filter(F.chat.id == MTLChats.BotsChanel)
 
 PING_INTERVAL = 60  # seconds
-PING_TIMEOUT = 120  # seconds
+PING_TIMEOUT = 100  # seconds
 
 @router.channel_post(F.text.regexp(r'^\s*#skynet'))
 async def handle_skynet_message(message: types.Message):

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
-from aiogram.types import Message, User, CallbackQuery, Chat, ChatMember, ReactionTypeCustomEmoji
+from aiogram.types import Message, User, CallbackQuery, Chat, ChatMember, ReactionTypeCustomEmoji, BufferedInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from middlewares.retry import logger
@@ -109,6 +109,14 @@ async def multi_answer(message: Message, text: str):
     while len(text) > 0:
         await message.answer(text[:4000])
         text = text[4000:]
+
+
+async def answer_text_file(message: Message, text: str, filename: str = None):
+    """Отправляет текст как файл, используя BufferedInputFile"""
+    if filename is None:
+        filename = f"response_{message.message_id}.txt"
+    text_file = BufferedInputFile(text.encode(), filename=filename)
+    await message.answer_document(text_file)
 
 
 def has_words(master, words_array):
