@@ -21,10 +21,10 @@ from sqlalchemy.orm import Session
 
 from other.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
-from other.aiogram_tools import is_admin, cmd_delete_later, cmd_sleep_and_delete
+from other.aiogram_tools import is_admin, cmd_delete_later, cmd_sleep_and_delete, ChatInOption, get_username_link
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
-from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
+from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info, is_topic_admin
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
 from other.pyro_tools import get_group_members, remove_deleted_users, pyro_test
@@ -539,6 +539,7 @@ commands_info = {
     "set_listen": (global_data.listen, BotValueTypes.Listen, "toggle", "skynet_admin", 1),
     # ToDo need show to skyadmin in helpers
     "set_captcha": (global_data.captcha, BotValueTypes.Captcha, "toggle", "admin", 1),
+    "set_moderate": (global_data.moderate, BotValueTypes.Moderate, "toggle", "admin", 1),
 
     "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3),
     "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0),
@@ -546,7 +547,9 @@ commands_info = {
     "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin", 3),
     "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin", 0),
     "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin", 0),
-
+    "add_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "add_list_topic", "admin", 3),
+    "del_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "del_list_topic", "admin", 0),
+    "show_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "show_list_topic", "admin", 0),
 }
 
 
@@ -571,6 +574,7 @@ async def command_config_loads(session: Session):
                     json.loads(await global_data.mongo_config.load_bot_value(0, global_data_key, '[]')))
 
     global_data.votes = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
+    global_data.topic_mute = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
 
     global_data.welcome_messages = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
     global_data.welcome_button = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
@@ -597,6 +601,9 @@ async def command_config_loads(session: Session):
                      "Добавить пользователей в админы скайнета. запуск с параметрами "
                      "/add_skynet_admin @user1 @user2 итд")
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
+@update_command_info("/add_topic_admin", "Добавить админов топика. Использование: /add_topic_admin @user1 @user2")
+@update_command_info("/del_topic_admin", "Удалить админов топика. Использование: /del_topic_admin @user1 @user2")
+@update_command_info("/show_topic_admin", "Показать админов топика")
 @update_command_info("/notify_join_request",
                      "Оповещать о новом участнике, требующем подтверждения для присоединения. "
                      "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу", 2,
@@ -610,6 +617,7 @@ async def command_config_loads(session: Session):
                      "Работает только совместно с /notify_join_request")
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
+@update_command_info("/set_moderate", "Включает\Выключает режим модерации", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, bot: Bot):
     command = message.text.lower().split()[0][1:]
@@ -641,7 +649,14 @@ async def universal_command_handler(message: Message, bot: Bot):
 
     if action_type in ["add_list", "del_list", "show_list"]:
         await list_command_handler(message, command_info)
-    else:  # toggle
+
+    if action_type in ["add_list_topic", "del_list_topic", "show_list_topic"]:
+        if not message.message_thread_id:
+            await message.reply("Run this command in thread.")
+            return
+        await list_command_handler_topic(message, command_info)
+
+    if action_type == "toggle":
         await handle_command(message, command_info)
 
 
@@ -706,6 +721,44 @@ async def list_command_handler(message: Message, command_info):
             await message.reply(' '.join(global_data_field))
         else:
             await message.reply('The list is empty.')
+
+
+async def list_command_handler_topic(message: Message, command_info):
+    global_data_field = command_info[0]  # will be dict
+    db_value_type = command_info[1]
+    action_type = command_info[2]
+
+    command_args = message.text.lower().split()[1:]  # аргументы после команды
+    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+
+    if action_type == "add_list_topic":
+        if not command_args:
+            await message.reply("Необходимо указать аргументы.")
+        else:
+            if chat_thread_key not in global_data_field:
+                global_data_field[chat_thread_key] = []
+            global_data_field[chat_thread_key].extend(command_args)
+            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await message.reply(f'Added at this thread: {" ".join(command_args)}')
+
+    elif action_type == "del_list_topic":
+        if not command_args:
+            await message.reply("Необходимо указать аргументы.")
+        else:
+            if chat_thread_key in global_data_field:
+                for arg in command_args:
+                    if arg in global_data_field[chat_thread_key]:
+                        global_data_field[chat_thread_key].remove(arg)
+                await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+                await message.reply(f'Removed from this thread: {" ".join(command_args)}')
+            else:
+                await message.reply('This thread has no items in the list.')
+
+    elif action_type == "show_list_topic":
+        if chat_thread_key in global_data_field and global_data_field[chat_thread_key]:
+            await message.reply(f'Items in this thread: {" ".join(global_data_field[chat_thread_key])}')
+        else:
+            await message.reply('The list for this thread is empty.')
 
 
 @router.message(Command(commands=["update_mtlap"]))
@@ -986,6 +1039,89 @@ async def cmd_calc(message: Message):
     with suppress(TelegramBadRequest):
         await message.reply_to_message.reply(f"This message was {difference} messages ago.")
         await message.delete()
+
+
+@update_command_info("/mute", "Блокирует пользователя в текущей ветке")
+@router.message(ChatInOption('moderate'), Command(commands=["mute"]))
+async def cmd_mute(message: Message, session: Session):
+    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+    if chat_thread_key not in global_data.topic_admins:
+        await message.reply('Local admins not set yet')
+        return False
+
+    if not is_topic_admin(message):
+        await message.reply('You are not local admin')
+        return False
+
+    if message.reply_to_message is None or message.reply_to_message.forum_topic_created:
+        await message.reply('Please send for reply message to set mute')
+        return
+
+    delta = await parse_timedelta_from_message(message)
+    user_id = message.reply_to_message.from_user.id
+    end_time_str = (datetime.now() + delta).isoformat()
+
+    if chat_thread_key not in global_data.topic_mute:
+        global_data.topic_mute[chat_thread_key] = {}
+
+    user = get_username_link(message.reply_to_message.from_user)
+    global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
+
+    await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
+
+
+@update_command_info("/show_mute", "Показывает пользователей, которые заблокированы в текущей ветке")
+@router.message(ChatInOption('moderate'), Command(commands=["show_mute"]))
+async def cmd_show_mutes(message: Message, session: Session):
+    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+
+    if chat_thread_key not in global_data.topic_admins:
+        await message.reply('Local admins not set yet')
+        return False
+
+    if not is_topic_admin(message):
+        await message.reply('You are not local admin')
+        return False
+
+    if chat_thread_key not in global_data.topic_mute or not global_data.topic_mute[chat_thread_key]:
+        await message.reply('No users are currently muted in this topic')
+        return
+
+    current_time = datetime.now()
+    muted_users = []
+    users_to_remove = []
+
+    # Create a copy of the dictionary items to iterate over
+    mute_items = list(global_data.topic_mute[chat_thread_key].items())
+
+    for user_id, mute_info in mute_items:
+        try:
+            end_time = datetime.fromisoformat(mute_info["end_time"])
+            if end_time > current_time:
+                remaining_time = end_time - current_time
+                muted_users.append(f"{mute_info['user']} - {remaining_time}")
+            else:
+                # Mark expired mutes for removal
+                users_to_remove.append(user_id)
+        except (ValueError, KeyError):
+            # Ignore invalid date values
+            continue
+
+    # Remove expired mutes
+    for user_id in users_to_remove:
+        del global_data.topic_mute[chat_thread_key][user_id]
+
+    # Save changes to global_data.topic_mute if any mutes were removed
+    if users_to_remove:
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                      json.dumps(global_data.topic_mute))
+
+    if muted_users:
+        mute_list = "\n".join(muted_users)
+        await message.reply(f"Currently muted users in this topic:\n{mute_list}")
+    else:
+        await message.reply('No users are currently muted in this topic')
 
 
 @router.message(Command(commands=["test2"]))

@@ -1,6 +1,8 @@
 import asyncio
 import html
+import json
 from contextlib import suppress
+from datetime import datetime
 
 from aiogram import F, Bot, Router
 from aiogram.enums import MessageEntityType
@@ -62,9 +64,9 @@ async def delete_and_log_spam(message, session, rules_name):
     user_username = message.sender_chat.username if message.sender_chat else message.from_user.username
     with suppress(TelegramBadRequest):
         await message.chat.restrict(user_id,
-                                permissions=ChatPermissions(can_send_messages=False,
-                                                            can_send_media_messages=False,
-                                                            can_send_other_messages=False))
+                                    permissions=ChatPermissions(can_send_messages=False,
+                                                                can_send_media_messages=False,
+                                                                can_send_other_messages=False))
     msg = await message.forward(MTLChats.SpamGroup)
     chat_link = f'@{message.chat.username}' if message.chat.username else message.chat.invite_link
     msg_text = f'Сообщение из чата {message.chat.title} {chat_link}\n{rules_name}'
@@ -100,7 +102,7 @@ async def check_spam(message, session):
 
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    #if user_id in global_data.users_list:
+    # if user_id in global_data.users_list:
     if global_data.check_user(user_id) == 1:
         return False
 
@@ -319,6 +321,48 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
         await multi_reply(message, msg)
 
 
+async def check_mute(message, session):
+    #     global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time, "user": user}
+    #     await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
+    if message.chat.id not in global_data.moderate:
+        return False
+
+    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+
+    if chat_thread_key not in global_data.topic_mute:
+        return False
+
+    user_id = message.from_user.id
+    if user_id not in global_data.topic_mute[chat_thread_key]:
+        return False
+
+    mute_info = global_data.topic_mute[chat_thread_key][user_id]
+    current_time = datetime.now()
+
+    try:
+        end_time = datetime.fromisoformat(mute_info["end_time"])
+    except ValueError as e:
+        logger.error(f"Invalid date format for user {user_id} in chat {chat_thread_key}: {e}")
+        # Remove the invalid entry
+        del global_data.topic_mute[chat_thread_key][user_id]
+        if not global_data.topic_mute[chat_thread_key]:
+            del global_data.topic_mute[chat_thread_key]
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                      json.dumps(global_data.topic_mute))
+        return False
+
+    if current_time < end_time:
+        await message.delete()
+        return True
+    else:
+        del global_data.topic_mute[chat_thread_key][user_id]
+        if not global_data.topic_mute[chat_thread_key]:
+            del global_data.topic_mute[chat_thread_key]
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                      json.dumps(global_data.topic_mute))
+        return False
+
+
 ########################################################################################################################
 ##########################################  handlers  ##################################################################
 ########################################################################################################################
@@ -339,6 +383,9 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
     if message.chat.id in global_data.save_last_message_date:
         await save_last(message, session)
 
+    if message.chat.id in global_data.moderate:
+        await check_mute(message, session)
+
     if message.chat.id in global_data.notify_message:
         await notify_message(message)
 
@@ -346,9 +393,6 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
         await cmd_check_reply_only(message, session, bot)
 
     await check_alert(bot, message, session)
-
-    if message.chat.id in global_data.save_last_message_date:
-        await save_last(message, session)
 
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
     if global_data.check_user(user_id) == 0:
@@ -397,11 +441,13 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
                                        permissions=chat.permissions)
         await query.answer("Oops, bringing the message back!", show_alert=True)
         add_bot_users(session, callback_data.user_id, None, 1)
-        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.username}"))
+        await query.message.edit_reply_markup(
+            reply_markup=get_named_reply_markup(f"✅ Restored {query.from_user.username}"))
     else:
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer("Banned !")
-        await query.message.edit_reply_markup(reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
+        await query.message.edit_reply_markup(
+            reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
         with suppress(TelegramBadRequest):
             await query.bot.ban_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id)
 

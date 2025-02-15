@@ -18,9 +18,9 @@ class MTLChats:
     GuarantorGroup = -1001169382324  # Guarantors EURMTL
     DistributedGroup = -1001798357244  # distributed government
     ShareholderGroup = -1001269297637
-    GroupAnonymousBot = 1087968824 # анонимный админ
-    Channel_Bot = 136817688 # от всех каналов приходит с этим ID
-    Telegram_Repost_Bot = 777000 # репост из канала в чат
+    GroupAnonymousBot = 1087968824  # анонимный админ
+    Channel_Bot = 136817688  # от всех каналов приходит с этим ID
+    Telegram_Repost_Bot = 777000  # репост из канала в чат
     FARMGroup = -1001876391583
     LandLordGroup = -1001757912662
     SignGroupForChanel = -1001784614029
@@ -83,6 +83,9 @@ class BotValueTypes(Enum):
     JoinRequestCaptcha = 38
     FirstVote = 39
     LastTransaction = 40
+    Moderate = 41
+    TopicAdmins = 42
+    TopicMutes = 43
 
 
 class LogQuery:
@@ -119,6 +122,7 @@ class GlobalData:
             cls.users_list[user_id] = user_type
             logger.debug(f"Add user {user_id}: type {user_type}")
             return user_type
+
     info_cmd = {}
     # info_cmd = {'/my_cmd': {'info': 'my_cmd use', 'cmd_type': 0, 'cmd_list': 'my_cmd'}'}
     # type 0 none
@@ -128,6 +132,8 @@ class GlobalData:
     admins = {}
     alert_me = {}
     sync = {}
+    topic_admins = {}
+    topic_mute = {}
     join_request_captcha = []
     skynet_admins = []
     skynet_img = []
@@ -142,6 +148,7 @@ class GlobalData:
     need_decode = []
     first_vote = []
     first_vote_data = {}
+    moderate = []
     mongo_config: BotMongoConfig
     reboot = False
 
@@ -153,6 +160,15 @@ global_tasks = []
 
 def is_skynet_admin(event: Message | ChatMemberUpdated | CallbackQuery):
     return f'@{event.from_user.username.lower()}' in global_data.skynet_admins
+
+
+def is_topic_admin(event: Message | ChatMemberUpdated | CallbackQuery):
+    if not event.message_thread_id:
+        return False
+    chat_thread_key = f"{event.chat.id}-{event.message_thread_id}"
+    if not chat_thread_key in global_data.topic_admins:
+        return False
+    return f'@{event.from_user.username.lower()}' in global_data.topic_admins[chat_thread_key]
 
 
 def float2str(f) -> str:
