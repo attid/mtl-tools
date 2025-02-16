@@ -24,6 +24,7 @@ class MTLGrist:
 
     MTLA_CHATS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_CHATS")
     MTLA_COUNCILS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_COUNCILS")
+    MTLA_USERS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "Users")
 
     SP_USERS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_USERS")
     SP_CHATS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_CHATS")
@@ -36,6 +37,8 @@ class MTLGrist:
 
 
 
+
+
 class GristAPI:
     def __init__(self, session_manager: HTTPSessionManager = None):
         self.session_manager = session_manager
@@ -43,19 +46,36 @@ class GristAPI:
         if not self.session_manager:
             self.session_manager = HTTPSessionManager()
 
-    async def fetch_data(self, table: GristTableConfig, sort: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def fetch_data(self, table: GristTableConfig, sort: Optional[str] = None,
+                        filter_dict: Optional[Dict[str, List[Any]]] = None) -> List[Dict[str, Any]]:
         """
         Загружает данные из указанной таблицы Grist.
+
+        Args:
+            table: Конфигурация таблицы
+            sort: Параметр сортировки
+            filter_dict: Словарь фильтрации в формате {"column": [value1, value2]}
+                        Пример: {"TGID": [123456789]}
         """
+        from urllib.parse import quote
+        
         headers = {
             'accept': 'application/json',
             'Authorization': f'Bearer {self.token}'
         }
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
-        params = ''
+        params = []
+        
         if sort:
-            params = f"sort={sort}"
-            url = f"{url}?{params}"
+            params.append(f"sort={sort}")
+        if filter_dict:
+            # Преобразуем словарь в JSON и кодируем для URL
+            filter_json = json.dumps(filter_dict)
+            encoded_filter = quote(filter_json)
+            params.append(f"filter={encoded_filter}")
+            
+        if params:
+            url = f"{url}?{'&'.join(params)}"
         response = await self.session_manager.get_web_request(method='GET', url=url, headers=headers)
 
         match response.status:
@@ -104,13 +124,19 @@ class GristAPI:
             case _:
                 raise Exception(f'Ошибка запроса: Статус {response.status}')
 
-    async def load_table_data(self, table: GristTableConfig, sort: Optional[str] = None) -> Optional[
-        List[Dict[str, Any]]]:
+    async def load_table_data(self, table: GristTableConfig, sort: Optional[str] = None,
+                            filter_dict: Optional[Dict[str, List[Any]]] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Загружает данные из таблицы с обработкой ошибок.
+
+        Args:
+            table: Конфигурация таблицы
+            sort: Параметр сортировки
+            filter_dict: Словарь фильтрации в формате {"column": [value1, value2]}
+                        Пример: {"TGID": [123456789]}
         """
         try:
-            records = await self.fetch_data(table, sort)
+            records = await self.fetch_data(table, sort, filter_dict)
             logger.info(f"Данные из таблицы {table.table_name} успешно загружены")
             return records
         except Exception as e:
@@ -124,17 +150,15 @@ grist_manager = GristAPI(grist_session_manager)
 
 
 async def main():
-    # Пример загрузки данных
-    assets = await grist_manager.load_table_data(MTLGrist.NOTIFY_TREASURY, sort='order')
-    if assets:
-        print(json.dumps(assets, indent=2))
+    # Пример загрузки данных с фильтрацией по TGUD
+    users = await grist_manager.load_table_data(
+        MTLGrist.MTLA_USERS,
+        filter_dict={"TGID": [3344083]}
+    )
+    if users:
+        print(json.dumps(users, indent=2))
+        print(users[0]["Stellar"])
     await grist_session_manager.close()
-
-    # Пример обновления данных
-    # update_data = {"records": [{"fields": {"name": "New Asset", "value": 100}}]}
-    # success = await grist_notify.put_data('Assets', update_data)
-    # if success:
-    #     logger.info("Данные успешно обновлены")
 
 
 if __name__ == '__main__':
