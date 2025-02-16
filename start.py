@@ -82,7 +82,7 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
 # async def startup_update_namelist(bot: Bot):
 #     await gs_update_namelist()
 #     with suppress(TelegramBadRequest):
-#         await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
+#     await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
 
 
 async def on_shutdown(bot: Bot):
@@ -115,9 +115,8 @@ async def main():
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 
-    await load_globals(db_pool())
+    global_tasks.append(asyncio.create_task(load_globals(db_pool())))
     from routers import (admin, inline, polls, start_router, stellar, talk_handlers, time_handlers, welcome)
-
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
