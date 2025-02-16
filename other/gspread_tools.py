@@ -160,184 +160,184 @@ async def gs_find_user(user_id):
     return result
 
 
-async def gs_update_watchlist(session_pool):
-    # Open the MTL_assets worksheet
-    agc = await agcm.authorize()
-    ss = await agc.open("MTL_assets")
-
-    # Check and process the ACCOUNTS worksheet
-    ws_accounts = await ss.worksheet("ACCOUNTS")
-    if (await ws_accounts.acell('G1')).value == 'pub_key':
-        keys_accounts = [cell for cell in (await ws_accounts.col_values(7)) if len(cell) == 56]
-    else:
-        raise ValueError("Expected 'pub_key' in cell G1 of the ACCOUNTS worksheet")
-
-    # Check and process the ASSETS worksheet
-    ws_assets = await ss.worksheet("ASSETS")
-    if (await ws_assets.acell('F1')).value == 'issuer':
-        keys_assets = [cell for cell in (await ws_assets.col_values(6)) if len(cell) == 56]
-    else:
-        raise ValueError("Expected 'issuer' in cell F1 of the ASSETS worksheet")
-
-    # Combine the keys and add to watchlist
-    combined_keys = keys_accounts + keys_assets
-
-    # Remove duplicates from the combined keys list
-    combined_keys = list(set(combined_keys))
-
-    with session_pool() as session:
-        add_to_watchlist(session, combined_keys)
-
-
-async def gs_update_namelist():
-    # Open the MTL_assets worksheet
-    agc = await agcm.authorize()
-    ss = await agc.open("MTL_assets")
-
-    # Select the ACCOUNTS worksheet
-    ws_accounts = await ss.worksheet("ACCOUNTS")
-    if (await ws_accounts.acell('G1')).value == 'pub_key' and (await ws_accounts.acell('C1')).value == 'descr':
-        keys = await ws_accounts.col_values(7)
-        descs = await ws_accounts.col_values(3)
-        key_to_desc = {}
-        for key, desc in zip_longest(keys, descs, fillvalue=''):
-            if len(key) == 56:
-                if desc:
-                    key_to_desc[key] = desc
-                else:
-                    key_to_desc[key] = key[:4] + '__' + key[-4:]
-
-    else:
-        raise ValueError("Expected 'pub_key' in cell G1 and 'descr' in cell C1 of the ACCOUNTS worksheet")
-
-    # Open the MTL_ID_register worksheet
-    ss_id_register = await agc.open("MTL_ID_register")
-
-    # Select the List worksheet
-    ws_list = await ss_id_register.worksheet("List")
-    if (await ws_list.acell('F2')).value == 'stellar_key' and (await ws_list.acell('D2')).value == 'tg_username':
-        keys = await ws_list.col_values(6)
-        usernames = await ws_list.col_values(4)
-        for key, username in zip_longest(keys, usernames, fillvalue=''):
-            if len(key) == 56:
-                if username:
-                    key_to_desc[key] = username
-                else:
-                    key_to_desc[key] = key[:4] + '__' + key[-4:]
-        # global_data.name_list = key_to_desc
-    else:
-        raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
-    # print(key_to_desc)
-    ss_mtlap = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
-    ws_mtlap = await ss_mtlap.worksheet("MTLAP")
-
-    # Проверяем заголовки в первой строке
-    headers = await ws_mtlap.row_values(1)
-    if headers[0].lower() == 'telegram' and headers[2].lower() == 'stellar':
-        # Считываем данные из столбцов Telegram и Stellar
-        tgs = await ws_mtlap.col_values(1)
-        stellar_keys = await ws_mtlap.col_values(3)
-
-        # Добавляем данные в словарь key_to_desc
-        for tg, stellar_key in zip_longest(tgs, stellar_keys, fillvalue=''):
-            if len(stellar_key) == 56:
-                if tg:
-                    key_to_desc[stellar_key] = tg[1:]
-                else:
-                    key_to_desc[stellar_key] = stellar_key[:4] + '__' + stellar_key[-4:]
-    else:
-        raise ValueError("Expected 'Telegram' in column 1 and 'Stellar' in column 3 of the MTLAP worksheet")
-    # print(key_to_desc)
-    global_data.name_list = key_to_desc
+# async def gs_update_watchlist(session_pool):
+#     # Open the MTL_assets worksheet
+#     agc = await agcm.authorize()
+#     ss = await agc.open("MTL_assets")
+#
+#     # Check and process the ACCOUNTS worksheet
+#     ws_accounts = await ss.worksheet("ACCOUNTS")
+#     if (await ws_accounts.acell('G1')).value == 'pub_key':
+#         keys_accounts = [cell for cell in (await ws_accounts.col_values(7)) if len(cell) == 56]
+#     else:
+#         raise ValueError("Expected 'pub_key' in cell G1 of the ACCOUNTS worksheet")
+#
+#     # Check and process the ASSETS worksheet
+#     ws_assets = await ss.worksheet("ASSETS")
+#     if (await ws_assets.acell('F1')).value == 'issuer':
+#         keys_assets = [cell for cell in (await ws_assets.col_values(6)) if len(cell) == 56]
+#     else:
+#         raise ValueError("Expected 'issuer' in cell F1 of the ASSETS worksheet")
+#
+#     # Combine the keys and add to watchlist
+#     combined_keys = keys_accounts + keys_assets
+#
+#     # Remove duplicates from the combined keys list
+#     combined_keys = list(set(combined_keys))
+#
+#     with session_pool() as session:
+#         add_to_watchlist(session, combined_keys)
 
 
-async def gs_get_assets_dict():
-    agc = await agcm.authorize()
+# async def gs_update_namelist():
+#     # Open the MTL_assets worksheet
+#     agc = await agcm.authorize()
+#     ss = await agc.open("MTL_assets")
+#
+#     # Select the ACCOUNTS worksheet
+#     ws_accounts = await ss.worksheet("ACCOUNTS")
+#     if (await ws_accounts.acell('G1')).value == 'pub_key' and (await ws_accounts.acell('C1')).value == 'descr':
+#         keys = await ws_accounts.col_values(7)
+#         descs = await ws_accounts.col_values(3)
+#         key_to_desc = {}
+#         for key, desc in zip_longest(keys, descs, fillvalue=''):
+#             if len(key) == 56:
+#                 if desc:
+#                     key_to_desc[key] = desc
+#                 else:
+#                     key_to_desc[key] = key[:4] + '__' + key[-4:]
+#
+#     else:
+#         raise ValueError("Expected 'pub_key' in cell G1 and 'descr' in cell C1 of the ACCOUNTS worksheet")
+#
+#     # Open the MTL_ID_register worksheet
+#     ss_id_register = await agc.open("MTL_ID_register")
+#
+#     # Select the List worksheet
+#     ws_list = await ss_id_register.worksheet("List")
+#     if (await ws_list.acell('F2')).value == 'stellar_key' and (await ws_list.acell('D2')).value == 'tg_username':
+#         keys = await ws_list.col_values(6)
+#         usernames = await ws_list.col_values(4)
+#         for key, username in zip_longest(keys, usernames, fillvalue=''):
+#             if len(key) == 56:
+#                 if username:
+#                     key_to_desc[key] = username
+#                 else:
+#                     key_to_desc[key] = key[:4] + '__' + key[-4:]
+#         # global_data.name_list = key_to_desc
+#     else:
+#         raise ValueError("Expected 'stellar_key' in cell F2 and 'tg_username' in cell D2 of the List worksheet")
+#     # print(key_to_desc)
+#     ss_mtlap = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+#     ws_mtlap = await ss_mtlap.worksheet("MTLAP")
+#
+#     # Проверяем заголовки в первой строке
+#     headers = await ws_mtlap.row_values(1)
+#     if headers[0].lower() == 'telegram' and headers[2].lower() == 'stellar':
+#         # Считываем данные из столбцов Telegram и Stellar
+#         tgs = await ws_mtlap.col_values(1)
+#         stellar_keys = await ws_mtlap.col_values(3)
+#
+#         # Добавляем данные в словарь key_to_desc
+#         for tg, stellar_key in zip_longest(tgs, stellar_keys, fillvalue=''):
+#             if len(stellar_key) == 56:
+#                 if tg:
+#                     key_to_desc[stellar_key] = tg[1:]
+#                 else:
+#                     key_to_desc[stellar_key] = stellar_key[:4] + '__' + stellar_key[-4:]
+#     else:
+#         raise ValueError("Expected 'Telegram' in column 1 and 'Stellar' in column 3 of the MTLAP worksheet")
+#     # print(key_to_desc)
+#     global_data.name_list = key_to_desc
 
-    # Откройте таблицу и получите лист
-    ss = await agc.open("MTL_assets")
-    wks = await ss.worksheet("ASSETS")
 
-    # Получите данные из листа
-    data = await wks.get_all_values()
-
-    # Проверьте заголовки
-    if data[0][0] != 'code' or data[0][5] != 'issuer' or data[0][13] != 'eurmtl.me':
-        return {}
-
-    # Создайте словарь
-    assets_dict = {}
-    for row in data[1:]:
-        code = row[0]
-        issuer = row[5]
-        eurmtl = row[13]
-
-        # Проверьте условия
-        if eurmtl != 'TRUE' or len(issuer) < 56 or len(code) < 3:
-            continue
-
-        # Добавьте в словарь
-        assets_dict[code] = issuer
-
-    return assets_dict
-
-
-async def gs_get_accounts_dict():
-    agc = await agcm.authorize()
-
-    # Откройте таблицу и получите лист
-    ss = await agc.open("MTL_assets")
-    wks = await ss.worksheet("ACCOUNTS")
-
-    # Получите данные из листа
-    data = await wks.get_all_values()
-
-    # Проверьте заголовки
-    if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][7] != 'eurmtl.me':
-        return None
-
-    # Создайте словарь
-    accounts_dict = {}
-    for row in data[1:]:
-        descr = row[2]
-        pub_key = row[6]
-        eurmtl = row[7]
-
-        # Проверьте условия
-        if eurmtl != 'TRUE' or len(pub_key) != 56 or len(descr) < 3:
-            continue
-
-        # Добавьте в словарь
-        accounts_dict[descr] = pub_key
-
-    return accounts_dict
+# async def gs_get_assets_dict():
+#     agc = await agcm.authorize()
+#
+#     # Откройте таблицу и получите лист
+#     ss = await agc.open("MTL_assets")
+#     wks = await ss.worksheet("ASSETS")
+#
+#     # Получите данные из листа
+#     data = await wks.get_all_values()
+#
+#     # Проверьте заголовки
+#     if data[0][0] != 'code' or data[0][5] != 'issuer' or data[0][13] != 'eurmtl.me':
+#         return {}
+#
+#     # Создайте словарь
+#     assets_dict = {}
+#     for row in data[1:]:
+#         code = row[0]
+#         issuer = row[5]
+#         eurmtl = row[13]
+#
+#         # Проверьте условия
+#         if eurmtl != 'TRUE' or len(issuer) < 56 or len(code) < 3:
+#             continue
+#
+#         # Добавьте в словарь
+#         assets_dict[code] = issuer
+#
+#     return assets_dict
 
 
-async def gs_get_accounts_multi_list() -> list:
-    agc = await agcm.authorize()
+# async def gs_get_accounts_dict():
+#     agc = await agcm.authorize()
+#
+#     # Откройте таблицу и получите лист
+#     ss = await agc.open("MTL_assets")
+#     wks = await ss.worksheet("ACCOUNTS")
+#
+#     # Получите данные из листа
+#     data = await wks.get_all_values()
+#
+#     # Проверьте заголовки
+#     if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][7] != 'eurmtl.me':
+#         return None
+#
+#     # Создайте словарь
+#     accounts_dict = {}
+#     for row in data[1:]:
+#         descr = row[2]
+#         pub_key = row[6]
+#         eurmtl = row[7]
+#
+#         # Проверьте условия
+#         if eurmtl != 'TRUE' or len(pub_key) != 56 or len(descr) < 3:
+#             continue
+#
+#         # Добавьте в словарь
+#         accounts_dict[descr] = pub_key
+#
+#     return accounts_dict
 
-    ss = await agc.open("MTL_assets")
-    wks = await ss.worksheet("ACCOUNTS")
 
-    data = await wks.get_all_values()
-
-    if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][5] != 'signers':
-        return None
-
-    accounts_list = []
-    for row in data[1:]:
-        descr = row[2]
-        pub_key = row[6]
-        flag = row[5]
-
-        # Проверьте условия
-        if flag.lower().find('multisp') == -1 or len(pub_key) != 56 or len(descr) < 3:
-            continue
-
-        # Добавьте в словарь
-        accounts_list.append(pub_key)
-
-    return accounts_list
+# async def gs_get_accounts_multi_list() -> list:
+#     agc = await agcm.authorize()
+#
+#     ss = await agc.open("MTL_assets")
+#     wks = await ss.worksheet("ACCOUNTS")
+#
+#     data = await wks.get_all_values()
+#
+#     if data[0][2] != 'descr' or data[0][6] != 'pub_key' or data[0][5] != 'signers':
+#         return None
+#
+#     accounts_list = []
+#     for row in data[1:]:
+#         descr = row[2]
+#         pub_key = row[6]
+#         flag = row[5]
+#
+#         # Проверьте условия
+#         if flag.lower().find('multisp') == -1 or len(pub_key) != 56 or len(descr) < 3:
+#             continue
+#
+#         # Добавьте в словарь
+#         accounts_list.append(pub_key)
+#
+#     return accounts_list
 
 
 async def gs_get_chicago_premium():

@@ -26,7 +26,6 @@ from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
 from routers import last_handler
 from other.global_data import global_data, MTLChats, global_tasks
-from other.gspread_tools import gs_update_namelist, gs_update_watchlist
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
 from routers.monitoring import register_handlers  # Импорт функции для регистрации роутера
@@ -72,18 +71,18 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
     # with suppress(TelegramBadRequest):
     #     await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
-    global_tasks.append(asyncio.create_task(work_with_support()))
     if 'test' in sys.argv:
         return
+    global_tasks.append(asyncio.create_task(work_with_support()))
     await pyro_start()
-    _ = asyncio.create_task(startup_update_namelist(bot))
-    _ = asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
+    # _ = asyncio.create_task(startup_update_namelist(bot))
+    # _ = asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
 
 
-async def startup_update_namelist(bot: Bot):
-    await gs_update_namelist()
-    with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
+# async def startup_update_namelist(bot: Bot):
+#     await gs_update_namelist()
+#     with suppress(TelegramBadRequest):
+#         await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
 
 
 async def on_shutdown(bot: Bot):

@@ -38,7 +38,7 @@ async def cmd_decode(message: Message):
         if message.text.find('eurmtl.me') > -1:
             msg = await check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         else:
-            msg = decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
+            msg = await decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         msg = f'\n'.join(msg)
         await multi_reply(message, msg)
     except Exception as e:
@@ -386,7 +386,7 @@ async def cmd_get_defi_xdr_(message: Message):
         memo = None if len(arg) < 3 else ' '.join(arg[3:])
         xdr = await get_btcmtl_xdr(float2str(arg[1]), arg[2], memo)
         await multi_answer(message, xdr)
-        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+        await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))
     else:
         await multi_answer(message,
                            'use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL')
@@ -398,7 +398,7 @@ async def cmd_get_damircoin_xdr(message: Message):
     if len(arg) > 1:
         xdr = await get_damircoin_xdr(int(arg[1]))
         await multi_answer(message, xdr)
-        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+        await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))
     else:
         await multi_answer(message,
                            'use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL')
@@ -408,7 +408,7 @@ async def cmd_get_damircoin_xdr(message: Message):
 async def cmd_get_damircoin_xdr(message: Message):
     xdr = await get_agora_xdr()
     await multi_answer(message, xdr)
-    await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+    await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))
 
 
 @update_command_info("/get_chicago_xdr", "Делает транзакцию кешбека для chicago")
@@ -423,7 +423,7 @@ async def cmd_get_chicago_xdr(message: Message):
         text = (f'Не могу отправить xdr вы можете получить его по ссылке ' +
                 f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>')
         await message.answer(text)
-    await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+    await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))
 
 
 @router.message(Command(commands=["get_toc_xdr"]))
@@ -432,7 +432,7 @@ async def cmd_get_toc_xdr(message: Message):
     if len(arg) > 1:
         xdr = await get_toc_xdr(int(arg[1]))
         await multi_answer(message, xdr)
-        await multi_answer(message, '\n'.join(decode_xdr(xdr=xdr)))
+        await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))
     else:
         await multi_answer(message,
                            'use -  /get_toc_xdr 123 \n where 123 sum in EURMTL')

@@ -19,7 +19,7 @@ from other.config_reader import config
 from db.requests import *
 from other.global_data import float2str, global_data
 from other.grist_tools import grist_manager, MTLGrist
-from other.gspread_tools import agcm, gs_get_chicago_premium, gs_get_accounts_multi_list
+from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
 
@@ -106,7 +106,7 @@ exchange_bots = ()
 
 async def check_url_xdr(url, full_data=True):
     xdr = await get_eurmtl_xdr(url)
-    return decode_xdr(xdr, full_data=full_data)
+    return await decode_xdr(xdr, full_data=full_data)
 
 
 def cleanhtml(raw_html):
@@ -138,7 +138,7 @@ def good_operation(operation, operation_name, filter_operation, ignore_operation
     return False
 
 
-def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None,
+async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None,
                full_data=False):
     if ignore_operation is None:
         ignore_operation = []
@@ -153,7 +153,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
     else:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
     result.append(
-        f"Операции с аккаунта {address_id_to_username(transaction.transaction.source.account_id, full_data=full_data)}")
+        f"Операции с аккаунта {await address_id_to_username(transaction.transaction.source.account_id, full_data=full_data)}")
     if transaction.transaction.memo.__class__ == TextMemo:
         memo: TextMemo = transaction.transaction.memo
         result.append(f'  Memo "{memo.memo_text.decode()}"\n')
@@ -164,7 +164,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         # print('bad xdr', idx, operation)
         if operation.source:
             result.append(
-                f"*** для аккаунта {address_id_to_username(operation.source.account_id, full_data=full_data)}")
+                f"*** для аккаунта {await address_id_to_username(operation.source.account_id, full_data=full_data)}")
         if good_operation(operation, "Payment", filter_operation, ignore_operation):
             if 'SPAM' in ignore_operation and operation.asset.code == 'XLM' and operation.amount < '0.1':
                 continue
@@ -172,13 +172,13 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
                 if (filter_asset is None) or (operation.asset == filter_asset):
                     data_exist = True
                     result.append(
-                        f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {address_id_to_username(operation.destination.account_id, full_data=full_data)}")
+                        f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {await address_id_to_username(operation.destination.account_id, full_data=full_data)}")
             continue
         if good_operation(operation, "SetOptions", filter_operation, ignore_operation):
             data_exist = True
             if operation.signer:
                 result.append(
-                    f"    Изменяем подписанта {address_id_to_username(operation.signer.signer_key.encoded_signer_key, full_data=full_data)} новые голоса : {operation.signer.weight}")
+                    f"    Изменяем подписанта {await address_id_to_username(operation.signer.signer_key.encoded_signer_key, full_data=full_data)} новые голоса : {operation.signer.weight}")
             if operation.med_threshold:
                 data_exist = True
                 result.append(f"Установка нового требования. Нужно будет {operation.med_threshold} голосов")
@@ -198,10 +198,10 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
             else:
                 if operation.limit == '0':
                     result.append(
-                        f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
+                        f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {await address_id_to_username(operation.asset.issuer, full_data=full_data)}")
                 else:
                     result.append(
-                        f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {address_id_to_username(operation.asset.issuer, full_data=full_data)}")
+                        f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {await address_id_to_username(operation.asset.issuer, full_data=full_data)}")
 
             continue
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
@@ -232,14 +232,14 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
                 if (filter_asset is None) or (filter_asset in [operation.send_asset, operation.dest_asset]):
                     data_exist = True
                     result.append(
-                        f"    Покупка {address_id_to_username(operation.destination.account_id, full_data=full_data)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
+                        f"    Покупка {await address_id_to_username(operation.destination.account_id, full_data=full_data)}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
             continue
         if good_operation(operation, "PathPaymentStrictReceive", filter_operation, ignore_operation):
             if (float(operation.send_max) > filter_sum) and (float(operation.dest_amount) > filter_sum):
                 if (filter_asset is None) or (filter_asset in [operation.send_asset, operation.dest_asset]):
                     data_exist = True
                     result.append(
-                        f"    Продажа {address_id_to_username(operation.destination.account_id, full_data=full_data)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
+                        f"    Продажа {await address_id_to_username(operation.destination.account_id, full_data=full_data)}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
             continue
         if good_operation(operation, "ManageData", filter_operation, ignore_operation):
             data_exist = True
@@ -249,7 +249,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         if good_operation(operation, "SetTrustLineFlags", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Trustor {address_id_to_username(operation.trustor, full_data=full_data)} for asset {operation.asset.code}")
+                f"    Trustor {await address_id_to_username(operation.trustor, full_data=full_data)} for asset {operation.asset.code}")
             if operation.clear_flags is not None:
                 result.append(f"    Clear flags: {operation.clear_flags}")
             if operation.set_flags is not None:
@@ -258,22 +258,22 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         if good_operation(operation, "CreateAccount", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Создание аккаунта {address_id_to_username(operation.destination, full_data=full_data)} с суммой {operation.starting_balance} XLM")
+                f"    Создание аккаунта {await address_id_to_username(operation.destination, full_data=full_data)} с суммой {operation.starting_balance} XLM")
             continue
         if good_operation(operation, "AccountMerge", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    Слияние аккаунта c {address_id_to_username(operation.destination.account_id, full_data=full_data)} ")
+                f"    Слияние аккаунта c {await address_id_to_username(operation.destination.account_id, full_data=full_data)} ")
             continue
         if good_operation(operation, "ClaimClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    ClaimClaimableBalance {address_id_to_username(operation.balance_id, full_data=full_data)}")
+                f"    ClaimClaimableBalance {await address_id_to_username(operation.balance_id, full_data=full_data)}")
             continue
         if good_operation(operation, "BeginSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
             result.append(
-                f"    BeginSponsoringFutureReserves {address_id_to_username(operation.sponsored_id, full_data=full_data)}")
+                f"    BeginSponsoringFutureReserves {await address_id_to_username(operation.sponsored_id, full_data=full_data)}")
             continue
         if good_operation(operation, "EndSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
@@ -282,7 +282,7 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         if type(operation).__name__ == "Clawback":
             data_exist = True
             result.append(
-                f"    Возврат {operation.amount} {operation.asset.code} с аккаунта {address_id_to_username(operation.from_.account_id)}")
+                f"    Возврат {operation.amount} {operation.asset.code} с аккаунта {await address_id_to_username(operation.from_.account_id)}")
             continue
         if type(operation).__name__ == "LiquidityPoolDeposit":
             data_exist = True
@@ -313,9 +313,41 @@ def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operatio
         return []
 
 
-def address_id_to_username(key, full_data=False) -> str:
-    if full_data and key in global_data.name_list:
-        return '@' + global_data.name_list[key]
+async def address_id_to_username(key, full_data=False) -> str:
+    if full_data:
+        # cash
+        if key in global_data.name_list:
+            return global_data.name_list[key]
+
+        # mtla
+        user = await grist_manager.load_table_data(
+            MTLGrist.MTLA_USERS,
+            filter_dict={"Stellar": [key]}
+        )
+        if user:
+            global_data.name_list[key] = user[0]["Telegram"]
+            return global_data.name_list[key]
+
+        # eurmtl users
+        user = await grist_manager.load_table_data(
+            MTLGrist.EURMTL_users,
+            filter_dict={"account_id": [key]}
+        )
+        if user:
+            global_data.name_list[key] = user[0]["username"]
+            return global_data.name_list[key]
+
+        # eurmtl users
+        user = await grist_manager.load_table_data(
+            MTLGrist.EURMTL_users,
+            filter_dict={"account_id": [key]}
+        )
+        if user:
+            global_data.name_list[key] = user[0]["description"]
+            return global_data.name_list[key]
+
+        return key[:4] + '..' + key[-4:] + 'не найден, возможно скам'
+
     return key[:4] + '..' + key[-4:]
 
 
@@ -1090,6 +1122,7 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum=0):
     # return div_accounts
     # print(*mtl_accounts, sep='\n')
 
+
 async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0, test_for_address=None):
     div_accounts = []
     if test_sum > 0:
@@ -1210,14 +1243,18 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
         return div_accounts
 
 
-
 async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
     if len(public_key) > 10:
         vote_list = await cmd_gen_mtl_vote_list()
         result = [gen_vote_xdr(public_key, vote_list, remove_master=remove_master, source=public_key)]
     else:
         vote_list = await cmd_gen_mtl_vote_list()
-        address_list = await gs_get_accounts_multi_list()
+        # address_list = await gs_get_accounts_multi_list()
+        accounts = await grist_manager.load_table_data(
+            MTLGrist.EURMTL_accounts,
+            filter_dict={"signers_type": ['multisp']}
+        )
+
         result = []
         transaction = TransactionBuilder(
             source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer),
@@ -1225,12 +1262,13 @@ async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
         sequence = transaction.source_account.sequence
         transaction.set_timeout(60 * 60 * 24 * 7)
         xdr = None
-        for address in address_list:
+        for account in accounts:
+            account_id = account["account_id"]
             vote_list_copy = deepcopy(vote_list)
             # return sequence because every build inc number
             transaction.source_account.sequence = sequence
             if len(transaction.operations) < 80:
-                xdr = gen_vote_xdr(address, vote_list_copy, transaction, source=address, remove_master=True)
+                xdr = gen_vote_xdr(account_id, vote_list_copy, transaction, source=account_id, remove_master=True)
 
         result.append(xdr)
 
@@ -1837,13 +1875,13 @@ async def cmd_check_new_transaction(ignore_operation: List,
     for transaction in new_transactions:
         if transaction["paging_token"] > last_id:
             last_id = transaction["paging_token"]
-        tr = decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
+        tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
         if 0 < len(tr) < 90:
             link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
-            tr = decode_xdr(transaction["envelope_xdr"])
+            tr = await decode_xdr(transaction["envelope_xdr"])
             tr.insert(0, f'(<a href="{link}">expert link</a>)')
             result.append(tr)
-        # print(decode_xdr(transaction["envelope_xdr"]))
+        # print(await decode_xdr(transaction["envelope_xdr"]))
         # print('****')
         # print(transaction["paging_token"])
 
@@ -1876,7 +1914,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
     # Получаем новые эффекты для токена
     data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
     for row in data:
-        result.append(decode_db_effect(row))
+        result.append(await decode_db_effect(row))
         max_id = row.id
 
     # Сохраняем новый max_id, если он больше last_id
@@ -1886,9 +1924,9 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
     return result
 
 
-def decode_db_effect(row: TOperations):
+async def decode_db_effect(row: TOperations):
     result = f'<a href="https://stellar.expert/explorer/public/op/{row.id.split("-")[0]}">' \
-             f'Операция</a> с аккаунта {address_id_to_username(row.for_account)} \n'
+             f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
     if row.operation == 'trade':
         result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'
     else:
@@ -2772,7 +2810,7 @@ async def get_market_price(
                 'forward_amount': forward_amount,
                 'reverse_amount': reverse_amount,
                 'input_amount': Decimal(amount),
-                #'timestamp': datetime.utcnow().isoformat(),
+                # 'timestamp': datetime.utcnow().isoformat(),
                 'asset1': asset1.code,
                 'asset2': asset2.code
             }
@@ -2787,7 +2825,8 @@ async def get_market_price(
 if __name__ == '__main__':
     pass
     from db.quik_pool import quik_pool
-    _ = asyncio.run(get_cash_balance(5))
+
+    _ = asyncio.run(cmd_get_new_vote_all_mtl(''))
     print(_)
     # print(len(_))
     # _ = asyncio.run(get_pool_balances(MTLAddresses.public_itolstov))

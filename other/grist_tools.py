@@ -35,8 +35,8 @@ class MTLGrist:
     GRIST_access = GristTableConfig("rGD426DVBySAFMTLEqKp1d", "Access")
     GRIST_use_log = GristTableConfig("rGD426DVBySAFMTLEqKp1d", "Use_log")
 
-
-
+    EURMTL_users = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Users")
+    EURMTL_accounts = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Accounts")
 
 
 class GristAPI:
@@ -47,7 +47,7 @@ class GristAPI:
             self.session_manager = HTTPSessionManager()
 
     async def fetch_data(self, table: GristTableConfig, sort: Optional[str] = None,
-                        filter_dict: Optional[Dict[str, List[Any]]] = None) -> List[Dict[str, Any]]:
+                         filter_dict: Optional[Dict[str, List[Any]]] = None) -> List[Dict[str, Any]]:
         """
         Загружает данные из указанной таблицы Grist.
 
@@ -58,14 +58,14 @@ class GristAPI:
                         Пример: {"TGID": [123456789]}
         """
         from urllib.parse import quote
-        
+
         headers = {
             'accept': 'application/json',
             'Authorization': f'Bearer {self.token}'
         }
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
         params = []
-        
+
         if sort:
             params.append(f"sort={sort}")
         if filter_dict:
@@ -73,7 +73,7 @@ class GristAPI:
             filter_json = json.dumps(filter_dict)
             encoded_filter = quote(filter_json)
             params.append(f"filter={encoded_filter}")
-            
+
         if params:
             url = f"{url}?{'&'.join(params)}"
         response = await self.session_manager.get_web_request(method='GET', url=url, headers=headers)
@@ -124,8 +124,30 @@ class GristAPI:
             case _:
                 raise Exception(f'Ошибка запроса: Статус {response.status}')
 
+    async def post_data(self, table: GristTableConfig, json_data: Dict[str, Any]) -> bool:
+        """
+        Добавляет новые записи в указанную таблицу Grist.
+
+        Args:
+            table: Конфигурация таблицы Grist
+            json_data: Данные для добавления в формате {"records": [{"fields": {...}}]}
+        """
+        headers = {
+            'accept': 'application/json',
+            'Authorization': f'Bearer {self.token}'
+        }
+        url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
+        response = await self.session_manager.get_web_request(method='POST', url=url, headers=headers,
+                                                              json=json_data)
+
+        match response.status:
+            case 200:
+                return True
+            case _:
+                raise Exception(f'Ошибка запроса: Статус {response.status}')
+
     async def load_table_data(self, table: GristTableConfig, sort: Optional[str] = None,
-                            filter_dict: Optional[Dict[str, List[Any]]] = None) -> Optional[List[Dict[str, Any]]]:
+                              filter_dict: Optional[Dict[str, List[Any]]] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Загружает данные из таблицы с обработкой ошибок.
 

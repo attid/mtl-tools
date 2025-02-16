@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from other.grist_tools import grist_manager, MTLGrist
-from other.gspread_tools import (gs_update_namelist, gs_copy_a_table, gs_update_a_table_vote,
+from other.gspread_tools import (gs_copy_a_table, gs_update_a_table_vote,
                                  gs_update_a_table_first, gs_check_vote_table)
 from other.stellar_tools import MTLAddresses, get_balances, address_id_to_username, get_mtlap_votes
 
@@ -217,7 +217,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
 
 
 async def cmd_save_votes(session: Session):
-    await gs_update_namelist()
+    #await gs_update_namelist()
     vote_list = {}
     for chat_id in chat_to_address:
         if chat_to_address[chat_id] in vote_list:
@@ -229,7 +229,7 @@ async def cmd_save_votes(session: Session):
             for signer in signers:
                 if signer['weight'] > 0:
                     total += signer['weight']
-                    key_ = address_id_to_username(signer['key'], full_data=True).lower()
+                    key_ = (await address_id_to_username(signer['key'], full_data=True)).lower()
                     vote_list[chat_to_address[chat_id]][key_] = signer['weight']
             vote_list[chat_to_address[chat_id]]['NEED'] = {'50': total // 2 + 1,
                                                            '75': math.ceil(total * 0.75),

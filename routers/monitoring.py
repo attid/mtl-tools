@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timedelta
 from aiogram import Router, types, Bot
 from aiogram import F
@@ -50,5 +51,7 @@ async def check_ping_responses(bot: Bot):
                     logger.error(f"Failed to notify admin : {e}")
 
 def register_handlers(dp, bot):
+    if 'test' in sys.argv:
+        return
     dp.include_router(router)
     asyncio.create_task(check_ping_responses(bot))
