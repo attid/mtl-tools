@@ -36,6 +36,7 @@ def get_creds():
     ])
     return scoped
 
+
 # Create an AsyncioGspreadClientManager object which
 # will give us access to the Spreadsheet API.
 
@@ -451,14 +452,14 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
     await wks.update('A2', update_data)
 
 
-async def gs_find_user_a(username):
-    agc = await agcm.authorize()
-    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
-    ws = await ss.worksheet("MTLAP")
-    data = await ws.find(str(username), in_column=1, case_sensitive=False)
-    if data:
-        result = await ws.row_values(data.row)
-        return result[2]
+# async def gs_find_user_a(username):
+#     agc = await agcm.authorize()
+#     ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")
+#     ws = await ss.worksheet("MTLAP")
+#     data = await ws.find(str(username), in_column=1, case_sensitive=False)
+#     if data:
+#         result = await ws.row_values(data.row)
+#         return result[2]
 
 
 async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, wks=None):
@@ -753,7 +754,6 @@ async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=F
             perm_type='user',
             role='writer'
         )
-
 
 
 if __name__ == "__main__":

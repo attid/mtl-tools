@@ -11,7 +11,8 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from sqlalchemy.orm import Session
 
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
-from other.gspread_tools import (gs_update_namelist, gs_copy_a_table, gs_find_user_a, gs_update_a_table_vote,
+from other.grist_tools import grist_manager, MTLGrist
+from other.gspread_tools import (gs_update_namelist, gs_copy_a_table, gs_update_a_table_vote,
                                  gs_update_a_table_first, gs_check_vote_table)
 from other.stellar_tools import MTLAddresses, get_balances, address_id_to_username, get_mtlap_votes
 
@@ -116,7 +117,8 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot):
         else:
             message_id = message.reply_to_message.message_id
 
-        my_poll = json.loads(await global_data.mongo_config.load_bot_value(message.chat.id, -1 * message_id, empty_poll))
+        my_poll = json.loads(
+            await global_data.mongo_config.load_bot_value(message.chat.id, -1 * message_id, empty_poll))
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
@@ -296,10 +298,15 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
     my_poll = json.loads(
         await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
     # find user
-    user_address = await gs_find_user_a(f'@{poll.user.username}')
+    user_address = await grist_manager.load_table_data(MTLGrist.MTLA_USERS,
+                                                       filter_dict={"TGID": [poll.user.id]}
+                                                       )
+
     if not user_address:
         await bot.send_message(my_poll["info_chat_id"], f'User @{poll.user.username} not found')
         return
+    else:
+        user_address = user_address[0]["Stellar"]
 
     # update answer
     # gs_update_a_table_vote(table_uuid, address, options):
