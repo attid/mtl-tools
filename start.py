@@ -14,20 +14,15 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
 from redis.asyncio import Redis
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-
-from other import aiogram_tools
 from other.config_reader import config
 from db.requests import db_save_bot_user, db_load_bot_users
 import importlib
-from routers import time_handlers
 from middlewares.db import DbSessionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
-from routers import last_handler
 from other.global_data import global_data, MTLChats, global_tasks
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
@@ -162,15 +157,11 @@ async def main():
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
 
+    dp['dbsession_pool'] = db_pool
+
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)
 
-    scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')  # str(tzlocal.get_localzone()))
-    aiogram_tools.scheduler = scheduler
-    scheduler.start()
-    if 'test' not in sys.argv:
-        time_handlers.scheduler_jobs(scheduler, bot, db_pool)
-    dp['dbsession_pool'] = db_pool
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     dp.errors.register(sentry_error_handler)

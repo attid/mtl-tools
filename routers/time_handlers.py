@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime
 import random
 import aiohttp
@@ -7,6 +8,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
+from other import aiogram_tools
 from other.config_reader import config
 from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count, db_load_bot_value_ext
 from scripts.mtl_exchange2 import check_mm, check_mmwb
@@ -114,3 +116,16 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
 
     ### job.args = (dp, 25,)
     ### await cmd_send_message_10м(dp)
+
+
+def register_handlers(dp, bot):
+    if 'test' not in sys.argv:
+        scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')  # str(tzlocal.get_localzone()))
+        aiogram_tools.scheduler = scheduler
+        scheduler.start()
+        db_pool = dp['dbsession_pool']
+        scheduler_jobs(scheduler, bot, db_pool)
+
+    logger.info('router time_handlers was loaded')
+
+register_handlers.priority = 90
