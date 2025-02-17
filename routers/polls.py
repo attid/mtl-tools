@@ -3,6 +3,7 @@ import math
 from contextlib import suppress
 
 from aiogram import Router, Bot, F
+from loguru import logger
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
@@ -341,6 +342,11 @@ async def cmd_poll_check(message: Message, session: Session):
                 await message.reply(msg_text)
     else:
         await message.answer('Требуется в ответ на голосование')
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router polls was loaded')
 
 
 if __name__ == "__main__":

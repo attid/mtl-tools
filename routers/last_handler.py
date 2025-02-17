@@ -547,3 +547,10 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         await bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
                                             reply_markup=kb_reply)
         await query.answer('Your vote has been counted.', show_alert=True)
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router last_handler was loaded')
+
+register_handlers.priority = 99

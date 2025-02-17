@@ -1,5 +1,6 @@
 from aiogram import Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from loguru import logger
 
 from other.global_data import global_data
 
@@ -45,3 +46,8 @@ async def inline_handler(inline_query: InlineQuery):
                 input_message_content=InputTextMessageContent(message_text=key)
             ))
     return await inline_query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router inline was loaded')

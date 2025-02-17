@@ -1,3 +1,6 @@
+from loguru import logger
+
+logger.info('start')
 import asyncio
 import sys
 from contextlib import suppress
@@ -12,14 +15,14 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
 from redis.asyncio import Redis
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from other import aiogram_tools
 from other.config_reader import config
-from routers.admin import command_config_loads
 from db.requests import db_save_bot_user, db_load_bot_users
+import importlib
+from routers import time_handlers
 from middlewares.db import DbSessionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
@@ -28,7 +31,6 @@ from routers import last_handler
 from other.global_data import global_data, MTLChats, global_tasks
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
-from routers.monitoring import register_handlers  # Импорт функции для регистрации роутера
 
 
 async def set_commands(bot):
@@ -92,6 +94,40 @@ async def on_shutdown(bot: Bot):
         task.cancel()
 
 
+async def load_routers(dp: Dispatcher, bot: Bot):
+    """Динамическая загрузка и регистрация роутеров"""
+    import os
+
+    routers_path = os.path.join(os.path.dirname(__file__), 'routers')
+    router_modules = []
+
+    # Загрузка всех модулей роутеров
+    for filename in os.listdir(routers_path):
+        if filename.endswith('.py') and not filename.startswith('__'):
+            module_name = f'routers.{filename[:-3]}'
+            try:
+                module = importlib.import_module(module_name)
+                if hasattr(module, 'register_handlers'):
+                    # Установка дефолтного приоритета, если не указан
+                    if not hasattr(module.register_handlers, 'priority'):
+                        module.register_handlers.priority = 50
+                    router_modules.append(module)
+                    logger.info(f"Found router module {module_name} with priority {module.register_handlers.priority}")
+            except Exception as e:
+                logger.error(f"Error loading module {module_name}: {e}")
+
+    # Сортировка модулей по приоритету
+    router_modules.sort(key=lambda m: getattr(m.register_handlers, 'priority', 50))
+
+    # Регистрация роутеров в порядке приоритета
+    for module in router_modules:
+        try:
+            module.register_handlers(dp, bot)
+            logger.info(f"Registered handlers from {module.__name__}")
+        except Exception as e:
+            logger.error(f"Error registering handlers from {module.__name__}: {e}")
+
+
 async def main():
     logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
 
@@ -115,29 +151,21 @@ async def main():
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 
-    global_tasks.append(asyncio.create_task(load_globals(db_pool())))
-    from routers import (admin, inline, polls, start_router, stellar, talk_handlers, time_handlers, welcome)
+    global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot)))
+
+    # Настройка middleware
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
-
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
 
-    dp.include_router(admin.router)
-    dp.include_router(inline.router)
-    dp.include_router(polls.router)
-    dp.include_router(start_router.router)
-    dp.include_router(stellar.router)
-    dp.include_router(welcome.router)
-    dp.include_router(talk_handlers.router)  # last
-    dp.include_router(last_handler.router)  # last, last
+    # Загрузка и регистрация роутеров
+    await load_routers(dp, bot)
 
-    register_handlers(dp, bot)  # Регистрация роутера
-
-    scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')#str(tzlocal.get_localzone()))
+    scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')  # str(tzlocal.get_localzone()))
     aiogram_tools.scheduler = scheduler
     scheduler.start()
     if 'test' not in sys.argv:
@@ -150,14 +178,15 @@ async def main():
     # Запускаем бота и пропускаем все накопленные входящие
     # Да, этот метод можно вызвать даже если у вас поллинг
     await bot.delete_webhook(drop_pending_updates=True)
-    print(dp.resolve_used_update_types())
+    logger.info(dp.resolve_used_update_types())
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
-async def load_globals(session: Session):
-    await command_config_loads(session)
+async def load_globals(session: Session, bot: Bot):
     for user in db_load_bot_users(session):
         global_data.users_list[user.user_id] = user.user_type
+    with suppress(TelegramBadRequest):
+        await bot.send_message(chat_id=MTLChats.ITolstov, text='globals loaded')
 
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):

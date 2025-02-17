@@ -291,3 +291,10 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     if message.chat.type != ChatType.PRIVATE:
         # на случай вызова из /skynet
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router talk_handlers was loaded')
+
+register_handlers.priority = 90

@@ -113,3 +113,8 @@ async def cmd_me(message: Message, bot: Bot):
         await message.delete()
     except:
         pass
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router start_router was loaded')

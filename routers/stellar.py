@@ -529,3 +529,8 @@ async def cmd_check_bim(message: Message):
 
     msg = await check_mtlap(key)
     await message.reply(msg)
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router stellar was loaded')

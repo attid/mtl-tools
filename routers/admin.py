@@ -334,7 +334,7 @@ async def cmd_sync_post(message: Message, session: Session, bot: Bot):
         url = f'https://t.me/c/{str(chat.id)[4:]}/{post_id}'
         msg_text = message.reply_to_message.html_text
         reply_markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Edit', url=url),
-                                                              InlineKeyboardButton(text='Edit', url=url)]])
+                                                               InlineKeyboardButton(text='Edit', url=url)]])
         if msg_text and msg_text[-1] == '*':
             msg_text = msg_text[:-1]
             reply_markup = None
@@ -553,7 +553,7 @@ commands_info = {
 }
 
 
-async def command_config_loads(session: Session):
+async def command_config_loads():
     for command in commands_info:
         global_data_field = commands_info[command][0]
         global_data_key = commands_info[command][1]
@@ -1127,6 +1127,17 @@ async def cmd_show_mutes(message: Message, session: Session):
 @router.message(Command(commands=["test2"]))
 async def cmd_test(message: Message, session: Session):
     pass
+
+
+@router.startup()
+async def on_startup():
+    asyncio.create_task(command_config_loads())
+    logger.info('Started command_config_loads task')
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router admin was loaded')
 
 
 if __name__ == "__main__":

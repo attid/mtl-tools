@@ -590,5 +590,10 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
 
 
 
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info('router welcome was loaded')
+
+
 if __name__ == '__main__':
     print(create_emoji_captcha_keyboard(1, 0))

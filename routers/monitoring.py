@@ -55,3 +55,4 @@ def register_handlers(dp, bot):
         return
     dp.include_router(router)
     asyncio.create_task(check_ping_responses(bot))
+    logger.info('router monitoring was loaded')
