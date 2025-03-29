@@ -221,7 +221,7 @@ async def main():
     await pyro_app.start()
     await pyro_test()
 
-    a = await common_chats('itolstov')
+    a = await pyro_test()
     print(a)
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")

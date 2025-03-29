@@ -429,7 +429,7 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
                    [datetime.now().strftime('%d.%m.%Y %H:%M:%S')],
                    [],
                    [len(votes)],
-                   [math.ceil(len(votes) / 2)]
+                   [math.floor(len(votes) / 2) + 1]
                    ]
     await wks.update('B1', update_data)
     update_data = []
@@ -468,10 +468,10 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         ss = await agc.open_by_key(table_uuid)
         wks = await ss.worksheet("Log")
 
-    # Проверка наличия адреса на странице Members
-    members_addresses = await (await ss.worksheet("Members")).col_values(1)
-    if address not in members_addresses:
-        return
+        # Проверка наличия адреса на странице Members
+        members_addresses = await (await ss.worksheet("Members")).col_values(1)
+        if address not in members_addresses:
+            return
 
     # Удаляем голос если был
     data = await wks.find(str(address), in_column=1, case_sensitive=False)
@@ -756,11 +756,111 @@ async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=F
         )
 
 
+def extract_links_from_column_C():
+    from googleapiclient.discovery import build
+    from oauth2client.service_account import ServiceAccountCredentials
+    import os
+
+    SPREADSHEET_ID = '1NYtsXZET8q-MJYeHaWrMbs4-3SeQgidf1O5IVGa3Jzo'
+    SHEET_NAME = 'EUR_GNRL'
+    COLUMN_FROM_INDEX = 16  # C (0-based index)
+    COLUMN_TO_INDEX = 25   # X (0-based index)
+
+    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
+    service = build('sheets', 'v4', credentials=credentials)
+
+    # Получаем весь лист с gridData
+    print("📥 Запрашиваем данные с листа...")
+    spreadsheet = service.spreadsheets().get(
+        spreadsheetId=SPREADSHEET_ID,
+        includeGridData=True,
+        ranges=[SHEET_NAME]
+    ).execute()
+
+    sheet_data = next(
+        (s for s in spreadsheet['sheets'] if s['properties']['title'] == SHEET_NAME), None
+    )
+    if not sheet_data:
+        raise Exception("❌ Лист не найден: EUR_GNRL")
+
+    print("✅ Лист найден. Обрабатываем строки...")
+
+    rows = sheet_data['data'][0].get('rowData', [])
+    requests = []
+    processed_rows = 0
+    filled_rows = 0
+
+    for row_index, row in enumerate(rows):
+        processed_rows += 1
+        cells = row.get('values', [])
+        if COLUMN_FROM_INDEX >= len(cells):
+            print(f"⚠️ Строка {row_index + 1}: нет данных в колонке C")
+            continue
+
+        cell = cells[COLUMN_FROM_INDEX]
+        full_text = cell.get('formattedValue', '')
+        runs = cell.get('textFormatRuns', [])
+        links = []
+
+        print(f"🔍 Строка {row_index + 1}: текст='{full_text}', runs={len(runs)}")
+
+        # 1. Пробуем как ссылка на всю ячейку
+        if 'hyperlink' in cell:
+            link = cell['hyperlink']
+            print(f"  🔗 Ссылка на всю ячейку: {link}")
+            links.append(link)
+
+        # 2. Пробуем как форматированный фрагмент
+        for i, run in enumerate(runs):
+            run_link = run.get('link', {}).get('uri')
+            start = run.get('startIndex', 0)
+            end = runs[i + 1]['startIndex'] if i + 1 < len(runs) else len(full_text)
+            text_fragment = full_text[start:end]
+
+            print(f"  ⤷ Фрагмент [{start}:{end}]: '{text_fragment}', ссылка: {run_link}")
+
+            if run_link:
+                links.append(run_link)
+
+        final_text = ', '.join(links)
+
+        if final_text:
+            filled_rows += 1
+            requests.append({
+                "updateCells": {
+                    "rows": [{
+                        "values": [{
+                            "userEnteredValue": {"stringValue": final_text}
+                        }]
+                    }],
+                    "fields": "userEnteredValue",
+                    "start": {
+                        "sheetId": sheet_data['properties']['sheetId'],
+                        "rowIndex": row_index,
+                        "columnIndex": COLUMN_TO_INDEX
+                    }
+                }
+            })
+
+    print(f"📦 Обработано строк: {processed_rows}, Ссылки найдены в: {filled_rows}")
+
+    if requests:
+        print(f"🚀 Отправка {len(requests)} обновлений через batchUpdate...")
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"requests": requests}
+        ).execute()
+        print("✅ Готово: ссылки записаны в столбец X")
+    else:
+        print("ℹ️ Ничего не найдено для обновления")
+
 if __name__ == "__main__":
     pass
-
-    _ = asyncio.run(gs_permission(True))
-    print(_)
+    extract_links_from_column_C()
+    # _ = asyncio.run(gs_permission('1VYyZ4a0bAiAS0GENg_HqmD51_JNE5SuShIN_5og7hgY'))
+    # print(_)
 
     # a = asyncio.run(gs_check_bim(user_name='itolstov'))
     # a = asyncio.run(gs_find_user('710700915'))

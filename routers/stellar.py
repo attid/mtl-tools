@@ -380,7 +380,7 @@ async def cmd_get_vote_fund_xdr(message: Message):
 @update_command_info("/get_btcmtl_xdr",
                      "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL")
 @router.message(Command(commands=["get_btcmtl_xdr"]))
-async def cmd_get_defi_xdr_(message: Message):
+async def cmd_get_btcmtl_xdr(message: Message):
     arg = message.text.split()
     if len(arg) > 1:
         memo = None if len(arg) < 3 else ' '.join(arg[3:])

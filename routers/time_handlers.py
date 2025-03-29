@@ -11,8 +11,11 @@ from loguru import logger
 from other import aiogram_tools
 from other.config_reader import config
 from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count, db_load_bot_value_ext
+from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
+from scripts.mtl_exchange import check_exchange, check_exchange_one
 from scripts.mtl_exchange2 import check_mm, check_mmwb
 from other.global_data import MTLChats, BotValueTypes
+from scripts.update_report import lite_report
 
 
 @logger.catch
@@ -72,17 +75,19 @@ async def cmd_send_message_1m(bot: Bot, session_pool):
 
 @logger.catch
 async def time_check_ledger(bot: Bot, session_pool):
-    with session_pool() as session:
-        saved_ledger = int(db_load_bot_value_ext(session,0, BotValueTypes.LastLedger, '45407700'))
-        async with aiohttp.ClientSession() as httpsession:
-            async with httpsession.get(config.horizon_url) as resp:
-                json_resp = await resp.json()
-                core_latest_ledger = int(json_resp['history_latest_ledger'])
-                if core_latest_ledger > saved_ledger + 10:
-                    db_send_admin_message(session, f'Отставание от горизонта больше чем {core_latest_ledger - saved_ledger}')
-        queue_size = db_get_ledger_count(session)
-        if queue_size > 10:
-            db_send_admin_message(session, f'Очередь в обработке ledger {queue_size}!')
+    return #Todo: fix it to NATS
+    # with session_pool() as session:
+    #     saved_ledger = int(db_load_bot_value_ext(session, 0, BotValueTypes.LastLedger, '45407700'))
+    #     async with aiohttp.ClientSession() as httpsession:
+    #         async with httpsession.get(config.horizon_url) as resp:
+    #             json_resp = await resp.json()
+    #             core_latest_ledger = int(json_resp['history_latest_ledger'])
+    #             if core_latest_ledger > saved_ledger + 10:
+    #                 db_send_admin_message(session,
+    #                                       f'Отставание от горизонта больше чем {core_latest_ledger - saved_ledger}')
+    #     queue_size = db_get_ledger_count(session)
+    #     if queue_size > 10:
+    #         db_send_admin_message(session, f'Очередь в обработке ledger {queue_size}!')
 
 
 @logger.catch
@@ -100,8 +105,8 @@ async def time_check_mmwb(bot: Bot, session_pool):
 @logger.catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
-    scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
-                      jitter=5 * 60)
+    # scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
+    #                   jitter=5 * 60)
     scheduler.add_job(time_check_mm, "interval", hours=1, args=(bot, session_pool), misfire_grace_time=360,
                       jitter=10 * 60)
     scheduler.add_job(time_check_mmwb, "interval", hours=6, args=(bot, session_pool), misfire_grace_time=360,
@@ -109,6 +114,41 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
 
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
                       misfire_grace_time=360)
+    ###########
+    # m h  dom mon dow   command
+
+    # Задача проверки транзакций Stellar каждые 5 минут
+    # */5 * * * * /home/skynet_bot/deploy/check_stellar.sh check_transaction
+    scheduler.add_job(cmd_check_cron_transaction, "interval", minutes=5, args=(session_pool,),
+                      misfire_grace_time=360, jitter=60)
+
+    # 30 */3 * * * /home/skynet_bot/deploy/check_stellar.sh check_grist
+    scheduler.add_job(cmd_check_grist, "interval", hours=3, minutes=30,
+                      misfire_grace_time=360, jitter=120)
+
+    # Задача проверки бота Stellar три раза в день
+    # 10 */6 * * * /home/skynet_bot/deploy/check_stellar.sh check_bot
+    scheduler.add_job(cmd_check_bot, "interval", hours=6, minutes=10, args=(session_pool,),
+                      misfire_grace_time=360, jitter=120)
+
+
+    # обмен
+    # */13 * * * * /home/skynet_bot/deploy/mtl_exchange.sh check_exchange
+    # 17 10 * * * /home/skynet_bot/deploy/mtl_exchange.sh one_exchange
+    scheduler.add_job(check_exchange, "interval", minutes=13,
+                      misfire_grace_time=360, jitter=120)
+    scheduler.add_job(check_exchange_one, "interval", hours=18,
+                      misfire_grace_time=360, jitter=120)
+
+
+    # Другие задачи
+    # 17 8 * * * /home/skynet_bot/deploy/mtl_backup.sh > /dev/null*
+    # 25 8 * * * /home/skynet_bot/deploy/report.sh > /dev/null
+    scheduler.add_job(lite_report, "cron", hour=8, minute=10, args=(session_pool,),
+                      misfire_grace_time=360)
+
+    # 30 */8 * * * /opt/firebird/bin/isql -i /db/archive.sql
+
     ##scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(bot,), id='test')
     #### scheduler.add_job(cmd_send_message_10m, "interval", minutes=10, jitter=120, args=(dp,))
     #### scheduler.add_job(cmd_send_message_8h, "interval", hours=8, jitter=800, args=(dp,))
@@ -126,6 +166,7 @@ def register_handlers(dp, bot):
         db_pool = dp['dbsession_pool']
         scheduler_jobs(scheduler, bot, db_pool)
 
-    logger.info('router time_handlers was loaded')
+        logger.info('router time_handlers was loaded')
+
 
 register_handlers.priority = 90

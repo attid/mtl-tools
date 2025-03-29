@@ -19,7 +19,7 @@ from db.requests import db_send_admin_message
 from routers.multi_handler import check_membership
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
-from other.aiogram_tools import is_admin, cmd_delete_later, get_username_link, get_chat_link
+from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_link, get_chat_link
 from other.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from other.pyro_tools import GroupMember
 from other.spam_cheker import combo_check_spammer, lols_check_spammer
@@ -113,8 +113,8 @@ async def cmd_delete_welcome(message: Message, session: Session):
         await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
 
     msg = await message.reply('Removed')
-    cmd_delete_later(msg, 1)
-    cmd_delete_later(message, 1)
+    await cmd_sleep_and_delete(msg, 60)
+    await cmd_sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
@@ -130,11 +130,11 @@ async def cmd_set_welcome(message: Message, session: Session):
         await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
                                                       message.html_text[13:])
         msg = await message.reply('Added')
-        cmd_delete_later(msg, 1)
+        await cmd_sleep_and_delete(msg, 60)
     else:
         await cmd_delete_welcome(message, session)
 
-    cmd_delete_later(message, 1)
+    await cmd_sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome_button", "Установить текст на кнопке капчи", 2, "welcome_button")
@@ -148,12 +148,12 @@ async def cmd_set_welcome(message: Message, session: Session):
         global_data.welcome_button[message.chat.id] = message.text[19:]
         await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
         msg = await message.reply('Added')
-        cmd_delete_later(msg, 1)
+        await cmd_sleep_and_delete(msg, 60)
     else:
         msg = await message.reply('need more words')
-        cmd_delete_later(msg, 1)
+        await cmd_sleep_and_delete(msg, 60)
 
-    cmd_delete_later(message, 1)
+    await cmd_sleep_and_delete(message, 60)
 
 
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
@@ -260,7 +260,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
             answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
                                             reply_markup=kb_captcha)
-            cmd_delete_later(answer)
+            await cmd_sleep_and_delete(answer)
 
     if event.chat.id in global_data.auto_all:
         members = json.loads(await global_data.mongo_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]'))
@@ -365,7 +365,7 @@ async def cmd_recaptcha(message: Message, session: Session):
 
     if len(message.text.split()) < 2:
         msg = await message.reply('need more words')
-        cmd_delete_later(msg)
+        await cmd_sleep_and_delete(msg)
         return
 
     await message.answer(' '.join(message.text.split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[

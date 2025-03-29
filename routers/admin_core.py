@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import re
 from contextlib import suppress
@@ -6,7 +7,7 @@ from datetime import datetime
 
 import aiohttp
 from aiogram import Router, Bot, F
-from aiogram.enums import ChatMemberStatus, ChatType
+from aiogram.enums import ChatMemberStatus, ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -14,7 +15,7 @@ from aiogram.types import Message, ChatPermissions, ChatMemberUpdated, InlineKey
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from other.aiogram_tools import is_admin, cmd_delete_later, cmd_sleep_and_delete, ChatInOption, get_username_link
+from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, get_username_link
 from other.config_reader import config
 from other.global_data import global_data, BotValueTypes, update_command_info, is_topic_admin
 from other.pyro_tools import get_group_members, remove_deleted_users
@@ -76,8 +77,19 @@ async def cmd_create_topic(message: Message):
 @router.message(Command(commands=["all"]))
 async def cmd_all(message: Message):
     user_list = await get_group_members(message.chat.id)
-    members = [f'@{user.username}' for user in user_list if not user.is_bot and user.username]
-    await message.reply(' '.join(members))
+    members = []
+    for user in user_list:
+        if user.is_bot:
+            continue
+        if user.username:
+            members.append(f'@{user.username}')
+        else:
+            full_name = html.unescape(user.full_name)
+            members.append(f'<a href="tg://user?id={user.user_id}">{full_name}</a>')
+    text = ' '.join(members)
+    logger.info(text)
+    await message.reply(text, parse_mode=ParseMode.HTML)
+
 
 
 @router.message(Command(commands=["delete_dead_members"]))
@@ -294,8 +306,8 @@ async def cmd_set_alert_me(message: Message, session: Session):
                                                       json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Added')
 
-    cmd_delete_later(message, 1)
-    cmd_delete_later(msg, 1)
+    await cmd_sleep_and_delete(message, 60)
+    await cmd_sleep_and_delete(msg, 60)
 
 
 @update_command_info("/calc", "Посчитать сообщения от ответного")

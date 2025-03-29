@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     bot_token: SecretStr
     test_token: SecretStr
     base_fee: int
-    db_dns: str
+    redis_url: str
+    firebird_url: str
     openai_key: SecretStr
     private_sign: SecretStr
     currencylayer_id: str
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     pyro_api_hash: SecretStr
     telegraph_token: str
     grist_token: str
+    test_mode: bool = True
 
     model_config = SettingsConfigDict(
         env_file=dotenv_path,
@@ -35,4 +37,9 @@ class Settings(BaseSettings):
     )
 
 
-config = Settings()
+config: Settings = Settings()
+
+if os.getenv('ENVIRONMENT', 'test') == 'production':
+    config.test_mode = False
+else:
+    config.test_mode = True

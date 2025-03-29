@@ -11,6 +11,7 @@ from other.config_reader import start_path
 from other.gspread_tools import gs_copy_sheets_with_style
 from other.stellar_tools import *
 from other.web_tools import get_debank_balance
+from scripts.mtl_backup import save_assets
 from scripts.mtl_exchange import check_fire
 
 
@@ -29,10 +30,11 @@ async def update_main_report(session: Session):
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
     await wks.update('D3', float(rq.json()['quotes']['USDEUR']))
 
-    # BTC,XLM
-    rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM')
+    # BTC,XLM,ETH
+    rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH')
     await wks.update('D4', float(rq.json()['rates']['BTC']))
     await wks.update('D5', float(rq.json()['rates']['XLM']))
+    await wks.update('D20', float(rq.json()['rates']['ETH']))
 
     # aum
     s = requests.get(
@@ -80,16 +82,16 @@ async def update_main_report(session: Session):
             update_data = [['ISSUER', 'AMOUNT', 'COST']]
             for key in assets:
                 update_data.append([key, float(assets.get(key, 0)),
-                                    db_get_last_trade_operation(session=session, asset_code=key)])
+                                    await stellar_get_trade_cost(Asset(code=key, issuer=address[0]))])
             await address_sheet.update('E1', update_data)
 
             pools = await get_pool_balances(address[0])
             update_data = [['POOLS', 'SHARES', 'AMOUNT1', 'AMOUNT2']]
             for pool in pools:
-                #[{'pool_id': '1b492b669959d3f082b5fb7dcc847d43371fd1f586209899603b93ac1a39b7f8', 'name': 'MTL-EURMTL', 'shares': 761437.8395765, 'token1_amount': 348606.2247324, 'token2_amount': 1685938.1857397}]
-                update_data.append([pool['name'], float(pool['shares']), float(pool['token1_amount']), float(pool['token2_amount'])])
+                # [{'pool_id': '1b492b669959d3f082b5fb7dcc847d43371fd1f586209899603b93ac1a39b7f8', 'name': 'MTL-EURMTL', 'shares': 761437.8395765, 'token1_amount': 348606.2247324, 'token2_amount': 1685938.1857397}]
+                update_data.append(
+                    [pool['name'], float(pool['shares']), float(pool['token1_amount']), float(pool['token2_amount'])])
             await address_sheet.update('H1', update_data)
-
 
     await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
 
@@ -809,7 +811,7 @@ async def update_fest(session: Session):
     logger.info(f'update_fest completed successfully')
 
 
-async def main():
+async def main_report():
     from db.quik_pool import quik_pool
 
     logger.add("logs/update_report.log", rotation="1 MB")
@@ -824,25 +826,39 @@ async def main():
     await update_donates_new()
     await update_wallet_report(quik_pool())
     await update_wallet_report2(quik_pool())
-    await update_export(quik_pool())
-    await update_fire(quik_pool())
+    # await update_export(quik_pool())
+    # await update_fire(quik_pool())
+
+
+async def lite_report(session_pool):
+    await save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
+    await asyncio.sleep(10)
+
+    with session_pool() as session:
+        await update_main_report(session)
+        await asyncio.sleep(10)
+        await update_top_holders_report(session)
+        await asyncio.sleep(10)
+        await update_mmwb_report(session)
+        await update_wallet_report(session)
+        await update_wallet_report2(session)
 
 
 if __name__ == "__main__":
     logger.add("logs/mtl_report.log", rotation="1 MB")
 
-    if 'report' in sys.argv:
-        sentry_sdk.init(
-            dsn=config.sentry_report_dsn,
-            traces_sample_rate=1.0,
-            profiles_sample_rate=1.0,
-        )
-        asyncio.run(main())
-    elif 'one_exchange' in sys.argv:
-        pass
-    else:
-        print('need more parameters')
-        from db.quik_pool import quik_pool
-
-        asyncio.run(update_main_report(quik_pool()))  # only from skynet
-        # print(calculate_statistics())
+    # if 'report' in sys.argv:
+    #     sentry_sdk.init(
+    #         dsn=config.sentry_report_dsn,
+    #         traces_sample_rate=1.0,
+    #         profiles_sample_rate=1.0,
+    #     )
+    #     asyncio.run(main_report())
+    # elif 'one_exchange' in sys.argv:
+    #     pass
+    # else:
+    #     print('need more parameters')
+    #     from db.quik_pool import quik_pool
+    #
+    #     asyncio.run(update_main_report(quik_pool()))  # only from skynet
+    #     # print(calculate_statistics())

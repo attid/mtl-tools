@@ -66,9 +66,7 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
-    # with suppress(TelegramBadRequest):
-    #     await bot.send_message(chat_id=MTLChats.HelperChat, text='Bot started')
-    if 'test' in sys.argv:
+    if config.test_mode:
         return
     global_tasks.append(asyncio.create_task(work_with_support()))
     await pyro_start()
@@ -95,6 +93,7 @@ async def load_routers(dp: Dispatcher, bot: Bot):
 
     routers_path = os.path.join(os.path.dirname(__file__), 'routers')
     router_modules = []
+    registered_handlers = set()  # Для отслеживания уже зарегистрированных обработчиков
 
     # Загрузка всех модулей роутеров
     for filename in os.listdir(routers_path):
@@ -103,13 +102,19 @@ async def load_routers(dp: Dispatcher, bot: Bot):
             try:
                 module = importlib.import_module(module_name)
                 if hasattr(module, 'register_handlers'):
+                    # Проверка на дублирование модуля
+                    if module.__name__ in registered_handlers:
+                        logger.warning(f"Skipping duplicate router module: {module.__name__}")
+                        continue
+
                     # Установка дефолтного приоритета, если не указан
                     if not hasattr(module.register_handlers, 'priority'):
                         module.register_handlers.priority = 50
                     router_modules.append(module)
+                    registered_handlers.add(module.__name__)
                     logger.info(f"Found router module {module_name} with priority {module.register_handlers.priority}")
             except Exception as e:
-                logger.error(f"Error loading module {module_name}: {e}")
+                logger.error(f"Error loading module {module_name}: {e}", exc_info=True)
 
     # Сортировка модулей по приоритету
     router_modules.sort(key=lambda m: getattr(m.register_handlers, 'priority', 50))
@@ -117,24 +122,27 @@ async def load_routers(dp: Dispatcher, bot: Bot):
     # Регистрация роутеров в порядке приоритета
     for module in router_modules:
         try:
+            logger.debug(f"Registering handlers from {module.__name__}")
             module.register_handlers(dp, bot)
-            logger.info(f"Registered handlers from {module.__name__}")
+            logger.info(f"Successfully registered handlers from {module.__name__}")
         except Exception as e:
-            logger.error(f"Error registering handlers from {module.__name__}: {e}")
+            logger.error(f"Error registering handlers from {module.__name__}: {e}", exc_info=True)
+
+    logger.info(f"Total router modules loaded: {len(router_modules)}")
 
 
 async def main():
     logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
 
     # Запуск бота
-    engine = create_engine(config.db_dns, pool_pre_ping=True, max_overflow=50)
+    engine = create_engine(config.firebird_url, pool_pre_ping=True, max_overflow=50)
     # Creating DB connections pool
     db_pool = sessionmaker(bind=engine)
 
     # Creating bot and its dispatcher
     session: AiohttpSession = AiohttpSession()
     session.middleware(RetryRequestMiddleware())
-    if 'test' in sys.argv:
+    if config.test_mode:
         bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
                   session=session)
         logger.info('start test')
@@ -142,7 +150,7 @@ async def main():
         bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
                   session=session)
 
-    redis = Redis(host='localhost', port=6379, db=4)
+    redis = Redis.from_url(config.redis_url)
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 

@@ -299,9 +299,7 @@ async def cmd_poll_answer(poll: PollAnswer, session: Session, bot: Bot):
     my_poll = json.loads(
         await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll.poll_id), empty_poll))
     # find user
-    user_address = await grist_manager.load_table_data(MTLGrist.MTLA_USERS,
-                                                       filter_dict={"TGID": [poll.user.id]}
-                                                       )
+    user_address = await grist_manager.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"TGID": [poll.user.id]})
 
     if not user_address:
         await bot.send_message(my_poll["info_chat_id"], f'User @{poll.user.username} not found')

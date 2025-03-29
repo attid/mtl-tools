@@ -1,7 +1,9 @@
 import asyncio
 import html
+import re
 from contextlib import suppress
 from datetime import datetime, timedelta
+from enum import Enum, auto
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -14,6 +16,22 @@ from other.config_reader import config
 from other.global_data import MTLChats, global_data
 
 scheduler: AsyncIOScheduler
+
+
+class AdminPermission(Enum):
+    """Перечисление прав администратора в Telegram."""
+    CAN_RESTRICT_MEMBERS = 'can_restrict_members'
+    CAN_DELETE_MESSAGES = 'can_delete_messages'
+    CAN_PROMOTE_MEMBERS = 'can_promote_members'
+    CAN_CHANGE_INFO = 'can_change_info'
+    CAN_INVITE_USERS = 'can_invite_users'
+    CAN_PIN_MESSAGES = 'can_pin_messages'
+    CAN_MANAGE_TOPICS = 'can_manage_topics'
+    CAN_MANAGE_VIDEO_CHATS = 'can_manage_video_chats'
+    CAN_POST_MESSAGES = 'can_post_messages'
+    CAN_EDIT_MESSAGES = 'can_edit_messages'
+    IS_ANONYMOUS = 'is_anonymous'
+
 non_breaking_space = chr(0x00A0)
 
 
@@ -37,7 +55,27 @@ def get_chat_link(chat: Chat):
     return f"<a href='https://t.me/c/{chat.id}/999999999999'>{chat.title}</a>"
 
 
-async def is_admin(event: Message | CallbackQuery, chat_id=None):
+async def is_admin(event: Message | CallbackQuery, chat_id=None, permission: AdminPermission = None):
+    """
+    Проверяет, является ли пользователь администратором чата и имеет ли указанные права.
+    
+    Args:
+        event (Message | CallbackQuery): Объект сообщения или колбэка.
+        chat_id: ID чата для проверки. Если None, будет определен из event.
+        permission (AdminPermission, optional): Право администратора для проверки из перечисления AdminPermission.
+            Например, AdminPermission.CAN_RESTRICT_MEMBERS.
+            Если None, проверяется только статус администратора.
+    
+    Returns:
+        bool: True, если пользователь является администратором и имеет указанные права (если указаны).
+    
+    Examples:
+        # Проверка, является ли пользователь администратором
+        is_admin_result = await is_admin(message)
+        
+        # Проверка, может ли администратор ограничивать пользователей
+        can_restrict = await is_admin(message, permission=AdminPermission.CAN_RESTRICT_MEMBERS)
+    """
     if chat_id is None:
         if isinstance(event, CallbackQuery):
             chat_id = event.message.chat.id
@@ -54,7 +92,18 @@ async def is_admin(event: Message | CallbackQuery, chat_id=None):
 
     with suppress(TelegramBadRequest):
         members = await event.bot.get_chat_administrators(chat_id=chat_id)
-        return any(member.user.id == user_id for member in members)
+        
+        if permission is None:
+            # Проверяем только статус администратора
+            return any(member.user.id == user_id for member in members)
+        else:
+            # Проверяем наличие указанного права у администратора
+            for member in members:
+                if member.user.id == user_id:
+                    # Проверяем, есть ли у администратора указанное право
+                    return getattr(member, permission.value, False)
+            
+            return False
 
 
 def add_text(lines, num_line, text):
@@ -64,16 +113,16 @@ def add_text(lines, num_line, text):
     return "\n".join(lines)
 
 
-def cmd_delete_later(message: Message, minutes=5, seconds=None):
-    current_time = datetime.now()
-    if seconds:
-        future_time = current_time + timedelta(seconds=seconds)
-    else:
-        future_time = current_time + timedelta(minutes=minutes)
-    scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(message,))
+# def cmd_delete_later(message: Message, minutes=5, seconds=None):
+#     current_time = datetime.now()
+#     if seconds:
+#         future_time = current_time + timedelta(seconds=seconds)
+#     else:
+#         future_time = current_time + timedelta(minutes=minutes)
+#     scheduler.add_job(cmd_delete_by_scheduler, run_date=future_time, args=(message,))  # noqa: F821
 
 
-async def cmd_sleep_and_delete(message: Message, sleep_time):
+async def cmd_sleep_and_delete(message: Message, sleep_time=3*60):
     """
     Asynchronous function that sleeps for a specified time and then attempts to delete a message.
     Args:
@@ -150,6 +199,26 @@ class StartText(Filter):
         return start_words(message.text, self.my_arr)
 
 
+class HasRegex(Filter):
+    """Фильтр для проверки регулярных выражений в сообщении"""
+    def __init__(self, patterns: tuple) -> None:
+        self.patterns = [re.compile(pattern) for pattern in patterns]
+
+    async def __call__(self, message: Message) -> bool:
+        if not message.text:
+            return False
+        
+        for pattern in self.patterns:
+            match = pattern.search(message.text)
+            if match:
+                pass
+                #logger.info(f"HasRegex: Паттерн '{pattern.pattern}' найден: {match.group()}")
+            else:
+                return False
+        
+        return True
+
+
 class ReplyToBot(Filter):
     async def __call__(self, message: Message, bot: Bot) -> bool:
         return message.reply_to_message and message.reply_to_message.from_user.id == bot.id
@@ -172,42 +241,39 @@ def get_username_link(user: User):
     return username
 
 
-async def get_user_info(chat_id: int, user_id: int) -> ChatMember:
-    bot = Bot(token=config.bot_token.get_secret_value())
+async def get_user_info(bot: Bot, chat_id: int, user_id: int) -> ChatMember | None:
     try:
-        # Получение информации о пользователе
         chat_member = await bot.get_chat_member(chat_id, user_id)
         return chat_member
     except Exception as e:
-        print(f"Произошла ошибка: {e}")
+        print(f"Ошибка при получении информации о пользователе: {e}")
         return None
 
 
-# Пример вызова функции
 async def main():
-    chat_id = -1001429770534  # Замените на реальный chat_id
-    user_id = 7539876829  # Замените на реальный user_id
-    user_id2 = 7321780032  # Замените на реальный user_id
-
-    user_info = await get_user_info(chat_id, user_id)
-    if user_info:
-        print(user_info)
-    else:
-        print("Не удалось получить информацию о пользователе.")
-
-    user_info = await get_user_info(chat_id, user_id2)
-    if user_info:
-        print(user_info)
-    else:
-        print("Не удалось получить информацию о пользователе.")
+    bot = Bot(token=config.bot_token.get_secret_value())
+    try:
+        chat_id = -1001429770534
+        user_ids = [7539876829, 7321780032]
+        
+        for user_id in user_ids:
+            user_info = await get_user_info(bot, chat_id, user_id)
+            if user_info:
+                print(f"Информация о пользователе {user_id}:", user_info)
+            else:
+                print(f"Не удалось получить информацию о пользователе {user_id}")
+    finally:
+        await bot.session.close()
 
 
-async def main0():
+async def main0(chat_id: str = '@Montelibero_ru', message_id: int = 9544, 
+                custom_emoji_id: str = '5458863124947942457'):
     async with Bot(
             token=config.bot_token.get_secret_value(),
     ) as bot:
-        await bot.set_message_reaction(chat_id='@Montelibero_ru', message_id=9544,
-                                       reaction=[ReactionTypeCustomEmoji(custom_emoji_id='5458863124947942457')])
+        await bot.set_message_reaction(chat_id=chat_id, message_id=message_id,
+                                       reaction=[ReactionTypeCustomEmoji(custom_emoji_id=custom_emoji_id)])
+
 
 
 async def update_mongo_chats_names():

@@ -6,6 +6,7 @@ import re
 import asyncio
 from loguru import logger
 
+from other.config_reader import config
 from other.global_data import global_data, MTLChats
 
 router = Router()
@@ -51,7 +52,7 @@ async def check_ping_responses(bot: Bot):
                     logger.error(f"Failed to notify admin : {e}")
 
 def register_handlers(dp, bot):
-    if 'test' in sys.argv:
+    if config.test_mode:
         return
     dp.include_router(router)
     asyncio.create_task(check_ping_responses(bot))

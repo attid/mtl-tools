@@ -10,7 +10,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from loguru import logger
 
 from db.requests import db_send_admin_message, db_get_user_id
-from other.aiogram_tools import is_admin, cmd_delete_later
+from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.global_data import global_data, is_skynet_admin, update_command_info, MTLChats
 from start import add_bot_users
 
@@ -36,7 +36,7 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
         if message.reply_to_message:
             user_id = message.reply_to_message.from_user.id
             username = message.reply_to_message.from_user.username
-            cmd_delete_later(message.reply_to_message, seconds=5)
+            await cmd_sleep_and_delete(message.reply_to_message, 5)
             msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
             spam_check = message.chat.id in global_data.no_first_link
             chat_url = html.link(message.chat.title, message.get_url())
@@ -60,8 +60,8 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
             await message.bot.send_message(chat_id=MTLChats.SpamGroup,
                                          text=f"User (ID: {user_id}) has been banned by "
                                               f"{message.from_user.username} in {message.chat.title} chat.")
-        cmd_delete_later(message, seconds=5)
-        cmd_delete_later(msg, seconds=5)
+        await cmd_sleep_and_delete(message, 5)
+        await cmd_sleep_and_delete(msg, 5)
 
 
 @router.message(Command(commands=["unban"]))

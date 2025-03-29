@@ -25,6 +25,7 @@ class MTLGrist:
     MTLA_CHATS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_CHATS")
     MTLA_COUNCILS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_COUNCILS")
     MTLA_USERS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "Users")
+    MTLA_Corporates = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "Corporates")
 
     SP_USERS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_USERS")
     SP_CHATS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_CHATS")
@@ -37,6 +38,7 @@ class MTLGrist:
 
     EURMTL_users = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Users")
     EURMTL_accounts = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Accounts")
+    EURMTL_assets = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Assets")
 
 
 class GristAPI:

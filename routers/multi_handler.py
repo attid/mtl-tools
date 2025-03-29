@@ -114,7 +114,7 @@ async def command_config_loads():
                      "Работает только совместно с /notify_join_request")
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
-@update_command_info("/set_moderate", "Включает\Выключает режим модерации", 1, "moderate")
+@update_command_info("/set_moderate", "Включает\Выключает режим модерации по топикам/topic", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
 async def universal_command_handler(message: Message, bot: Bot):
     command = message.text.lower().split()[0][1:]

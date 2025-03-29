@@ -11,7 +11,7 @@ from other.gspread_tools import gs_save_new_task
 
 MAX_TOKENS = 4000
 save_time_long = 60 * 60 * 2
-redis = Redis(host='localhost', port=6379, db=6)
+redis = Redis.from_url(config.redis_url)
 openai_key = config.openai_key.get_secret_value()
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
@@ -109,15 +109,15 @@ async def delete_last_redis(chat_id):
     await redis.delete(keys[-1])
 
 
-async def talk(chat_id, msg, gpt4=False):
+async def talk(chat_id, msg, gpt4=False, googleit=False):
     await save_to_redis(chat_id, msg)
     if gpt4:
         msg = f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n\n{msg}"
-        msg = await talk_open_ai_async(msg=msg, gpt4=True)
+        msg = await talk_open_ai_async(msg=msg, gpt4=True, googleit=googleit)
     else:
         msg_data = await load_from_redis(chat_id)
         msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде."})
-        msg = await talk_open_ai_async(msg_data=msg_data)
+        msg = await talk_open_ai_async(msg_data=msg_data, googleit=googleit)
     if msg:
         await save_to_redis(chat_id, msg, is_answer=True)
         return msg
@@ -135,7 +135,8 @@ async def talk_open_ai_list_models(name_filter):
             print(raw.id)
 
 
-async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False):
+async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False, googleit: bool = False):
+    addons = ":online" if googleit else ""
     if msg_data:
         messages = msg_data
     else:
@@ -144,9 +145,10 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
             messages[0]["name"] = user_name
     try:
         if gpt4:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages, extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4", messages=messages, extra_headers=extra_headers)
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4o", messages=messages, extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4o{addons}", messages=messages, extra_headers=extra_headers)
+
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
         logger.info(e.args)
@@ -357,14 +359,14 @@ if __name__ == "__main__":
     # print(p)
     # exit()
 
-    article = '''
-Кому интересен дoxoд от 200$ в день
-Потребуется Trust Wallet 
-Затраты по времени минимальные 
-Заинтересовало? Пишите !    
- '''
-    a = (asyncio.run(talk_check_spam(article)))
-    print(type(a), a)
-    # print(asyncio.run(talk(0,'Расскажи сказку про колобка на 10000 знаков')))
+#     article = '''
+# Кому интересен дoxoд от 200$ в день
+# Потребуется Trust Wallet
+# Затраты по времени минимальные
+# Заинтересовало? Пишите !
+#  '''
+#     a = (asyncio.run(talk_check_spam(article)))
+#     print(type(a), a)
+    print(asyncio.run(talk(0,'кто такой Виктор Корб', googleit=True)))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

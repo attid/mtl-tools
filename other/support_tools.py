@@ -2,10 +2,12 @@ import asyncio
 import json
 from datetime import datetime
 from redis.asyncio import Redis
+
+from other.config_reader import config
 from other.global_data import MTLChats
 from other.gspread_tools import gs_save_new_support
 
-redis = Redis(host='localhost', port=6379, db=7)
+redis = Redis.from_url(config.redis_url[:-1] + '7')
 
 
 async def save_to_redis(chat_id, data: dict):
@@ -16,7 +18,7 @@ async def save_to_redis(chat_id, data: dict):
 async def work_with_support():
     while True:
         await asyncio.sleep(10)
-        keys:list = await redis.keys(f'{MTLChats.TestGroup}:*')
+        keys: list = await redis.keys(f'{MTLChats.TestGroup}:*')
         keys.extend(await redis.keys(f'{MTLChats.HelperChat}:*'))
         messages = []
         for key in keys:

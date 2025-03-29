@@ -7,11 +7,12 @@ from other.stellar_tools import *
 
 
 @logger.catch
-async def cmd_check_cron_transaction(session: Session):
-    assets_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ASSETS)
-    await process_transactions_by_assets(session, assets_config)
-    address_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ACCOUNTS)
-    await process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
+async def cmd_check_cron_transaction(session_pool):
+    with session_pool() as session:
+        assets_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ASSETS)
+        await process_transactions_by_assets(session, assets_config)
+        address_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ACCOUNTS)
+        await process_specific_transactions(session, address_config, ['CreateClaimableBalance', 'SPAM'])
 
 
 async def process_transactions_by_assets(session, assets_config):
@@ -53,54 +54,55 @@ def send_message_4000(session, chat_id, messages, topic_id=None):
 
 
 @logger.catch
-async def cmd_check_bot(session: Session):
-    # balance Wallet
-    balance = await get_balances(MTLAddresses.public_wallet)
-    if int(balance['XLM']) < 100:
-        db_cmd_add_message(session, MTLChats.SignGroup, 'Внимание Баланс MyMTLWallet меньше 100 !')
+async def cmd_check_bot(session_pool):
+    with session_pool() as session:
+        # balance Wallet
+        balance = await get_balances(MTLAddresses.public_wallet)
+        if int(balance['XLM']) < 100:
+            db_cmd_add_message(session, MTLChats.SignGroup, 'Внимание Баланс MyMTLWallet меньше 100 !')
 
-    # bot1
-    now = datetime.now()
-    for bot_address in exchange_bots:
-        if bot_address == MTLAddresses.public_fire:
-            dt = cmd_check_last_operation(bot_address)
-            delta = now - dt
-            if delta.days > 15:
-                db_cmd_add_message(session, MTLChats.SignGroup,
-                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
-        elif bot_address == MTLAddresses.public_exchange_eurmtl_usdm:
-            dt = cmd_check_last_operation(bot_address)
-            delta = now - dt
-            if delta.days > 3:
-                db_cmd_add_message(session, MTLChats.SignGroup,
-                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
-        else:
-            dt = cmd_check_last_operation(bot_address)
-            delta = now - dt
-            if delta.days > 0:
-                db_cmd_add_message(session, MTLChats.SignGroup,
-                                   f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+        # bot1
+        now = datetime.now()
+        for bot_address in exchange_bots:
+            if bot_address == MTLAddresses.public_fire:
+                dt = cmd_check_last_operation(bot_address)
+                delta = now - dt
+                if delta.days > 15:
+                    db_cmd_add_message(session, MTLChats.SignGroup,
+                                       f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+            elif bot_address == MTLAddresses.public_exchange_eurmtl_usdm:
+                dt = cmd_check_last_operation(bot_address)
+                delta = now - dt
+                if delta.days > 3:
+                    db_cmd_add_message(session, MTLChats.SignGroup,
+                                       f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
+            else:
+                dt = cmd_check_last_operation(bot_address)
+                delta = now - dt
+                if delta.days > 0:
+                    db_cmd_add_message(session, MTLChats.SignGroup,
+                                       f'Внимание по боту обмена {bot_address} нет операций {delta.days} дней !')
 
-    # USDM order
-    params = [
-        (MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset, 3000),
-        (MTLAddresses.public_usdm, MTLAssets.yusdc_asset, MTLAssets.usdm_asset, 5000),
-        (MTLAddresses.public_usdm, MTLAssets.usdm_asset, MTLAssets.usdc_asset, 50000),
-    ]
+        # USDM order
+        params = [
+            (MTLAddresses.public_usdm, MTLAssets.usdc_asset, MTLAssets.usdm_asset, 3000),
+            (MTLAddresses.public_usdm, MTLAssets.yusdc_asset, MTLAssets.usdm_asset, 5000),
+            (MTLAddresses.public_usdm, MTLAssets.usdm_asset, MTLAssets.usdc_asset, 50000),
+        ]
 
-    for address, selling_asset, buying_asset, order_min_sum in params:
-        order_sum = await stellar_get_orders_sum(address, selling_asset, buying_asset)
-        if order_sum < order_min_sum:
-            db_cmd_add_message(session, MTLChats.USDMMGroup,
-                               f'Внимание ордер {selling_asset.code}/{buying_asset.code} {order_sum} !')
+        for address, selling_asset, buying_asset, order_min_sum in params:
+            order_sum = await stellar_get_orders_sum(address, selling_asset, buying_asset)
+            if order_sum < order_min_sum:
+                db_cmd_add_message(session, MTLChats.USDMMGroup,
+                                   f'Внимание ордер {selling_asset.code}/{buying_asset.code} {order_sum} !')
 
-    # key rate
-    # dt = fb.execsql1('select max(t.dt_add) from t_keyrate t', [], datetime.now())
-    # dt = datetime.combine(dt, datetime.min.time())
-    # now = datetime.now()
-    # delta = now - dt
-    # if delta.days > 0:
-    #    db_cmd_add_message(MTLChats.SignGroup, 'Внимание начислению key rate нет операций больше суток !')
+        # key rate
+        # dt = fb.execsql1('select max(t.dt_add) from t_keyrate t', [], datetime.now())
+        # dt = datetime.combine(dt, datetime.min.time())
+        # now = datetime.now()
+        # delta = now - dt
+        # if delta.days > 0:
+        #    db_cmd_add_message(MTLChats.SignGroup, 'Внимание начислению key rate нет операций больше суток !')
 
 
 @logger.catch
@@ -161,19 +163,19 @@ async def cmd_check_grist():
 
 if __name__ == "__main__":
     logger.add("logs/check_stellar.log", rotation="1 MB")
-    sentry_sdk.init(
-        dsn=config.sentry_report_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
-
-    if 'check_transaction' in sys.argv:
-        # pass
-        asyncio.run(cmd_check_cron_transaction(quik_pool()))
-    elif 'check_bot' in sys.argv:
-        asyncio.run(cmd_check_bot(quik_pool()))
-    elif 'check_grist' in sys.argv:
-        pass
-        asyncio.run(cmd_check_grist())
-    else:
-        print('need more parameters')
+    # sentry_sdk.init(
+    #     dsn=config.sentry_report_dsn,
+    #     traces_sample_rate=1.0,
+    #     profiles_sample_rate=1.0,
+    # )
+    #
+    # if 'check_transaction' in sys.argv:
+    #     # pass
+    #     asyncio.run(cmd_check_cron_transaction(quik_pool()))
+    # elif 'check_bot' in sys.argv:
+    #     asyncio.run(cmd_check_bot(quik_pool()))
+    # elif 'check_grist' in sys.argv:
+    #     pass
+    #     asyncio.run(cmd_check_grist())
+    # else:
+    #     print('need more parameters')

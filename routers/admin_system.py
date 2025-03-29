@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from other.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
-from other.aiogram_tools import is_admin, cmd_delete_later
+from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
@@ -77,8 +77,19 @@ async def cmd_ping_piro(message: Message):
 
 
 async def cmd_send_file(message: Message, filename):
-    if os.path.isfile(filename):
+    try:
+        if not os.path.isfile(filename):
+            await message.reply(f'Файл {filename} не найден')
+            return
+        
+        if os.path.getsize(filename) == 0:
+            await message.reply(f'Файл {filename} пуст')
+            return
+            
         await message.reply_document(FSInputFile(filename))
+    except Exception as e:
+        logger.error(f"Ошибка при отправке файла {filename}: {e}")
+        await message.reply(f'Произошла ошибка при отправке файла {filename}')
 
 
 @router.message(Command(commands=["summary"]))
@@ -91,36 +102,63 @@ async def cmd_get_summary(message: Message, session: Session):
         await message.reply('No messages 1')
         return
 
-    data = db_get_messages_without_summary(session, chat_id=message.chat.id,
-                                           thread_id=message.message_thread_id if message.is_topic_message else None)
+    try:
+        data = db_get_messages_without_summary(session, chat_id=message.chat.id,
+                                             thread_id=message.message_thread_id if message.is_topic_message else None)
 
-    if len(data) > 0:
+        if not data:
+            await message.reply('Нет новых сообщений для обработки')
+            return
+
         text = ''
         summary = db_add_summary(session=session, text=text)
         session.flush()
 
-        for record in data:
-            new_text = text + f'{record.username}: {record.text} \n\n'
-            if len(new_text) < 16000:
-                text = new_text
-                record.summary_id = summary.id
-                session.flush()
-            else:
+        try:
+            for record in data:
+                new_text = text + f'{record.username}: {record.text} \n\n'
+                if len(new_text) < 16000:
+                    text = new_text
+                    record.summary_id = summary.id
+                    session.flush()
+                else:
+                    summary.text = await talk_get_summary(text)
+                    session.flush()
+                    summary = db_add_summary(session=session, text='')
+                    session.flush()
+                    text = record.username + ': ' + record.text + '\n\n'
+                    record.summary_id = summary.id
+                    session.flush()
+            
+            if text:  # Обработка оставшегося текста
                 summary.text = await talk_get_summary(text)
                 session.flush()
-                summary = db_add_summary(session=session, text='')
-                session.flush()
-                text = record.username + ': ' + record.text + '\n\n'
-                record.summary_id = summary.id
-                session.flush()
-        summary.text = await talk_get_summary(text)
-        session.flush()
 
-    for record in db_get_summary(session=session, chat_id=message.chat.id,
-                                 thread_id=message.message_thread_id if message.is_topic_message else None):
-        await message.reply(record.text[:4000])
+            summaries = db_get_summary(session=session, chat_id=message.chat.id,
+                                     thread_id=message.message_thread_id if message.is_topic_message else None)
 
-    session.commit()
+            if not summaries:
+                await message.reply('Не удалось получить сводку сообщений')
+                return
+
+            for record in summaries:
+                if record.text:
+                    await message.reply(record.text[:4000])
+                else:
+                    logger.warning(f"Empty summary text for record {record.id}")
+
+            session.commit()
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error processing messages for summary: {e}")
+            await message.reply('Произошла ошибка при обработке сообщений')
+            return
+
+    except Exception as e:
+        logger.error(f"Database error in cmd_get_summary: {e}")
+        await message.reply('Произошла ошибка при работе с базой данных')
+        return
 
 
 @router.message(F.document, F.chat.type == ChatType.PRIVATE)

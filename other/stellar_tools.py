@@ -12,7 +12,7 @@ from aiogram import Bot
 from aiogram.types import Message
 from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
                          AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
-                         ClaimPredicate)
+                         ClaimPredicate, LiquidityPoolAsset)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from other.config_reader import config
@@ -139,7 +139,7 @@ def good_operation(operation, operation_name, filter_operation, ignore_operation
 
 
 async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_operation=None, filter_asset=None,
-               full_data=False):
+                     full_data=False):
     if ignore_operation is None:
         ignore_operation = []
     if filter_operation is None:
@@ -337,16 +337,25 @@ async def address_id_to_username(key, full_data=False) -> str:
             global_data.name_list[key] = user[0]["username"]
             return global_data.name_list[key]
 
-        # eurmtl users
+        # eurmtl accounts
         user = await grist_manager.load_table_data(
-            MTLGrist.EURMTL_users,
+            MTLGrist.EURMTL_accounts,
             filter_dict={"account_id": [key]}
         )
         if user:
             global_data.name_list[key] = user[0]["description"]
             return global_data.name_list[key]
 
-        return key[:4] + '..' + key[-4:] + 'не найден, возможно скам'
+        # eurmtl assets
+        user = await grist_manager.load_table_data(
+            MTLGrist.EURMTL_assets,
+            filter_dict={"issuer": [key]}
+        )
+        if user:
+            global_data.name_list[key] = 'Issuer of ' + user[0]["code"]
+            return global_data.name_list[key]
+
+        return key[:4] + '..' + key[-4:] + ' не найден, возможно скам'
 
     return key[:4] + '..' + key[-4:]
 
@@ -386,7 +395,7 @@ async def stellar_get_account(account_id) -> dict:
 
 async def stellar_get_issuer_assets(account_id) -> dict:
     async with aiohttp.ClientSession() as session:
-        async with session.get(f'{config.horizon_url}/assets?asset_issuer={account_id}') as resp:
+        async with session.get(f'{config.horizon_url}/assets?limit=200&asset_issuer={account_id}') as resp:
             data = await resp.json()
             # print(data)  # 'liquidity_pools_amount': '1807570.6061503',
             assets = {}
@@ -1845,93 +1854,119 @@ async def cmd_check_new_transaction(ignore_operation: List,
                                     account_id=MTLAddresses.public_issuer, cash=None, chat_id=None):
     result = []
 
-    # Проверяем, есть ли данные в кэше
-    if cash is not None and account_id in cash:
-        tr = cash[account_id]
-    else:
-        # Если данных в кэше нет, выполняем запрос
-        server = Server(horizon_url=config.horizon_url)
-        tr = server.transactions().for_account(account_id).order(desc=True).call()
-        # Сохраняем полученные данные в кэш
-        if cash is not None:
-            cash[account_id] = tr
+    try:
+        # Проверяем, есть ли данные в кэше
+        if cash is not None and account_id in cash:
+            tr = cash[account_id]
+        else:
+            # Если данных в кэше нет, выполняем запрос
+            server = Server(horizon_url=config.horizon_url)
+            tr = server.transactions().for_account(account_id).order(desc=True).call()
+            # Сохраняем полученные данные в кэш
+            if cash is not None:
+                cash[account_id] = tr
 
-    # Получаем last_id из базы данных
-    last_id = await global_data.mongo_config.load_kv_value(account_id + chat_id)
+        # Получаем last_id из базы данных
+        last_id = await global_data.mongo_config.load_kv_value(account_id + chat_id)
 
-    # Если last_id равен None, сохраняем текущий last_id и выходим
-    if last_id is None:
-        if tr["_embedded"]["records"]:
-            last_id = tr["_embedded"]["records"][0]["paging_token"]
-            await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
-        return result
+        # Если last_id равен None, сохраняем текущий last_id и выходим
+        if last_id is None:
+            if tr["_embedded"]["records"]:
+                last_id = tr["_embedded"]["records"][0]["paging_token"]
+                await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+            return result
 
-    new_transactions = []
-    for record in tr["_embedded"]["records"]:
-        if record["paging_token"] == last_id:
-            break
-        new_transactions.append(record)
+        new_transactions = []
+        for record in tr["_embedded"]["records"]:
+            if record["paging_token"] == last_id:
+                break
+            new_transactions.append(record)
 
-    for transaction in new_transactions:
-        if transaction["paging_token"] > last_id:
-            last_id = transaction["paging_token"]
-        tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
-        if 0 < len(tr) < 90:
-            link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
-            tr = await decode_xdr(transaction["envelope_xdr"])
-            tr.insert(0, f'(<a href="{link}">expert link</a>)')
-            result.append(tr)
-        # print(await decode_xdr(transaction["envelope_xdr"]))
-        # print('****')
-        # print(transaction["paging_token"])
+        for transaction in new_transactions:
+            if transaction["paging_token"] > last_id:
+                last_id = transaction["paging_token"]
+            try:
+                tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
+                if tr and 0 < len(tr) < 90:
+                    link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
+                    try:
+                        tr_details = await decode_xdr(transaction["envelope_xdr"])
+                        if tr_details:
+                            tr_details.insert(0, f'(<a href="{link}">expert link</a>)')
+                            result.append(tr_details)
+                    except Exception as ex:
+                        logger.error(f"Error decoding XDR details for transaction {transaction['paging_token']}: {ex}")
+                        # Добавляем базовую информацию о транзакции, если детальное декодирование не удалось
+                        result.append([f'(<a href="{link}">expert link</a>)', 'Error decoding transaction details'])
+            except Exception as ex:
+                logger.error(f"Error processing transaction {transaction['paging_token']}: {ex}")
+                continue
 
-    await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+        await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+
+    except Exception as ex:
+        logger.error(f"Error in cmd_check_new_transaction for account {account_id}: {ex}")
 
     return result
 
 
 async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_sum: int = -1,
                                           filter_operation=None, filter_asset=None, chat_id=None):
-    if filter_operation is None:
-        filter_operation = []
-    result = []
-    asset_name = asset.split('-')[0]
+    try:
+        if filter_operation is None:
+            filter_operation = []
+        result = []
+        asset_name = asset.split('-')[0]
 
-    # Получаем last_id из базы данных
-    last_id = await global_data.mongo_config.load_kv_value(asset + chat_id)
+        # Получаем last_id из базы данных
+        last_id = await global_data.mongo_config.load_kv_value(asset + chat_id)
 
-    # Если last_id равен None, просто сохраняем его и выходим
-    if last_id is None:
-        # Получаем данные для определения текущего max_id
-        data = db_get_new_effects_for_token(session, asset_name, '-1', filter_sum)
-        if data:
-            # Сохраняем id последнего эффекта как начальный last_id
-            await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
+        # Если last_id равен None, просто сохраняем его и выходим
+        if last_id is None:
+            # Получаем данные для определения текущего max_id
+            data = db_get_new_effects_for_token(session, asset_name, '-1', filter_sum)
+            if data:
+                # Сохраняем id последнего эффекта как начальный last_id
+                await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
+            return result
+
+        max_id = last_id
+
+        # Получаем новые эффекты для токена
+        data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
+        for row in data:
+            try:
+                effect = await decode_db_effect(row)
+                if effect:  # Проверяем, что effect не пустой
+                    result.append(effect)
+                    max_id = row.id
+            except Exception as ex:
+                logger.error(f"Error decoding effect for row {row.id}: {ex}")
+                continue
+
+        # Сохраняем новый max_id, если он больше last_id
+        if max_id > last_id:
+            await global_data.mongo_config.save_kv_value(asset + chat_id, max_id)
+
         return result
 
-    max_id = last_id
-
-    # Получаем новые эффекты для токена
-    data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
-    for row in data:
-        result.append(await decode_db_effect(row))
-        max_id = row.id
-
-    # Сохраняем новый max_id, если он больше last_id
-    if max_id > last_id:
-        await global_data.mongo_config.save_kv_value(asset + chat_id, max_id)
-
-    return result
+    except Exception as ex:
+        logger.error(f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}")
+        return []
 
 
 async def decode_db_effect(row: TOperations):
-    result = f'<a href="https://stellar.expert/explorer/public/op/{row.id.split("-")[0]}">' \
-             f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
-    if row.operation == 'trade':
-        result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'
-    else:
-        result += f'  {row.operation} for {float2str(row.amount1)} {row.code1} \n'
-    return result
+    try:
+        result = f'<a href="https://stellar.expert/explorer/public/op/{row.id.split("-")[0]}">' \
+                 f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
+        if row.operation == 'trade':
+            result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'
+        else:
+            result += f'  {row.operation} for {float2str(row.amount1)} {row.code1} \n'
+        return result
+    except Exception as ex:
+        logger.error(f"Error in decode_db_effect for operation {row.id}: {ex}")
+        return None
 
 
 def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
@@ -1992,6 +2027,49 @@ async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
     for account in accounts:
         if account.account_id in signer_weights:
             account.votes = signer_weights[account.account_id]
+
+
+async def stellar_get_trade_cost(asset: Asset) -> float:
+    """
+    Calculate average trade price between given asset and EURMTL based on last 100 trades.
+
+    Args:
+        asset: Stellar SDK Asset object to check trades against EURMTL
+
+    Returns:
+        float: Average trade price or 0 if no trades found
+    """
+    try:
+        async with ServerAsync(
+                horizon_url=config.horizon_url, client=AiohttpClient()
+        ) as server:
+            # Get last 100 trades for the asset pair
+            trades = await server.trades().for_asset_pair(
+                asset, MTLAssets.eurmtl_asset
+            ).limit(100).order(desc=True).call()
+
+            if not trades['_embedded']['records']:
+                return 0
+
+            total_price = 0
+            trade_count = 0
+
+            # Calculate average price from trades
+            for trade in trades['_embedded']['records']:
+                # Check which asset is base/counter to calculate correct price
+                if trade['base_asset_code'] == asset.code:
+                    price = float(trade['price']['n']) / float(trade['price']['d'])
+                else:
+                    price = float(trade['price']['d']) / float(trade['price']['n'])
+
+                total_price += price
+                trade_count += 1
+
+            return total_price / trade_count if trade_count > 0 else 0
+
+    except Exception as ex:
+        logger.error(f"Error getting trade cost for {asset.code}: {ex}")
+        return 0
 
 
 def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
@@ -2825,9 +2903,13 @@ async def get_market_price(
 if __name__ == '__main__':
     pass
     from db.quik_pool import quik_pool
+    print(asyncio.run(stellar_get_trade_cost(MTLAssets.mtl_asset)))
+    # p = LiquidityPoolAsset(MTLAssets.eurmtl_asset, Asset('USDMPOOL', MTLAddresses.public_usdm))
+    # print(p)
+    # print(p.liquidity_pool_id)
 
-    _ = asyncio.run(cmd_get_new_vote_all_mtl(''))
-    print(_)
+    # _ = asyncio.run(address_id_to_username('GC5M4DTKUZY36YHSEVO2ZJC3DZC67CLH5CA4FBYBJTCGTN46H2RWCATO', True))
+    # print(_)
     # print(len(_))
     # _ = asyncio.run(get_pool_balances(MTLAddresses.public_itolstov))
     # print(_)
