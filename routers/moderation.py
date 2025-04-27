@@ -1,15 +1,14 @@
-import json
 from contextlib import suppress
 
-from aiogram import Router, Bot, html, F
+from aiogram import Router, Bot, html
 from sqlalchemy.orm import Session
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
 from loguru import logger
 
-from db.requests import db_send_admin_message, db_get_user_id
+from db.requests import db_get_user_id
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.global_data import global_data, is_skynet_admin, update_command_info, MTLChats
 from start import add_bot_users

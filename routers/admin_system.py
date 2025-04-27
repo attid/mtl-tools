@@ -11,16 +11,15 @@ from datetime import datetime
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatType, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton,
-                           ReactionTypeEmoji, LoginUrl, User)
+                           LoginUrl, User)
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from other.config_reader import config
 from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
-from other.aiogram_tools import is_admin, cmd_sleep_and_delete
+from other.aiogram_tools import is_admin
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
@@ -98,7 +97,7 @@ async def cmd_get_summary(message: Message, session: Session):
         await message.reply('You are not my admin.')
         return False
 
-    if not (message.chat.id in global_data.listen):
+    if message.chat.id not in global_data.listen:
         await message.reply('No messages 1')
         return
 
@@ -413,7 +412,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
             user_id = int(row[1])
             await bot.send_chat_action(user_id, action='typing')
             results.append(True)
-        except Exception as e:
+        except Exception:
             results.append(False)
         await asyncio.sleep(0.1)
 
@@ -446,7 +445,7 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User)
         is_member = member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
         return is_member, member.user
 
-    except TelegramBadRequest as e:
+    except TelegramBadRequest:
         return False, None
 
 

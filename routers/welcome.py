@@ -4,7 +4,7 @@ import random
 import re
 from contextlib import suppress
 
-from aiogram import Router, Bot, F, html
+from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import (Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER,

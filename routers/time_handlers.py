@@ -1,20 +1,21 @@
+import asyncio
 import json
 import sys
 from datetime import datetime
 import random
-import aiohttp
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
 from other import aiogram_tools
-from other.config_reader import config
-from db.requests import db_load_new_message, db_send_admin_message, db_get_ledger_count, db_load_bot_value_ext
+from db.requests import db_load_new_message
+from other.grist_tools import grist_manager, MTLGrist
+from other.pyro_tools import remove_deleted_users
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
-from scripts.mtl_exchange import check_exchange, check_exchange_one
+from scripts.mtl_exchange import check_exchange_one
 from scripts.mtl_exchange2 import check_mm, check_mmwb
-from other.global_data import MTLChats, BotValueTypes
+from other.global_data import MTLChats
 from scripts.update_report import lite_report
 
 
@@ -37,7 +38,7 @@ async def cmd_send_message_test(bot: Bot):
 
 @logger.catch
 async def cmd_send_message_start_month(bot: Bot):
-    logger.info(f'cmd_send_message_singers')
+    logger.info('cmd_send_message_singers')
     await bot.send_message(MTLChats.SignGroup, 'Не пора ли с кучицы и GPA денег стрясти ? /all',
                            message_thread_id=59558)
 
@@ -103,6 +104,24 @@ async def time_check_mmwb(bot: Bot, session_pool):
 
 
 @logger.catch
+async def time_clear(bot: Bot):
+    chats = await grist_manager.load_table_data(
+        MTLGrist.CONFIG_auto_clean,
+        filter_dict={"enabled": [True]}
+    )
+    for chat in chats:
+        try:
+            chat_info = await bot.get_chat(chat['chat_id'])
+            count = await remove_deleted_users(chat['chat_id'])
+            if count > 0 :
+                await bot.send_message(MTLChats.SpamGroup,f"Finished removing deleted users from {chat_info.full_name}. \n Total deleted users: {count}")
+        except Exception as e:
+            logger.error(f"Error in cmd_delete_dead_members: {e}")
+            await bot.send_message(MTLChats.ITolstov,f"An error occurred while removing deleted users: {str(e)}")
+        await asyncio.sleep(30)
+
+
+@logger.catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
     # scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
@@ -135,8 +154,8 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     # обмен
     # */13 * * * * /home/skynet_bot/deploy/mtl_exchange.sh check_exchange
     # 17 10 * * * /home/skynet_bot/deploy/mtl_exchange.sh one_exchange
-    scheduler.add_job(check_exchange, "interval", minutes=13,
-                      misfire_grace_time=360, jitter=120)
+    # scheduler.add_job(check_exchange, "interval", minutes=13,
+    #                   misfire_grace_time=360, jitter=120)
     scheduler.add_job(check_exchange_one, "interval", hours=18,
                       misfire_grace_time=360, jitter=120)
 
@@ -147,6 +166,8 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(lite_report, "cron", hour=8, minute=10, args=(session_pool,),
                       misfire_grace_time=360)
 
+    scheduler.add_job(time_clear, "interval", hours=10, args=(bot,),
+                      misfire_grace_time=360, jitter=120)
     # 30 */8 * * * /opt/firebird/bin/isql -i /db/archive.sql
 
     ##scheduler.add_job(cmd_send_message_test, "interval", minutes=1, args=(bot,), id='test')

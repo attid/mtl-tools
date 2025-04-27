@@ -39,10 +39,10 @@ async def cmd_decode(message: Message):
             msg = await check_url_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
         else:
             msg = await decode_xdr(message.text.split()[1], full_data=message.chat.id in global_data.full_data)
-        msg = f'\n'.join(msg)
+        msg = '\n'.join(msg)
         await multi_reply(message, msg)
     except Exception as e:
-        await message.reply(f'Параметр не распознан. Надо xdr или ссылку на тулзу')
+        await message.reply('Параметр не распознан. Надо xdr или ссылку на тулзу')
         logger.error(e)
 
 
@@ -110,17 +110,17 @@ async def cmd_do_bim(message: Message, session: Session):
         i = cmd_gen_xdr(session, list_id)
         await msg.edit_text(add_text(lines, 3, f"Part done. Need {i} more. Step (3/7)"))
 
-    await msg.edit_text(add_text(lines, 4, f"Try send transactions. Step (4/7)"))
+    await msg.edit_text(add_text(lines, 4, "Try send transactions. Step (4/7)"))
     i = 1
     e = 1
     while i > 0:
         try:
             i = await cmd_send_by_list_id(session, list_id)
             await msg.edit_text(add_text(lines, 5, f"Part done. Need {i} more. Step (5/7)"))
-        except Exception as err:
+        except Exception:
             await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/7)"))
             e += 1
-    await msg.edit_text(add_text(lines, 7, f"BDM. Work done. Step (7/7)"))
+    await msg.edit_text(add_text(lines, 7, "BDM. Work done. Step (7/7)"))
 
 
 @update_command_info("/do_resend", "Переотправить транзакцию. Только для админов")
@@ -135,7 +135,7 @@ async def cmd_do_key_rate(message: Message, session: Session):
         lines = []
         msg = await message.answer(add_text(lines, 1, f"Start resend. PayID №{list_id}. Step (1/6)"))
 
-        await msg.edit_text(add_text(lines, 3, f"Try send transactions. Step (2/6)"))
+        await msg.edit_text(add_text(lines, 3, "Try send transactions. Step (2/6)"))
         i = 1
         e = 1
         while i > 0:
@@ -146,7 +146,7 @@ async def cmd_do_key_rate(message: Message, session: Session):
                 await msg.edit_text(add_text(lines, 5, f"Got error. New attempt {e}. Step (4/6)"))
                 logger.info(f'249 line error {err}')
                 e += 1
-        await msg.edit_text(add_text(lines, 6, f"Resend. Work done. Step (5/6)"))
+        await msg.edit_text(add_text(lines, 6, "Resend. Work done. Step (5/6)"))
 
 
 @router.message(Command(commands=["do_all"]))
@@ -194,7 +194,7 @@ async def cmd_do_div(message: Message, session: Session):
         i = cmd_gen_xdr(session, donate_list_id)
         await msg.edit_text(add_text(lines, 4, f"Donate part done. Need {i} more. Step (4/12)"))
 
-    await msg.edit_text(add_text(lines, 5, f"Try send div transactions. Step (5/12)"))
+    await msg.edit_text(add_text(lines, 5, "Try send div transactions. Step (5/12)"))
     i = 1
     e = 1
     while i > 0:
@@ -205,19 +205,19 @@ async def cmd_do_div(message: Message, session: Session):
             logger.info(str(err))
             await msg.edit_text(add_text(lines, 7, f"Got error. New attempt {e}. Step (7/12)"))
             e += 1
-    await msg.edit_text(add_text(lines, 8, f"All work done. Step (8/12)"))
+    await msg.edit_text(add_text(lines, 8, "All work done. Step (8/12)"))
 
-    await msg.edit_text(add_text(lines, 9, f"Try send donate transactions. Step (9/12)"))
+    await msg.edit_text(add_text(lines, 9, "Try send donate transactions. Step (9/12)"))
     i = 1
     e = 1
     while i > 0:
         try:
             i = await cmd_send_by_list_id(session, donate_list_id)
             await msg.edit_text(add_text(lines, 10, f"Part done. Need {i} more. Step (10/12)"))
-        except Exception as err:
+        except Exception:
             await msg.edit_text(add_text(lines, 11, f"Got error. New attempt {e}. Step (11/12)"))
             e += 1
-    await msg.edit_text(add_text(lines, 12, f"All work done. Step (12/12)"))
+    await msg.edit_text(add_text(lines, 12, "All work done. Step (12/12)"))
 
 
 @update_command_info("/do_sats_div", "выплата дивидентов в satsmtl")
@@ -247,7 +247,7 @@ async def cmd_do_sats_div(message: Message, session: Session):
         i = cmd_gen_xdr(session, div_list_id)
         await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
 
-    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    await msg.edit_text(add_text(lines, 4, "Try send div transactions. Step (4/12)"))
     i = 1
     e = 1
     while i > 0:
@@ -258,7 +258,7 @@ async def cmd_do_sats_div(message: Message, session: Session):
             logger.info(str(err))
             await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
             e += 1
-    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
+    await msg.edit_text(add_text(lines, 7, "All work done. Step (7/12)"))
 
 
 @router.message(Command(commands=["do_usdm_div"]))
@@ -287,7 +287,7 @@ async def cmd_do_usdm_div(message: Message, session: Session):
         i = cmd_gen_xdr(session, div_list_id)
         await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
 
-    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    await msg.edit_text(add_text(lines, 4, "Try send div transactions. Step (4/12)"))
     i = 1
     e = 1
     while i > 0:
@@ -298,7 +298,7 @@ async def cmd_do_usdm_div(message: Message, session: Session):
             logger.info(str(err))
             await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
             e += 1
-    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
+    await msg.edit_text(add_text(lines, 7, "All work done. Step (7/12)"))
 
 
 @update_command_info("/do_usdm_usdm_div", "выплата дивидентов в usdm от usdm")
@@ -328,7 +328,7 @@ async def cmd_do_usdm_usdm_div(message: Message, session: Session):
         i = cmd_gen_xdr(session, div_list_id)
         await msg.edit_text(add_text(lines, 3, f"Div part done. Need {i} more. Step (3/12)"))
 
-    await msg.edit_text(add_text(lines, 4, f"Try send div transactions. Step (4/12)"))
+    await msg.edit_text(add_text(lines, 4, "Try send div transactions. Step (4/12)"))
     i = 1
     e = 1
     while i > 0:
@@ -339,7 +339,7 @@ async def cmd_do_usdm_usdm_div(message: Message, session: Session):
             logger.info(str(err))
             await msg.edit_text(add_text(lines, 6, f"Got error. New attempt {e}. Step (6/12)"))
             e += 1
-    await msg.edit_text(add_text(lines, 7, f"All work done. Step (7/12)"))
+    await msg.edit_text(add_text(lines, 7, "All work done. Step (7/12)"))
 
 
 @update_command_info("/do_usdm_usdm_div_test", "test выплата дивидентов в usdm от usdm")
@@ -420,7 +420,7 @@ async def cmd_get_chicago_xdr(message: Message):
     if len(xdr) < 4000:
         await multi_answer(message, xdr)
     else:
-        text = (f'Не могу отправить xdr вы можете получить его по ссылке ' +
+        text = ('Не могу отправить xdr вы можете получить его по ссылке ' +
                 f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>')
         await message.answer(text)
     await multi_answer(message, '\n'.join(await decode_xdr(xdr=xdr)))

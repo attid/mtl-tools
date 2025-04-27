@@ -317,7 +317,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session):
             await message.pin()
         msg = await check_url_xdr(
             await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
-        msg = f'\n'.join(msg)
+        msg = '\n'.join(msg)
         await multi_reply(message, msg)
 
 

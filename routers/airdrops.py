@@ -1,17 +1,14 @@
-import sys
 
 from other.config_reader import config
 from other.stellar_tools import get_balances
-from datetime import datetime, timedelta
-from aiogram import Router, types, Bot
+from aiogram import Router, types
 from aiogram import F
 import re
 import asyncio
 from loguru import logger
 
-from other.global_data import global_data, MTLChats
 from other.web_tools import http_session_manager
-from other.aiogram_tools import HasRegex, HasText
+from other.aiogram_tools import HasRegex
 
 router = Router()
 router.message.filter(F.chat.id == -1002294641071)

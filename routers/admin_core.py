@@ -1,7 +1,5 @@
-import asyncio
 import html
 import json
-import re
 from contextlib import suppress
 from datetime import datetime
 

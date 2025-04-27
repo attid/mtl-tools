@@ -1,5 +1,4 @@
-import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from aiogram import Router, types, Bot
 from aiogram import F
 import re

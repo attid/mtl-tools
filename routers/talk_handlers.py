@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from db.requests import extract_url
 from middlewares.throttling import rate_limit
-from scripts.update_report import (update_guarantors_report, update_main_report, update_fire, update_donate_report,
+from scripts.update_report import (update_guarantors_report, update_main_report, update_donate_report,
                                    update_mmwb_report, update_bim_data)
 from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
 from other.open_ai_tools import add_task_to_google, generate_image, talk_get_comment, talk, get_horoscope
@@ -142,14 +142,14 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot):
 
         if url:
             msg = await check_url_xdr(url)
-            msg = f'\n'.join(msg)
+            msg = '\n'.join(msg)
             await multi_reply(message, msg)
         else:
             await message.reply('Ссылка не найдена')
     else:
         msg = await check_url_xdr(await global_data.mongo_config.load_bot_value(
             message.chat.id, BotValueTypes.PinnedUrl))
-        msg = f'\n'.join(msg)
+        msg = '\n'.join(msg)
         await multi_reply(message, msg[:4000])
 
 
