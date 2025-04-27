@@ -1,5 +1,5 @@
 aiofiles==23.2.1
-aiogram==3.16.0
+aiogram==3.20.0
 aiohttp==3.11.11
 aiohttp-sse-client==0.2.1
 aioredis==2.0.1
@@ -51,9 +51,9 @@ pyasn1==0.5.0
 pyasn1-modules==0.3.0
 pycparser==2.21
 pycryptodomex
-pydantic~=2.9.2
-pydantic-core~=2.23.4
-pydantic-settings~=2.5.2
+pydantic~=2.11.3
+pydantic-core~=2.33.1
+pydantic-settings~=2.8.1
 pynacl==1.5.0
 pyparsing==3.1.1
 pyqrcode==1.2.1
@@ -78,7 +78,7 @@ toml==0.10.2
 tomli==2.0.1
 tqdm
 typeguard==2.13.3
-typing-extensions==4.7.1
+typing-extensions==4.13.2
 tzlocal==5.2
 uritemplate==4.1.1
 urllib3
