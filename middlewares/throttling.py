@@ -4,7 +4,6 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message
 import redis.asyncio.client
 import time
-from loguru import logger
 
 
 def rate_limit(limit: int, key=None):
