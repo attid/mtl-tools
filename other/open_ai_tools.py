@@ -2,6 +2,8 @@ import asyncio
 import json
 import random
 from datetime import datetime, date
+
+import httpx
 import tiktoken
 from redis.asyncio import Redis
 from loguru import logger
@@ -145,9 +147,11 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
             messages[0]["name"] = user_name
     try:
         if gpt4:
-            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4", messages=messages, extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages,
+                                                                         extra_headers=extra_headers)
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4o{addons}", messages=messages, extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4o{addons}", messages=messages,
+                                                                         extra_headers=extra_headers)
 
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
@@ -335,23 +339,54 @@ async def talk_get_summary(article):
     return msg
 
 
-async def generate_image(prompt, model="dall-e-3", n=1):
+async def generate_image_old(prompt, model="openai/gpt-4.1", n=1):
     response = await aclient.images.generate(prompt=prompt,
                                              n=n,
                                              model=model,
                                              extra_headers=extra_headers)
+    print(response)
 
     # Это вернет список URL изображений
     return [image.url for image in response.data]
 
 
+async def generate_image(prompt, model="openai/gpt-4.1", n=1):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {openai_key}",
+        "HTTP-Referer": "https://montelibero.org",
+        "X-Title": "Montelibero Bot",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt}
+                ]
+            }
+        ],
+        "modalities": ["text", "image"]
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=payload)
+        print(resp.status_code)
+        print(resp.text)
+
+
+
+
 if __name__ == "__main__":
     pass
-    # asyncio.run(talk_open_ai_list_models('gpt-4'))
+    # asyncio.run(talk_open_ai_list_models('openai'))
     # exit()
 
-    # a = asyncio.run(generate_image('красная панда'))
-    # print(a)
+    a = asyncio.run(generate_image('нарисуй красную панда'))
+    print(a)
 
     # text = 'добавь задачу что надо покрасить забор, испольнитель Егор, постановщик Владимир'
     #
@@ -359,14 +394,14 @@ if __name__ == "__main__":
     # print(p)
     # exit()
 
-#     article = '''
-# Кому интересен дoxoд от 200$ в день
-# Потребуется Trust Wallet
-# Затраты по времени минимальные
-# Заинтересовало? Пишите !
-#  '''
-#     a = (asyncio.run(talk_check_spam(article)))
-#     print(type(a), a)
-    print(asyncio.run(talk(0,'кто такой Виктор Корб', googleit=True)))
+    #     article = '''
+    # Кому интересен дoxoд от 200$ в день
+    # Потребуется Trust Wallet
+    # Затраты по времени минимальные
+    # Заинтересовало? Пишите !
+    #  '''
+    #     a = (asyncio.run(talk_check_spam(article)))
+    #     print(type(a), a)
+    #print(asyncio.run(talk(0, 'кто такой Виктор Корб', googleit=True)))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

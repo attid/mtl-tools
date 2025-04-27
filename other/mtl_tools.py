@@ -118,7 +118,7 @@ async def main():
 
     try:
         await pyro_app.stop()
-    except Exception as e:
+    except Exception:
         pass
 
 

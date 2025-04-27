@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import math
 from copy import deepcopy
 from datetime import date
@@ -12,7 +13,7 @@ from aiogram import Bot
 from aiogram.types import Message
 from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
                          AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
-                         ClaimPredicate, LiquidityPoolAsset)
+                         ClaimPredicate)
 from stellar_sdk.sep.federation import resolve_account_id_async
 
 from other.config_reader import config
@@ -207,7 +208,7 @@ async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_op
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
             result.append(f"  Спам {operation.asset.code}")
-            result.append(f"  Остальные операции игнорируются.")
+            result.append("  Остальные операции игнорируются.")
             break
         if good_operation(operation, "ManageSellOffer", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
@@ -277,7 +278,7 @@ async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_op
             continue
         if good_operation(operation, "EndSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
-            result.append(f"    EndSponsoringFutureReserves")
+            result.append("    EndSponsoringFutureReserves")
             continue
         if type(operation).__name__ == "Clawback":
             data_exist = True
@@ -305,7 +306,7 @@ async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_op
             continue
 
         data_exist = True
-        result.append(f"Прости хозяин, не понимаю")
+        result.append("Прости хозяин, не понимаю")
         logger.info(['bad xdr', idx, operation])
     if data_exist:
         return result
@@ -1488,7 +1489,7 @@ async def cmd_show_donates(return_json=False, return_table=False):
                 for recipient in recipients:
                     donate_data.append(f"          {recipient['percent']} ==> {recipient['recipient']}")
                     donate_table.append(['', recipient['percent'], recipient['recipient']])
-                donate_data.append(f"******")
+                donate_data.append("******")
 
     if return_json:
         return donate_json
@@ -1993,19 +1994,19 @@ async def resolve_account(account_id: str):
     try:
         result = await resolve_account_id_async(account_id, domain='eurmtl.me', client=client)
         result = result.stellar_address
-    except Exception as e:
+    except Exception:
         pass
     if result == '':
         try:
             result = await resolve_account_id_async(account_id, domain='lobstr.co', client=client)
             result = result.stellar_address
-        except Exception as e:
+        except Exception:
             pass
     if result == '':
         try:
             result = await resolve_account_id_async(account_id, domain='keybase.io', client=client)
             result = result.stellar_address
-        except Exception as e:
+        except Exception:
             pass
     if result == '':
         result = account_id[:4] + '..' + account_id[-4:]
@@ -2283,7 +2284,7 @@ async def get_chicago_xdr():
                                       amount=str(round(cashback_sum, 7)))
     transaction = transaction.build()
     xdr = transaction.to_xdr()
-    result.append(f'За период - ')
+    result.append('За период - ')
     num_premium_accounts = sum(account in premium_list for account in accounts_dict)
     num_regular_accounts = len(accounts_dict) - num_premium_accounts
     total_sum, total_income_sum, premium_sum = round(total_sum, 2), round(total_income_sum, 2), round(premium_sum, 2)
@@ -2778,24 +2779,6 @@ async def test1():
         print(f"Transaction failed: {get_response.result_xdr}")
 
 
-async def test():
-    # ['EURMTL', BotValueTypes.LastEurTransaction, MTLChats.GuarantorGroup, 900],
-    # a = await cmd_check_new_asset_transaction(quik_pool(), 'EURMTL', BotValueTypes.LastEurTransaction, 900)
-    # print(a)
-    # '224672741436141569-2'
-    # # a = gen_new('GROW')
-    # a = await cmd_calc_bim_pays(quik_pool(), 42, 200)
-    # #a = (await get_balances('GA4XOEQF4VQXWGJZQBIYWGBKZXGCELLRT6NBELGEB3KHP7J362BSMSIV')).get('EURMTL')
-    # print(len(a),a)
-
-    # from_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
-    # to_address = "GCKWH4EEYSLJMGA5DOJYQFOBUV57PLJYXBA7I42ZERZEMRSVDT6WLEDS"
-    # exclude_assets = [MTLAssets.mtlap_asset]
-    #
-    # result = await copy_trustlines(from_address, to_address, exclude_assets)
-    config.horizon_url = 'https://mainnet.stellar.validationcloud.io/v1/zLR8If1YxHyKtdE1EvW1EBczkjZ6Y8TVcLzBtdVeTYQ'
-    result = await cmd_get_new_vote_all_mtl('')
-    print(result)
 
 
 async def pay_ny():
@@ -2900,16 +2883,22 @@ async def get_market_price(
             return None
 
 
+async def test():
+    stellar_address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
+
+    # Запускаем асинхронное получение транзакций
+    transactions = await stellar_get_transactions(stellar_address, datetime.fromisocalendar(2022,1, 1), datetime.now())
+    print(len(transactions))
+
+    # Remove "_links" from each transaction
+    for transaction in transactions:
+        if "_links" in transaction:
+            del transaction["_links"]
+
+    with open('transactions.json', 'w', encoding='utf-8') as f:
+        json.dump(transactions, f, indent=2, ensure_ascii=False)
+
+
 if __name__ == '__main__':
     pass
-    from db.quik_pool import quik_pool
-    print(asyncio.run(stellar_get_trade_cost(MTLAssets.mtl_asset)))
-    # p = LiquidityPoolAsset(MTLAssets.eurmtl_asset, Asset('USDMPOOL', MTLAddresses.public_usdm))
-    # print(p)
-    # print(p.liquidity_pool_id)
-
-    # _ = asyncio.run(address_id_to_username('GC5M4DTKUZY36YHSEVO2ZJC3DZC67CLH5CA4FBYBJTCGTN46H2RWCATO', True))
-    # print(_)
-    # print(len(_))
-    # _ = asyncio.run(get_pool_balances(MTLAddresses.public_itolstov))
-    # print(_)
+    print(asyncio.run(test()))

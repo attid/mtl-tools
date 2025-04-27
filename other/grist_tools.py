@@ -1,7 +1,6 @@
 import asyncio
 import json
 from dataclasses import dataclass
-from enum import Enum
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from other.config_reader import config
@@ -40,6 +39,7 @@ class MTLGrist:
     EURMTL_accounts = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Accounts")
     EURMTL_assets = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Assets")
 
+    CONFIG_auto_clean = GristTableConfig("hPMqtkBmPfvA15SDWFJ9FH", "Auto_clean")
 
 class GristAPI:
     def __init__(self, session_manager: HTTPSessionManager = None):

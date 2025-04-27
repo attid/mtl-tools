@@ -2,8 +2,7 @@ import asyncio
 import html
 import re
 from contextlib import suppress
-from datetime import datetime, timedelta
-from enum import Enum, auto
+from enum import Enum
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest

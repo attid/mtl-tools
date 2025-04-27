@@ -166,7 +166,7 @@ def is_topic_admin(event: Message | ChatMemberUpdated | CallbackQuery):
     if not event.message_thread_id:
         return False
     chat_thread_key = f"{event.chat.id}-{event.message_thread_id}"
-    if not chat_thread_key in global_data.topic_admins:
+    if chat_thread_key not in global_data.topic_admins:
         return False
     return f'@{event.from_user.username.lower()}' in global_data.topic_admins[chat_thread_key]
 
