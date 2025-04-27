@@ -116,8 +116,8 @@ async def check_mmwb(session: Session):
         logger.info(f'{amount} SATSMTL bad sum')
 
     async with aiohttp.ClientSession() as httpsession:
-        async with httpsession.get(f'https://apilist.tronscan.org/api/account?'
-                                   f'address=TJaGpx1zVVmKgYwSdeSr6YmsuDcHHhgZDS') as resp:
+        async with httpsession.get('https://apilist.tronscan.org/api/account?'
+                                   'address=TJaGpx1zVVmKgYwSdeSr6YmsuDcHHhgZDS') as resp:
             json_resp = await resp.json()
             for token in json_resp['tokens']:
                 if token['tokenAbbr'] == 'USDT':
@@ -131,7 +131,6 @@ async def check_mmwb(session: Session):
 
 
 if __name__ == "__main__":
-    from db.quik_pool import quik_pool
 
     # asyncio.run(check_mmwb(quik_pool()))
 

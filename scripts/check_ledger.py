@@ -17,8 +17,8 @@ async def extra_run():
     queue = asyncio.Queue()
 
     # create task
-    master1_task = asyncio.create_task(master_update_list(f'master1', quik_pool))
-    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, quik_pool))
+    master1_task = asyncio.create_task(master_update_list('master1', quik_pool))
+    master2_task = asyncio.create_task(master_get_new_ledgers('master2', queue, quik_pool))
     # wait for a little while to allow master_get_new_ledgers to populate the queue
     # await asyncio.sleep(15)
 

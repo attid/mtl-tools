@@ -1,9 +1,7 @@
 import datetime
 import json
-import sys
 
 import numpy as np
-import sentry_sdk
 from gspread import WorksheetNotFound
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
@@ -38,7 +36,7 @@ async def update_main_report(session: Session):
 
     # aum
     s = requests.get(
-        f'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
+        'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
     s = s[s.find('"offers":'):]
     # print(s)
     s = s[s.find('"price": "') + 10:]
@@ -808,7 +806,7 @@ async def update_fest(session: Session):
 
     wks = await ss.worksheet("config")
     await wks.update('B4', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
-    logger.info(f'update_fest completed successfully')
+    logger.info('update_fest completed successfully')
 
 
 async def main_report():

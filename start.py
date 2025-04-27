@@ -1,10 +1,9 @@
-from loguru import logger
-
-logger.info('start')
+# Standard library imports
 import asyncio
-import sys
+import importlib
 from contextlib import suppress
 
+# Third-party imports
 import sentry_sdk
 import uvloop
 from aiogram import Bot, Dispatcher
@@ -12,24 +11,32 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
-from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeAllPrivateChats,
+    BotCommandScopeChat,
+)
+from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from other.config_reader import config
-from db.requests import db_save_bot_user, db_load_bot_users
-import importlib
+from sqlalchemy.orm import Session, sessionmaker
+
+# Local application imports
+from db.requests import db_load_bot_users, db_save_bot_user
 from middlewares.db import DbSessionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
-from other.global_data import global_data, MTLChats, global_tasks
+from other.config_reader import config
+from other.global_data import MTLChats, global_data, global_tasks
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
 
+logger.info('start')
+
 
 async def set_commands(bot):
-    commands_clear = []
+    # commands_clear = []
     commands_admin = [
         BotCommand(
             command="start",
@@ -50,12 +57,12 @@ async def set_commands(bot):
             description="Start or ReStart bot",
         ),
     ]
-    commands_treasury = [
-        BotCommand(
-            command="balance",
-            description="Show balance",
-        ),
-    ]
+    # commands_treasury = [
+    #     BotCommand(
+    #         command="balance",
+    #         description="Show balance",
+    #     ),
+    # ]
 
     await bot.set_my_commands(commands=commands_private, scope=BotCommandScopeAllPrivateChats())
     await bot.set_my_commands(commands=commands_admin, scope=BotCommandScopeChat(chat_id=84131737))

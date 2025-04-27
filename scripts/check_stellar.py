@@ -1,7 +1,4 @@
 import json
-import sys
-import sentry_sdk
-from db.quik_pool import quik_pool
 from other.grist_tools import grist_manager, MTLGrist
 from other.stellar_tools import *
 
@@ -41,7 +38,7 @@ async def process_specific_transactions(session, address_config, ignore_operatio
                                                       cash=cash, chat_id=address['chat_id'])
             if results:
                 for result in results:
-                    result.insert(0, f"Получены новые транзакции")
+                    result.insert(0, "Получены новые транзакции")
                     send_message_4000(session, int(address['chat_id']), result, topic_id=address['topic_id'])
             await asyncio.sleep(3)
 
