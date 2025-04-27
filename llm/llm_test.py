@@ -1,7 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_openai import OpenAI, ChatOpenAI
-from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
 
 from llm.llm_main import LangChainManager
 from other.config_reader import config

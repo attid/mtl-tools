@@ -1,7 +1,6 @@
 import requests
 import json
 
-from langchain_core.tools import tool
 
 from llm.llm_main import LangChainManager
 
