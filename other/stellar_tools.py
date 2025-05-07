@@ -697,7 +697,6 @@ def cmd_create_list(session: Session, memo: str, pay_type: int):
 
 
 async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
-    bim_accounts = []
     if test_sum > 0:
         div_sum = test_sum
     else:
@@ -707,7 +706,10 @@ async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum=0):
 
     accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
 
+    secretary = 'GDGC46H4MQKRW3TZTNCWUU6R2C7IPXGN7HQLZBJTNQO6TW7ZOS6MSECR'
+
     valid_accounts = [account for account in accounts if
+                      account['account_id'] != secretary and
                       (await get_balances(account['account_id'], account_json=account)).get('EURMTL') is not None]
     one_mtlap_accounts = [account for account in valid_accounts if
                           1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
@@ -2779,8 +2781,6 @@ async def test1():
         print(f"Transaction failed: {get_response.result_xdr}")
 
 
-
-
 async def pay_ny():
     # need pay from MTLAddresses.public_div
     # get address by     accounts = await stellar_get_all_mtl_holders()
@@ -2887,7 +2887,7 @@ async def test():
     stellar_address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
 
     # Запускаем асинхронное получение транзакций
-    transactions = await stellar_get_transactions(stellar_address, datetime.fromisocalendar(2022,1, 1), datetime.now())
+    transactions = await stellar_get_transactions(stellar_address, datetime.fromisocalendar(2022, 1, 1), datetime.now())
     print(len(transactions))
 
     # Remove "_links" from each transaction
