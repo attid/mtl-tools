@@ -489,7 +489,8 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         return False
 
     key = f"{callback_data.message_id}{query.message.chat.id}"
-    data = global_data.first_vote_data.get(key, {"spam": 0, "good": 0, "users": []})
+    data = global_data.first_vote_data.get(key, {"spam": 0, "good": 0, "users": [], "spam_users_mentions": [],
+                                                 "good_users_mentions": []})
 
     if query.from_user.id in data["users"]:
         await query.answer('You have already voted.', show_alert=True)
@@ -497,14 +498,18 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
 
     # Определяем вес голоса: 5 для администраторов, 1 для остальных
     vote_weight = 5 if await is_admin(query) else 1
+    username_link = get_username_link(query.from_user)
 
-    # Обновляем данные голосования
+    # Добавляем пользователя в общий список
+    data["users"].append(query.from_user.id)
+
     if callback_data.spam:
         data["spam"] += vote_weight
+        data["spam_users_mentions"].append(username_link)
     else:
         data["good"] += vote_weight
+        data["good_users_mentions"].append(username_link)
 
-    data["users"].append(query.from_user.id)
     global_data.first_vote_data[key] = data
 
     # Проверяем, достиг ли счет 5 для спама
@@ -512,6 +517,8 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         # Удаляем сообщение голосования и сообщение о котором голосование
         with suppress(TelegramBadRequest):
             await bot.delete_message(query.message.chat.id, callback_data.message_id)
+        with suppress(TelegramBadRequest):
+            await query.message.forward(MTLChats.SpamGroup)
         with suppress(TelegramBadRequest):
             await bot.delete_message(query.message.chat.id, query.message.message_id)
 
@@ -524,33 +531,50 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
                                                   can_send_other_messages=False))
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer('Message marked as spam and user restricted.', show_alert=True)
-    elif data["good"] >= 5:
-        # Если набрано 5 голосов за "Good", просто удаляем сообщение голосования
-        await bot.delete_message(query.message.chat.id, query.message.message_id)
-        await query.answer('Message marked as good.', show_alert=True)
-    else:
-        # Обновляем текст кнопок с количеством голосов
-        kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text=f"Spam ({data['spam']})",
-                callback_data=FirstMessageCallbackData(spam=True, message_id=callback_data.message_id,
-                                                       user_id=callback_data.user_id).pack()
-            ),
-            InlineKeyboardButton(
-                text=f"Good ({data['good']})",
-                callback_data=FirstMessageCallbackData(spam=False, message_id=callback_data.message_id,
-                                                       user_id=callback_data.user_id).pack()
-            )
-        ]])
+        return None
 
-        # Редактируем сообщение с новыми кнопками
-        await bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
-                                            reply_markup=kb_reply)
-        await query.answer('Your vote has been counted.', show_alert=True)
+    if data["good"] >= 5:
+        with suppress(TelegramBadRequest):
+            await query.message.forward(MTLChats.SpamGroup)
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(query.message.chat.id, query.message.message_id)
+        await query.answer('Message marked as good.', show_alert=True)
+        return None
+
+    kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text=f"Spam ({data['spam']})",
+            callback_data=FirstMessageCallbackData(spam=True, message_id=callback_data.message_id,
+                                                   user_id=callback_data.user_id).pack()
+        ),
+        InlineKeyboardButton(
+            text=f"Good ({data['good']})",
+            callback_data=FirstMessageCallbackData(spam=False, message_id=callback_data.message_id,
+                                                   user_id=callback_data.user_id).pack()
+        )
+    ]])
+
+    # Редактируем сообщение с новыми кнопками
+    spam_list = '\n'.join(data.get("spam_users_mentions", []))
+    good_list = '\n'.join(data.get("good_users_mentions", []))
+    text = (
+        "Please help me detect spam messages\n"
+        f"\n*Spam votes ({data['spam']}):*\n{spam_list if spam_list else 'None'}"
+        f"\n\n*Good votes ({data['good']}):*\n{good_list if good_list else 'None'}"
+    )
+
+    await bot.edit_message_text(chat_id=query.message.chat.id,
+                                message_id=query.message.message_id,
+                                text=text,
+                                parse_mode="HTML",
+                                reply_markup=kb_reply)
+    await query.answer('Your vote has been counted.', show_alert=True)
+    return None
 
 
 def register_handlers(dp, bot):
     dp.include_router(router)
     logger.info('router last_handler was loaded')
+
 
 register_handlers.priority = 99
