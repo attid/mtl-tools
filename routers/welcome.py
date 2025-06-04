@@ -11,7 +11,7 @@ from aiogram.filters import (Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS
                              ADMINISTRATOR)
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions,
-                            ChatMemberUpdated, ChatMemberMember, ChatJoinRequest)
+                           ChatMemberUpdated, ChatMemberMember, ChatJoinRequest)
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -361,18 +361,19 @@ async def cq_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCallbackDa
 async def cmd_recaptcha(message: Message, session: Session):
     if not await is_admin(message):
         await message.reply('You are not admin.')
-        return False
+        return None
 
     if len(message.text.split()) < 2:
         msg = await message.reply('need more words')
         await cmd_sleep_and_delete(msg)
-        return
+        return None
 
     await message.answer(' '.join(message.text.split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text='Get Captcha',
                              callback_data='ReCaptcha')
     ]]))
     await message.delete()
+    return None
 
 
 @router.callback_query(F.data == "ReCaptcha")
@@ -468,7 +469,6 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
                 inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]))
 
     # await query.answer("Ready !", show_alert=True)
-
 
 
 def register_handlers(dp, bot):
