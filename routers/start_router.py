@@ -1,4 +1,5 @@
 from aiogram import Router, Bot, F
+import re # Add re import for regex operations
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -114,6 +115,49 @@ async def cmd_me(message: Message, bot: Bot):
     except:
         pass
 
+@update_command_info("/link", "показать ссылки на Stellar адреса из сообщения")
+@router.message(Command(commands=["link"]))
+async def cmd_link(message: Message, bot: Bot):
+    # Check if the command is a reply to a message
+    if not message.reply_to_message:
+        await message.reply("Эта команда должна быть использована в ответ на сообщение.")
+        return
+
+    replied_message_text = message.reply_to_message.html_text
+    if not replied_message_text:
+        await message.reply("В сообщении, на которое вы ответили, нет текста для поиска адресов.")
+        return
+
+    # Find Stellar addresses (56 characters, starting with G)
+    stellar_addresses = re.findall(r'\b(G[A-Z0-9]{55})\b', replied_message_text)
+
+    if not stellar_addresses:
+        await message.reply("Stellar адреса не найдены в сообщении.")
+        return
+
+    # Remove duplicates and sort to ensure consistent order
+    unique_stellar_addresses = sorted(list(set(stellar_addresses)))
+
+    response_parts = []
+    for address in unique_stellar_addresses:
+        short_address = f"{address[:4]}..{address[-4:]}"
+        stellar_expert_link = f"https://stellar.expert/explorer/public/account/{address}"
+        bsn_expert_link = f"https://bsn.expert/accounts/{address}"
+        response_parts.append(
+            f'{short_address} <a href="{stellar_expert_link}">stellar.expert</a>  '
+            f'<a href="{bsn_expert_link}">bsn.expert</a>'
+        )
+    if response_parts:
+        full_response = "\n\n".join(response_parts)
+        await message.reply(
+            full_response,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+    else:
+        # This case should ideally not be reached if stellar_addresses is not empty,
+        # but as a fallback.
+        await message.reply("Не удалось сформировать ответ для найденных адресов.")
 
 def register_handlers(dp, bot):
     dp.include_router(router)
