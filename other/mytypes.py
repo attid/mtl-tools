@@ -537,6 +537,9 @@ class MyShareHolder:
     def lg_vote(self):  # divider = 1000
         return round(math.log2((self.balance + 0.001) / 1000)) + 1
 
+    def __str__(self):
+        return f"account_id={self.account_id}, balance={self.balance}, votes={self.votes}, calculated_votes={self.calculated_votes}"
+
 
 if __name__ == "__main__":
     # print(json.dumps(o))
