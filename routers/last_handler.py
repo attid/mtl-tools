@@ -20,7 +20,7 @@ from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
 from other.open_ai_tools import talk_check_spam
 from other.global_data import MTLChats, BotValueTypes, global_data
-from other.pyro_tools import MessageInfo
+from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.stellar_tools import check_url_xdr
 from other.telegraph_tools import telegraph
@@ -176,6 +176,40 @@ async def set_vote(message):
 async def check_alert(bot, message, session):
     # if user need be alert
     if message.entities and message.chat.id in global_data.alert_me:
+        # Создаем msg_info один раз для всего сообщения
+        msg_info = MessageInfo(chat_id=message.chat.id,
+                               user_from=message.from_user.username or "",
+                               message_id=message.message_id,
+                               chat_name=message.chat.title or "",
+                               message_text=message.html_text or "")
+        if message.reply_to_message:
+            msg_info.reply_to_message = MessageInfo(
+                chat_id=message.chat.id,
+                user_from=message.reply_to_message.from_user.username or "" if message.reply_to_message.from_user else "",
+                message_id=message.reply_to_message.message_id,
+                message_text=message.reply_to_message.html_text or "")
+        
+        # Получаем инфу о топике через Pyro один раз для сообщения
+        await pyro_update_msg_info(msg_info)
+        
+        # Формируем topic_info один раз
+        topic_info = ""
+        if getattr(msg_info, "thread_id", None):
+            chat_id_num = abs(message.chat.id)
+            thread_id = msg_info.thread_id
+            thread_name = getattr(msg_info, "thread_name", None)
+            thread_link = f"https://t.me/c/{chat_id_num}/{message.message_id}?thread={thread_id}"
+            if thread_name:
+                topic_info = f'Топик <a href="{thread_link}">"{thread_name}"</a>\n'
+            else:
+                topic_info = f'Топик <a href="{thread_link}">id {thread_id}</a>\n'
+
+        # Создаем Telegraph страницу один раз для всего сообщения
+        telegraph_link = await telegraph.create_uuid_page(msg_info)
+        chat_name_display = (msg_info.chat_name or "")[:30]
+        buttons = [[InlineKeyboardButton(text=f'ПП {chat_name_display}',
+                                         url=telegraph_link.url)]]
+
         for entity in message.entities:
             if entity.type == 'mention':
                 username = entity.extract_from(message.text)
@@ -187,26 +221,16 @@ async def check_alert(bot, message, session):
                 if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
                         alert_username = get_username_link(message.from_user)
-                        msg_info = MessageInfo(chat_id=message.chat.id,
-                                               user_from=message.from_user.username,
-                                               message_id=message.message_id,
-                                               chat_name=message.chat.title,
-                                               message_text=message.html_text)
-                        if message.reply_to_message:
-                            msg_info.reply_to_message = MessageInfo(
-                                chat_id=message.chat.id,
-                                user_from=message.reply_to_message.from_user.username,
-                                message_id=message.reply_to_message.message_id,
-                                message_text=message.reply_to_message.html_text)
 
-                        telegraph_link = await telegraph.create_uuid_page(msg_info)
-                        buttons = [[InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
-                                                         url=telegraph_link.url)]]
-
-                        await bot.send_message(user_id, f'Вас упомянул {alert_username}\n'
-                                                        f'В чате {message.chat.title}\n'
-                                                        f'Ссылка на сообщение {message.get_url()}',
-                                               reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+                        await bot.send_message(
+                            user_id,
+                            f'Вас упомянул {alert_username}\n'
+                            f'В чате {message.chat.title}\n'
+                            f'{topic_info}'
+                            f'Ссылка на сообщение {message.get_url()}',
+                            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                            parse_mode="HTML"
+                        )
 
 
 async def save_last(message, session):
