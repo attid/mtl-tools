@@ -1,28 +1,38 @@
 import asyncio
 import base64
 import json
+import logging
 import math
+import re
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from time import time
+from typing import List, Optional, Tuple, Union
 
 import aiohttp
 import requests
 from aiogram import Bot
 from aiogram.types import Message
-from stellar_sdk import (FeeBumpTransactionEnvelope, TransactionEnvelope, TextMemo, Network, Server, Asset,
-                         AiohttpClient, ServerAsync, Price, TransactionBuilder, Account, Keypair, Claimant,
-                         ClaimPredicate)
+from sqlalchemy.orm import Session
+from stellar_sdk import (Account, Asset, Claimant, ClaimPredicate, FeeBumpTransactionEnvelope, Keypair, Network, Price,
+                         Server, TextMemo, TransactionBuilder, TransactionEnvelope)
+from stellar_sdk.client.aiohttp_client import AiohttpClient
+from stellar_sdk.server_async import ServerAsync
 from stellar_sdk.sep.federation import resolve_account_id_async
 
+from db.models import TDivList, TOperations, TPayments, TTransaction
+from db.requests import (cmd_load_transactions, db_count_unpacked_payments, db_count_unsent_transactions,
+                         db_get_div_list, db_get_new_effects_for_token, db_get_operations_by_asset, db_get_payments,
+                         db_get_total_user_div, db_get_user_id)
 from other.config_reader import config
-from db.requests import *
 from other.global_data import float2str, global_data
-from other.grist_tools import grist_manager, MTLGrist
+from other.grist_tools import MTLGrist, grist_manager
 from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
+
+logger = logging.getLogger(__name__)
 
 base_fee = config.base_fee
 
@@ -156,7 +166,7 @@ async def decode_xdr(xdr, filter_sum: int = -1, filter_operation=None, ignore_op
     result.append(
         f"Операции с аккаунта {await address_id_to_username(transaction.transaction.source.account_id, full_data=full_data)}")
     if transaction.transaction.memo.__class__ == TextMemo:
-        memo: TextMemo = transaction.transaction.memo
+        memo = transaction.transaction.memo
         result.append(f'  Memo "{memo.memo_text.decode()}"\n')
     result.append(f"  Всего {len(transaction.transaction.operations)} операций\n")
 
@@ -1561,38 +1571,53 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
         delegate_list = {}
     shareholder_list = []
 
+    # Get current signers from issuer account
+    server = Server(horizon_url=config.horizon_url)
+    source_account = server.load_account(MTLAddresses.public_issuer)
+    sg = source_account.load_ed25519_public_key_signers()
+
+    # Create dictionary for quick signer lookup
+    signer_weights = {s.account_id: s.weight for s in sg}
+
     accounts = await stellar_get_all_mtl_holders()
 
     # mtl
     for account in accounts:
         balances = account["balances"]
-        balance_mtl = 0
+        balance_mtl = 0 # не имею голоса с 2025
         balance_rect = 0
-        # Токены MTL полностью теряют силу голоса с 1 января 2025 года. В период с 01.04.2024 по 30.06.2024
-        # к ним применяется понижающий коэффициент 0,75, в период с 01.07.2024 по 30.09.2024 — 0,5,
-        # в период 01.10.2024 по 31.12.2024 — 0,25.
-        k = 1
-        if datetime.now().date() >= date(2024, 4, 1):
-            k = 0.75
-        if datetime.now().date() >= date(2024, 7, 1):
-            k = 0.5
-        if datetime.now().date() >= date(2024, 10, 1):
-            k = 0.25
-        if datetime.now().date() >= date(2025, 1, 1):
-            k = 0
+
 
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
+                #if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+                    #balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
                 if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = int(float(balance["balance"]))
-        if account["account_id"] != MTLAddresses.public_issuer:
+
+        account_id = account["account_id"]
+        if account_id != MTLAddresses.public_issuer:
+            # Set votes from signer weights
+            votes = signer_weights.get(account_id, 0)
+
             shareholder = MyShareHolder(
-                account_id=account["account_id"],
+                account_id=account_id,
                 balance_mtl=balance_mtl,
                 balance_rect=balance_rect,
-                data=account.get('data')
+                data=account.get('data'),
+                votes=votes
+            )
+            shareholder_list.append(shareholder)
+
+    # Add signers that are not in shareholder_list but have weight > 0
+    existing_account_ids = {sh.account_id for sh in shareholder_list}
+    for signer_id, weight in signer_weights.items():
+        if weight > 0 and signer_id not in existing_account_ids:
+            shareholder = MyShareHolder(
+                account_id=signer_id,
+                balance_mtl=0,
+                balance_rect=0,
+                votes=weight
             )
             shareholder_list.append(shareholder)
 
@@ -1650,24 +1675,49 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
             shareholder.balance_rect = 0
             shareholder.balance_delegated = 0
 
+    # Если итоговый баланс (с учетом делегирования) меньше 500 MTLRECT,
+    # право голоса MTLRECT обнуляется. Участник остается в списке.
+    #№for shareholder in shareholder_list:
+    #    if shareholder.balance_rect < 500:
+    #        shareholder.balance_mtl = 0
+    #        shareholder.balance_rect = 0
+
     # Сортируем shareholder_list по убыванию баланса
     shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
 
-    total_sum = 0
-    for account in shareholder_list[:20]:
-        total_sum += account.balance
+    # Фильтруем участников с балансом MTLRECT >= 500 для расчета голосов
+    eligible_shareholders = [sh for sh in shareholder_list if sh.balance_rect >= 500]
+    
+    if eligible_shareholders:
+        total_sum = 0
+        for account in eligible_shareholders:
+            total_sum += account.balance
 
-    total_vote = 0
-    for account in shareholder_list[:20]:
-        account.calculated_votes = math.ceil(account.balance * 100 / total_sum)
-        total_vote += account.calculated_votes
+        total_vote = 0
+        for account in eligible_shareholders:
+            account.calculated_votes = math.ceil(account.balance * 100 / total_sum)
+            total_vote += account.calculated_votes
 
-    big_vote = shareholder_list[0].calculated_votes
+        big_vote = eligible_shareholders[0].calculated_votes
 
-    for account in shareholder_list[:20]:
-        account.calculated_votes = round(account.calculated_votes ** (
-                1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
-    # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
+        for account in eligible_shareholders:
+            account.calculated_votes = round(account.calculated_votes ** (
+                    1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
+        # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
+        
+        # Обновляем calculated_votes в основном списке shareholder_list
+        # Создаем словарь для быстрого поиска рассчитанных голосов
+        calculated_votes_dict = {sh.account_id: sh.calculated_votes for sh in eligible_shareholders}
+        
+        # Обновляем calculated_votes для всех участников в основном списке
+        for shareholder in shareholder_list:
+            if shareholder.account_id in calculated_votes_dict:
+                shareholder.calculated_votes = calculated_votes_dict[shareholder.account_id]
+            else:
+                shareholder.calculated_votes = 0  # Участники без права голоса получают 0
+
+    # Двойная сортировка: сначала по calculated_votes, потом по votes, потом по балансу
+    shareholder_list.sort(key=lambda sh: (sh.calculated_votes, sh.votes, sh.balance), reverse=True)
 
     return shareholder_list[:trim_count]
 
@@ -2884,20 +2934,8 @@ async def get_market_price(
 
 
 async def test():
-    stellar_address = 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS'
-
-    # Запускаем асинхронное получение транзакций
-    transactions = await stellar_get_transactions(stellar_address, datetime.fromisocalendar(2022, 1, 1), datetime.now())
-    print(len(transactions))
-
-    # Remove "_links" from each transaction
-    for transaction in transactions:
-        if "_links" in transaction:
-            del transaction["_links"]
-
-    with open('transactions.json', 'w', encoding='utf-8') as f:
-        json.dump(transactions, f, indent=2, ensure_ascii=False)
-
+    a = await cmd_gen_mtl_vote_list(30)
+    print('\n'.join(str(x) for x in a))
 
 if __name__ == '__main__':
     pass
