@@ -1,16 +1,30 @@
-import datetime
+from datetime import datetime, timedelta
 import json
 
+import asyncio
+from typing import cast
+
 import numpy as np
+import requests
 from gspread import WorksheetNotFound
+from sqlalchemy.orm import Session
+from stellar_sdk import Asset, AiohttpClient
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
-from other.config_reader import start_path
-from other.gspread_tools import gs_copy_sheets_with_style
-from other.stellar_tools import *
+from db.requests import db_send_admin_message, db_get_wallet_stats, db_get_log_count, db_cmd_add_message, \
+    get_mmwb_use_date, db_get_wallet_info, db_get_operations
+from other.config_reader import start_path, config
+from other.global_data import MTLChats
+from other.gspread_tools import gs_copy_sheets_with_style, agcm
+from other.stellar_tools import stellar_get_issuer_assets, stellar_get_trade_cost, get_pool_balances, get_balances, \
+    stellar_get_offers, MTLAddresses, get_asset_swap_spread, MTLAssets, cmd_gen_mtl_vote_list, \
+    stellar_add_mtl_holders_info, resolve_account, cmd_show_guards_list, cmd_show_donates, stellar_get_transactions, \
+    decode_data_value, stellar_get_holders
+
 from other.web_tools import get_debank_balance
 from scripts.mtl_backup import save_assets
 from scripts.mtl_exchange import check_fire
+from loguru import logger
 
 
 # https://docs.gspread.org/en/latest/
@@ -842,8 +856,18 @@ async def lite_report(session_pool):
         await update_wallet_report2(session)
 
 
+async def test_report():
+    from db.quik_pool import quik_pool
+
+    logger.add("logs/update_report.log", rotation="1 MB")
+
+    await update_top_holders_report(quik_pool())
+
+
 if __name__ == "__main__":
     logger.add("logs/mtl_report.log", rotation="1 MB")
+
+    asyncio.run(test_report())
 
     # if 'report' in sys.argv:
     #     sentry_sdk.init(
