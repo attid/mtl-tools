@@ -25,7 +25,7 @@ from other.web_tools import get_debank_balance
 from scripts.mtl_backup import save_assets
 from scripts.mtl_exchange import check_fire
 from loguru import logger
-
+from other.loguru_tools import safe_catch_async
 
 # https://docs.gspread.org/en/latest/
 
@@ -842,6 +842,7 @@ async def main_report():
     # await update_fire(quik_pool())
 
 
+@safe_catch_async
 async def lite_report(session_pool):
     await save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
     await asyncio.sleep(10)
