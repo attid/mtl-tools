@@ -11,7 +11,7 @@ from loguru import logger
 from other import aiogram_tools
 from db.requests import db_load_new_message
 from other.grist_tools import grist_manager, MTLGrist
-from other.loguru_tools import safe_catch_async
+from other.loguru_tools import safe_catch_async, safe_catch
 from other.pyro_tools import remove_deleted_users
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from scripts.mtl_exchange import check_exchange_one
@@ -122,7 +122,7 @@ async def time_clear(bot: Bot):
         await asyncio.sleep(30)
 
 
-@safe_catch_async
+@safe_catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
     # scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
