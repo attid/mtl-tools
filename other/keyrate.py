@@ -7,7 +7,7 @@
 # key_rate = 1.6
 #
 #
-# @logger.catch
+# @safe_catch_async
 # def get_pair(holders, eurmtl_dic, eurdebt_dic):
 #     for account in holders:
 #         # print(json.dumps(account,indent=4))
@@ -33,7 +33,7 @@
 #         # print(eurdebt_dic)
 #
 #
-# @logger.catch
+# @safe_catch_async
 # async def update_eurmtl_log():
 #     eurmtl_dic = {}
 #     eurdebt_dic = {}
@@ -54,7 +54,7 @@
 #     fb.many_insert("insert into t_keyrate (user_key, asset, amount) values (?,?,?)", insert_list)
 #
 #
-# @logger.catch
+# @safe_catch_async
 # def show_key_rate(key='all', check_can_run=False):
 #     remains = 0
 #     if len(key) < 10:

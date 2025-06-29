@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import logging
 import math
 import re
 from copy import deepcopy
@@ -32,10 +31,7 @@ from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
 
-logger = logging.getLogger(__name__)
-
 base_fee = config.base_fee
-
 
 class MTLAddresses:
     public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"

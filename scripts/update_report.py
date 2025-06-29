@@ -29,7 +29,7 @@ from other.loguru_tools import safe_catch_async
 
 # https://docs.gspread.org/en/latest/
 
-@logger.catch
+@safe_catch_async
 async def update_main_report(session: Session):
     agc = await agcm.authorize()
 
@@ -120,7 +120,7 @@ async def update_main_report(session: Session):
     logger.info(f'Main report all done {datetime.now()}')
 
 
-@logger.catch
+@safe_catch_async
 async def update_main_report_additional(session: Session):
     agc = await agcm.authorize()
     ss = await agc.open_by_key("1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec")
@@ -214,7 +214,7 @@ def calculate_statistics():
     }
 
 
-@logger.catch
+@safe_catch_async
 async def update_fire(session: Session):
     agc = await agcm.authorize()
     ss = await agc.open_by_key("1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec")
@@ -332,7 +332,7 @@ async def update_guarantors_report():
     logger.info(f'report Guarantors all done {now}')
 
 
-@logger.catch
+@safe_catch_async
 async def update_top_holders_report(session: Session):
     agc = await agcm.authorize()
 
@@ -381,7 +381,7 @@ async def update_top_holders_report(session: Session):
     logger.info(f'report topholders all done {now}')
 
 
-@logger.catch
+@safe_catch_async
 async def update_bdm_report():
     agc = await agcm.authorize()
 
@@ -404,7 +404,7 @@ async def update_bdm_report():
     logger.info(f'update bdm_report all done {now}')
 
 
-@logger.catch
+@safe_catch_async
 async def update_bim_data(session: Session):
     agc = await agcm.authorize()
 

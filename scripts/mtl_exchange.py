@@ -9,6 +9,7 @@ from stellar_sdk import TransactionBuilder, Network, Price, Asset, Server
 
 from other.config_reader import config
 from other.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
+from other.loguru_tools import safe_catch_async
 from other.stellar_tools import get_private_sign, base_fee, MTLAssets, MTLAddresses, get_balances, stellar_sync_submit, \
     stellar_sign, stellar_remove_orders, get_asset_swap_spread
 
@@ -80,7 +81,7 @@ async def update_offers(update_config):
                        record=offers.get(f'{update_config.asset_b.code}-{update_config.asset_a.code}'))
 
 
-@logger.catch
+@safe_catch_async
 async def update_offer(account_key, price_min, price_max, price, selling_asset, buying_asset, amount,
                        check_persent, record):
     test_record = {'id': '1086147610', 'paging_token': '1086147610',
@@ -127,7 +128,7 @@ async def update_offer(account_key, price_min, price_max, price, selling_asset, 
         server.submit_transaction(stellar_transaction)
 
 
-@logger.catch
+@safe_catch_async
 def fire_mtl(account, amount):
     stellar_transaction = TransactionBuilder(source_account=account,
                                              network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
@@ -142,7 +143,7 @@ def fire_mtl(account, amount):
     server.submit_transaction(stellar_transaction)
 
 
-@logger.catch
+@safe_catch_async
 async def check_fire(cost_fire):
     account_fire = server.load_account(MTLAddresses.public_fire)
     # get balance

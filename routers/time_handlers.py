@@ -11,6 +11,7 @@ from loguru import logger
 from other import aiogram_tools
 from db.requests import db_load_new_message
 from other.grist_tools import grist_manager, MTLGrist
+from other.loguru_tools import safe_catch_async
 from other.pyro_tools import remove_deleted_users
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from scripts.mtl_exchange import check_exchange_one
@@ -19,7 +20,7 @@ from other.global_data import MTLChats
 from scripts.update_report import lite_report
 
 
-@logger.catch
+@safe_catch_async
 async def cmd_send_message_test(bot: Bot):
     master_chat_id: int = MTLChats.TestGroup
     # FOND
@@ -36,14 +37,14 @@ async def cmd_send_message_test(bot: Bot):
 #    logger.info(f'cmd_send_message_singers')
 #    await dp.bot.send_message(MTLChats.SignGroup, show_key_rate(''), message_thread_id=59558)
 
-@logger.catch
+@safe_catch_async
 async def cmd_send_message_start_month(bot: Bot):
     logger.info('cmd_send_message_singers')
     await bot.send_message(MTLChats.SignGroup, 'Не пора ли с кучицы и GPA денег стрясти ? /all',
                            message_thread_id=59558)
 
 
-@logger.catch
+@safe_catch_async
 async def cmd_send_message_1m(bot: Bot, session_pool):
     with session_pool() as session:
         for record in db_load_new_message(session):
@@ -74,7 +75,7 @@ async def cmd_send_message_1m(bot: Bot, session_pool):
                 logger.error(f'Error in cmd_send_message_1m: {ex} {record}')
 
 
-@logger.catch
+@safe_catch_async
 async def time_check_ledger(bot: Bot, session_pool):
     return #Todo: fix it to NATS
     # with session_pool() as session:
@@ -91,19 +92,19 @@ async def time_check_ledger(bot: Bot, session_pool):
     #         db_send_admin_message(session, f'Очередь в обработке ledger {queue_size}!')
 
 
-@logger.catch
+@safe_catch_async
 async def time_check_mm(bot: Bot, session_pool):
     with session_pool() as session:
         await check_mm(session)
 
 
-@logger.catch
+@safe_catch_async
 async def time_check_mmwb(bot: Bot, session_pool):
     with session_pool() as session:
         await check_mmwb(session)
 
 
-@logger.catch
+@safe_catch_async
 async def time_clear(bot: Bot):
     chats = await grist_manager.load_table_data(
         MTLGrist.CONFIG_auto_clean,
@@ -121,7 +122,7 @@ async def time_clear(bot: Bot):
         await asyncio.sleep(30)
 
 
-@logger.catch
+@safe_catch_async
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
     # scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,

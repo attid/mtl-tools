@@ -1,9 +1,15 @@
 import json
+
+from loguru import logger
+
+from db.requests import db_cmd_add_message
+from other.global_data import MTLChats
 from other.grist_tools import grist_manager, MTLGrist
+from other.loguru_tools import safe_catch_async
 from other.stellar_tools import *
 
 
-@logger.catch
+@safe_catch_async
 async def cmd_check_cron_transaction(session_pool):
     with session_pool() as session:
         assets_config = await grist_manager.load_table_data(MTLGrist.NOTIFY_ASSETS)
@@ -50,7 +56,7 @@ def send_message_4000(session, chat_id, messages, topic_id=None):
     db_cmd_add_message(session, chat_id, msg, topic_id=topic_id)
 
 
-@logger.catch
+@safe_catch_async
 async def cmd_check_bot(session_pool):
     with session_pool() as session:
         # balance Wallet
@@ -102,7 +108,7 @@ async def cmd_check_bot(session_pool):
         #    db_cmd_add_message(MTLChats.SignGroup, 'Внимание начислению key rate нет операций больше суток !')
 
 
-@logger.catch
+@safe_catch_async
 async def cmd_check_price(session: Session):
     # "message_id": 6568,  "chat": {"id": -1001707489173,
     cb_cb = Server(horizon_url=config.horizon_url).orderbook(MTLAssets.usdc_asset,
