@@ -1,18 +1,17 @@
 import asyncio
 import base64
-import json
 import math
 import re
 from copy import deepcopy
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from time import time
-from typing import List, Optional, Tuple, Union
-
+from typing import List, Optional
 import aiohttp
 import requests
 from aiogram import Bot
 from aiogram.types import Message
+from loguru import logger
 from sqlalchemy.orm import Session
 from stellar_sdk import (Account, Asset, Claimant, ClaimPredicate, FeeBumpTransactionEnvelope, Keypair, Network, Price,
                          Server, TextMemo, TransactionBuilder, TransactionEnvelope)
@@ -25,13 +24,14 @@ from db.requests import (cmd_load_transactions, db_count_unpacked_payments, db_c
                          db_get_div_list, db_get_new_effects_for_token, db_get_operations_by_asset, db_get_payments,
                          db_get_total_user_div, db_get_user_id)
 from other.config_reader import config
-from other.global_data import float2str, global_data
+from other.global_data import float2str, global_data, MTLChats
 from other.grist_tools import MTLGrist, grist_manager
 from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
 
 base_fee = config.base_fee
+
 
 class MTLAddresses:
     public_issuer = "GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V"
@@ -1580,14 +1580,13 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
     # mtl
     for account in accounts:
         balances = account["balances"]
-        balance_mtl = 0 # не имею голоса с 2025
+        balance_mtl = 0  # не имею голоса с 2025
         balance_rect = 0
-
 
         for balance in balances:
             if balance["asset_type"][0:15] == "credit_alphanum":
-                #if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    #balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
+                # if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
+                # balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
                 if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
                     balance_rect = int(float(balance["balance"]))
 
@@ -1673,7 +1672,7 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
 
     # Если итоговый баланс (с учетом делегирования) меньше 500 MTLRECT,
     # право голоса MTLRECT обнуляется. Участник остается в списке.
-    #№for shareholder in shareholder_list:
+    # №for shareholder in shareholder_list:
     #    if shareholder.balance_rect < 500:
     #        shareholder.balance_mtl = 0
     #        shareholder.balance_rect = 0
@@ -1683,7 +1682,7 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
 
     # Фильтруем участников с балансом MTLRECT >= 500 для расчета голосов
     eligible_shareholders = [sh for sh in shareholder_list if sh.balance_rect >= 500]
-    
+
     if eligible_shareholders:
         total_sum = 0
         for account in eligible_shareholders:
@@ -1700,11 +1699,11 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
             account.calculated_votes = round(account.calculated_votes ** (
                     1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
         # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
-        
+
         # Обновляем calculated_votes в основном списке shareholder_list
         # Создаем словарь для быстрого поиска рассчитанных голосов
         calculated_votes_dict = {sh.account_id: sh.calculated_votes for sh in eligible_shareholders}
-        
+
         # Обновляем calculated_votes для всех участников в основном списке
         for shareholder in shareholder_list:
             if shareholder.account_id in calculated_votes_dict:
@@ -2932,6 +2931,7 @@ async def get_market_price(
 async def test():
     a = await cmd_gen_mtl_vote_list(30)
     print('\n'.join(str(x) for x in a))
+
 
 if __name__ == '__main__':
     pass
