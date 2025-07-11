@@ -8,45 +8,88 @@ from other.pyro_tools import get_group_members, pyro_app
 async def check_user_in_sp_chats(bot: Bot, need_remove: bool = False):
     chats = await grist_manager.load_table_data(MTLGrist.SP_CHATS)
     all_users = await grist_manager.load_table_data(MTLGrist.SP_USERS)
-    users = [user for user in all_users if not user['DISABLED']]
     alerts = []
 
-    user_ids = [user['TELEGRAM_ID'] for user in users]
+    # Create a dictionary for quick user lookup by ID
+    user_map = {user['TELEGRAM_ID']: user for user in all_users}
 
     for chat in chats:
-        members = await get_group_members(chat['TELEGRAM_ID'])
-        member_ids = [member.user_id for member in members if not member.is_bot]
+        try:
+            members = await get_group_members(chat['TELEGRAM_ID'])
+            member_ids = {member.user_id for member in members if not member.is_bot}
+        except Exception as e:
+            alerts.append(f"Could not get members for chat {chat['TITLE']} (ID: {chat['TELEGRAM_ID']}). Error: {e}")
+            continue
 
-        if chat['REQUIRED']:
-            # Check if all users are in the required chat
-            for user_id in user_ids:
-                if user_id not in member_ids:
-                    user = next((u for u in users if u['TELEGRAM_ID'] == user_id), None)
-                    username = user['USERNAME'] if user else 'Unknown'
-                    alerts.append(f"Need Add User @{username} (ID: {user_id}) in chat: {chat['TITLE']}")
+        # --- Logic to determine who should be ADDED ---
+        users_to_add_ids = set()
+        for user in all_users:
+            user_id = user['TELEGRAM_ID']
+            is_active = user.get('ACTIVE', False)
+            is_only_additional = user.get('ONLY_ADDITIONAL', False)
+            is_chat_required = chat.get('REQUIRED', False)
+            is_chat_additional = chat.get('ADDITIONAL', False)
 
-            # Check if there are any unexpected members in the required chat
-            for member_id in member_ids:
-                if member_id not in user_ids:
-                    member = next((m for m in members if m.user_id == member_id), None)
-                    username = member.username if member else 'Unknown'
-                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
-                    if need_remove:
-                        try:
-                            await bot.unban_chat_member(chat_id=chat['TELEGRAM_ID'], user_id=member_id)
-                        except Exception as e:
-                            alerts.append(f"Error removing user @{username} (ID: {member_id}) from chat {chat['TITLE']}: {str(e)}")
-        else:
-            # Check if there are any unexpected members in the required chat
-            for member_id in member_ids:
-                if member_id not in user_ids:
-                    member = next((m for m in members if m.user_id == member_id), None)
-                    username = member.username if member else 'Unknown'
-                    alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
-                    try:
-                        await bot.unban_chat_member(chat_id=chat['TELEGRAM_ID'], user_id=member_id)
-                    except Exception as e:
-                        alerts.append(f"Error removing user @{username} (ID: {member_id}) from chat {chat['TITLE']}: {str(e)}")
+            should_be_in_chat = False
+            if is_active:
+                if is_only_additional:
+                    # "Special" user must be in all "Additional" chats
+                    if is_chat_additional:
+                        should_be_in_chat = True
+                else:
+                    # "Normal" user must be in all "Required" chats
+                    if is_chat_required:
+                        should_be_in_chat = True
+
+            if should_be_in_chat and user_id not in member_ids:
+                users_to_add_ids.add(user_id)
+
+        # --- Logic to determine who should be REMOVED ---
+        users_to_remove_ids = set()
+        for member_id in member_ids:
+            user = user_map.get(member_id)
+
+            # Rule: Kick anyone not in our user database
+            if not user:
+                users_to_remove_ids.add(member_id)
+                continue
+
+            is_active = user.get('ACTIVE', False)
+            is_only_additional = user.get('ONLY_ADDITIONAL', False)
+            is_chat_additional = chat.get('ADDITIONAL', False)
+
+            should_be_removed = False
+            # Rule 1: Kick all inactive users
+            if not is_active:
+                should_be_removed = True
+            # Rule 2: Kick "special" users from non-"Additional" chats
+            elif is_only_additional and not is_chat_additional:
+                should_be_removed = True
+
+            if should_be_removed:
+                users_to_remove_ids.add(member_id)
+
+        # --- Generate alerts ---
+        for user_id in users_to_add_ids:
+            user = user_map.get(user_id)
+            username = user['USERNAME'] if user else 'Unknown'
+            alerts.append(f"Need Add User @{username} (ID: {user_id}) to chat: {chat['TITLE']}")
+
+        for member_id in users_to_remove_ids:
+            user = user_map.get(member_id)
+            if user:
+                username = user['USERNAME']
+            else:
+                member = next((m for m in members if m.user_id == member_id), None)
+                username = member.username if member else 'Unknown'
+
+            alerts.append(f"Need Remove User @{username} (ID: {member_id}) from chat {chat['TITLE']}")
+            if need_remove:
+                try:
+                    await bot.unban_chat_member(chat_id=chat['TELEGRAM_ID'], user_id=member_id)
+                    alerts.append(f"Successfully removed @{username} from {chat['TITLE']}")
+                except Exception as e:
+                    alerts.append(f"Error removing user @{username} (ID: {member_id}) from chat {chat['TITLE']}: {str(e)}")
 
     return alerts
 
@@ -113,7 +156,7 @@ async def main():
             token=config.bot_token.get_secret_value(),
     ) as bot:
         # a = await check_user_in_sp_chats()
-        a = await check_user_in_sp_chats(bot, True)
+        a = await check_user_in_sp_chats(bot, False)
         print('\n'.join(a))
 
     try:
