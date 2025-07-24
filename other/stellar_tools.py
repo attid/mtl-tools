@@ -1697,9 +1697,15 @@ async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MySha
 
         for account in eligible_shareholders:
             account.calculated_votes = round(account.calculated_votes ** (
-                    1 - (1.45 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
+                    1 - (1.74 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
         # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
 
+        major_percent = eligible_shareholders[0].calculated_votes / sum(
+            sh.calculated_votes for sh in eligible_shareholders) * 100
+        if major_percent < 33 or major_percent > 36:
+            logger.warning(f"Внимание! Мажор имеет {major_percent:.2f}% голосов (вне диапазона 33-36%)")
+        else:
+            logger.info(f"Мажор имеет {major_percent:.2f}% голосов (в пределах 33-36%)")
         # Обновляем calculated_votes в основном списке shareholder_list
         # Создаем словарь для быстрого поиска рассчитанных голосов
         calculated_votes_dict = {sh.account_id: sh.calculated_votes for sh in eligible_shareholders}
