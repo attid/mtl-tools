@@ -40,6 +40,7 @@ class MTLChats:
     ClubFMCGroup = -1001777233595
     SerpicaGroup = -1001589557564
     BotsChanel = -1002263825546
+    MTLIDGroup = -1001713504799  # MTL ID Group
 
 
 class BotValueTypes(Enum):

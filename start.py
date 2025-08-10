@@ -77,14 +77,6 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
         return
     global_tasks.append(asyncio.create_task(work_with_support()))
     await pyro_start()
-    # _ = asyncio.create_task(startup_update_namelist(bot))
-    # _ = asyncio.create_task(gs_update_watchlist(dispatcher['dbsession_pool']))
-
-
-# async def startup_update_namelist(bot: Bot):
-#     await gs_update_namelist()
-#     with suppress(TelegramBadRequest):
-#     await bot.send_message(chat_id=MTLChats.ITolstov, text='namelist loaded')
 
 
 async def on_shutdown(bot: Bot):

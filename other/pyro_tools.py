@@ -219,15 +219,17 @@ async def common_chats(user_id: int|str):
 
 async def main():
     await pyro_app.start()
-    await pyro_test()
-
     a = await pyro_test()
     print(a)
+
     # await remove_deleted_users(-1002032873651)
     # await pyro_app.send_message("itolstov", "Greetings from **SkyNet**!")
-    # a = await get_group_members(-1001892843127)
-    # # 1798357244
-    # print(a)
+
+    a = await get_group_members(-1001269297637)
+    for member in a:
+        print(f"{member.user_id}\t{member.full_name}\t{member.username or ''}")
+
+
     # from other.global_data import global_data
     # await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
     # url = "https://t.me/c/1798357244/90095/95343"
