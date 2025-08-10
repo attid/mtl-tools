@@ -1,5 +1,7 @@
 import html
 import json
+import csv
+import io
 from contextlib import suppress
 from datetime import datetime
 
@@ -9,13 +11,14 @@ from aiogram.enums import ChatMemberStatus, ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ChatPermissions, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, ChatPermissions, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton, \
+    MessageReactionUpdated, ReactionTypeCustomEmoji, BufferedInputFile
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, get_username_link
 from other.config_reader import config
-from other.global_data import global_data, BotValueTypes, update_command_info, is_topic_admin
+from other.global_data import global_data, BotValueTypes, update_command_info, is_topic_admin, MTLChats
 from other.pyro_tools import get_group_members, remove_deleted_users
 from other.timedelta import parse_timedelta_from_message
 
@@ -212,6 +215,52 @@ async def cmd_show_mutes(message: Message):
         await message.reply('No users are currently muted in this topic')
 
 
+@router.message_reaction(ChatInOption('moderate'))
+async def message_reaction(message: MessageReactionUpdated, bot: Bot):
+    if message.new_reaction and message.reaction.type == ReactionTypeCustomEmoji:
+        reaction:ReactionTypeCustomEmoji = message.new_reaction[0]
+
+        if reaction.custom_emoji_id == '5220151067429335888':  # X emoji
+            pass
+
+        if reaction.custom_emoji_id in ['5220090169088045319', '5220223291599383581', '5221946956464548565']:
+            chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+            if chat_thread_key not in global_data.topic_admins:
+                await message.reply('Local admins not set yet')
+                return False
+
+            if not is_topic_admin(message):
+                await message.reply('You are not local admin')
+                return False
+
+            if message.reply_to_message is None or message.reply_to_message.forum_topic_created:
+                await message.reply('Please send for reply message to set mute')
+                return
+
+            delta = await parse_timedelta_from_message(message)
+            user_id = message.reply_to_message.from_user.id
+            end_time_str = (datetime.now() + delta).isoformat()
+
+            if chat_thread_key not in global_data.topic_mute:
+                global_data.topic_mute[chat_thread_key] = {}
+
+            user = get_username_link(message.reply_to_message.from_user)
+            global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
+            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                          json.dumps(global_data.topic_mute))
+
+            await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
+
+    logger.info(f"message_reaction: {message}")
+    #new_reaction=[ReactionTypeCustomEmoji(type='custom_emoji', custom_emoji_id='5220151067429335888')]
+    #10m    "custom_emoji_id": "5220090169088045319"
+    #60m    "custom_emoji_id": "5220223291599383581"
+    #1D    "custom_emoji_id": "5221946956464548565"
+    # X    "custom_emoji_id": "5220151067429335888"
+
+
+
+
 @router.my_chat_member()
 async def on_my_chat_member(update: ChatMemberUpdated, bot: Bot):
     chat = update.chat
@@ -368,6 +417,114 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
     # Обновляем сообщение, добавляя клавиатуру
     await sent_message.edit_reply_markup(reply_markup=reply_markup)
+
+
+@update_command_info("/show_all_topic_admin", "Показать всех администраторов всех топиков")
+@router.message(Command(commands=["show_all_topic_admin"]))
+async def cmd_show_all_topic_admin(message: Message):
+    if not await is_admin(message):
+        await message.reply("You are not an admin.")
+        return
+
+    chat_id = message.chat.id
+    chat_admins = {}
+    prefix = f"{chat_id}-"
+    for key, admins in global_data.topic_admins.items():
+        if key.startswith(prefix):
+            try:
+                topic_id = key[len(prefix):]
+                if topic_id not in chat_admins:
+                    chat_admins[topic_id] = set()
+                chat_admins[topic_id].update(admins)
+            except Exception as e:
+                logger.warning(f"Could not parse topic_admins key: {key}, error: {e}")
+                continue
+
+    if not chat_admins:
+        await message.reply("No topic admins found for this chat.")
+        return
+
+    response_lines = ["<b>Topic Admins for this chat:</b>"]
+    for topic_id, admins in chat_admins.items():
+        chat_id_for_link = str(chat_id).replace('-100', '')
+        topic_link = f"https://t.me/c/{chat_id_for_link}/{topic_id}"
+        admin_list = " ".join(sorted(list(admins)))
+        response_lines.append(f'<a href="{topic_link}">Topic {topic_id}</a>: {admin_list}')
+
+    await message.reply("\n".join(response_lines), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+
+@update_command_info("/get_users_csv", "Получить CSV файл со списком пользователей чата")
+@router.message(Command(commands=["get_users_csv"]))
+async def cmd_get_users_csv(message: Message, bot: Bot):
+    if message.chat.id != MTLChats.MTLIDGroup:
+        return
+
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.reply("Usage: /get_users_csv <chat_id>")
+        return
+
+    target_chat_id_str = command_parts[1]
+    if not (target_chat_id_str.startswith('-100') and target_chat_id_str[1:].isdigit()):
+        await message.reply("Invalid chat_id format. It must start with -100.")
+        return
+
+    target_chat_id = int(target_chat_id_str)
+
+    try:
+        bot_member = await bot.get_chat_member(target_chat_id, bot.id)
+        if bot_member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.KICKED]:
+            await message.reply("I am not a member of the target chat.")
+            return
+    except TelegramBadRequest:
+        await message.reply(f"I am not a member of the target chat, or the chat does not exist.")
+        return
+    except Exception as e:
+        await message.reply(f"An error occurred while checking my membership: {e}")
+        logger.error(f"Error checking bot membership: {e}")
+        return
+
+    try:
+        user_member = await bot.get_chat_member(target_chat_id, message.from_user.id)
+        if user_member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.KICKED]:
+            await message.reply("You are not a member of the target chat.")
+            return
+    except TelegramBadRequest:
+        await message.reply(f"You are not a member of the target chat, or the chat does not exist.")
+        return
+    except Exception as e:
+        await message.reply(f"An error occurred while checking your membership: {e}")
+        logger.error(f"Error checking user membership: {e}")
+        return
+
+    await message.reply("Processing... This may take a while for large chats.")
+
+    try:
+        members = await get_group_members(target_chat_id)
+    except Exception as e:
+        await message.reply(f"Failed to get group members: {e}")
+        logger.error(f"Failed to get group members for {target_chat_id}: {e}")
+        return
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(['user_id', 'full_name', 'username', 'is_admin', 'is_bot'])
+
+    for member in members:
+        writer.writerow([
+            member.user_id,
+            member.full_name,
+            member.username or '',
+            member.is_admin,
+            member.is_bot
+        ])
+
+    output.seek(0)
+
+    csv_file = BufferedInputFile(output.getvalue().encode('utf-8'), filename=f'users_{target_chat_id}.csv')
+    await message.reply_document(csv_file)
 
 
 def register_handlers(dp, bot):

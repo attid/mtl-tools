@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, MessageReactionUpdated
 from loguru import logger
 
 from db.requests import db_get_user_id
