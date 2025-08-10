@@ -472,8 +472,9 @@ async def cmd_push(message: Message, bot: Bot):
 @router.message(Command(re.compile(r"get_info_(\d+)")))
 async def cmd_get_info(message: Message, bot: Bot):
     if not is_skynet_admin(message):
-        await message.reply('You are not my admin.')
-        return
+        if message.chat.id != MTLChats.HelperChat:
+            await message.reply('You are not my admin.')
+            return
 
     command_args = message.text.split()
     if command_args[0] == "get_info":
