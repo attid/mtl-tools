@@ -22,7 +22,7 @@ class UnbanCallbackData(CallbackData, prefix="unban"):
     chat_id: int
 
 
-@router.message(Command(commands=["ban"]))
+@router.message(Command(commands=["ban", "sban"]))
 async def cmd_ban(message: Message, session: Session, bot: Bot):
     skynet_admin = is_skynet_admin(message)
     admin = await is_admin(message)
@@ -59,8 +59,11 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
             await message.bot.send_message(chat_id=MTLChats.SpamGroup,
                                          text=f"User (ID: {user_id}) has been banned by "
                                               f"{message.from_user.username} in {message.chat.title} chat.")
-        await cmd_sleep_and_delete(message, 5)
-        await cmd_sleep_and_delete(msg, 5)
+
+        # If the command is sban, delete the messages
+        if message.text.startswith("/sban"):
+            await cmd_sleep_and_delete(message, 5)
+            await cmd_sleep_and_delete(msg, 5)
 
 
 @router.message(Command(commands=["unban"]))
