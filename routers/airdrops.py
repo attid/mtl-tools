@@ -47,7 +47,7 @@ async def get_bsn_recommendations(address: str) -> tuple[int, list]:
 @router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
 async def handle_address_messages(message: types.Message):
     # Find the last occurrence of ID
-    id_matches = list(re.finditer(r'#ID(\d+)', message.text))
+    id_matches = list(re.finditer(r'#ID(\d+)', message.html_text))
     match_id = id_matches[-1] if id_matches else None
 
     # Find Stellar address
