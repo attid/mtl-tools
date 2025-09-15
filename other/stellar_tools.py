@@ -664,6 +664,9 @@ async def get_cash_balance(chat_id):
     ========================+=====
     """
 
+    section_cash = 0
+    section_eurmtl = 0
+
     for treasure in treasure_list:
         if len(treasure['account_id']) == 56:
             if not treasure['enabled']:
@@ -676,16 +679,31 @@ async def get_cash_balance(chat_id):
             result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
             total_cash += diff
             total_eurmtl += int(assets['EURMTL'])
+            section_cash += diff
+            section_eurmtl += int(assets['EURMTL'])
         else:
-            result += line
+            # Добавляем промежуточный итог перед разделителем
+            if section_cash > 0 or section_eurmtl > 0:
+                s_section_cash = f'{section_cash} '.rjust(8)
+                s_section_eurmtl = f'{section_eurmtl} '.rjust(8)
+                result += f"=========={s_section_cash}={s_section_eurmtl}=\n"
+            # result += line
+            section_cash = 0
+            section_eurmtl = 0
 
-    assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
-    # result += f"А у Skynet {int(assets['USDM'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
-    s_cash = f'*{int(assets["USDM"])} '.rjust(8)
-    s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
-    result += f"|{'SkyNet'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
+    # Добавляем итог для последнего раздела
+    if section_cash > 0 or section_eurmtl > 0:
+        s_section_cash = f'{section_cash} '.rjust(8)
+        s_section_eurmtl = f'{section_eurmtl} '.rjust(8)
+        result += f"=========={s_section_cash}={s_section_eurmtl}=\n"
 
-    result += line
+    # assets = await get_balances('GBQZDXEBW5DGNOSRUPIWUTIYTO7QM65NOU5VHAAACED4HII7FVXPCBOT')
+    # # result += f"А у Skynet {int(assets['USDM'])} USDC и {int(assets['EURMTL'])} EURMTL \n"
+    # s_cash = f'*{int(assets["USDM"])} '.rjust(8)
+    # s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
+    # result += f"|{'SkyNet'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
+
+    # result += line
     s_cash = f'{total_cash} '.rjust(8)
     s_eurmtl = f'{total_eurmtl} '.rjust(8)
     result += f"|{'Итого'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
@@ -2935,8 +2953,8 @@ async def get_market_price(
 
 
 async def test():
-    a = await cmd_gen_mtl_vote_list(30)
-    print('\n'.join(str(x) for x in a))
+    a = await get_cash_balance(0)
+    print (a)
 
 
 if __name__ == '__main__':
