@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
                            ReplyParameters)
+from aiogram.fsm.context import FSMContext
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -275,7 +276,7 @@ async def notify_message(message: Message):
             # print(msg)
 
 
-async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
+async def cmd_check_reply_only(message: Message, session: Session, bot: Bot, state: FSMContext):
     has_hashtag = False
     if message.entities:
         for entity in message.entities:
@@ -283,7 +284,29 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot):
                 has_hashtag = True
                 break
 
-    if message.reply_to_message or message.forward_from_chat or has_hashtag or message.is_automatic_forward:
+    # Проверяем временное разрешение от FSM
+    has_temp_permission = False
+    fsm_data = await state.get_data()
+    expiration_str = fsm_data.get('reply_only_expiration')
+    
+    if expiration_str:
+        try:
+            expiration_time = datetime.fromisoformat(expiration_str)
+            if datetime.now() <= expiration_time:
+                has_temp_permission = True
+            else:
+                # Время истекло, удаляем наш ключ
+                await state.update_data(reply_only_expiration=None)
+        except ValueError:
+            # Некорректный формат времени, удаляем ключ
+            await state.update_data(reply_only_expiration=None)
+
+    # Если есть хэштег, устанавливаем временное разрешение
+    if has_hashtag:
+        expiration_time = datetime.now() + timedelta(minutes=1)
+        await state.update_data(reply_only_expiration=expiration_time.isoformat())
+
+    if message.reply_to_message or message.forward_from_chat or has_hashtag or has_temp_permission or message.is_automatic_forward:
         db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
@@ -394,7 +417,7 @@ async def check_mute(message, session):
 
 @rate_limit(0, 'listen')
 @router.message(F.text)  # если текст #точно не приватное, приватные выше остановились
-async def cmd_last_check(message: Message, session: Session, bot: Bot):
+async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FSMContext):
     if message.chat.id in global_data.no_first_link:
         deleted = await check_spam(message, session)
         if deleted:
@@ -414,7 +437,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot):
         await notify_message(message)
 
     if message.chat.id in global_data.reply_only:
-        await cmd_check_reply_only(message, session, bot)
+        await cmd_check_reply_only(message, session, bot, state)
 
     await check_alert(bot, message, session)
 
