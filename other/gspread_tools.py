@@ -11,6 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 from other.config_reader import start_path
 from other.global_data import float2str
+from other.grist_tools import grist_manager, MTLGrist
 
 
 # https://gspread-asyncio.readthedocs.io/en/latest/index.html#
@@ -512,16 +513,25 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
 
 
 async def gs_check_vote_table(table_uuid):
-    # Авторизация и получение данных из первой таблицы
+    # Авторизация и загрузка данных о пользователях из Grist
+    grist_users = await grist_manager.load_table_data(MTLGrist.MTLA_USERS)
+    address_dict = {}
+    if grist_users:
+        for user in grist_users:
+            stellar_address = user.get("Stellar")
+            telegram_username = user.get("Telegram")
+            if not stellar_address:
+                continue
+            if telegram_username:
+                username = telegram_username if telegram_username.startswith('@') else f'@{telegram_username}'
+            else:
+                tg_id = user.get("TGID")
+                username = f'id:{tg_id}' if tg_id else None
+            if username:
+                address_dict[stellar_address] = username
+
+    # Авторизация и получение списка участников голосования
     agc = await agcm.authorize()
-    ss = await agc.open_by_key("1_HaNfIsPXBs65vwfytAGXUXwH57gb50WtVkh0qBySCo")  # MTLA Members
-    ws = await ss.worksheet("MTLAP")
-    data = await ws.get_all_values()
-
-    # Создание словаря для хранения адресов и соответствующих @username
-    address_dict = {row[2]: row[0] for row in data if len(row) >= 2}
-
-    # Открытие второй таблицы и получение списка участников
     ss = await agc.open_by_key(table_uuid)
     wks = await ss.worksheet("Members")
     who_in = await wks.col_values(1)
