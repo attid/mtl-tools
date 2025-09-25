@@ -220,9 +220,8 @@ async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_c
         return True, False
 
     try:
-        await bot.ban_chat_member(chat_id, user_id)
-        await asyncio.sleep(0.2)
         await bot.unban_chat_member(chat_id, user_id)
+        await asyncio.sleep(0.2)
         return False, True
     except (TelegramBadRequest, TelegramForbiddenError) as exc:
         logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
