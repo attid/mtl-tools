@@ -35,7 +35,7 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
         if message.reply_to_message:
             user_id = message.reply_to_message.from_user.id
             username = message.reply_to_message.from_user.username
-            await cmd_sleep_and_delete(message.reply_to_message, 5)
+            await cmd_sleep_and_delete(message.reply_to_message, 10)
             msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
             spam_check = message.chat.id in global_data.no_first_link
             chat_url = html.link(message.chat.title, message.get_url())
@@ -62,8 +62,8 @@ async def cmd_ban(message: Message, session: Session, bot: Bot):
 
         # If the command is sban, delete the messages
         if message.text.startswith("/sban"):
-            await cmd_sleep_and_delete(message, 5)
-            await cmd_sleep_and_delete(msg, 5)
+            await cmd_sleep_and_delete(message, 2)
+            await cmd_sleep_and_delete(msg, 2)
 
 
 @router.message(Command(commands=["unban"]))
