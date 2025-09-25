@@ -20,6 +20,7 @@
 - Clean caches/logs: `./clean.sh`
 
 ## Coding Style & Naming Conventions
+- You must communicate in Russian; code comments and docstrings must stay in English.
 - Python 3, 4‑space indentation, UTF‑8.
 - Names: `snake_case` for functions/vars, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants.
 - Prefer type hints across public functions; keep routers thin and delegate to services in `other/`.
@@ -43,4 +44,3 @@
 ## Router/Agent Instructions
 - New feature: create `routers/<feature>.py` with `register_handlers(dp, bot)`. Optionally set `register_handlers.priority` (lower loads earlier).
 - Add pure helpers to `other/` and DB access in `db/` to keep handlers small, testable, and reusable.
-

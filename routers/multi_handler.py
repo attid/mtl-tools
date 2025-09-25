@@ -3,7 +3,7 @@ import json
 from contextlib import suppress
 
 from aiogram import Router, Bot
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
@@ -11,6 +11,7 @@ from loguru import logger
 from other.config_reader import config
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
+from other.pyro_tools import get_group_members
 from routers.admin_system import check_membership
 
 router = Router()
@@ -33,6 +34,7 @@ commands_info = {
     # ToDo need show to skyadmin in helpers
     "set_captcha": (global_data.captcha, BotValueTypes.Captcha, "toggle", "admin", 1),
     "set_moderate": (global_data.moderate, BotValueTypes.Moderate, "toggle", "admin", 1),
+    "set_entry_channel": (global_data.entry_channel, BotValueTypes.EntryChannel, "toggle_entry_channel", "admin", 1),
 
     "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3),
     "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0),
@@ -109,6 +111,9 @@ async def command_config_loads():
                      "Оповещать о новом сообщении в определенный чат"
                      "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками", 2,
                      "notify_message")
+@update_command_info("/set_entry_channel",
+                     "Ограничение входа только для подписчиков канала. Использование: /set_entry_channel -100123456",
+                     2, "entry_channel")
 @update_command_info("/join_request_captcha",
                      "Шлет пользователю капчу для подтверждения его человечности. "
                      "Работает только совместно с /notify_join_request")
@@ -153,6 +158,10 @@ async def universal_command_handler(message: Message, bot: Bot):
             return
         await list_command_handler_topic(message, command_info)
 
+    if action_type == "toggle_entry_channel":
+        await handle_entry_channel_toggle(message, command_info)
+        return
+
     if action_type == "toggle":
         await handle_command(message, command_info)
 
@@ -187,6 +196,65 @@ async def handle_command(message: Message, command_info):
         await asyncio.sleep(1)
         await message.delete()
 
+
+async def handle_entry_channel_toggle(message: Message, command_info):
+    chat_id = message.chat.id
+    global_data_field = command_info[0]
+
+    if chat_id not in global_data_field:
+        command_args = message.text.split()[1:]
+        if not command_args:
+            info_message = await message.reply('Необходимо указать канал или чат в формате -100123456 или @channel.')
+            await cmd_sleep_and_delete(info_message, 10)
+            with suppress(TelegramBadRequest):
+                await asyncio.sleep(1)
+                await message.delete()
+            return
+
+    await handle_command(message, command_info)
+
+
+async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str) -> tuple[bool, bool]:
+    is_member, _ = await check_membership(bot, required_channel, user_id)
+    if is_member:
+        return True, False
+
+    try:
+        await bot.ban_chat_member(chat_id, user_id)
+        await asyncio.sleep(0.2)
+        await bot.unban_chat_member(chat_id, user_id)
+        return False, True
+    except (TelegramBadRequest, TelegramForbiddenError) as exc:
+        logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
+        return False, False
+
+
+async def run_entry_channel_check(bot: Bot, chat_id: int) -> tuple[int, int]:
+    required_channel = global_data.entry_channel.get(chat_id)
+    if not required_channel:
+        raise ValueError('entry_channel setting is not enabled for this chat')
+
+    members = await get_group_members(chat_id)
+    checked_count = 0
+    action_count = 0
+
+    for member in members:
+        if member.is_bot or member.is_admin:
+            continue
+
+        checked_count += 1
+
+        membership_ok, action_applied = await enforce_entry_channel(bot, chat_id, member.user_id, required_channel)
+        if membership_ok:
+            await asyncio.sleep(0.1)
+            continue
+
+        if action_applied:
+            action_count += 1
+
+        await asyncio.sleep(0.5)
+
+    return checked_count, action_count
 
 async def list_command_handler(message: Message, command_info):
     global_data_field = command_info[0]

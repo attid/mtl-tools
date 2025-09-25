@@ -73,10 +73,13 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
+
     if config.test_mode:
-        return
-    global_tasks.append(asyncio.create_task(work_with_support()))
-    await pyro_start()
+        logger.info('test mode')
+        # await pyro_start()
+    else:
+        global_tasks.append(asyncio.create_task(work_with_support()))
+        await pyro_start()
 
 
 async def on_shutdown(bot: Bot):

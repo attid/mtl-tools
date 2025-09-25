@@ -16,7 +16,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.requests import db_send_admin_message
-from routers.multi_handler import check_membership
+from routers.multi_handler import check_membership, enforce_entry_channel
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_link, get_chat_link
@@ -212,6 +212,12 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot):
                                f'был забанен в чате {get_chat_link(event.chat)}'
                                f' за использование запрещенного никнейма')
         return
+
+    required_channel = global_data.entry_channel.get(event.chat.id)
+    if required_channel:
+        membership_ok, _ = await enforce_entry_channel(bot, event.chat.id, new_user_id, required_channel)
+        if not membership_ok:
+            return
 
     member = GroupMember(user_id=event.new_chat_member.user.id,
                          username=event.new_chat_member.user.username,

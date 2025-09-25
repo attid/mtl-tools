@@ -87,6 +87,7 @@ class BotValueTypes(Enum):
     Moderate = 41
     TopicAdmins = 42
     TopicMutes = 43
+    EntryChannel = 44
 
 
 class LogQuery:
@@ -150,6 +151,7 @@ class GlobalData:
     first_vote = []
     first_vote_data = {}
     moderate = []
+    entry_channel = {}
     mongo_config: BotMongoConfig
     reboot = False
 

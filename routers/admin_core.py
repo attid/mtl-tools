@@ -20,6 +20,7 @@ from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, ge
 from other.config_reader import config
 from other.global_data import global_data, BotValueTypes, update_command_info, is_topic_admin, MTLChats
 from other.pyro_tools import get_group_members, remove_deleted_users
+from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
 
 router = Router()
@@ -90,6 +91,28 @@ async def cmd_all(message: Message):
     text = ' '.join(members)
     logger.info(text)
     await message.reply(text, parse_mode=ParseMode.HTML)
+
+
+@update_command_info("/check_entry_channel",
+                     "Запустить проверку всех участников на подписку в обязательный канал.")
+@router.message(Command(commands=["check_entry_channel"]))
+async def cmd_check_entry_channel(message: Message, bot: Bot):
+    if not await is_admin(message):
+        await message.reply('You are not admin.')
+        return
+
+    try:
+        checked_count, action_count = await run_entry_channel_check(bot, message.chat.id)
+    except ValueError:
+        info_message = await message.reply('Настройка обязательного канала не включена в этом чате.')
+        await cmd_sleep_and_delete(info_message, 10)
+        await cmd_sleep_and_delete(message, 10)
+        return
+
+    info_message = await message.reply(
+        f'Проверено участников: {checked_count}. Применено ограничений: {action_count}.')
+    await cmd_sleep_and_delete(info_message, 30)
+    await cmd_sleep_and_delete(message, 30)
 
 
 
