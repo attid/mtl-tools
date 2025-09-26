@@ -158,6 +158,10 @@ async def universal_command_handler(message: Message, bot: Bot):
             return
         await list_command_handler_topic(message, command_info)
 
+    if action_type == "toggle_chat":
+        await handle_command(message, command_info)
+        return
+
     if action_type == "toggle_entry_channel":
         await handle_entry_channel_toggle(message, command_info)
         return
