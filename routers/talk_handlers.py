@@ -281,7 +281,7 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot):
     if message.reply_to_message and message.reply_to_message.text:
         msg = f"{message.reply_to_message.text} \n================\n{message.text}"
 
-    googleit = True if message.text.find('загугли') > 0 else False
+    googleit = 'загугли' in message.text.lower()
     msg = await talk(message.chat.id, msg, gpt4, googleit=googleit)
     if msg is None:
         msg = '=( connection error, retry again )='

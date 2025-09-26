@@ -111,11 +111,11 @@ async def delete_last_redis(chat_id):
     await redis.delete(keys[-1])
 
 
-async def talk(chat_id, msg, gpt4=False, googleit=False):
+async def talk(chat_id, msg, gpt_maxi=False, googleit=False):
     await save_to_redis(chat_id, msg)
-    if gpt4:
+    if gpt_maxi:
         msg = f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n\n{msg}"
-        msg = await talk_open_ai_async(msg=msg, gpt4=True, googleit=googleit)
+        msg = await talk_open_ai_async(msg=msg, gpt_maxi=True, googleit=googleit)
     else:
         msg_data = await load_from_redis(chat_id)
         msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде."})
@@ -137,7 +137,7 @@ async def talk_open_ai_list_models(name_filter):
             print(raw.id)
 
 
-async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False, googleit: bool = False):
+async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt_maxi=False, googleit: bool = False):
     addons = ":online" if googleit else ""
     if msg_data:
         messages = msg_data
@@ -146,11 +146,11 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt4=False
         if user_name:
             messages[0]["name"] = user_name
     try:
-        if gpt4:
-            chat_completion_resp = await aclient.chat.completions.create(model="gpt-4", messages=messages,
+        if gpt_maxi:
+            chat_completion_resp = await aclient.chat.completions.create(model="openai/gpt-5", messages=messages,
                                                                          extra_headers=extra_headers)
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model=f"gpt-4o{addons}", messages=messages,
+            chat_completion_resp = await aclient.chat.completions.create(model=f"openai/gpt-5-mini{addons}", messages=messages,
                                                                          extra_headers=extra_headers)
 
         return chat_completion_resp.choices[0].message.content
@@ -332,7 +332,7 @@ async def talk_get_summary(article):
                 {"role": "user", "content": article}]
     msg = None
     while msg is None:
-        msg = await talk_open_ai_async(msg_data=messages, gpt4=True)
+        msg = await talk_open_ai_async(msg_data=messages, gpt_maxi=True)
         if not msg:
             logger.info('msg is None')
             await asyncio.sleep(3)
