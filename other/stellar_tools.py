@@ -672,15 +672,17 @@ async def get_cash_balance(chat_id):
             if not treasure['enabled']:
                 continue
             assets = await get_balances(treasure['account_id'])
-            diff = int(assets['EURDEBT']) - int(assets['EURMTL'])
+            eurdebt = int(assets.get('EURDEBT', 0))
+            eurmtl_amount = int(assets.get('EURMTL', 0))
+            diff = eurdebt - eurmtl_amount
             name = treasure['name'] if chat_id == MTLChats.GuarantorGroup else treasure['name'][0]
             s_cash = f'{diff} '.rjust(8)
-            s_eurmtl = f'{int(assets["EURMTL"])} '.rjust(8)
+            s_eurmtl = f'{eurmtl_amount} '.rjust(8)
             result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
             total_cash += diff
-            total_eurmtl += int(assets['EURMTL'])
+            total_eurmtl += eurmtl_amount
             section_cash += diff
-            section_eurmtl += int(assets['EURMTL'])
+            section_eurmtl += eurmtl_amount
         else:
             # Добавляем промежуточный итог перед разделителем
             if section_cash > 0 or section_eurmtl > 0:
