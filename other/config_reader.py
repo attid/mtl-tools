@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     horizon_url: str
     coinmarketcap: SecretStr
     #mongodb_url: str
-    pyro_api_id: int
-    pyro_api_hash: SecretStr
+    pyro_api_id: int = 0
+    pyro_api_hash: SecretStr = ''
     telegraph_token: str
     grist_token: str
     test_mode: bool = True

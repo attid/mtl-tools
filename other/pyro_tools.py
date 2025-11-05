@@ -121,6 +121,9 @@ async def pyro_update_msg_info(msg: MessageInfo):
 
 async def pyro_start():
     try:
+        if config.pyro_api_id == 0:
+            logger.warning("pyro_api_id is disabled")
+            return
         await pyro_app.start()
     except Exception as e:
         logger.error(e)
