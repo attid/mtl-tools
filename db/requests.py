@@ -11,7 +11,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import count
 
-from db.models import *
+from shared.infrastructure.database.models import *
 from other.global_data import MTLChats
 
 

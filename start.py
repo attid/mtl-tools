@@ -137,7 +137,7 @@ async def main():
     logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
 
     # Запуск бота
-    engine = create_engine(config.firebird_url, pool_pre_ping=True, max_overflow=50)
+    engine = create_engine(config.postgres_url, pool_pre_ping=True, max_overflow=50)
     # Creating DB connections pool
     db_pool = sessionmaker(bind=engine)
 

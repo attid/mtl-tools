@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     test_token: SecretStr
     base_fee: int
     redis_url: str
-    firebird_url: str
+    #firebird_url: str
+    postgres_url: str
     openai_key: SecretStr
     private_sign: SecretStr
     currencylayer_id: str
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     sentry_report_dsn: str
     horizon_url: str
     coinmarketcap: SecretStr
-    mongodb_url: str
+    #mongodb_url: str
     pyro_api_id: int
     pyro_api_hash: SecretStr
     telegraph_token: str
