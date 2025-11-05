@@ -278,7 +278,26 @@ class BotMongoConfig:
             # Добавляем или обновляем участников
             admin_ids = set(chat.admins) if chat.admins else set()
 
+            # Импортируем модель BotUsers
+            from shared.infrastructure.database.models import BotUsers
+
             for member in members:
+                # Проверяем, существует ли пользователь в bot_users
+                user_result = session.execute(
+                    select(BotUsers).where(BotUsers.user_id == member.user_id)
+                )
+                user_record = user_result.scalar_one_or_none()
+
+                if not user_record:
+                    # Создаем пользователя в bot_users
+                    new_user = BotUsers(
+                        user_id=member.user_id,
+                        user_name=member.username,
+                        user_type=0  # дефолтный тип
+                    )
+                    session.add(new_user)
+                    session.flush()  # Гарантируем, что пользователь создан
+
                 # Проверяем, существует ли участник
                 existing_member = session.execute(
                     select(ChatMember).where(
@@ -386,7 +405,24 @@ class BotMongoConfig:
             # Обновляем время последнего обновления чата
             chat.last_updated = now
 
-            # Проверяем, существует ли участник
+            # Проверяем, существует ли пользователь в bot_users
+            from shared.infrastructure.database.models import BotUsers
+            user_result = session.execute(
+                select(BotUsers).where(BotUsers.user_id == member.user_id)
+            )
+            user_record = user_result.scalar_one_or_none()
+
+            if not user_record:
+                # Создаем пользователя в bot_users
+                new_user = BotUsers(
+                    user_id=member.user_id,
+                    user_name=member.username,
+                    user_type=0  # дефолтный тип
+                )
+                session.add(new_user)
+                session.flush()  # Гарантируем, что пользователь создан
+
+            # Проверяем, существует ли участник чата
             existing_member = session.execute(
                 select(ChatMember).where(
                     and_(ChatMember.chat_id == chat_id, ChatMember.user_id == member.user_id)

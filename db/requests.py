@@ -6,7 +6,7 @@ from sys import argv
 from typing import List, cast, Optional
 
 from loguru import logger
-from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast, Date
+from sqlalchemy import select, and_, case, distinct, desc, cast as sql_cast, Date, func, Float
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import count
