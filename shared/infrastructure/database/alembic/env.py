@@ -11,9 +11,9 @@ from alembic import context
 config = context.config
 
 # --- НАЧАЛО ИЗМЕНЕНИЙ ---
-# Получаем URL из переменной окружения 'DATABASE_URL'.
+# Получаем URL из переменной окружения 'POSTGRES_URL'.
 # Если переменная не установлена, используем значение из alembic.ini.
-db_url = os.getenv('DATABASE_URL', config.get_main_option("sqlalchemy.url"))
+db_url = os.getenv('POSTGRES_URL', config.get_main_option("sqlalchemy.url"))
 
 # Устанавливаем это значение как основное для Alembic
 config.set_main_option('sqlalchemy.url', db_url)
