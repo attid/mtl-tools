@@ -145,7 +145,7 @@ class KVStore(Base):
 class BotConfig(Base):
     __tablename__ = 'bot_config'
     chat_id = Column(BigInteger, primary_key=True)
-    chat_key = Column(Integer, primary_key=True)
+    chat_key = Column(BigInteger, primary_key=True)
     chat_key_name = Column(String)
     chat_value = Column(JSONB) # Using JSONB for flexibility
 

@@ -702,8 +702,19 @@ async def update_users():
     await pyro_app.stop()
 
 
+async def local_test():
+    from db.quik_pool import quik_pool
+    mongo_config = BotMongoConfig(quik_pool)
+    from other.global_data import BotValueTypes
+    print(BotValueTypes.Votes.value)
+    a = await mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}')
+    print(a)
+    #global_data.votes = json.loads(await mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
+
+
 if __name__ == "__main__":
     # _ = asyncio.run(update_users(''))
-    from db.quik_pool import quik_pool
-    _ = asyncio.run(BotMongoConfig(quik_pool).get_all_chats_by_user(6227392660))
-    print(_)
+    #from db.quik_pool import quik_pool
+    #_ = asyncio.run(BotMongoConfig(quik_pool).get_all_chats_by_user(6227392660))
+    #print(_)
+    asyncio.run(local_test())
