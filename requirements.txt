@@ -70,6 +70,8 @@ sentry-sdk==1.45.1
 six==1.16.0
 sqlalchemy==2.0.28
 sqlalchemy-firebird==2.1
+psycopg2-binary==2.9.9
+alembic==1.13.1
 sqlalchemy-stubs==0.4
 stellar-base-sseclient==0.0.21
 stellar-sdk~=11.1.0

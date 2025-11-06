@@ -138,3 +138,5 @@ members_key.json
 /.idea/
 /data/*
 *.sh
+/.junie/*
+/.venv_tmp_alembic/*

@@ -6,6 +6,7 @@ from loguru import logger
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 
 from db.mongo import BotMongoConfig
+from db.quik_pool import quik_pool
 
 
 class MTLChats:
@@ -157,7 +158,7 @@ class GlobalData:
 
 
 global_data = GlobalData()
-global_data.mongo_config = BotMongoConfig()
+global_data.mongo_config = BotMongoConfig(quik_pool)
 global_tasks = []
 
 

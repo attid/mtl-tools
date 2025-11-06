@@ -137,7 +137,7 @@ async def main():
     logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
 
     # Запуск бота
-    engine = create_engine(config.firebird_url, pool_pre_ping=True, max_overflow=50)
+    engine = create_engine(config.postgres_url, pool_pre_ping=True, max_overflow=50)
     # Creating DB connections pool
     db_pool = sessionmaker(bind=engine)
 
@@ -202,11 +202,14 @@ def add_bot_users(session: Session, user_id: int, username: str | None, new_user
 
 
 if __name__ == "__main__":
-    sentry_sdk.init(
-        dsn=config.sentry_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
+    if len(config.sentry_dsn) > 20:
+        sentry_sdk.init(
+            dsn=config.sentry_dsn,
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+        )
+    else:
+        logger.warning("sentry_dsn is bad. Not start it")
     try:
         # import logging
         # logging.basicConfig(level=logging.DEBUG)
