@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file:
-      - .env
+      - .env.example
     environment:
       POSTGRES_URL: postgresql://bot:bot_password@postgres:5432/mtldb
       REDIS_URL: redis://redis:6379/4
@@ -25,7 +25,7 @@ services:
       dockerfile: Dockerfile
     command: ["alembic", "-c", "shared/infrastructure/database/alembic/alembic.ini", "upgrade", "head"]
     env_file:
-      - .env
+      - .env.example
     environment:
       POSTGRES_URL: postgresql://bot:bot_password@postgres:5432/mtldb
     depends_on:

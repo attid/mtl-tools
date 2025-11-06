@@ -202,11 +202,14 @@ def add_bot_users(session: Session, user_id: int, username: str | None, new_user
 
 
 if __name__ == "__main__":
-    sentry_sdk.init(
-        dsn=config.sentry_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
+    if len(config.sentry_dsn) > 20:
+        sentry_sdk.init(
+            dsn=config.sentry_dsn,
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+        )
+    else:
+        logger.warning("sentry_dsn is bad. Not start it")
     try:
         # import logging
         # logging.basicConfig(level=logging.DEBUG)
