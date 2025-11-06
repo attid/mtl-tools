@@ -21,6 +21,7 @@ RUN apt-get update \
         libwebp-dev \
         libpq-dev \
         libzbar0 \
+        fonts-dejavu-core \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
