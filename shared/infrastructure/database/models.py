@@ -87,7 +87,7 @@ class TTransaction(Base):
     id_div_list = Column(Integer, ForeignKey('t_div_list.id'))
     xdr_id = Column(BigInteger)
     xdr = Column(Text)
-    was_send = Column(Boolean, default=False)
+    was_send = Column(SmallInteger, default=0)
 
     div_list = relationship("TDivList", back_populates="transactions")
 
