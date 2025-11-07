@@ -11,7 +11,7 @@ from db.requests import db_get_first_100_ledgers, db_get_ledger, db_load_bot_val
     db_get_watch_list
 from other.config_reader import config
 from other.global_data import BotValueTypes
-from db.models import TLedgers, TOperations
+from shared.infrastructure.database.models import TLedgers, TOperations
 from db.quik_pool import quik_pool
 from other.stellar_tools import decode_data_value
 

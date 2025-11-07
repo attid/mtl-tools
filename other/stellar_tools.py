@@ -19,7 +19,7 @@ from stellar_sdk.client.aiohttp_client import AiohttpClient
 from stellar_sdk.server_async import ServerAsync
 from stellar_sdk.sep.federation import resolve_account_id_async
 
-from db.models import TDivList, TOperations, TPayments, TTransaction
+from shared.infrastructure.database.models import TDivList, TOperations, TPayments, TTransaction
 from db.requests import (cmd_load_transactions, db_count_unpacked_payments, db_count_unsent_transactions,
                          db_get_div_list, db_get_new_effects_for_token, db_get_operations_by_asset, db_get_payments,
                          db_get_total_user_div, db_get_user_id)
