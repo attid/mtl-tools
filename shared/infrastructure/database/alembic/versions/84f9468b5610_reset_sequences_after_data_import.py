@@ -35,16 +35,19 @@ def _build_setval_sql(table: str, column: str) -> str:
     return f"""
         WITH seq AS (
             SELECT pg_get_serial_sequence('{table}', '{column}') AS name
+        ),
+        max_id AS (
+            SELECT COALESCE(MAX({column}), 0) AS value FROM {table}
         )
         SELECT CASE
-            WHEN name IS NULL THEN NULL
+            WHEN seq.name IS NULL THEN NULL
             ELSE setval(
-                name,
-                COALESCE((SELECT MAX({column}) FROM {table}), 0),
+                seq.name,
+                GREATEST(max_id.value, 1),
                 true
             )
         END
-        FROM seq;
+        FROM seq CROSS JOIN max_id;
     """
 
 
