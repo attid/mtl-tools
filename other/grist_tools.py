@@ -149,7 +149,7 @@ class GristAPI:
                 raise Exception(f'Ошибка запроса: Статус {response.status}')
 
     async def load_table_data(self, table: GristTableConfig, sort: Optional[str] = None,
-                              filter_dict: Optional[Dict[str, List[Any]]] = None) -> Optional[List[Dict[str, Any]]]:
+                              filter_dict: Optional[Dict[str, List[Any]]] = None) -> List[Dict[str, Any]]:
         """
         Загружает данные из таблицы с обработкой ошибок.
 
@@ -165,7 +165,7 @@ class GristAPI:
             return records
         except Exception as e:
             logger.warning(f"Ошибка при загрузке данных из таблицы {table.table_name}: {e}")
-            return None
+            return []
 
 
 # Конфигурация
