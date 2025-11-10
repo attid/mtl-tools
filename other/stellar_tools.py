@@ -3,8 +3,9 @@ import base64
 import math
 import re
 from copy import deepcopy
-from datetime import date, datetime, timedelta
-from decimal import Decimal
+from datetime import date, datetime, timedelta, timezone
+import calendar
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from time import time
 from typing import List, Optional
 import aiohttp
@@ -1280,22 +1281,47 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
 
 
 @safe_catch_async
+async def cmd_calc_usdm_sum():
+    today = datetime.now(timezone.utc).date()
+    if today.day >= 10:
+        target_month = today.month
+        target_year = today.year
+    else:
+        if today.month == 1:
+            target_month = 12
+            target_year = today.year - 1
+        else:
+            target_month = today.month - 1
+            target_year = today.year
+
+    key = f'next_divs_{target_month}'
+    _, data = await get_balances(MTLAddresses.public_usdm, return_data=True)
+
+    if not data or key not in data:
+        raise ValueError(f"Dividend data '{key}' not found")
+
+    value_str = decode_data_value(data[key])
+    try:
+        monthly_sum = Decimal(value_str)
+    except InvalidOperation as exc:
+        raise ValueError(f"Cannot parse dividend sum '{value_str}' for {key}") from exc
+
+    days_in_month = calendar.monthrange(target_year, target_month)[1]
+    daily_sum = (monthly_sum / Decimal(days_in_month)).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+    return float(daily_sum)
+
+
+@safe_catch_async
 async def cmd_calc_usdm_daily(session: Session, div_list_id: int, test_sum=0, test_for_address=None):
     div_accounts = []
     if test_sum > 0:
         div_sum = test_sum
     else:
-        div_sum = await get_balances(MTLAddresses.public_usdm_div)
-        div_sum = float(div_sum['USDM']) - 0.1
-        logger.info(f"div_sum = {div_sum}")
-        if not test_for_address:  # Записываем в блокчейн только если это не тестовый расчет
-            await stellar_async_submit(
-                stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f'LAST_DIVS_USDM:{div_sum}'),
-                             config.private_sign.get_secret_value()))
+        div_sum = await cmd_calc_usdm_sum()
 
-    if div_sum > 700:
+    if div_sum > 100:
         logger.info(f"div_sum = {div_sum}")
-        return
+        raise ValueError("Dividend sum too high")
 
     accounts = await stellar_get_holders(MTLAssets.usdm_asset)
     pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
@@ -3034,7 +3060,9 @@ async def get_market_price(
 
 async def test():
     from db.quik_pool import quik_pool
-    a = await cmd_calc_usdm_daily(quik_pool(), 100, 66)
+    sum = await cmd_calc_usdm_sum()
+    print(sum)
+    a = await cmd_calc_usdm_daily(quik_pool(), 100, sum)
     print (a)
 
 
