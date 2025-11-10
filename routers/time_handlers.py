@@ -13,6 +13,7 @@ from db.requests import db_load_new_message
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async, safe_catch
 from other.pyro_tools import remove_deleted_users
+from other.stellar_tools import cmd_create_list, cmd_calc_usdm_daily, cmd_gen_xdr, cmd_send_by_list_id
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from scripts.mtl_exchange import check_exchange_one
 from scripts.mtl_exchange2 import check_mm, check_mmwb
@@ -122,6 +123,45 @@ async def time_clear(bot: Bot):
         await asyncio.sleep(30)
 
 
+@safe_catch_async
+async def time_usdm_daily(session_pool, bot: Bot):
+    with session_pool() as session:
+        # новая запись
+        # ('mtl div 17/12/2021')
+        div_list_id = cmd_create_list(session, datetime.now().strftime('usdm div %d/%m/%Y'), 6)
+        lines = []
+        logger.info(f"Start div pays №{div_list_id}. Step (1/7)")
+        result = await cmd_calc_usdm_daily(session, div_list_id)
+        logger.info(f"Found {len(result)} addresses. Try gen xdr.")
+
+        i = 1
+
+        while i > 0:
+            i = cmd_gen_xdr(session, div_list_id)
+            logger.info(f"Div part done. Need {i} more. Step (3/7)")
+
+        logger.info("Try send div transactions. Step (4/7)")
+        i = 1
+        e = 1
+        while i > 0:
+            try:
+                i = await cmd_send_by_list_id(session, div_list_id)
+                logger.info(f"Part done. Need {i} more. Step (5/7)")
+            except Exception as err:
+                logger.info(str(err))
+                logger.error(f"Got error. New attempt {e}. Step (6/7)")
+                e += 1
+                await asyncio.sleep(10)
+                if e > 20:
+                    return
+
+        logger.info("All work done. Step (7/7)")
+        msg = (f"Start div pays №{div_list_id}.\n"
+               f"Found {len(result)} addresses.\n"
+               f"All work done.")
+        await bot.send_message(MTLChats.USDMMGroup, msg)
+
+
 @safe_catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
@@ -176,6 +216,9 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     #### scheduler.add_job(cmd_send_message_8h, "interval", hours=8, jitter=800, args=(dp,))
     ### scheduler.add_job(cmd_send_message_key_rate, "cron", day_of_week='fri', hour=8, minute=10, args=(dp,))
 
+    # usdm divs
+    scheduler.add_job(time_usdm_daily, "interval", hours=4, minutes=4, args=(session_pool, bot),
+                      misfire_grace_time=360)
     ### job.args = (dp, 25,)
     ### await cmd_send_message_10м(dp)
 

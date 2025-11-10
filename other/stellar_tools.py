@@ -3064,6 +3064,7 @@ async def test():
     print(sum)
     a = await cmd_calc_usdm_daily(quik_pool(), 100, sum)
     print (a)
+    print(len(a))
 
 
 if __name__ == '__main__':
