@@ -3,7 +3,7 @@ import base64
 import math
 import re
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from time import time
 from typing import List, Optional
@@ -1175,6 +1175,10 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
                 stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f'LAST_DIVS_USDM:{div_sum}'),
                              config.private_sign.get_secret_value()))
 
+    if div_sum > 700:
+        logger.info(f"div_sum = {div_sum}")
+        return
+
     # print(json.dumps(response, indent=4))
     accounts = await stellar_get_holders(MTLAssets.usdm_asset)
     pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
@@ -1205,11 +1209,26 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
 
     div_accounts_dict = {account[0]: account[1] for account in div_accounts}
 
-    current_date = datetime.now().date()
-    start_current_month = datetime.now().replace(day=1).date()
-    start_previous_month = (start_current_month - timedelta(days=1)).replace(day=1)
+    period_start = date(2025, 11, 1)
+    period_end = date(2025, 11, 10)
+    current_date = period_end
 
-    while current_date >= start_current_month:
+    div_accounts_dict_month = {account: 0 for account in div_accounts_dict}
+    month_full_sum = 0
+
+    while current_date >= period_start:
+        for key, value in div_accounts_dict.items():
+            if value < 0:
+                div_accounts_dict[key] = 0
+
+        total_token_balance = sum(div_accounts_dict.values())
+        month_full_sum += total_token_balance
+        for key, value in div_accounts_dict.items():
+            div_accounts_dict_month[key] += value
+
+        if current_date == period_start:
+            break
+
         for record in db_get_operations_by_asset(session, MTLAssets.usdm_asset.code, current_date):
             if record.for_account in div_accounts_dict:
                 if record.operation == 'account_credited':
@@ -1221,37 +1240,95 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
                         div_accounts_dict[record.for_account] += float(record.amount1)
                     if record.code2 == 'USDM':
                         div_accounts_dict[record.for_account] -= float(record.amount2)
+
         current_date = current_date - timedelta(days=1)
 
-    total_token_balance = sum(div_accounts_dict.values())
-
-    div_accounts_dict_month = deepcopy(div_accounts_dict)
-    month_full_sum = total_token_balance
-
-    while current_date >= start_previous_month:
-        for record in db_get_operations_by_asset(session, MTLAssets.usdm_asset.code, current_date):
-            if record.for_account in div_accounts_dict:
-                if record.operation == 'account_credited':
-                    div_accounts_dict[record.for_account] -= float(record.amount1)
-                elif record.operation == 'account_debited':
-                    div_accounts_dict[record.for_account] += float(record.amount1)
-                elif record.operation == 'trade':
-                    if record.code1 == 'USDM':
-                        div_accounts_dict[record.for_account] += float(record.amount1)
-                    elif record.code2 == 'USDM':
-                        div_accounts_dict[record.for_account] -= float(record.amount2)
-
-        for key, value in div_accounts_dict.items():
-            if value < 0:
-                div_accounts_dict[key] = 0
-        current_date = current_date - timedelta(days=1)
-        total_token_balance = sum(div_accounts_dict.values())
-        month_full_sum += total_token_balance
-        for key, value in div_accounts_dict.items():
-            div_accounts_dict_month[key] += value
+    if month_full_sum == 0:
+        logger.warning("No positive balances found for the configured dividend period")
+        return []
 
     for record in div_accounts:
         record[2] = round((div_accounts_dict_month[record[0]] / month_full_sum) * div_sum, 7)
+        record[3] = record[2]
+
+    div_accounts.sort(key=get_key_1, reverse=True)
+
+    # Фильтруем список div_accounts, оставляя только те элементы, которые удовлетворяют условию
+    div_accounts = [record for record in div_accounts if round(record[2], 5) > 0]
+
+    if test_for_address:
+        # Ищем запись для тестового адреса
+        test_account_data = next((record for record in div_accounts if record[0] == test_for_address), None)
+        if test_account_data:
+            return [test_account_data]  # Возвращаем только данные тестового адреса
+        return []  # Если адрес не найден
+    else:
+        # Стандартное сохранение в БД только если это не тестовый расчет
+        payments = [
+            TPayments(
+                user_key=item[0],
+                mtl_sum=item[1],
+                user_calc=item[2],
+                user_div=item[3],
+                id_div_list=item[4]
+            )
+            for item in div_accounts
+        ]
+        session.add_all(payments)
+        session.commit()
+        return div_accounts
+
+
+@safe_catch_async
+async def cmd_calc_usdm_daily(session: Session, div_list_id: int, test_sum=0, test_for_address=None):
+    div_accounts = []
+    if test_sum > 0:
+        div_sum = test_sum
+    else:
+        div_sum = await get_balances(MTLAddresses.public_usdm_div)
+        div_sum = float(div_sum['USDM']) - 0.1
+        logger.info(f"div_sum = {div_sum}")
+        if not test_for_address:  # Записываем в блокчейн только если это не тестовый расчет
+            await stellar_async_submit(
+                stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f'LAST_DIVS_USDM:{div_sum}'),
+                             config.private_sign.get_secret_value()))
+
+    if div_sum > 700:
+        logger.info(f"div_sum = {div_sum}")
+        return
+
+    accounts = await stellar_get_holders(MTLAssets.usdm_asset)
+    pools = await get_liquidity_pools_for_asset(MTLAssets.usdm_asset)
+    total_calc_sum = 0
+
+    for account in accounts:
+        balances = account["balances"]
+        token_balance = 0
+        for balance in balances:
+            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
+                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
+                token_balance += float(balance["balance"])
+            elif balance["asset_type"] == "liquidity_pool_shares":
+                pool_id = balance["liquidity_pool_id"]
+                pool_share = float(balance["balance"])
+                for pool in pools:
+                    if pool['id'] == pool_id:
+                        usdm_amount = float(
+                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
+                        total_shares = float(pool['total_shares'])
+                        if total_shares > 0 and pool_share > 0:
+                            token_balance += (pool_share / total_shares) * usdm_amount
+
+        div_accounts.append([account["account_id"], token_balance, 0, 0, div_list_id])
+        total_calc_sum += token_balance
+
+    if total_calc_sum <= 0:
+        logger.warning("No positive USDM balances found for daily dividend calculation")
+        return []
+
+    for record in div_accounts:
+        share = record[1] / total_calc_sum
+        record[2] = round(share * div_sum, 7)
         record[3] = record[2]
 
     div_accounts.sort(key=get_key_1, reverse=True)
@@ -2956,7 +3033,8 @@ async def get_market_price(
 
 
 async def test():
-    a = await get_cash_balance(0)
+    from db.quik_pool import quik_pool
+    a = await cmd_calc_usdm_daily(quik_pool(), 100, 66)
     print (a)
 
 

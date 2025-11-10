@@ -44,3 +44,7 @@
 ## Router/Agent Instructions
 - New feature: create `routers/<feature>.py` with `register_handlers(dp, bot)`. Optionally set `register_handlers.priority` (lower loads earlier).
 - Add pure helpers to `other/` and DB access in `db/` to keep handlers small, testable, and reusable.
+
+## Task Intake Protocol
+- For each new task, first analyze the requirements and explicitly state which files or directories need to change.
+- Do not edit any files until there is direct permission that names the specific file(s) or directory that may be modified—no exceptions.

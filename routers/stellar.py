@@ -301,8 +301,8 @@ async def cmd_do_usdm_div(message: Message, session: Session):
     await msg.edit_text(add_text(lines, 7, "All work done. Step (7/12)"))
 
 
-@update_command_info("/do_usdm_usdm_div", "выплата дивидентов в usdm от usdm")
-@router.message(Command(commands=["do_usdm_usdm_div"]))
+#@update_command_info("/do_usdm_usdm_div", "выплата дивидентов в usdm от usdm")
+@router.message(Command(commands=["do_usdm_usdm_div_666"]))
 async def cmd_do_usdm_usdm_div(message: Message, session: Session):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
@@ -319,7 +319,7 @@ async def cmd_do_usdm_usdm_div(message: Message, session: Session):
     lines = []
     msg = await message.answer(
         add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
-    result = await cmd_calc_usdm_usdm_divs(session, div_list_id)
+    result = await cmd_calc_usdm_usdm_divs(session, div_list_id, test_sum=666)
     await msg.edit_text(add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
 
     i = 1
