@@ -129,10 +129,11 @@ async def time_usdm_daily(session_pool, bot: Bot):
         # новая запись
         # ('mtl div 17/12/2021')
         div_list_id = cmd_create_list(session, datetime.now().strftime('usdm div %d/%m/%Y'), 6)
-        lines = []
         logger.info(f"Start div pays №{div_list_id}. Step (1/7)")
         result = await cmd_calc_usdm_daily(session, div_list_id)
         logger.info(f"Found {len(result)} addresses. Try gen xdr.")
+        total_div_sum = sum(record[2] for record in result)
+        total_div_sum_str = f"{total_div_sum:.2f}"
 
         i = 1
 
@@ -158,6 +159,7 @@ async def time_usdm_daily(session_pool, bot: Bot):
         logger.info("All work done. Step (7/7)")
         msg = (f"Start div pays №{div_list_id}.\n"
                f"Found {len(result)} addresses.\n"
+               f"Total payouts sum: {total_div_sum_str}.\n"
                f"All work done.")
         await bot.send_message(MTLChats.USDMMGroup, msg)
 
@@ -217,7 +219,7 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     ### scheduler.add_job(cmd_send_message_key_rate, "cron", day_of_week='fri', hour=8, minute=10, args=(dp,))
 
     # usdm divs
-    scheduler.add_job(time_usdm_daily, "interval", hours=4, minutes=4, args=(session_pool, bot),
+    scheduler.add_job(time_usdm_daily, "cron", hour=4, minute=4, args=(session_pool, bot),
                       misfire_grace_time=360)
     ### job.args = (dp, 25,)
     ### await cmd_send_message_10м(dp)
