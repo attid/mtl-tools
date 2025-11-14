@@ -10,12 +10,14 @@ from loguru import logger
 
 from other.config_reader import config
 from other.grist_tools import GristTableConfig, grist_manager
+from other.loguru_tools import safe_catch_async
 
 router = Router()
 
-RELY_DEAL_CHAT_ID = -3113317571
+RELY_DEAL_CHAT_ID = -1003113317571
+#RELY_DEAL_CHAT_ID = -1001767165598
 
-GRIST_ACCESS_ID = "kceNjvoEEihS"
+GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
 GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
 
 
@@ -25,6 +27,7 @@ GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
     F.text,
     F.chat.type != ChatType.PRIVATE,
 )
+@safe_catch_async
 async def deal_command(message: types.Message, command: CommandObject, bot: Bot):
     if not command.args:
         await message.answer("Пожалуйста, укажите параметр. Формат: /deal 0.1")
