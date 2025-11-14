@@ -18,6 +18,7 @@ RELY_DEAL_CHAT_ID = -3113317571
 GRIST_ACCESS_ID = "kceNjvoEEihS"
 GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
 
+
 @router.message(
     Command(commands=["deal"]),
     F.reply_to_message,
@@ -77,13 +78,6 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         await deal_service.send_error_notification(e, message)
 
 
-def register_handlers(dp, bot):
-    if config.test_mode:
-        dp.include_router(router)
-        logger.info("router rely was loaded")
-
-
-
 class ArgumentParsingError(Exception):
     """Base class for argument parsing errors."""
     pass
@@ -105,25 +99,31 @@ class RepositoryError(Exception):
     """Base class for repository-related errors."""
     pass
 
+
 class DealIsCheckedError(RepositoryError):
     """Raised when trying to modify a checked deal."""
     pass
+
 
 class DealCreationError(RepositoryError):
     """Raised when a deal cannot be created."""
     pass
 
+
 class DealRetrievalError(RepositoryError):
     """Raised when a deal cannot be retrieved."""
     pass
+
 
 class ParticipantEntryError(RepositoryError):
     """Raised for errors related to participant entries."""
     pass
 
+
 class HolderCreationError(RepositoryError):
     """Raised when a holder cannot be created."""
     pass
+
 
 class HolderRetrievalError(RepositoryError):
     """Raised when a holder cannot be retrieved."""
@@ -142,11 +142,12 @@ class Deal:
     id: int
     checked: bool = False
 
+
 @dataclass
 class DealParticipantEntry:
     deal_id: int
     holder_id: int
-    amount: Decimal 
+    amount: Decimal
     id: int | None = None
 
 
@@ -158,7 +159,6 @@ class GristDealRepository:
             base_url=GRIST_BASE_URL,
         )
 
-
     async def get_or_create_deal(self, message_url: str) -> tuple[Deal, bool]:
         """
         Находит сделку по URL или создает новую.
@@ -167,7 +167,7 @@ class GristDealRepository:
         deal = await self._get_deal_by_url(message_url)
         if deal:
             return deal, False
-        
+
         new_deal = await self._create_deal(message_url)
         return new_deal, True
 
@@ -190,7 +190,7 @@ class GristDealRepository:
                 json_data={
                     "records": [
                         {
-                            "fields":{
+                            "fields": {
                                 "Message": message_url
                             }
                         }
@@ -317,8 +317,10 @@ class GristDealParticipantRepository:
 
         return participant_entry
 
+
 class DealService:
-    def __init__(self, deal_repo: GristDealRepository, participant_repo: GristDealParticipantRepository, holder_repo: GristHolderRepository, bot: Bot):
+    def __init__(self, deal_repo: GristDealRepository, participant_repo: GristDealParticipantRepository,
+                 holder_repo: GristHolderRepository, bot: Bot):
         self._deal_repo = deal_repo
         self._participant_repo = participant_repo
         self._holder_repo = holder_repo
@@ -348,7 +350,8 @@ class DealService:
         except Exception as e:
             logger.error(f"Не удалось отправить уведомление об ошибке: {e}")
 
-    async def process_deal_entry(self, message_url: str, tg_username: str, amount: Decimal) -> tuple[Deal, DealParticipantEntry]:
+    async def process_deal_entry(self, message_url: str, tg_username: str, amount: Decimal) -> tuple[
+        Deal, DealParticipantEntry]:
         if not message_url:
             raise ValueError("Message URL is required.")
         if not tg_username:
@@ -372,3 +375,8 @@ class DealService:
             amount=amount
         )
         return deal, participant_entry
+
+
+def register_handlers(dp, bot):
+    dp.include_router(router)
+    logger.info("router rely was loaded")
