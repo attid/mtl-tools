@@ -78,9 +78,8 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
 
 
 def register_handlers(dp, bot):
-    if config.test_mode:
-        dp.include_router(router)
-        logger.info("router rely was loaded")
+    dp.include_router(router)
+    logger.info("router rely was loaded")
 
 
 
