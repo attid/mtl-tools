@@ -372,27 +372,3 @@ class DealService:
             amount=amount
         )
         return deal, participant_entry
-
-class Bot:
-    async def send_message(self, chat_id: int, text: str, disable_web_page_preview: bool = False):
-        print(f"Sending message to chat {chat_id}: {text}")
-
-async def main():
-    print("Starting...")
-    try:
-        deal_repository = GristDealRepository()
-        deal_participant_repository = GristDealParticipantRepository()
-        holder_repository = GristHolderRepository()
-
-        deal_service = DealService(deal_repository, deal_participant_repository, holder_repository, bot=Bot())
-        await deal_service.process_deal_entry(
-            "https://t.me/rc_06_15_3",
-            "@bjjhVHanzBu86XLb2N1jGi",
-            Decimal("0.1"),
-        )
-
-    except RepositoryError as e:
-        logger.error(f"Error in main: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
