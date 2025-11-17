@@ -1,16 +1,52 @@
-from other.config_reader import config
-from other.stellar_tools import get_balances
-from aiogram import Router, types
-from aiogram import F
-import re
 import asyncio
+import html
+import re
+
+from aiogram import Bot, F, Router, types
+from aiogram.enums import ChatMemberStatus
+from aiogram.exceptions import TelegramBadRequest
 from loguru import logger
 
-from other.web_tools import http_session_manager
 from other.aiogram_tools import HasRegex
+from other.config_reader import config
+from other.global_data import MTLChats
+from other.grist_tools import grist_check_airdrop_records
+from other.stellar_tools import get_balances
+from other.web_tools import http_session_manager
 
 router = Router()
 router.message.filter(F.chat.id == -1002294641071)
+
+
+async def check_membership(bot: Bot, chat_id: int, user_id: int) -> tuple[bool, types.User | None]:
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        is_member = member.status in [
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.CREATOR,
+            ChatMemberStatus.ADMINISTRATOR,
+        ]
+        return is_member, member.user
+    except TelegramBadRequest:
+        return False, None
+
+
+async def build_trustline_checks(stellar_address: str) -> list[str]:
+    asset_codes = ("MTL", "USDM", "EURMTL")
+    try:
+        balances = await get_balances(stellar_address)
+    except Exception as exc:
+        logger.warning(f"Не удалось получить балансы для {stellar_address}: {exc}")
+        return ["Не удалось получить данные о трастлайнах"]
+
+    checks: list[str] = []
+    for code in asset_codes:
+        if balances and code in balances:
+            balance_value = balances[code]
+            checks.append(f"Линия доверия к {code}: открыта (баланс {balance_value})")
+        else:
+            checks.append(f"Линия доверия к {code}: не открыта")
+    return checks
 
 
 async def get_bsn_recommendations(address: str) -> tuple[int, list]:
@@ -46,76 +82,56 @@ async def get_bsn_recommendations(address: str) -> tuple[int, list]:
 
 @router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
 async def handle_address_messages(message: types.Message):
-    # Find the last occurrence of ID
-    id_matches = list(re.finditer(r'#ID(\d+)', message.html_text))
+    html_text = message.html_text or message.text or ''
+    plain_text = message.text or ''
+    id_matches = list(re.finditer(r'#ID(\d+)', html_text))
     match_id = id_matches[-1] if id_matches else None
+    match_stellar = re.search(r'(G[A-Z0-9]{50,})', plain_text)
+    username_match = re.search(r'\|[^|]*\|\s*(@\S+)', plain_text)
 
-    # Find Stellar address
-    match_stellar = re.search(r'(G[A-Z0-9]{50,})', message.text)
+    if not (match_id and match_stellar):
+        return
 
-    # Search for username after the second vertical bar
-    username_match = re.search(r'\|[^|]*\|\s*(@\S+)', message.text)
+    user_id = match_id.group(1)
+    username = username_match.group(1) if username_match else None
+    stellar_address = match_stellar.group(1)
+    username_display = html.escape(username) if username else 'Отсутствует'
 
-    if match_id and match_stellar:
-        logger.info("ID and Stellar address found!")
-        logger.info(f"Found parameters: ID: {match_id.group(1)}, Stellar address: {match_stellar.group(1)}")
+    results = []
+    trustline_checks = await build_trustline_checks(stellar_address)
+    results.extend(trustline_checks)
+    chat_list = (
+        (MTLChats.MonteliberoChanel, "канал Montelibero ru"),
+        (MTLChats.MTLAAgoraGroup, "MTLAAgoraGroup"),
+        (-1001429770534, "chat Montelibero ru"),
+    )
 
-        username = username_match.group(1) if username_match else "Отсутствует"
-        user_id = f"#ID{match_id.group(1)}"
-        trustline_status = ""
-        token_balance = ""
-        # Determine username status
-        username_presence = "Присутствует" if username != "Отсутствует" else "Отсутствует"
-        is_active_member = ""
-
-        # Get balances
-        balances = await get_balances(match_stellar.group(1))
-        has_mtlap_trustline = "MTLAP" in balances
-        token_balance_mtlap = balances.get("MTLAP", 0)
-        has_mtlac_trustline = "MTLAC" in balances
-        token_balance_mtlac = balances.get("MTLAC", 0)
-
-        trustline_status_mtlap = "Открыта" if has_mtlap_trustline else "Не открыта"
-        token_balance_status_mtlap = str(token_balance_mtlap)
-        trustline_status_mtlac = "Открыта" if has_mtlac_trustline else "Не открыта"
-        token_balance_status_mtlac = str(token_balance_mtlac)
-
-        # Get recommendations
-        rec_count, recommenders = await get_bsn_recommendations(match_stellar.group(1))
-        if rec_count > 0:
-            bsn_recommendations = f"Есть {rec_count} рекомендаций от:\n" + "\n".join(f"- {r}" for r in recommenders)
+    for chat_id, chat_name in chat_list:
+        is_member, user = await check_membership(message.bot, chat_id, int(user_id))
+        if is_member:
+            if user and user.username:
+                results.append(f"Пользователь @{user.username} подписан на {chat_name}")
+            else:
+                results.append(f"Пользователь подписан на {chat_name}")
+                results.append("<b>!Внимание: нет юзернейма!</b>")
         else:
-            bsn_recommendations = "Рекомендации отсутствуют"
+            results.append(f"Пользователь не подписан на {chat_name}")
 
-        message_template = "Новый запрос на вступление в МТЛА!\n\n" \
-                           "Юзернейм: {username}\n" \
-                           "Юзер ID: {user_id}\n" \
-                           "Стеллар адрес: {stellar_address}\n\n" \
-                           "**Результаты проверок:**\n\n" \
-                           f"Линия доверия к MTLAP: {trustline_status_mtlap}\n" \
-                           f"Баланс токенов MTLAP: {token_balance_status_mtlap}\n" \
-                           f"Линия доверия к MTLAC: {trustline_status_mtlac}\n" \
-                           f"Баланс токенов MTLAC: {token_balance_status_mtlac}\n" \
-                           "Наличие юзернейма: {username_presence}\n" \
-                           "Активный член МТЛАП: {is_active_member}\n" \
-                           "BSN рекомендации: {bsn_recommendations}\n\n"
-        output_message = message_template.format(
-            username=username,
-            user_id=user_id,
-            stellar_address=match_stellar.group(1),
-            trustline_status_mtlap=trustline_status_mtlap,
-            token_balance_status_mtlap=token_balance_status_mtlap,
-            trustline_status_mtlac=trustline_status_mtlac,
-            token_balance_status_mtlac=token_balance_status_mtlac,
-            username_presence=username_presence,
-            is_active_member=is_active_member,
-            bsn_recommendations=bsn_recommendations
-        )
+    results.extend(await grist_check_airdrop_records(int(user_id), stellar_address))
 
-        print(output_message)
+    header_lines = [
+        "Новый запрос!",
+        "",
+        f"Юзернейм: {username_display}",
+        f"Юзер ID: {user_id}",
+        f"Стеллар адрес: {stellar_address}",
+        "",
+        "<b>Результаты проверок:</b>",
+        "",
+    ]
 
-        await message.answer(output_message)
-        #https://bsn.expert/accounts/GBBCLIYOIBVZSMCPDAOP67RJZBDHEDQ5VOVYY2VDXS2B6BLUNFS5242O
+    output_message = '\n'.join(header_lines + results)
+    await message.answer(output_message, parse_mode="HTML")
 
 
 def register_handlers(dp, bot):
