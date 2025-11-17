@@ -40,6 +40,7 @@ class MTLGrist:
     EURMTL_assets = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Assets")
 
     CONFIG_auto_clean = GristTableConfig("hPMqtkBmPfvA15SDWFJ9FH", "Auto_clean")
+    MTLA_AIRDROP = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "EUR_GNRL")
 
 class GristAPI:
     def __init__(self, session_manager: HTTPSessionManager = None):
@@ -171,6 +172,31 @@ class GristAPI:
 # Конфигурация
 grist_session_manager = HTTPSessionManager()
 grist_manager = GristAPI(grist_session_manager)
+
+
+async def grist_check_airdrop_records(tg_id: Optional[int], public_key: Optional[str]) -> list[str]:
+    """
+    Checks MTLAirdrop register for TG ID and Stellar address matches.
+    """
+    results: list[str] = []
+    table = MTLGrist.MTLA_AIRDROP
+
+    if public_key:
+        records = await grist_manager.load_table_data(table, filter_dict={"Public_key": [public_key]})
+        if records:
+            row_number = records[0].get("N") or records[0].get("id")
+            results.append(f"Стеллар адрес найден в Airdrop строка {row_number}")
+            return results
+
+    if tg_id is not None:
+        records = await grist_manager.load_table_data(table, filter_dict={"TG_ID": [tg_id]})
+        if records:
+            row_number = records[0].get("N") or records[0].get("id")
+            results.append(f"Найден в Airdrop по ID строка {row_number}")
+            return results
+
+    results.append("Не найден в Airdrop")
+    return results
 
 
 async def main():
