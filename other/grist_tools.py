@@ -1,6 +1,7 @@
 import asyncio
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from other.config_reader import config
@@ -197,6 +198,29 @@ async def grist_check_airdrop_records(tg_id: Optional[int], public_key: Optional
 
     results.append("Не найден в Airdrop")
     return results
+
+
+async def grist_log_airdrop_payment(tg_id: int, public_key: str, nickname: str, tx_hash: str,
+                                    amount: float, currency: str = "USDM") -> None:
+    """
+    Logs completed airdrop payment into MTLAirdrop register.
+    """
+    now = datetime.now(tz=timezone.utc)
+    record = {
+        "Currency": currency,
+        "Amount": amount,
+        "Public_key": public_key,
+        "Nickname": nickname or "",
+        "Time": now.strftime("%H:%M:%S"),
+        "Date": now.date().isoformat(),
+        "Transaction": f"https://stellar.expert/explorer/public/tx/{tx_hash}" if tx_hash else "",
+        "TG_ID": tg_id,
+    }
+    json_data = {"records": [{"fields": record}]}
+    try:
+        await grist_manager.post_data(MTLGrist.MTLA_AIRDROP, json_data)
+    except Exception as exc:
+        logger.error(f"Failed to log airdrop payment to Grist: {exc}")
 
 
 async def main():

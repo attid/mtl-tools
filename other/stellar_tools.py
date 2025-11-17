@@ -447,6 +447,34 @@ async def get_balances(address: str, return_assets=False, return_data=False, ret
         return assets
 
 
+async def send_payment_async(source_address: str, destination: str, asset: Asset, amount: str,
+                             memo_text: Optional[str] = None) -> dict:
+    """
+    Builds, signs and submits a payment transaction via stellar_async_submit.
+    """
+    async with ServerAsync(
+            horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as async_server:
+        source_account = await async_server.load_account(source_address)
+
+    builder = TransactionBuilder(
+        source_account=source_account,
+        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        base_fee=base_fee,
+    )
+    builder.set_timeout(60)
+    if memo_text:
+        builder.add_text_memo(memo_text[:28])
+    builder.append_payment_op(
+        destination=destination,
+        asset=asset,
+        amount=str(amount),
+    )
+    transaction = builder.build()
+    transaction.sign(get_private_sign())
+    return await stellar_async_submit(transaction.to_xdr())
+
+
 async def get_pool_info(pool_id: str, session) -> dict:
     async with session.get(f'{config.horizon_url}/liquidity_pools/{pool_id}') as resp:
         return await resp.json()
