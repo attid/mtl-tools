@@ -238,9 +238,9 @@ async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: 
 
 
 def register_handlers(dp, bot):
-    if config.test_mode:
-        dp.include_router(router)
-        logger.info('router secretary_mtl was loaded')
+    #if config.test_mode:
+    dp.include_router(router)
+    logger.info('router airdrops was loaded')
 
 
 if __name__ == '__main__':
