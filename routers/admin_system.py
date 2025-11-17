@@ -476,20 +476,29 @@ async def cmd_get_info(message: Message, bot: Bot):
             await message.reply('You are not my admin.')
             return
 
-    command_args = message.text.split()
-    if command_args[0] == "get_info":
-        if len(command_args) < 2 or not command_args[1].startswith("#ID"):
-            await message.reply('Пришлите ID в формате #ID0000')
-            return
-        user_id = command_args[1][3:]  # убрать "#ID" из начала строки
-    else:
-        user_id = command_args[0].split('_')
-        if len(user_id) == 3:
-            user_id = user_id[2].split('@')[0]
-
-    if not user_id.isdigit():
-        await message.reply('ID должен быть числом.')
+    command_args = (message.text or '').split()
+    if not command_args:
+        await message.reply('Пришлите числовой ID')
         return
+
+    command_name = command_args[0].split('@')[0].lstrip('/')
+    if command_name == "get_info":
+        if len(command_args) < 2:
+            await message.reply('Пришлите числовой ID')
+            return
+        raw_id = command_args[1].strip()
+        if raw_id.upper().startswith("#ID"):
+            raw_id = raw_id[3:]
+        if not raw_id.isdigit():
+            await message.reply('ID должен быть числом.')
+            return
+        user_id = raw_id
+    else:
+        match = re.match(r"get_info_(\d+)", command_name)
+        if not match:
+            await message.reply('Некорректная команда. Используйте /get_info <ID>')
+            return
+        user_id = match.group(1)
 
     messages = []
 
@@ -502,10 +511,15 @@ async def cmd_get_info(message: Message, bot: Bot):
     for chat_id, chat_name in chat_list:
         is_member, user = await check_membership(bot, chat_id, int(user_id))
         if is_member:
-            messages.append(f"Пользователь @{user.username} подписан на {chat_name}")
+            if user and user.username:
+                messages.append(f"Пользователь @{user.username} подписан на {chat_name}")
+            else:
+                messages.append(f"Пользователь подписан на {chat_name}")
+                messages.append("<b>!Внимание: нет юзернейма</b>")
         else:
             messages.append(f"Пользователь не подписан на {chat_name}")
-    messages.extend(await gs_find_user(user_id))
+    #messages.extend(await gs_find_user(user_id))
+    messages.append(f"Я больше не умею проверять на айдропы, гуглшит не работает")
 
     await message.reply('\n'.join(messages))
 
