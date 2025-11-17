@@ -120,37 +120,6 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         )
 
 
-async def get_bsn_recommendations(address: str) -> tuple[int, list]:
-    """
-    Gets recommendations for an address from BSN API
-    
-    :param address: Stellar address
-    :return: (number of recommendations, list of recommenders)
-    """
-    url = f"https://bsn.mtla.me/accounts/{address}?tag=RecommendToMTLA"
-    headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-    try:
-        response = await http_session_manager.get_web_request('GET', url, headers=headers, return_type='json')
-        if response.status == 200:
-            data = response.data
-            recommendations = data.get('links', {}).get('income', {}).get('RecommendToMTLA', {}).get('links', {})
-            recommenders = []
-            if recommendations:
-                for address, info in recommendations.items():
-                    display_name = info.get('display_name', address)
-                    recommenders.append(display_name)
-            return len(recommenders), recommenders
-        else:
-            logger.error(f"Ошибка получения рекомендаций: статус {response.status}")
-            return 0, []
-    except Exception as e:
-        logger.error(f"Ошибка при запросе рекомендаций: {e}")
-        return 0, []
-
-
 @router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
 async def handle_address_messages(message: types.Message):
     html_text = message.html_text or message.text or ''
@@ -197,13 +166,14 @@ async def handle_address_messages(message: types.Message):
         f"Юзернейм: {username_display}",
         f"Юзер ID: {user_id}",
         f"Стеллар адрес: {stellar_address}",
+        f'BSN: <a href="https://bsn.expert/accounts/{stellar_address}">bsn.expert</a>',
         "",
         "<b>Результаты проверок:</b>",
         "",
     ]
 
     output_message = '\n'.join(header_lines + results)
-    sent_message = await message.answer(output_message, parse_mode="HTML")
+    sent_message = await message.answer(output_message, parse_mode="HTML", disable_web_page_preview=True)
 
     keyboard = build_request_keyboard(sent_message.message_id)
     await sent_message.edit_reply_markup(reply_markup=keyboard)
@@ -244,4 +214,4 @@ def register_handlers(dp, bot):
 
 
 if __name__ == '__main__':
-    print(asyncio.run(get_bsn_recommendations('GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2')))
+    print(asyncio.run(print('GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2')))
