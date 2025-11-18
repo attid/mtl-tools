@@ -54,6 +54,34 @@ class BotMongoConfig:
         )
 
     def _save_bot_value_sync(self, chat_id: int, chat_key_value: int, chat_key_name: str, chat_value: Any):
+        def prepare_chat_value(value: Any):
+            if value is None:
+                return None
+
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped and stripped[0] in '{"[' or stripped.startswith('"'):
+                    try:
+                        parsed = json.loads(value)
+                        if isinstance(parsed, str):
+                            inner_stripped = parsed.strip()
+                            if inner_stripped and inner_stripped[0] in '{"[' or inner_stripped.startswith('"'):
+                                try:
+                                    parsed = json.loads(parsed)
+                                except json.JSONDecodeError:
+                                    pass
+                        if isinstance(parsed, dict) and set(parsed.keys()) == {"value"} and isinstance(parsed["value"], str):
+                            try:
+                                parsed = json.loads(parsed["value"])
+                            except json.JSONDecodeError:
+                                pass
+                        return parsed
+                    except json.JSONDecodeError:
+                        pass
+                return value
+
+            return value
+
         with self.db_pool() as session:
             if chat_value is None:
                 # Удаляем запись
@@ -62,6 +90,8 @@ class BotMongoConfig:
                 )
                 session.execute(stmt)
             else:
+                prepared_value = prepare_chat_value(chat_value)
+
                 # Обновляем или создаем запись
                 # Проверяем, существует ли запись
                 existing = session.execute(
@@ -74,16 +104,10 @@ class BotMongoConfig:
                 if existing_record:
                     # Обновляем существующую запись
                     existing_record.chat_key_name = chat_key_name
-                    if isinstance(chat_value, dict):
-                        existing_record.chat_value = chat_value
-                    else:
-                        existing_record.chat_value = {"value": str(chat_value)}
+                    existing_record.chat_value = prepared_value
                 else:
                     # Создаем новую запись
-                    if isinstance(chat_value, dict):
-                        chat_data = chat_value
-                    else:
-                        chat_data = {"value": str(chat_value)}
+                    chat_data = prepare_chat_value(chat_value)
 
                     new_record = BotConfig(
                         chat_id=chat_id,
@@ -115,6 +139,24 @@ class BotMongoConfig:
                 # Если значение - это словарь с одним ключом "value", возвращаем значение
                 if isinstance(record.chat_value, dict) and "value" in record.chat_value and len(record.chat_value) == 1:
                     return record.chat_value["value"]
+
+                if isinstance(record.chat_value, (dict, list)):
+                    try:
+                        return json.dumps(record.chat_value)
+                    except TypeError:
+                        return str(record.chat_value)
+
+                if isinstance(record.chat_value, str):
+                    stripped = record.chat_value.strip()
+                    if stripped and stripped[0] in '{"[' or stripped.startswith('"'):
+                        try:
+                            parsed = json.loads(record.chat_value)
+                            if isinstance(parsed, (dict, list)):
+                                return json.dumps(parsed)
+                            if isinstance(parsed, str):
+                                return parsed
+                        except json.JSONDecodeError:
+                            pass
                 return record.chat_value
             return default_value
 
