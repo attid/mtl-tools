@@ -22,6 +22,7 @@ from loguru import logger
 
 from other.grist_tools import GristTableConfig, grist_manager
 from other.loguru_tools import safe_catch_async
+from other.global_data import update_command_info
 
 router = Router()
 
@@ -32,6 +33,7 @@ GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
 GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
 
 
+@update_command_info('/deal', 'Добавить участника в сделку RELY (реплаем на сообщение)')
 @router.message(
     Command(commands=["deal"]),
     F.reply_to_message,
@@ -124,6 +126,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         await deal_service.send_error_notification(e, message)
 
 
+@update_command_info('/resolve', 'Закрыть сделку RELY (можно реплаем на сообщение сделки)')
 @router.message(
     Command(commands=["resolve"]),
     F.text,
