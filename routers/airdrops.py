@@ -49,7 +49,7 @@ def build_request_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(
-                text=f"Отправить {AIRDROP_SEND_AMOUNT} USDM",
+                text=f"Отправить {AIRDROP_SEND_AMOUNT} EURMTL",
                 callback_data=AirdropCallbackData(action="send", message_id=message_id).pack()
             ),
             InlineKeyboardButton(
@@ -90,7 +90,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         tx_result = await send_payment_async(
             source_address=AIRDROP_SOURCE_ADDRESS,
             destination=request_data["stellar_address"],
-            asset=MTLAssets.usdm_asset,
+            asset=MTLAssets.eurmtl_asset,
             amount=AIRDROP_SEND_AMOUNT,
         )
     except Exception as exc:
@@ -106,6 +106,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
             nickname=request_data["username"],
             tx_hash=tx_hash,
             amount=float(AIRDROP_SEND_AMOUNT),
+            currency="EURMTL"
         )
     except Exception as exc:
         logger.error(f"Не удалось записать аирдроп в Grist: {exc}")
@@ -116,7 +117,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
 
     if tx_hash:
         await callback.message.answer(
-            f"Перевод {AIRDROP_SEND_AMOUNT} USDM отправлен. https://stellar.expert/explorer/public/tx/{tx_hash}"
+            f"Перевод {AIRDROP_SEND_AMOUNT} EURMTL отправлен. https://stellar.expert/explorer/public/tx/{tx_hash}"
         )
 
 
