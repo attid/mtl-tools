@@ -10,6 +10,7 @@ from loguru import logger
 
 from other import aiogram_tools
 from db.requests import db_load_new_message
+from other.config_reader import config
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async, safe_catch
 from other.pyro_tools import remove_deleted_users
@@ -226,14 +227,15 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
 
 
 def register_handlers(dp, bot):
-    if 'test' not in sys.argv:
-        scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')  # str(tzlocal.get_localzone()))
-        aiogram_tools.scheduler = scheduler
-        scheduler.start()
-        db_pool = dp['dbsession_pool']
-        scheduler_jobs(scheduler, bot, db_pool)
+    if config.test_mode:
+        return
+    scheduler = AsyncIOScheduler(timezone='Europe/Podgorica')  # str(tzlocal.get_localzone()))
+    aiogram_tools.scheduler = scheduler
+    scheduler.start()
+    db_pool = dp['dbsession_pool']
+    scheduler_jobs(scheduler, bot, db_pool)
 
-        logger.info('router time_handlers was loaded')
+    logger.info('router time_handlers was loaded')
 
 
 register_handlers.priority = 90

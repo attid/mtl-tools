@@ -375,7 +375,7 @@ async def update_top_holders_report(session: Session):
     for record in records:
         if record[0] != '0':
             text = f'You need update votes <a href="{gd_link}">more info</a>'
-            db_cmd_add_message(session, MTLChats.SignGroup, text, use_alarm=True, topic_id=59558)
+            db_cmd_add_message(session, MTLChats.SignGroup, text, use_alarm=1, topic_id=59558)
             break
 
     logger.info(f'report topholders all done {now}')
