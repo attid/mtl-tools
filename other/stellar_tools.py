@@ -416,7 +416,8 @@ async def stellar_get_issuer_assets(account_id) -> dict:
                     assets[balance['asset_code']] = (
                             float(balances['authorized']) +
                             float(balance.get('claimable_balances_amount', 0)) +
-                            float(balance.get('liquidity_pools_amount', 0)))
+                            float(balance.get('liquidity_pools_amount', 0)) +
+                            float(balance.get('contracts_amount', 0)))
                 return assets
 
 
@@ -3088,9 +3089,7 @@ async def get_market_price(
 
 async def test():
     from db.quik_pool import quik_pool
-    sum = await cmd_calc_usdm_sum()
-    print(sum)
-    a = await cmd_calc_usdm_daily(quik_pool(), 100, sum)
+    a = await stellar_get_issuer_assets('GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM')
     print (a)
     print(len(a))
 
