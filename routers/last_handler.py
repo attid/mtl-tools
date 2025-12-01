@@ -197,7 +197,7 @@ async def check_alert(bot, message, session):
         # Формируем topic_info один раз
         topic_info = ""
         if getattr(msg_info, "thread_id", None):
-            chat_id_num = abs(message.chat.id)
+            chat_id_num = str(abs(message.chat.id))[3:]
             thread_id = msg_info.thread_id
             thread_name = getattr(msg_info, "thread_name", None)
             #thread_link = f"https://t.me/c/{chat_id_num}/{message.message_id}?thread={thread_id}"
