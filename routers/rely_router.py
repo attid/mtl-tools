@@ -26,8 +26,8 @@ from other.global_data import update_command_info
 
 router = Router()
 
-RELY_DEAL_CHAT_ID = -1003113317571
-#RELY_DEAL_CHAT_ID = -1001767165598
+RELY_DEAL_CHAT_ID = -1003363491610 # rely
+#RELY_DEAL_CHAT_ID = -1001767165598 #test group
 
 GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
 GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
