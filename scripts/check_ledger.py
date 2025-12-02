@@ -1,19 +1,9 @@
-import asyncio
-from datetime import datetime
-
-import aiohttp
 import sentry_sdk
-from loguru import logger
-from sqlalchemy.orm import Session
-from stellar_sdk import ServerAsync
 
-from db.requests import db_get_first_100_ledgers, db_get_ledger, db_load_bot_value_ext, db_save_bot_value_ext, \
-    db_get_watch_list
-from other.config_reader import config
 from other.global_data import BotValueTypes
-from shared.infrastructure.database.models import TLedgers, TOperations
+from other.stellar_tools import *
+from db.models import TLedgers, TOperations
 from db.quik_pool import quik_pool
-from other.stellar_tools import decode_data_value
 
 watch_list = []
 
@@ -27,8 +17,8 @@ async def extra_run():
     queue = asyncio.Queue()
 
     # create task
-    master1_task = asyncio.create_task(master_update_list('master1', quik_pool))
-    master2_task = asyncio.create_task(master_get_new_ledgers('master2', queue, quik_pool))
+    master1_task = asyncio.create_task(master_update_list(f'master1', quik_pool))
+    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, quik_pool))
     # wait for a little while to allow master_get_new_ledgers to populate the queue
     # await asyncio.sleep(15)
 
