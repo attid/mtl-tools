@@ -2095,7 +2095,7 @@ async def cmd_check_new_transaction(ignore_operation: List,
             try:
                 tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
                 if tr and 0 < len(tr) < 90:
-                    link = f'https://stellar.expert/explorer/public/tx/{transaction["paging_token"]}'
+                    link = f'https://viewer.eurmtl.me/transaction/{transaction["hash"]}'
                     try:
                         tr_details = await decode_xdr(transaction["envelope_xdr"])
                         if tr_details:
@@ -2164,7 +2164,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
 
 async def decode_db_effect(row: TOperations):
     try:
-        result = f'<a href="https://stellar.expert/explorer/public/op/{row.id.split("-")[0]}">' \
+        result = f'<a href="https://viewer.eurmtl.me/operation/{row.id.split("-")[0]}">' \
                  f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
         if row.operation == 'trade':
             result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'

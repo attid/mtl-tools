@@ -213,7 +213,7 @@ async def grist_log_airdrop_payment(tg_id: int, public_key: str, nickname: str, 
         "Nickname": nickname or "",
         "Time": now.strftime("%H:%M:%S"),
         "Date": now.date().isoformat(),
-        "Transaction": f"https://stellar.expert/explorer/public/tx/{tx_hash}" if tx_hash else "",
+        "Transaction": f"https://viewer.eurmtl.me/transaction/{tx_hash}" if tx_hash else "",
         "TG_ID": tg_id,
     }
     json_data = {"records": [{"fields": record}]}

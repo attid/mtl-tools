@@ -19,7 +19,7 @@ startmsg = """
 Чтобы увидеть все, что я умею, наберите в поле ввода @mymtlbot и любое слово для поиска команды
 """
 
-link_stellar = "https://stellar.expert/explorer/public/account/"
+link_stellar = "https://viewer.eurmtl.me/account/"
 link_json = "https://raw.githubusercontent.com/montelibero-org/mtl/main/json/"
 
 links_msg = f"""
@@ -141,10 +141,10 @@ async def cmd_link(message: Message, bot: Bot):
     response_parts = []
     for address in unique_stellar_addresses:
         short_address = f"{address[:4]}..{address[-4:]}"
-        stellar_expert_link = f"https://stellar.expert/explorer/public/account/{address}"
+        stellar_expert_link = f"https://viewer.eurmtl.me/account/{address}"
         bsn_expert_link = f"https://bsn.expert/accounts/{address}"
         response_parts.append(
-            f'{short_address} <a href="{stellar_expert_link}">stellar.expert</a>  '
+            f'{short_address} <a href="{stellar_expert_link}">viewer.eurmtl.me</a>  '
             f'<a href="{bsn_expert_link}">bsn.expert</a>'
         )
     if response_parts:

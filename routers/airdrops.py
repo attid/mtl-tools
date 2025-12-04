@@ -117,7 +117,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
 
     if tx_hash:
         await callback.message.answer(
-            f"Перевод {AIRDROP_SEND_AMOUNT} EURMTL отправлен. https://stellar.expert/explorer/public/tx/{tx_hash}"
+            f"Перевод {AIRDROP_SEND_AMOUNT} EURMTL отправлен. https://viewer.eurmtl.me/transaction/{tx_hash}"
         )
 
 
