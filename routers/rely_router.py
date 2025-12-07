@@ -154,7 +154,10 @@ async def resolve_command(message: types.Message, command: CommandObject, bot: B
     user_display = f"@{tg_username}" if not tg_username.startswith("id_") else tg_username
 
     # Extract additional text
-    additional_text = message.md_text.strip()[9:]
+    additional_text = None
+    if command.args:
+        split_message = message.md_text.strip().split(' ')
+        additional_text = ' '.join(split_message[1:])
 
     # Get the URL of the current /resolve message
     resolve_message_url = message.get_url()
