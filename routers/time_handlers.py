@@ -14,7 +14,14 @@ from other.config_reader import config
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async, safe_catch
 from other.pyro_tools import remove_deleted_users
-from other.stellar_tools import cmd_create_list, cmd_calc_usdm_daily, cmd_gen_xdr, cmd_send_by_list_id
+from other.stellar_tools import (
+    cmd_create_list,
+    cmd_calc_usdm_daily,
+    cmd_gen_xdr,
+    cmd_send_by_list_id,
+    get_balances,
+    MTLAddresses,
+)
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from scripts.mtl_exchange import check_exchange_one
 from scripts.mtl_exchange2 import check_mm, check_mmwb
@@ -158,9 +165,14 @@ async def time_usdm_daily(session_pool, bot: Bot):
                     return
 
         logger.info("All work done. Step (7/7)")
+        balances = await get_balances(MTLAddresses.public_usdm_div)
+        usdm_left = float(balances.get('USDM', 0)) if balances else 0
+        usdm_left_str = f"{usdm_left:.2f}"
+
         msg = (f"Start div pays №{div_list_id}.\n"
                f"Found {len(result)} addresses.\n"
                f"Total payouts sum: {total_div_sum_str}.\n"
+               f"Осталось {usdm_left_str} USDM\n"
                f"All work done.")
         await bot.send_message(MTLChats.USDMMGroup, msg)
 
