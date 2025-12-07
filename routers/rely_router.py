@@ -18,6 +18,7 @@ from typing import Optional
 from aiogram import Bot, F, Router, types
 from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
+from aiogram.utils.text_decorations import markdown_decoration
 from loguru import logger
 
 from other.grist_tools import GristTableConfig, grist_manager
@@ -39,6 +40,7 @@ GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
     F.reply_to_message,
     F.text,
     F.chat.type != ChatType.PRIVATE,
+    F.forward_date.is_(None),
 )
 @safe_catch_async
 async def deal_command(message: types.Message, command: CommandObject, bot: Bot):
@@ -75,11 +77,11 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         - Error: Provides specific error messages for different failure scenarios
     """
     if not command.args:
-        await message.answer("Пожалуйста, укажите параметр. Формат: /deal 0.1")
+        await message.reply("Пожалуйста, укажите параметр. Формат: /deal 0.1")
         return
 
     try:
-        amount = CommandArgumentParser().parse_amount(command.args)
+        amount = DealCommandArgumentParser().parse_amount(command.args)
     except ArgumentParsingError as e:
         await message.answer(str(e))
         return
@@ -88,7 +90,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
     message_url = message.reply_to_message.get_url()
 
     if not message_url:
-        await message.answer("Доступно только для сообщений в суппергруппах. Обратитесь к оператору.")
+        await message.reply("Доступно только для сообщений в суппергруппах. Обратитесь к оператору.")
         return
 
     if not message.from_user:
@@ -96,6 +98,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         return
 
     tg_username = message.from_user.username if message.from_user.username else f"id_{message.from_user.id}"
+    tg_user_id = message.from_user.id
 
     deal_repository = GristDealRepository()
     deal_participant_repository = GristDealParticipantRepository()
@@ -106,9 +109,10 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         deal, participant_entry = await deal_service.process_deal_entry(
             message_url=message_url,
             tg_username=tg_username,
+            tg_user_id=tg_user_id,
             amount=amount
         )
-        await message.answer(
+        await message.reply(
             f"Сделка '{deal.id}' по сообщению успешно обработана. "
             f"Ваша запись (ID: {participant_entry.id}) с параметром {participant_entry.amount} добавлена."
         )
@@ -116,13 +120,13 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
 
     except DealIsCheckedError as e:
         logger.warning(f"Attempt to modify a checked deal by {message.from_user.username}: {e}")
-        await message.answer(str(e))
+        await message.reply(str(e))
     except ParticipantEntryError as e:
         logger.warning(f"Attempt to add a duplicate participant entry by {message.from_user.username}: {e}")
-        await message.answer(str(e))
+        await message.reply(str(e))
     except RepositoryError as e:
         logger.error(f"Error processing deal command: {e}")
-        await message.answer("Произошла ошибка при обработке сделки. Пожалуйста, обратитесь к оператору.")
+        await message.reply("Произошла ошибка при обработке сделки. Пожалуйста, обратитесь к оператору.")
         await deal_service.send_error_notification(e, message)
 
 
@@ -131,6 +135,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
     Command(commands=["resolve"]),
     F.text,
     F.chat.type != ChatType.PRIVATE,
+    F.forward_date.is_(None),
 )
 @safe_catch_async
 async def resolve_command(message: types.Message, command: CommandObject, bot: Bot):
@@ -149,12 +154,12 @@ async def resolve_command(message: types.Message, command: CommandObject, bot: B
     user_display = f"@{tg_username}" if not tg_username.startswith("id_") else tg_username
 
     # Extract additional text
-    additional_text = command.args.strip() if command.args else None
+    additional_text = message.md_text.strip()[9:]
 
     # Get the URL of the current /resolve message
     resolve_message_url = message.get_url()
     if not resolve_message_url:
-        await message.answer("Доступно только для сообщений в суппергруппах. Обратитесь к оператору.")
+        await message.reply("Доступно только для сообщений в суппергруппах. Обратитесь к оператору.")
         return
 
     # Get replied message URL if this is a reply
@@ -182,7 +187,7 @@ async def resolve_command(message: types.Message, command: CommandObject, bot: B
             logger.warning(f"Failed to set reaction on resolve message: {e}")
     except RepositoryError as e:
         logger.error(f"Error processing resolve command: {e}")
-        await message.answer("Произошла ошибка при отправке уведомления. Пожалуйста, обратитесь к оператору.")
+        await message.reply("Произошла ошибка при отправке уведомления. Пожалуйста, обратитесь к оператору.")
 
 
 class ArgumentParsingError(Exception):
@@ -195,7 +200,7 @@ class ArgumentParsingError(Exception):
     pass
 
 
-class CommandArgumentParser:
+class DealCommandArgumentParser:
     """
     Parser for command arguments from the /deal command.
 
@@ -218,8 +223,8 @@ class CommandArgumentParser:
         """
         try:
             amount = Decimal(args_string.strip().replace(",", "."))
-            if amount <= Decimal("0.1"):
-                raise ArgumentParsingError("Сумма 0.1 и меньше не допускается.")
+            if amount < Decimal("0.1"):
+                raise ArgumentParsingError("Сумма меньше 0.1 не допускается.")
             return amount
         except (ValueError, TypeError, InvalidOperation):
             raise ArgumentParsingError("Неверный формат параметра. Пожалуйста, используйте число, например: /deal 0.2")
@@ -334,7 +339,7 @@ class DealParticipantEntry:
     deal_id: int
     holder_id: int
     amount: Decimal
-    id: int | None = None
+    id: Optional[int] = None
 
 
 class GristDealRepository:
@@ -440,6 +445,7 @@ class GristHolderRepository:
     Repository for managing Holder (participant) entities in Grist.
 
     Handles CRUD operations for holders stored in the Grist 'Holders' table.
+    It supports finding holders by Telegram ID or username, and updates their information.
     """
 
     def __init__(self):
@@ -450,65 +456,82 @@ class GristHolderRepository:
             base_url=GRIST_BASE_URL,
         )
 
-    async def get_or_create_holder(self, tg_username: str) -> Holder:
+    async def get_or_create_holder(self, tg_username: str, tg_user_id: int) -> Holder:
         """
-        Retrieve an existing holder by Telegram username or create a new one.
+        Retrieve an existing holder by Telegram ID or username, or create a new one.
+        If a holder is found, it will be updated with the latest tg_user_id and tg_username if they differ.
+
+        Search Priority:
+        1. by tg_user_id (TGID column)
+        2. by tg_username (Lowercase column)
 
         Args:
-            tg_username: The Telegram username to search for
+            tg_username: The user's current Telegram username.
+            tg_user_id: The user's Telegram ID.
 
         Returns:
-            Holder: The Holder object (existing or newly created)
+            Holder: The existing or newly created Holder object.
 
         Raises:
-            HolderRetrievalError: If unable to load holder data from Grist
-            HolderCreationError: If unable to create a new holder
+            HolderRetrievalError: If unable to load holder data from Grist.
+            HolderCreationError: If unable to create or update a new holder.
         """
-        # Clean username for lookup: strip whitespace, remove '@' prefix, and convert to lowercase
-        cleaned_username = tg_username.strip().strip('@').lower()
-        holder = await self._get_holder_by_username(cleaned_username)
-        if holder:
-            return holder
-        return await self._create_holder(f'@{tg_username}')
+        holder_record = await self._get_holder_record_by_telegram_id(tg_user_id)
+        if not holder_record:
+            cleaned_username = tg_username.strip().strip('@').lower()
+            holder_record = await self._get_holder_record_by_username(cleaned_username)
 
-    async def _get_holder_by_username(self, tg_username: str) -> Optional[Holder]:
-        """
-        Retrieve a holder from Grist by Telegram username using the Lowercase column.
+        if holder_record:
+            updates = {}
+            if str(holder_record.get("TGID")) != str(tg_user_id):
+                updates["TGID"] = tg_user_id
+            
+            new_telegram_handle = f"@{tg_username}"
+            if holder_record.get("Telegram") != new_telegram_handle:
+                updates["Telegram"] = new_telegram_handle
+            
+            if updates:
+                await self._update_holder_record(holder_record["id"], updates)
 
-        Args:
-            tg_username: The cleaned lowercase Telegram username to search for
+            updated_username = updates.get("Telegram", holder_record["Telegram"])
+            return Holder(id=holder_record["Number"], tg_username=updated_username)
 
-        Returns:
-            Optional[Holder]: The Holder object if found, None otherwise
+        return await self._create_holder(tg_username, tg_user_id)
 
-        Raises:
-            HolderRetrievalError: If the Grist API call fails
-        """
-        record_data = await grist_manager.load_table_data(
+    async def _get_holder_record_by_telegram_id(self, tg_user_id: int) -> Optional[dict]:
+        """Retrieve a holder record from Grist by their Telegram ID."""
+        records = await grist_manager.fetch_data(
+            self._table_config,
+            filter_dict={"TGID": [tg_user_id]}
+        )
+        if records is None:
+            logger.info("Failed to load holder data from Grist by TGID.")
+            return None
+        return records[0] if records else None
+
+    async def _get_holder_record_by_username(self, tg_username: str) -> Optional[dict]:
+        """Retrieve a holder record from Grist by their Telegram username."""
+        records = await grist_manager.fetch_data(
             self._table_config,
             filter_dict={"Lowercase": [tg_username]}
         )
-        if record_data is None:
-            raise HolderRetrievalError("Failed to load holder data from Grist.")
-        if record_data:
-            record = record_data[0]
-            return Holder(id=record["Number"], tg_username=record["Telegram"])
-        return None
+        if records is None:
+            logger.info("Failed to load holder data from Grist by username.")
+            return None
+        return records[0] if records else None
 
-    async def _create_holder(self, tg_username: str) -> Holder:
-        """
-        Create a new holder in Grist.
+    async def _update_holder_record(self, record_id: int, fields: dict):
+        """Update a holder record in Grist."""
+        try:
+            await grist_manager.patch_data(
+                table=self._table_config,
+                json_data={"records": [{"id": record_id, "fields": fields}]}
+            )
+        except Exception as e:
+            raise HolderCreationError(f"Failed to update holder record {record_id} in Grist: {e}") from e
 
-        Args:
-            tg_username: The Telegram username for the new holder
-
-        Returns:
-            Holder: The newly created Holder object
-
-        Raises:
-            HolderCreationError: If unable to create the holder in Grist
-            HolderRetrievalError: If unable to retrieve the newly created holder
-        """
+    async def _create_holder(self, tg_username: str, tg_user_id: int) -> Holder:
+        """Create a new holder in Grist."""
         try:
             await grist_manager.post_data(
                 table=self._table_config,
@@ -516,7 +539,8 @@ class GristHolderRepository:
                     "records": [
                         {
                             "fields": {
-                                "Telegram": tg_username
+                                "Telegram": f"@{tg_username}",
+                                "TGID": tg_user_id
                             }
                         }
                     ]
@@ -525,11 +549,11 @@ class GristHolderRepository:
         except Exception as e:
             raise HolderCreationError(f"Failed to create holder in Grist: {e}") from e
 
-        created_holder = await self._get_holder_by_username(tg_username)
-        if not created_holder:
-            raise HolderRetrievalError("Failed to retrieve newly created holder.")
+        created_holder_record = await self._get_holder_record_by_telegram_id(tg_user_id)
+        if not created_holder_record:
+            raise HolderCreationError("Failed to retrieve newly created holder.")
 
-        return created_holder
+        return Holder(id=created_holder_record["Number"], tg_username=created_holder_record["Telegram"])
 
 
 class GristDealParticipantRepository:
@@ -688,7 +712,7 @@ class DealService:
         except Exception as e:
             logger.error(f"Не удалось отправить уведомление об ошибке: {e}")
 
-    async def process_deal_entry(self, message_url: str, tg_username: str, amount: Decimal) -> tuple[
+    async def process_deal_entry(self, message_url: str, tg_username: str, tg_user_id: int, amount: Decimal) -> tuple[
         Deal, DealParticipantEntry]:
         """
         Process a new deal entry from a participant.
@@ -704,6 +728,7 @@ class DealService:
         Args:
             message_url: The Telegram message URL identifying the deal
             tg_username: The Telegram username of the participant
+            tg_user_id: The Telegram user ID of the participant
             amount: The contribution amount
 
         Returns:
@@ -718,6 +743,8 @@ class DealService:
             raise ValueError("Message URL is required.")
         if not tg_username:
             raise ValueError("Telegram username is required.")
+        if not tg_user_id:
+            raise ValueError("Telegram user ID is required.")
         if amount <= 0:
             raise ValueError("Amount must be greater than 0.")
 
@@ -729,7 +756,7 @@ class DealService:
         if is_new:
             await self._send_creation_notification(deal)
 
-        holder = await self._holder_repo.get_or_create_holder(tg_username)
+        holder = await self._holder_repo.get_or_create_holder(tg_username, tg_user_id)
 
         participant_entry = await self._participant_repo.add_participant_entry(
             deal_id=deal.id,
@@ -751,13 +778,14 @@ class DealService:
         This method:
         1. Looks up the deal by replied message URL if available
         2. Determines the deal identifier (ID, URL, or "???")
-        3. Formats and sends notification to operator chat
+        3. Formats and sends notification to operator chat, preserving text entities
+           by converting them to Markdown.
 
         Args:
             user_display: User display name (e.g., "@username" or "id_123")
             replied_message_url: URL of the message being replied to (None if not a reply)
             resolve_message_url: URL of the message with /resolve command
-            additional_text: Optional comment text from the command
+            additional_text: Optional comment text from the command, pre-formatted as Markdown.
 
         Raises:
             RepositoryError: If database operation fails
@@ -777,14 +805,19 @@ class DealService:
                 deal_identifier = replied_message_url
 
         # Format the notification message
-        notification_text = f"{user_display} закрывает сделку {deal_identifier}"
+        notification_text = markdown_decoration.quote(f"{user_display} закрывает сделку {deal_identifier}")
         if additional_text:
-            notification_text += f" с комментарием {additional_text}"
-        notification_text += f"\n{resolve_message_url}"
+            notification_text += f" с комментарием\n> {additional_text}"
+        notification_text += markdown_decoration.quote(f"\n\n\n{resolve_message_url}")
 
         # Send notification to operator chat
         try:
-            await self._bot.send_message(RELY_DEAL_CHAT_ID, notification_text, disable_web_page_preview=True)
+            await self._bot.send_message(
+                RELY_DEAL_CHAT_ID, 
+                notification_text, 
+                parse_mode="MarkdownV2",
+                disable_web_page_preview=True
+            )
             logger.info(f"Resolve notification sent for deal {deal_identifier} by {user_display}")
         except Exception as e:
             logger.error(f"Failed to send resolve notification: {e}")
