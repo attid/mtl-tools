@@ -403,7 +403,7 @@ class GristDealRepository:
             raise DealRetrievalError("Failed to load deal data from Grist.")
         if record_data:
             record = record_data[0]
-            return Deal(id=record["Number"], url=record["Message"], checked=record["Checked"])
+            return Deal(id=record["id"], url=record["Message"], checked=record["Checked"])
         return None
 
     async def _create_deal(self, message_url: str) -> Deal:
@@ -497,7 +497,7 @@ class GristHolderRepository:
                 await self._update_holder_record(holder_record["id"], updates)
 
             updated_username = updates.get("Telegram", holder_record["Telegram"])
-            return Holder(id=holder_record["Number"], tg_username=updated_username)
+            return Holder(id=holder_record["id"], tg_username=updated_username)
 
         return await self._create_holder(tg_username, tg_user_id)
 
@@ -556,7 +556,7 @@ class GristHolderRepository:
         if not created_holder_record:
             raise HolderCreationError("Failed to retrieve newly created holder.")
 
-        return Holder(id=created_holder_record["Number"], tg_username=created_holder_record["Telegram"])
+        return Holder(id=created_holder_record["id"], tg_username=created_holder_record["Telegram"])
 
 
 class GristDealParticipantRepository:
