@@ -75,6 +75,19 @@ async def delete_and_log_spam(message, session, rules_name):
     if message.reply_to_message:
         msg_text += f'\nОтвет на сообщение: {message.reply_to_message.get_url()}'
 
+    external_reply = message.external_reply
+    if not external_reply and message.reply_to_message:
+        external_reply = message.reply_to_message.external_reply
+    if external_reply:
+        ext_chat = getattr(external_reply, 'chat', None)
+        ext_chat_title = getattr(ext_chat, 'title', None) if ext_chat else None
+        ext_chat_id = getattr(ext_chat, 'id', None) if ext_chat else None
+        ext_message_id = getattr(external_reply, 'message_id', None)
+        msg_text += f'\nExternal reply: chat_id={ext_chat_id}, msg_id={ext_message_id}'
+        if ext_chat_title:
+            msg_text += f' ({ext_chat_title})'
+        logger.info(f"External reply detected for spam: chat_id={ext_chat_id}, message_id={ext_message_id}")
+
     await msg.reply(msg_text, disable_web_page_preview=True,
                     reply_markup=InlineKeyboardMarkup(
                         inline_keyboard=[[InlineKeyboardButton(text='Restore. Its good msg !',
@@ -132,6 +145,10 @@ async def check_spam(message, session):
         if custom_emoji_count > 3:
             process_message = True
             rules_name = 'emoji'
+
+    if not process_message and message.external_reply:
+        process_message = True
+        rules_name = 'external_reply'
 
     if not process_message:
         words = message.text.split()
