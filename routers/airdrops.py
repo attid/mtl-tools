@@ -9,24 +9,24 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from loguru import logger
+from stellar_sdk import Asset
 
 from other.aiogram_tools import HasRegex
-from other.config_reader import config
 from other.global_data import MTLChats
-from other.grist_tools import grist_check_airdrop_records, grist_log_airdrop_payment
-from other.stellar_tools import get_balances, MTLAssets, send_payment_async
-from other.web_tools import http_session_manager
+from other.grist_tools import (AirdropConfigItem, grist_check_airdrop_records,
+                               grist_load_airdrop_configs, grist_log_airdrop_payment)
+from other.stellar_tools import get_balances, send_payment_async
 
 router = Router()
 router.message.filter(F.chat.id == -1002294641071)
 
 AIRDROP_SOURCE_ADDRESS = "GCUBKDGH4PG6LN43XNZT3FYQBHMAJ4DPPXJ46YDAKAQDUJY3QRPMDROP"
-AIRDROP_SEND_AMOUNT = "2"
 
 
 class AirdropCallbackData(CallbackData, prefix="aird"):
     action: str
     message_id: int
+    config_id: int
 
 
 airdrop_requests: dict[int, dict] = {}
@@ -45,18 +45,28 @@ async def check_membership(bot: Bot, chat_id: int, user_id: int) -> tuple[bool, 
         return False, None
 
 
-def build_request_keyboard(message_id: int) -> InlineKeyboardMarkup:
+def build_request_keyboard(message_id: int, configs: list[AirdropConfigItem]) -> InlineKeyboardMarkup:
+    rows = []
+    for config_item in configs:
+        label = f"Отправить {config_item.amount} {config_item.asset_code}"
+        rows.append([InlineKeyboardButton(
+            text=label,
+            callback_data=AirdropCallbackData(
+                action="send",
+                message_id=message_id,
+                config_id=config_item.record_id,
+            ).pack(),
+        )])
+    rows.append([InlineKeyboardButton(
+        text="Убрать кнопки",
+        callback_data=AirdropCallbackData(
+            action="remove",
+            message_id=message_id,
+            config_id=0,
+        ).pack()
+    )])
     return InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(
-                text=f"Отправить {AIRDROP_SEND_AMOUNT} EURMTL",
-                callback_data=AirdropCallbackData(action="send", message_id=message_id).pack()
-            ),
-            InlineKeyboardButton(
-                text="Убрать кнопки",
-                callback_data=AirdropCallbackData(action="remove", message_id=message_id).pack()
-            ),
-        ]]
+        inline_keyboard=rows
     )
 
 
@@ -85,13 +95,31 @@ async def build_trustline_checks(stellar_address: str) -> list[str]:
     return checks
 
 
-async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int, request_data: dict):
+def build_airdrop_asset(config_item: AirdropConfigItem) -> Asset:
+    asset_code = config_item.asset_code.strip()
+    asset_issuer = config_item.asset_issuer.strip()
+    if asset_code.upper() == "XLM":
+        return Asset.native()
+    if not asset_issuer:
+        raise ValueError("Asset issuer is required for non-XLM assets")
+    return Asset(asset_code, asset_issuer)
+
+
+async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int,
+                                  request_data: dict, config_item: AirdropConfigItem):
+    try:
+        asset = build_airdrop_asset(config_item)
+    except ValueError as exc:
+        logger.error(f"Некорректный конфиг аирдропа: {exc}")
+        await callback.message.answer("Конфиг аирдропа некорректный. Проверьте данные в Grist.")
+        return
+
     try:
         tx_result = await send_payment_async(
             source_address=AIRDROP_SOURCE_ADDRESS,
             destination=request_data["stellar_address"],
-            asset=MTLAssets.eurmtl_asset,
-            amount=AIRDROP_SEND_AMOUNT,
+            asset=asset,
+            amount=config_item.amount,
         )
     except Exception as exc:
         logger.error(f"Ошибка при отправке аирдропа: {exc}")
@@ -105,8 +133,8 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
             public_key=request_data["stellar_address"],
             nickname=request_data["username"],
             tx_hash=tx_hash,
-            amount=float(AIRDROP_SEND_AMOUNT),
-            currency="EURMTL"
+            amount=float(config_item.amount),
+            currency=config_item.asset_code
         )
     except Exception as exc:
         logger.error(f"Не удалось записать аирдроп в Grist: {exc}")
@@ -117,7 +145,8 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
 
     if tx_hash:
         await callback.message.answer(
-            f"Перевод {AIRDROP_SEND_AMOUNT} EURMTL отправлен. https://viewer.eurmtl.me/transaction/{tx_hash}"
+            f"Перевод {config_item.amount} {config_item.asset_code} отправлен. "
+            f"https://viewer.eurmtl.me/transaction/{tx_hash}"
         )
 
 
@@ -160,6 +189,9 @@ async def handle_address_messages(message: types.Message):
             results.append(f"Пользователь не подписан на {chat_name}")
 
     results.extend(await grist_check_airdrop_records(tg_id, stellar_address))
+    configs = await grist_load_airdrop_configs()
+    if not configs:
+        results.append("Нет активных конфигураций аирдропа в таблице CONFIG")
 
     header_lines = [
         "Новый запрос!",
@@ -176,13 +208,14 @@ async def handle_address_messages(message: types.Message):
     output_message = '\n'.join(header_lines + results)
     sent_message = await message.answer(output_message, parse_mode="HTML", disable_web_page_preview=True)
 
-    keyboard = build_request_keyboard(sent_message.message_id)
+    keyboard = build_request_keyboard(sent_message.message_id, configs)
     await sent_message.edit_reply_markup(reply_markup=keyboard)
 
     airdrop_requests[sent_message.message_id] = {
         "stellar_address": stellar_address,
         "tg_id": tg_id,
         "username": username or "",
+        "configs": {item.record_id: item for item in configs},
     }
 
 
@@ -190,6 +223,7 @@ async def handle_address_messages(message: types.Message):
 async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: AirdropCallbackData):
     action = callback_data.action
     message_id = callback_data.message_id
+    config_id = callback_data.config_id
     request_data = airdrop_requests.get(message_id)
 
     if not request_data:
@@ -205,7 +239,11 @@ async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: 
 
     if action == "send":
         await callback.answer("ок выполняю, ожидайте")
-        await process_airdrop_payment(callback, message_id, request_data)
+        config_item = request_data.get("configs", {}).get(config_id)
+        if not config_item:
+            await callback.answer("Конфиг не найден", show_alert=True)
+            return
+        await process_airdrop_payment(callback, message_id, request_data, config_item)
 
 
 def register_handlers(dp, bot):

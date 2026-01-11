@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from other.config_reader import config
+from other.global_data import float2str
 from other.web_tools import HTTPSessionManager
 
 
@@ -42,6 +43,16 @@ class MTLGrist:
 
     CONFIG_auto_clean = GristTableConfig("hPMqtkBmPfvA15SDWFJ9FH", "Auto_clean")
     MTLA_AIRDROP = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "EUR_GNRL")
+    MTLA_CONFIG = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "CONFIG")
+
+
+@dataclass(frozen=True)
+class AirdropConfigItem:
+    record_id: int
+    amount: str
+    asset_code: str
+    asset_issuer: str
+    priority: int
 
 class GristAPI:
     def __init__(self, session_manager: HTTPSessionManager = None):
@@ -221,6 +232,34 @@ async def grist_log_airdrop_payment(tg_id: int, public_key: str, nickname: str, 
         await grist_manager.post_data(MTLGrist.MTLA_AIRDROP, json_data)
     except Exception as exc:
         logger.error(f"Failed to log airdrop payment to Grist: {exc}")
+
+
+async def grist_load_airdrop_configs() -> list[AirdropConfigItem]:
+    records = await grist_manager.load_table_data(
+        MTLGrist.MTLA_CONFIG,
+        sort="Priority",
+        filter_dict={"Enabled": [True]},
+    )
+    configs: list[AirdropConfigItem] = []
+    for record in records:
+        record_id = record.get("id")
+        amount_value = record.get("Amount")
+        asset_code = (record.get("Asset_Code") or "").strip()
+        asset_issuer = (record.get("Asset_Issuer") or "").strip()
+        priority = record.get("Priority") or 0
+        if not record_id or not amount_value or not asset_code:
+            logger.warning(f"Skipping invalid airdrop config row: {record}")
+            continue
+        amount = float2str(amount_value)
+        configs.append(AirdropConfigItem(
+            record_id=record_id,
+            amount=amount,
+            asset_code=asset_code,
+            asset_issuer=asset_issuer,
+            priority=priority,
+        ))
+    configs.sort(key=lambda item: item.priority)
+    return configs
 
 
 async def main():
