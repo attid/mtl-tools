@@ -95,6 +95,31 @@ async def build_trustline_checks(stellar_address: str) -> list[str]:
     return checks
 
 
+async def check_source_balance(source_address: str, asset_code: str, amount: str) -> tuple[bool, str]:
+    try:
+        balances = await get_balances(source_address)
+    except Exception as exc:
+        logger.error(f"Не удалось получить балансы источника {source_address}: {exc}")
+        return False, "Не удалось получить балансы источника"
+
+    if not balances or asset_code not in balances:
+        return False, f"На источнике нет трастлайна к {asset_code}"
+
+    try:
+        needed_amount = float(amount)
+    except (TypeError, ValueError):
+        return False, "Некорректная сумма аирдропа"
+
+    balance_value = float(balances[asset_code])
+    if balance_value < needed_amount:
+        return False, (
+            f"Недостаточно средств на источнике: баланс {balance_value} {asset_code}, "
+            f"нужно {amount} {asset_code}"
+        )
+
+    return True, ""
+
+
 def build_airdrop_asset(config_item: AirdropConfigItem) -> Asset:
     asset_code = config_item.asset_code.strip()
     asset_issuer = config_item.asset_issuer.strip()
@@ -112,6 +137,15 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
     except ValueError as exc:
         logger.error(f"Некорректный конфиг аирдропа: {exc}")
         await callback.message.answer("Конфиг аирдропа некорректный. Проверьте данные в Grist.")
+        return
+
+    balance_ok, balance_message = await check_source_balance(
+        AIRDROP_SOURCE_ADDRESS,
+        config_item.asset_code,
+        config_item.amount,
+    )
+    if not balance_ok:
+        await callback.message.answer(balance_message)
         return
 
     try:
