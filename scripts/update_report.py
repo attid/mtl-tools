@@ -42,11 +42,12 @@ async def update_main_report(session: Session):
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
     await wks.update('D3', float(rq.json()['quotes']['USDEUR']))
 
-    # BTC,XLM,ETH
-    rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH')
+    # BTC,XLM,ETH,XRP
+    rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH,XRP')
     await wks.update('D4', float(rq.json()['rates']['BTC']))
     await wks.update('D5', float(rq.json()['rates']['XLM']))
     await wks.update('D20', float(rq.json()['rates']['ETH']))
+    await wks.update('D21', float(rq.json()['rates']['XRP']))
 
     # aum
     s = requests.get(
