@@ -140,3 +140,4 @@ members_key.json
 *.sh
 /.junie/*
 /.venv_tmp_alembic/*
+/.vscode/settings.json
