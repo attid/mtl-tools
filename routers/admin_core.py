@@ -177,13 +177,21 @@ async def cmd_mute(message: Message):
         return
 
     delta = await parse_timedelta_from_message(message)
-    user_id = message.reply_to_message.from_user.id
+    
+    # Check if the message is from a channel (sender_chat) or a user (from_user)
+    if message.reply_to_message.sender_chat:
+        user_id = message.reply_to_message.sender_chat.id
+        user = f"Channel {message.reply_to_message.sender_chat.title}"
+    else:
+        user_id = message.reply_to_message.from_user.id
+        user = get_username_link(message.reply_to_message.from_user)
+
     end_time_str = (datetime.now() + delta).isoformat()
 
     if chat_thread_key not in global_data.topic_mute:
         global_data.topic_mute[chat_thread_key] = {}
 
-    user = get_username_link(message.reply_to_message.from_user)
+    
     global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
     await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
 

@@ -399,7 +399,15 @@ async def check_mute(message, session):
         return False
 
     user_id = message.from_user.id
-    if user_id not in global_data.topic_mute[chat_thread_key]:
+    
+    # Check if the user is muted
+    if user_id in global_data.topic_mute[chat_thread_key]:
+        # Perform mute check for user
+        pass 
+    # Check if the channel (sender_chat) is muted
+    elif message.sender_chat and message.sender_chat.id in global_data.topic_mute[chat_thread_key]:
+        user_id = message.sender_chat.id
+    else:
         return False
 
     mute_info = global_data.topic_mute[chat_thread_key][user_id]

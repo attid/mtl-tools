@@ -141,3 +141,7 @@ members_key.json
 /.junie/*
 /.venv_tmp_alembic/*
 /.vscode/settings.json
+/docs/tasks.md
+/test*.py
+/tmpdocs/ARCHITECTURE_REFACTOR.md
+/tmpdocs/POSTGRES_MIGRATION_PLAN.md

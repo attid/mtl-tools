@@ -150,3 +150,66 @@ async def test_mute_command(mock_server, dp):
         global_data.mongo_config.save_bot_value.assert_called()
 
     await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_mute_command_channel(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(admin_router)
+    
+    # Mock global data and is_topic_admin
+    chat_id = 123
+    thread_id = 5
+    chat_thread_key = f"{chat_id}-{thread_id}"
+    
+    global_data.topic_admins[chat_thread_key] = {"@admin"}
+    if chat_id not in global_data.moderate:
+        global_data.moderate.append(chat_id)
+
+    # Mock mongo config save
+    global_data.mongo_config.save_bot_value = AsyncMock()
+
+    with patch("routers.admin_core.is_topic_admin", return_value=True):
+        
+        # Message from a channel (has sender_chat)
+        reply_msg = types.Message(
+            message_id=20,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=136817688, is_bot=True, first_name="Channel Bot", username="Channel_Bot"), # Generic bot ID
+            sender_chat=types.Chat(id=-100999999, type='channel', title="SpamChannel"), # Specific channel
+            text="Channel spam"
+        )
+
+        update = types.Update(
+            update_id=4,
+            message=types.Message(
+                message_id=21,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+                message_thread_id=thread_id,
+                from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+                text="/mute 1h",
+                reply_to_message=reply_msg
+            )
+        )
+        
+        await dp.feed_update(bot=bot, update=update)
+        
+        # Verify mute logic: Persistent save called for CHANNEL ID
+        assert chat_thread_key in global_data.topic_mute
+        # Should NOT mute the generic bot user ID
+        assert 136817688 not in global_data.topic_mute[chat_thread_key]
+        # Should mute the specific channel ID
+        assert -100999999 in global_data.topic_mute[chat_thread_key]
+        
+        # Verify saved name
+        assert global_data.topic_mute[chat_thread_key][-100999999]["user"] == "Channel SpamChannel"
+        
+        # Verify save_bot_value called
+        global_data.mongo_config.save_bot_value.assert_called()
+
+    await bot.session.close()

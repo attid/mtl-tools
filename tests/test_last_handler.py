@@ -162,3 +162,52 @@ async def test_spam_callback(mock_server, dp):
         assert edit_req is not None
 
     await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_check_mute_enforcement_channel(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(last_router)
+    dp.message.middleware(MockDbMiddleware())
+
+    chat_id = 999
+    thread_id = 7
+    chat_thread_key = f"{chat_id}-{thread_id}"
+    channel_id = -100999999
+
+    # Setup global data with muted channel
+    if chat_id not in global_data.moderate:
+        global_data.moderate.append(chat_id)
+        
+    global_data.topic_mute[chat_thread_key] = {
+        channel_id: {
+            "end_time": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat(),
+            "user": "Channel SpamChannel"
+        }
+    }
+    
+    # Mock message from muted channel
+    update = types.Update(
+        update_id=4,
+        message=types.Message(
+            message_id=40,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=136817688, is_bot=True, first_name="Channel Bot", username="Channel_Bot"),
+            sender_chat=types.Chat(id=channel_id, type='channel', title="SpamChannel"),
+            text="I should be deleted"
+        )
+    )
+    
+    await dp.feed_update(bot=bot, update=update)
+    
+    # Verify deleteMessage called
+    del_req = next((r for r in mock_server if r["method"] == "deleteMessage"), None)
+    assert del_req is not None
+    assert int(del_req["data"]["chat_id"]) == chat_id
+    assert int(del_req["data"]["message_id"]) == 40
+    
+    await bot.session.close()
