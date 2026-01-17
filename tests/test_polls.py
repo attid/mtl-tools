@@ -33,47 +33,46 @@ async def test_poll_command(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
     
     # Mock save_bot_value
-    global_data.mongo_config.save_bot_value = AsyncMock()
-    
-    # Create poll object
-    poll = types.Poll(
-        id="poll123",
-        question="My Question",
-        options=[types.PollOption(text="Opt1", voter_count=0), types.PollOption(text="Opt2", voter_count=0)],
-        total_voter_count=0,
-        is_closed=False,
-        is_anonymous=False,
-        type="regular",
-        allows_multiple_answers=False
-    )
+    with patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock) as mock_save:
+        # Create poll object
+        poll = types.Poll(
+            id="poll123",
+            question="My Question",
+            options=[types.PollOption(text="Opt1", voter_count=0), types.PollOption(text="Opt2", voter_count=0)],
+            total_voter_count=0,
+            is_closed=False,
+            is_anonymous=False,
+            type="regular",
+            allows_multiple_answers=False
+        )
 
-    update = types.Update(
-        update_id=1,
-        message=types.Message(
-            message_id=2,
-            date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
-            from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/poll",
-            reply_to_message=types.Message(
-                message_id=1,
+        update = types.Update(
+            update_id=1,
+            message=types.Message(
+                message_id=2,
                 date=datetime.datetime.now(),
                 chat=types.Chat(id=123, type='supergroup', title="Group"),
-                poll=poll
+                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                text="/poll",
+                reply_to_message=types.Message(
+                    message_id=1,
+                    date=datetime.datetime.now(),
+                    chat=types.Chat(id=123, type='supergroup', title="Group"),
+                    poll=poll
+                )
             )
         )
-    )
-    
-    await dp.feed_update(bot=bot, update=update)
-    
-    # Verify sendMessage (bot recreates the poll with buttons)
-    req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
-    assert req is not None
-    assert req["data"]["text"] == "My Question"
-    assert "reply_markup" in req["data"]
-    
-    # Verify mongo save
-    global_data.mongo_config.save_bot_value.assert_called_once()
+        
+        await dp.feed_update(bot=bot, update=update)
+        
+        # Verify sendMessage (bot recreates the poll with buttons)
+        req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+        assert req is not None
+        assert req["data"]["text"] == "My Question"
+        assert "reply_markup" in req["data"]
+        
+        # Verify mongo save
+        mock_save.assert_called_once()
 
     await bot.session.close()
 
@@ -89,7 +88,8 @@ async def test_apoll_command(mock_server, dp):
     # Mock external tools
     with patch("routers.polls.gs_copy_a_table", return_value=("http://google.com", "sheet_id")), \
          patch("routers.polls.gs_update_a_table_first", return_value=True), \
-         patch("routers.polls.get_mtlap_votes", return_value=[]):
+         patch("routers.polls.get_mtlap_votes", return_value=[]), \
+         patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock):
         
         poll = types.Poll(
             id="999",
@@ -165,37 +165,38 @@ async def test_poll_callback(mock_server, dp):
             "message_id": 99,
             "buttons": [["Opt1", 0, []]]
         }
-        global_data.mongo_config.load_bot_value = AsyncMock(return_value=json.dumps(my_poll))
-        global_data.mongo_config.save_bot_value = AsyncMock()
+        
+        with patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)), \
+             patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock) as mock_save:
 
-        cb_data = PollCallbackData(answer=0).pack()
-        
-        update = types.Update(
-            update_id=3,
-            callback_query=types.CallbackQuery(
-                id="cb1",
-                chat_instance="ci1",
-                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-                message=types.Message(
-                    message_id=99,
-                    date=datetime.datetime.now(),
-                    chat=types.Chat(id=test_chat_id, type='supergroup', title="Group"),
-                    text="Poll Msg"
-                ),
-                data=cb_data
+            cb_data = PollCallbackData(answer=0).pack()
+            
+            update = types.Update(
+                update_id=3,
+                callback_query=types.CallbackQuery(
+                    id="cb1",
+                    chat_instance="ci1",
+                    from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                    message=types.Message(
+                        message_id=99,
+                        date=datetime.datetime.now(),
+                        chat=types.Chat(id=test_chat_id, type='supergroup', title="Group"),
+                        text="Poll Msg"
+                    ),
+                    data=cb_data
+                )
             )
-        )
-        
-        await dp.feed_update(bot=bot, update=update)
-        
-        # Verify editMessageText (updating vote counts)
-        # Note: logic truncates option text to 3 chars: button[0][:3]
-        req = next((r for r in mock_server if r["method"] == "editMessageText"), None)
-        assert req is not None
-        assert "Opt (10)" in req["data"]["text"]
-        
-        # Verify save new state
-        global_data.mongo_config.save_bot_value.assert_called()
+            
+            await dp.feed_update(bot=bot, update=update)
+            
+            # Verify editMessageText (updating vote counts)
+            # Note: logic truncates option text to 3 chars: button[0][:3]
+            req = next((r for r in mock_server if r["method"] == "editMessageText"), None)
+            assert req is not None
+            assert "Opt (10)" in req["data"]["text"]
+            
+            # Verify save new state
+            mock_save.assert_called()
 
     await bot.session.close()
 
@@ -208,35 +209,34 @@ async def test_channel_post_creates_poll(mock_server, dp):
     dp.include_router(polls_router)
     dp.channel_post.middleware(MockDbMiddleware())
 
-    global_data.mongo_config.save_bot_value = AsyncMock()
-
-    poll = types.Poll(
-        id="poll123",
-        question="Channel Question",
-        options=[types.PollOption(text="Opt1", voter_count=0)],
-        total_voter_count=0,
-        is_closed=False,
-        is_anonymous=False,
-        type="regular",
-        allows_multiple_answers=False
-    )
-
-    update = types.Update(
-        update_id=4,
-        channel_post=types.Message(
-            message_id=5,
-            date=datetime.datetime.now(),
-            chat=types.Chat(id=-1001649743884, type='channel', title="Channel"),
-            from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            poll=poll
+    with patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock) as mock_save:
+        poll = types.Poll(
+            id="poll123",
+            question="Channel Question",
+            options=[types.PollOption(text="Opt1", voter_count=0)],
+            total_voter_count=0,
+            is_closed=False,
+            is_anonymous=False,
+            type="regular",
+            allows_multiple_answers=False
         )
-    )
 
-    await dp.feed_update(bot=bot, update=update)
+        update = types.Update(
+            update_id=4,
+            channel_post=types.Message(
+                message_id=5,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=-1001649743884, type='channel', title="Channel"),
+                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                poll=poll
+            )
+        )
 
-    req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
-    assert req is not None
-    global_data.mongo_config.save_bot_value.assert_called()
+        await dp.feed_update(bot=bot, update=update)
+
+        req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+        assert req is not None
+        mock_save.assert_called()
 
     await bot.session.close()
 
@@ -255,29 +255,30 @@ async def test_poll_replace_text(mock_server, dp):
         "message_id": 11,
         "buttons": [["A", 0, []]]
     }
-    global_data.mongo_config.load_bot_value = AsyncMock(return_value=json.dumps(my_poll))
-    global_data.mongo_config.save_bot_value = AsyncMock()
+    
+    with patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)), \
+         patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock) as mock_save:
 
-    update = types.Update(
-        update_id=5,
-        message=types.Message(
-            message_id=12,
-            date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
-            from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/poll_replace_text New Question",
-            reply_to_message=types.Message(
-                message_id=11,
+        update = types.Update(
+            update_id=5,
+            message=types.Message(
+                message_id=12,
                 date=datetime.datetime.now(),
                 chat=types.Chat(id=123, type='supergroup', title="Group"),
-                text="Poll"
+                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                text="/poll_replace_text New Question",
+                reply_to_message=types.Message(
+                    message_id=11,
+                    date=datetime.datetime.now(),
+                    chat=types.Chat(id=123, type='supergroup', title="Group"),
+                    text="Poll"
+                )
             )
         )
-    )
 
-    await dp.feed_update(bot=bot, update=update)
+        await dp.feed_update(bot=bot, update=update)
 
-    global_data.mongo_config.save_bot_value.assert_called()
+        mock_save.assert_called()
 
     await bot.session.close()
 
@@ -290,7 +291,17 @@ async def test_poll_close_with_poll(mock_server, dp):
     dp.include_router(polls_router)
     dp.message.middleware(MockDbMiddleware())
 
-    with patch.object(bot, "stop_poll", new_callable=AsyncMock) as mock_stop:
+    # Mock load and save for close command
+    my_poll = {
+        "question": "Q",
+        "closed": False,
+        "message_id": 12,
+        "buttons": []
+    }
+    with patch.object(bot, "stop_poll", new_callable=AsyncMock) as mock_stop, \
+         patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)), \
+         patch.object(global_data.mongo_config, "save_bot_value", new_callable=AsyncMock):
+        
         poll = types.Poll(
             id="poll_close",
             question="Q",
@@ -377,30 +388,30 @@ async def test_poll_check_remaining_voters(mock_server, dp):
             "message_id": 99,
             "buttons": [["Opt1", 10, ["@user"]]]
         }
-        global_data.mongo_config.load_bot_value = AsyncMock(return_value=json.dumps(my_poll))
-
-        update = types.Update(
-            update_id=8,
-            message=types.Message(
-                message_id=15,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=test_chat_id, type='supergroup', title="Group"),
-                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-                text="/poll_check",
-                reply_to_message=types.Message(
-                    message_id=99,
+        
+        with patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)):
+            update = types.Update(
+                update_id=8,
+                message=types.Message(
+                    message_id=15,
                     date=datetime.datetime.now(),
                     chat=types.Chat(id=test_chat_id, type='supergroup', title="Group"),
-                    text="Poll Msg"
+                    from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                    text="/poll_check",
+                    reply_to_message=types.Message(
+                        message_id=99,
+                        date=datetime.datetime.now(),
+                        chat=types.Chat(id=test_chat_id, type='supergroup', title="Group"),
+                        text="Poll Msg"
+                    )
                 )
             )
-        )
 
-        await dp.feed_update(bot=bot, update=update)
+            await dp.feed_update(bot=bot, update=update)
 
-        req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
-        assert req is not None
-        assert "Смотрите голосование" in req["data"]["text"]
+            req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+            assert req is not None
+            assert "Смотрите голосование" in req["data"]["text"]
 
     await bot.session.close()
 
@@ -414,8 +425,12 @@ async def test_poll_reload_vote_admin(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
 
     vote_list = {"ADDR": {"..user": 1, "NEED": {"50": 1, "75": 1, "100": 1}}}
+    
+    async def mock_save_votes(session):
+        return vote_list
+
     with patch("routers.polls.is_skynet_admin", return_value=True), \
-         patch("routers.polls.cmd_save_votes", new_callable=AsyncMock, return_value=vote_list):
+         patch("routers.polls.cmd_save_votes", side_effect=mock_save_votes):
         update = types.Update(
             update_id=9,
             message=types.Message(
@@ -450,24 +465,24 @@ async def test_poll_answer_user_not_found(mock_server, dp):
         "google_id": "gid",
         "google_url": "http://google"
     }
-    global_data.mongo_config.load_bot_value = AsyncMock(return_value=json.dumps(my_poll))
 
-    with patch("routers.polls.grist_manager.load_table_data", new_callable=AsyncMock, return_value=[]):
-        poll_answer = types.PollAnswer(
-            poll_id="123",
-            user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            option_ids=[0]
-        )
-        update = types.Update(
-            update_id=10,
-            poll_answer=poll_answer
-        )
+    with patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)):
+        with patch("routers.polls.grist_manager.load_table_data", new_callable=AsyncMock, return_value=[]):
+            poll_answer = types.PollAnswer(
+                poll_id="123",
+                user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                option_ids=[0]
+            )
+            update = types.Update(
+                update_id=10,
+                poll_answer=poll_answer
+            )
 
-        await dp.feed_update(bot=bot, update=update)
+            await dp.feed_update(bot=bot, update=update)
 
-        req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
-        assert req is not None
-        assert "not found" in req["data"]["text"]
+            req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+            assert req is not None
+            assert "not found" in req["data"]["text"]
 
     await bot.session.close()
 
@@ -481,40 +496,40 @@ async def test_apoll_check_reply(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
 
     my_poll = {"google_id": "gid"}
-    global_data.mongo_config.load_bot_value = AsyncMock(return_value=json.dumps(my_poll))
-
-    with patch("routers.polls.gs_check_vote_table", new_callable=AsyncMock, return_value=(["ok"], ["d1"])):
-        poll = types.Poll(
-            id="321",
-            question="Assoc Poll",
-            options=[types.PollOption(text="Yes", voter_count=0)],
-            total_voter_count=0,
-            is_closed=False,
-            is_anonymous=False,
-            type="regular",
-            allows_multiple_answers=False
-        )
-        update = types.Update(
-            update_id=11,
-            message=types.Message(
-                message_id=17,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=123, type='supergroup', title="Group"),
-                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-                text="/apoll_check",
-                reply_to_message=types.Message(
-                    message_id=16,
+    
+    with patch.object(global_data.mongo_config, "load_bot_value", new_callable=AsyncMock, return_value=json.dumps(my_poll)):
+        with patch("routers.polls.gs_check_vote_table", new_callable=AsyncMock, return_value=(["ok"], ["d1"])):
+            poll = types.Poll(
+                id="321",
+                question="Assoc Poll",
+                options=[types.PollOption(text="Yes", voter_count=0)],
+                total_voter_count=0,
+                is_closed=False,
+                is_anonymous=False,
+                type="regular",
+                allows_multiple_answers=False
+            )
+            update = types.Update(
+                update_id=11,
+                message=types.Message(
+                    message_id=17,
                     date=datetime.datetime.now(),
                     chat=types.Chat(id=123, type='supergroup', title="Group"),
-                    poll=poll
+                    from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                    text="/apoll_check",
+                    reply_to_message=types.Message(
+                        message_id=16,
+                        date=datetime.datetime.now(),
+                        chat=types.Chat(id=123, type='supergroup', title="Group"),
+                        poll=poll
+                    )
                 )
             )
-        )
 
-        await dp.feed_update(bot=bot, update=update)
+            await dp.feed_update(bot=bot, update=update)
 
-        req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
-        assert req is not None
-        assert "delegates" in req["data"]["text"]
+            req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+            assert req is not None
+            assert "delegates" in req["data"]["text"]
 
     await bot.session.close()
