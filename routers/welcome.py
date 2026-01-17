@@ -145,8 +145,9 @@ async def cmd_set_welcome(message: Message, session: Session):
         return False
 
     if len(message.text.split()) > 1:
-        global_data.welcome_button[message.chat.id] = message.text[19:]
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, message.text[19:])
+        text = message.text[19:].strip()
+        global_data.welcome_button[message.chat.id] = text
+        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
         msg = await message.reply('Added')
         await cmd_sleep_and_delete(msg, 60)
     else:

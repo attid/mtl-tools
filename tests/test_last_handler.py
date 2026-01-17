@@ -7,7 +7,7 @@ from aiogram.client.telegram import TelegramAPIServer
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
-from routers.last_handler import router as last_router, SpamCheckCallbackData
+from routers.last_handler import router as last_router, SpamCheckCallbackData, ReplyCallbackData, FirstMessageCallbackData
 from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
 from other.global_data import global_data, BotValueTypes, MTLChats
 
@@ -118,7 +118,7 @@ async def test_spam_callback(mock_server, dp):
 
 
     # Mock is_admin
-    with patch("routers.last_handler.is_admin", return_value=True):
+    with patch("routers.last_handler.is_admin", new_callable=AsyncMock, return_value=True):
         
         cb_data = SpamCheckCallbackData(
             message_id=10,
@@ -159,6 +159,143 @@ async def test_spam_callback(mock_server, dp):
         
         # Verify editMessageReplyMarkup
         edit_req = next((r for r in mock_server if r["method"] == "editMessageReplyMarkup"), None)
+        assert edit_req is not None
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_last_check_other_non_text(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(last_router)
+    dp.message.middleware(MockDbMiddleware())
+
+    chat_id = 777
+    if chat_id not in global_data.no_first_link:
+        global_data.no_first_link.append(chat_id)
+
+    with patch("routers.last_handler.global_data.check_user", return_value=0), \
+         patch("routers.last_handler.delete_and_log_spam", new_callable=AsyncMock) as mock_delete:
+        update = types.Update(
+            update_id=5,
+            message=types.Message(
+                message_id=50,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=chat_id, type='supergroup', title="Group"),
+                from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
+                photo=[types.PhotoSize(file_id="1", file_unique_id="1", width=1, height=1)]
+            )
+        )
+
+        await dp.feed_update(bot=bot, update=update)
+
+        mock_delete.assert_called()
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_reply_ban_callback(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(last_router)
+    dp.callback_query.middleware(MockDbMiddleware())
+
+    cb_data = ReplyCallbackData(user_id=456, chat_id=123, message_id=10).pack()
+    with patch("routers.last_handler.is_admin", new_callable=AsyncMock, return_value=True):
+        update = types.Update(
+            update_id=6,
+            callback_query=types.CallbackQuery(
+                id="cb2",
+                chat_instance="ci2",
+                from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+                message=types.Message(
+                    message_id=60,
+                    date=datetime.datetime.now(),
+                    chat=types.Chat(id=888, type='supergroup', title="SpamGroup"),
+                    text="Spam report"
+                ),
+                data=cb_data
+            )
+        )
+
+        await dp.feed_update(bot=bot, update=update)
+
+        ban_req = next((r for r in mock_server if r["method"] == "banChatMember"), None)
+        assert ban_req is not None
+        del_req = next((r for r in mock_server if r["method"] == "deleteMessage"), None)
+        assert del_req is not None
+        ans_req = next((r for r in mock_server if r["method"] == "answerCallbackQuery"), None)
+        assert ans_req is not None
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_cq_look_callback(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(last_router)
+
+    update = types.Update(
+        update_id=7,
+        callback_query=types.CallbackQuery(
+            id="cb3",
+            chat_instance="ci3",
+            from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+            message=types.Message(
+                message_id=61,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=888, type='supergroup', title="SpamGroup"),
+                text="Look"
+            ),
+            data="👀"
+        )
+    )
+
+    await dp.feed_update(bot=bot, update=update)
+
+    ans_req = next((r for r in mock_server if r["method"] == "answerCallbackQuery"), None)
+    assert ans_req is not None
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_first_vote_callback(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(last_router)
+    dp.callback_query.middleware(MockDbMiddleware())
+
+    global_data.first_vote_data = {}
+    cb_data = FirstMessageCallbackData(spam=False, message_id=70, user_id=555).pack()
+
+    with patch("routers.last_handler.is_admin", new_callable=AsyncMock, return_value=False):
+        update = types.Update(
+            update_id=8,
+            callback_query=types.CallbackQuery(
+                id="cb4",
+                chat_instance="ci4",
+                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                message=types.Message(
+                    message_id=71,
+                    date=datetime.datetime.now(),
+                    chat=types.Chat(id=888, type='supergroup', title="SpamGroup"),
+                    text="Vote"
+                ),
+                data=cb_data
+            )
+        )
+
+        await dp.feed_update(bot=bot, update=update)
+
+        edit_req = next((r for r in mock_server if r["method"] == "editMessageText"), None)
         assert edit_req is not None
 
     await bot.session.close()

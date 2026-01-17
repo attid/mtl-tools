@@ -484,7 +484,7 @@ async def cmd_update_bim1(message: Message, bot: Bot):
 
     agc = await agcm.authorize()
 
-    wks = await agc.open("MTL_BIM_register").worksheet("List")
+    wks = await (await agc.open("MTL_BIM_register")).worksheet("List")
     update_list = []
     data = await wks.get_all_values()
     for record in data[2:]:

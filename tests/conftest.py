@@ -3,12 +3,19 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import sys
 import os
+from aiogram.dispatcher.middlewares.base import BaseMiddleware
+
 sys.path.append(os.getcwd())
 from aiohttp import web
 from aiogram import Dispatcher
 
 # Repo imports removed for simplicity
 # from database.repositories import Repo
+
+class MockDbMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        data["session"] = MagicMock()
+        return await handler(event, data)
 
 # Constants for Mock Server
 MOCK_SERVER_PORT = 8081
@@ -70,6 +77,30 @@ async def mock_server():
             }
         })
 
+    @routes.post("/bot{token}/getChatAdministrators")
+    async def get_chat_administrators(request):
+        if request.content_type == 'application/json':
+            data = await request.json()
+        else:
+            data = await request.post()
+        received_requests.append({"method": "getChatAdministrators", "token": request.match_info['token'], "data": dict(data)})
+        
+        return web.json_response({
+            "ok": True,
+            "result": [
+                {
+                    "status": "creator",
+                    "user": {
+                        "id": 123456,
+                        "is_bot": False,
+                        "first_name": "Owner",
+                        "username": "owner"
+                    },
+                    "is_anonymous": False
+                }
+            ]
+        })
+
     @routes.post("/bot{token}/getChat")
     async def get_chat(request):
         if request.content_type == 'application/json':
@@ -88,7 +119,15 @@ async def mock_server():
                 "type": "supergroup",
                 "title": "Test Chat",
                 "username": "test_chat",
-                "permissions": {"can_send_messages": True}
+                "permissions": {"can_send_messages": True},
+                "accent_color_id": 0,
+                "max_reaction_count": 0,
+                "accepted_gift_types": {
+                    "unlimited_gifts": False,
+                    "limited_gifts": False,
+                    "unique_gifts": False,
+                    "premium_subscription": False
+                }
             }
         })
 

@@ -7,7 +7,7 @@ from aiogram.client.telegram import TelegramAPIServer
 import datetime
 import json
 
-from routers.multi_handler import router as multi_router
+from routers.multi_handler import router as multi_router, on_startup
 from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
 from other.global_data import global_data, BotValueTypes
 
@@ -26,7 +26,7 @@ async def test_config_toggle(mock_server, dp):
     dp.include_router(multi_router)
     
     # Mock admin check
-    with patch("routers.multi_handler.is_admin", return_value=True):
+    with patch("routers.multi_handler.is_admin", new_callable=AsyncMock, return_value=True):
         
         # Test /set_no_first_link
         # It toggles presence in global_data.no_first_link list
@@ -104,7 +104,7 @@ async def test_topic_admin_management(mock_server, dp):
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(multi_router)
     
-    with patch("routers.multi_handler.is_admin", return_value=True):
+    with patch("routers.multi_handler.is_admin", new_callable=AsyncMock, return_value=True):
         
         # Test /add_topic_admin in a topic
         chat_id = 123
@@ -140,3 +140,10 @@ async def test_topic_admin_management(mock_server, dp):
         assert req is not None
 
     await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_on_startup_triggers_loads():
+    with patch("routers.multi_handler.command_config_loads", new_callable=AsyncMock) as mock_loads, \
+         patch("routers.multi_handler.asyncio.create_task") as mock_task:
+        await on_startup()
+        assert mock_task.called

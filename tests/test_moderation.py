@@ -7,7 +7,7 @@ from aiogram.client.telegram import TelegramAPIServer
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
-from routers.moderation import router as moderation_router
+from routers.moderation import router as moderation_router, UnbanCallbackData
 from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
 from other.global_data import MTLChats
 
@@ -36,7 +36,7 @@ async def test_ban_command_as_skynet_admin(mock_server, dp):
          patch("routers.moderation.db_get_user_id", return_value=123456), \
          patch("routers.moderation.add_bot_users") as mock_add_users, \
          patch("routers.moderation.cmd_sleep_and_delete", new_callable=AsyncMock), \
-         patch("routers.moderation.is_admin", return_value=False):
+         patch("routers.moderation.is_admin", new_callable=AsyncMock, return_value=False):
         
         # Test /ban 123456
         update = types.Update(
@@ -91,5 +91,71 @@ async def test_unban_command_as_skynet_admin(mock_server, dp):
         unban_req = next((r for r in mock_server if r["method"] == "unbanChatMember"), None)
         assert unban_req is not None
         assert int(unban_req["data"]["user_id"]) == 123456
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_test_id_command(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(moderation_router)
+    dp.message.middleware(MockDbMiddleware())
+
+    with patch("routers.moderation.global_data.check_user", return_value=1):
+        update = types.Update(
+            update_id=3,
+            message=types.Message(
+                message_id=3,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=MTLChats.TestGroup, type='supergroup', title="Test Chat"),
+                from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
+                text="/test_id 123"
+            )
+        )
+
+        await dp.feed_update(bot=bot, update=update)
+
+        msg_req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+        assert msg_req is not None
+        assert "Good User" in msg_req["data"]["text"]
+
+    await bot.session.close()
+
+@pytest.mark.asyncio
+async def test_unban_callback(mock_server, dp):
+    session = AiohttpSession(
+        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+    )
+    bot = Bot(token=TEST_BOT_TOKEN, session=session)
+    dp.include_router(moderation_router)
+    dp.callback_query.middleware(MockDbMiddleware())
+
+    cb_data = UnbanCallbackData(user_id=123, chat_id=456).pack()
+    with patch("routers.moderation.is_skynet_admin", return_value=True), \
+         patch("routers.moderation.add_bot_users"):
+        update = types.Update(
+            update_id=4,
+            callback_query=types.CallbackQuery(
+                id="cb1",
+                chat_instance="ci1",
+                from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+                message=types.Message(
+                    message_id=4,
+                    date=datetime.datetime.now(),
+                    chat=types.Chat(id=456, type='supergroup', title="Test Chat"),
+                    text="Unban"
+                ),
+                data=cb_data
+            )
+        )
+
+        await dp.feed_update(bot=bot, update=update)
+
+        unban_req = next((r for r in mock_server if r["method"] == "unbanChatMember"), None)
+        assert unban_req is not None
+        ans_req = next((r for r in mock_server if r["method"] == "answerCallbackQuery"), None)
+        assert ans_req is not None
 
     await bot.session.close()
