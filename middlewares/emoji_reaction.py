@@ -1,6 +1,8 @@
 import asyncio
 from typing import Any, Awaitable, Callable
 
+import re
+
 from aiogram import BaseMiddleware
 from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
@@ -10,8 +12,10 @@ from other.openrouter_service import classify_message
 
 ALLOWED_CHAT_IDS = {
     -1001908537713,
-    -1001908537777,
+    -1001677907211,
+    -1002124914508
 }
+LINK_ONLY_RE = re.compile(r"^\s*(https?://\S+)\s*$")
 
 
 class EmojiReactionMiddleware(BaseMiddleware):
@@ -30,6 +34,12 @@ class EmojiReactionMiddleware(BaseMiddleware):
         if message.chat.id not in ALLOWED_CHAT_IDS:
             return False
         if not message.text:
+            return False
+        if message.text.strip().startswith("/"):
+            return False
+        if LINK_ONLY_RE.match(message.text):
+            return False
+        if len(message.text.strip()) < 6:
             return False
         if message.from_user and message.from_user.is_bot:
             return False

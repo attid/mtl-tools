@@ -7,11 +7,9 @@ from openrouter import OpenRouter
 from other.config_reader import config
 from other.openrouter_reactions import build_messages, normalize_label
 
-OPENROUTER_MODEL = "google/gemini-3-flash-preview"
-OPENROUTER_HEADERS = {
-    "HTTP-Referer": "https://montelibero.org",
-    "X-Title": "Montelibero Bot",
-}
+#OPENROUTER_MODEL = "google/gemini-3-flash-preview"
+OPENROUTER_MODEL = "openai/gpt-oss-120b"
+
 
 
 async def classify_message(text: str, timeout_sec: float = 10.0) -> Optional[str]:
@@ -26,7 +24,6 @@ async def classify_message(text: str, timeout_sec: float = 10.0) -> Optional[str
                 client.chat.send_async(
                     model=OPENROUTER_MODEL,
                     messages=messages,
-                    extra_headers=OPENROUTER_HEADERS,
                 ),
                 timeout=timeout_sec,
             )
