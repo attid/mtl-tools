@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     #firebird_url: str
     postgres_url: str
     openai_key: SecretStr
+    openrouter_key: SecretStr | None = None
     private_sign: SecretStr
     currencylayer_id: str
     coinlayer_id: str

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 # Local application imports
 from db.requests import db_load_bot_users, db_save_bot_user
 from middlewares.db import DbSessionMiddleware
+from middlewares.emoji_reaction import EmojiReactionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
@@ -166,6 +167,7 @@ async def main():
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
+    dp.message.middleware(EmojiReactionMiddleware())
 
     dp['dbsession_pool'] = db_pool
 
