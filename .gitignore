@@ -143,5 +143,4 @@ members_key.json
 /.vscode/settings.json
 /docs/tasks.md
 /test*.py
-/tmpdocs/ARCHITECTURE_REFACTOR.md
-/tmpdocs/POSTGRES_MIGRATION_PLAN.md
+/tmpdocs/*
