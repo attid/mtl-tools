@@ -29,7 +29,7 @@
 ## Testing Guidelines
 - No formal suite yet. Add `pytest` tests under `tests/` for new logic (pure utils in `other/`, DB helpers, router helpers via unit‑level functions).
 - Keep tests isolated from Telegram/DB: mock network and DB calls; use small fixtures.
-- Run locally (if added): `pytest -q`.
+- Run locally (if added): `uv run pytest -q`.
 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits: `feat(scope):`, `fix(scope):`, `refactor(scope):` (emojis optional, keep scope meaningful).
