@@ -97,7 +97,7 @@ async def test_deal_command(mock_server, dp):
         assert "Создана новая сделка #101" in req["data"]["text"]
         
         # Verify rely to user
-        user_reply = next((r for r in mock_server if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == "123" and "успешно обработана" in r["data"]["text"]), None)
+        user_reply = next((r for r in mock_server if r["method"] == "setMessageReaction" and str(r["data"]["chat_id"]) == "123"), None)
         assert user_reply is not None
 
     await bot.session.close()
