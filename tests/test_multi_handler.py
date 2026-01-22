@@ -8,7 +8,7 @@ import datetime
 import json
 
 from routers.multi_handler import router as multi_router, on_startup
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import global_data, BotValueTypes
 
 @pytest.fixture(autouse=True)
@@ -20,7 +20,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_config_toggle(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(multi_router)
@@ -63,7 +63,7 @@ async def test_config_toggle(mock_server, dp):
 @pytest.mark.asyncio
 async def test_list_management(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(multi_router)
@@ -99,7 +99,7 @@ async def test_list_management(mock_server, dp):
 @pytest.mark.asyncio
 async def test_topic_admin_management(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(multi_router)

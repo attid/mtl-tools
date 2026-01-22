@@ -15,7 +15,7 @@ from routers.rely_router import (
     Holder,
     RELY_DEAL_CHAT_ID
 )
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 
 class MockDbMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
@@ -31,7 +31,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_deal_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(rely_router)
@@ -105,7 +105,7 @@ async def test_deal_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_resolve_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(rely_router)

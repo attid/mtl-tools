@@ -9,7 +9,7 @@ import datetime
 import json
 
 from routers.polls import router as polls_router, PollCallbackData
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import global_data, MTLChats
 
 class MockDbMiddleware(BaseMiddleware):
@@ -26,7 +26,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_poll_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -79,7 +79,7 @@ async def test_poll_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_apoll_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -134,7 +134,7 @@ async def test_apoll_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -203,7 +203,7 @@ async def test_poll_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_channel_post_creates_poll(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -243,7 +243,7 @@ async def test_channel_post_creates_poll(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_replace_text(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -285,7 +285,7 @@ async def test_poll_replace_text(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_close_with_poll(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -338,7 +338,7 @@ async def test_poll_close_with_poll(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_close_requires_reply(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -366,7 +366,7 @@ async def test_poll_close_requires_reply(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_check_remaining_voters(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -418,7 +418,7 @@ async def test_poll_check_remaining_voters(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_reload_vote_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -453,7 +453,7 @@ async def test_poll_reload_vote_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_poll_answer_user_not_found(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)
@@ -489,7 +489,7 @@ async def test_poll_answer_user_not_found(mock_server, dp):
 @pytest.mark.asyncio
 async def test_apoll_check_reply(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(polls_router)

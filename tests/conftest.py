@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import sys
 import os
+import socket
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 
 sys.path.append(os.getcwd())
@@ -18,9 +19,20 @@ class MockDbMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 # Constants for Mock Server
-MOCK_SERVER_PORT = 8081
+# Constants for Mock Server
 MOCK_SERVER_HOST = "localhost"
-MOCK_SERVER_URL = f"http://{MOCK_SERVER_HOST}:{MOCK_SERVER_PORT}"
+TEST_BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+
+def get_free_port():
+    """Finds a free port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+class MockServer(list):
+    def __init__(self, base_url):
+        super().__init__()
+        self.base_url = base_url
 TEST_BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 # MockRepo removed
@@ -37,8 +49,11 @@ def dp():
 @pytest.fixture
 async def mock_server():
     """Starts a local mock Telegram server."""
+    port = get_free_port()
+    base_url = f"http://{MOCK_SERVER_HOST}:{port}"
+    
     routes = web.RouteTableDef()
-    received_requests = []
+    received_requests = MockServer(base_url)
 
     @routes.post("/bot{token}/deleteWebhook")
     async def delete_webhook(request):
@@ -418,7 +433,7 @@ async def mock_server():
     app.add_routes(routes)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, MOCK_SERVER_HOST, MOCK_SERVER_PORT)
+    site = web.TCPSite(runner, MOCK_SERVER_HOST, port)
     await site.start()
 
     yield received_requests

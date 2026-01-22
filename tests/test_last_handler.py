@@ -8,7 +8,7 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
 from routers.last_handler import router as last_router, SpamCheckCallbackData, ReplyCallbackData, FirstMessageCallbackData
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import global_data, BotValueTypes, MTLChats
 
 class MockDbMiddleware(BaseMiddleware):
@@ -25,7 +25,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_spam_detection(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -63,7 +63,7 @@ async def test_spam_detection(mock_server, dp):
 @pytest.mark.asyncio
 async def test_real_spam_flow(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -110,7 +110,7 @@ async def test_real_spam_flow(mock_server, dp):
 @pytest.mark.asyncio
 async def test_spam_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -166,7 +166,7 @@ async def test_spam_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_last_check_other_non_text(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -198,7 +198,7 @@ async def test_last_check_other_non_text(mock_server, dp):
 @pytest.mark.asyncio
 async def test_reply_ban_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -236,7 +236,7 @@ async def test_reply_ban_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_cq_look_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -267,7 +267,7 @@ async def test_cq_look_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_first_vote_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)
@@ -303,7 +303,7 @@ async def test_first_vote_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_check_mute_enforcement_channel(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(last_router)

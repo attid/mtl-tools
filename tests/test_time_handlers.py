@@ -8,13 +8,13 @@ import datetime
 import json
 
 from routers.time_handlers import cmd_send_message_1m, time_clear
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import MTLChats
 
 @pytest.mark.asyncio
 async def test_cmd_send_message_1m(mock_server):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     
@@ -52,7 +52,7 @@ async def test_cmd_send_message_1m(mock_server):
 @pytest.mark.asyncio
 async def test_time_clear(mock_server):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     

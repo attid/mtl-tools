@@ -8,7 +8,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 import datetime
 
 from routers.start_router import router as start_router
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN, MockDbMiddleware
+from tests.conftest import TEST_BOT_TOKEN, MockDbMiddleware
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():
@@ -24,7 +24,7 @@ async def test_start_command(mock_server, dp):
     Test /start command.
     """
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     
@@ -65,7 +65,7 @@ async def test_links_command(mock_server, dp):
     Test /links command.
     """
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     
@@ -96,7 +96,7 @@ async def test_links_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_emoji_command_no_args(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -124,7 +124,7 @@ async def test_emoji_command_no_args(mock_server, dp):
 @pytest.mark.asyncio
 async def test_emoji_command_all(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -152,7 +152,7 @@ async def test_emoji_command_all(mock_server, dp):
 @pytest.mark.asyncio
 async def test_emoji_command_reaction(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -183,7 +183,7 @@ async def test_emoji_command_reaction(mock_server, dp):
 @pytest.mark.asyncio
 async def test_save_command_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -210,7 +210,7 @@ async def test_save_command_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_save_command_user(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -237,7 +237,7 @@ async def test_save_command_user(mock_server, dp):
 @pytest.mark.asyncio
 async def test_show_id_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -264,7 +264,7 @@ async def test_show_id_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_me_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -295,7 +295,7 @@ async def test_me_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_link_command_requires_reply(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)
@@ -322,7 +322,7 @@ async def test_link_command_requires_reply(mock_server, dp):
 @pytest.mark.asyncio
 async def test_link_command_reply_with_addresses(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(start_router)

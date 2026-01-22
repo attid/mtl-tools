@@ -8,7 +8,7 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
 from routers.talk_handlers import router as talk_router, my_talk_message
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN, MockDbMiddleware
+from tests.conftest import TEST_BOT_TOKEN, MockDbMiddleware
 from other.global_data import global_data, MTLChats
 from other.pyro_tools import MessageInfo
 
@@ -21,7 +21,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_skynet_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -57,7 +57,7 @@ async def test_skynet_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_img_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -107,7 +107,7 @@ async def test_img_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_comment_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -153,7 +153,7 @@ async def test_comment_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_reply_to_bot_handler(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -194,7 +194,7 @@ async def test_reply_to_bot_handler(mock_server, dp):
 @pytest.mark.asyncio
 async def test_nap_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -221,7 +221,7 @@ async def test_nap_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_decode_command_with_reply(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -259,7 +259,7 @@ async def test_decode_command_with_reply(mock_server, dp):
 @pytest.mark.asyncio
 async def test_remind_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -285,7 +285,7 @@ async def test_remind_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_task_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -314,7 +314,7 @@ async def test_task_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_horoscope_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -343,7 +343,7 @@ async def test_horoscope_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_update_report_not_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -372,7 +372,7 @@ async def test_update_report_not_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_private_links(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)
@@ -408,7 +408,7 @@ async def test_private_links(mock_server, dp):
 @pytest.mark.asyncio
 async def test_skynet4_not_allowed(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(talk_router)

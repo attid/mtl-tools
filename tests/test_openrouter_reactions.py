@@ -8,7 +8,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 
 from middlewares.emoji_reaction import EmojiReactionMiddleware
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN, MockDbMiddleware
+from tests.conftest import TEST_BOT_TOKEN, MockDbMiddleware
 
 
 def _build_message(chat_id: int, text: str | None = None, photo=None) -> types.Message:
@@ -30,7 +30,7 @@ async def _feed_message(dp: Dispatcher, bot: Bot, message: types.Message) -> Non
 
 @pytest.mark.asyncio
 async def test_reaction_in_allowed_chat(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(MOCK_SERVER_URL))
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 
@@ -55,7 +55,7 @@ async def test_reaction_in_allowed_chat(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_no_reaction_in_other_chat(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(MOCK_SERVER_URL))
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 
@@ -80,7 +80,7 @@ async def test_no_reaction_in_other_chat(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_no_reaction_on_photo(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(MOCK_SERVER_URL))
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 

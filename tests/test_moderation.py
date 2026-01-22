@@ -8,7 +8,7 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
 from routers.moderation import router as moderation_router, UnbanCallbackData
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import MTLChats
 
 class MockDbMiddleware(BaseMiddleware):
@@ -25,7 +25,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_ban_command_as_skynet_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(moderation_router)
@@ -66,7 +66,7 @@ async def test_ban_command_as_skynet_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_unban_command_as_skynet_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(moderation_router)
@@ -97,7 +97,7 @@ async def test_unban_command_as_skynet_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_test_id_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(moderation_router)
@@ -126,7 +126,7 @@ async def test_test_id_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_unban_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(moderation_router)

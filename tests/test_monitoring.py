@@ -8,7 +8,7 @@ import datetime
 
 from routers.monitoring import router as monitoring_router
 from other.global_data import global_data, MTLChats
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 
 @pytest.mark.asyncio
 async def test_monitoring_pong_update(mock_server, dp):
@@ -16,7 +16,7 @@ async def test_monitoring_pong_update(mock_server, dp):
     Test that #skynet #mmwb command=pong updates the global_data.last_pong_response
     """
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(monitoring_router)

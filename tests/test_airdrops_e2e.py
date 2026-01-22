@@ -7,7 +7,7 @@ from aiogram.client.telegram import TelegramAPIServer
 import datetime
 
 from routers.airdrops import router as airdrop_router, AirdropConfigItem, AirdropCallbackData
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 
 @pytest.fixture
 def airdrop_config_item():
@@ -32,7 +32,7 @@ async def test_airdrop_request_flow(mock_server, airdrop_config_item):
     
     # 1. Setup
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp = Dispatcher()

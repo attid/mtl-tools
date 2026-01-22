@@ -7,7 +7,7 @@ from aiogram.client.telegram import TelegramAPIServer
 
 from start import on_startup, set_commands
 from other.global_data import MTLChats
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.config_reader import config
 
 @pytest.mark.asyncio
@@ -19,7 +19,7 @@ async def test_startup_sends_message_to_admin(mock_server, dp):
     """
     # Setup
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     

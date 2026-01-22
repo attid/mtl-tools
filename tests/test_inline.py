@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from routers.inline import router as inline_router
 from other.global_data import global_data
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 
 @pytest.mark.asyncio
 async def test_inline_query_handler(mock_server, dp):
@@ -15,7 +15,7 @@ async def test_inline_query_handler(mock_server, dp):
     Test inline query handler for command info lookup.
     """
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(inline_router)

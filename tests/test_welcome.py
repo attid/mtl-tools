@@ -9,7 +9,7 @@ from aiogram.enums import ChatMemberStatus
 import datetime
 
 from routers.welcome import router as welcome_router, CaptchaCallbackData, EmojiCaptchaCallbackData, JoinCallbackData, emoji_pairs
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import global_data, MTLChats
 
 class MockDbMiddleware(BaseMiddleware):
@@ -26,7 +26,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_set_welcome_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -63,7 +63,7 @@ async def test_set_welcome_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_new_chat_member_welcome(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -112,7 +112,7 @@ async def test_new_chat_member_welcome(mock_server, dp):
 @pytest.mark.asyncio
 async def test_delete_welcome_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -145,7 +145,7 @@ async def test_delete_welcome_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_set_welcome_button_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -176,7 +176,7 @@ async def test_set_welcome_button_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_stop_exchange_command_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -206,7 +206,7 @@ async def test_stop_exchange_command_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_start_exchange_command_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -235,7 +235,7 @@ async def test_start_exchange_command_admin(mock_server, dp):
 @pytest.mark.asyncio
 async def test_left_chat_member_auto_all(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -267,7 +267,7 @@ async def test_left_chat_member_auto_all(mock_server, dp):
 @pytest.mark.asyncio
 async def test_msg_delete_income(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -295,7 +295,7 @@ async def test_msg_delete_income(mock_server, dp):
 @pytest.mark.asyncio
 async def test_captcha_callback_correct_user(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -327,7 +327,7 @@ async def test_captcha_callback_correct_user(mock_server, dp):
 @pytest.mark.asyncio
 async def test_emoji_captcha_callback_correct(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -359,7 +359,7 @@ async def test_emoji_captcha_callback_correct(mock_server, dp):
 @pytest.mark.asyncio
 async def test_recaptcha_command_need_words(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -388,7 +388,7 @@ async def test_recaptcha_command_need_words(mock_server, dp):
 @pytest.mark.asyncio
 async def test_recaptcha_callback(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -420,7 +420,7 @@ async def test_recaptcha_callback(mock_server, dp):
 @pytest.mark.asyncio
 async def test_update_admins(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -462,7 +462,7 @@ async def test_update_admins(mock_server, dp):
 @pytest.mark.asyncio
 async def test_handle_chat_join_request(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)
@@ -490,7 +490,7 @@ async def test_handle_chat_join_request(mock_server, dp):
 @pytest.mark.asyncio
 async def test_join_callback_not_admin(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(welcome_router)

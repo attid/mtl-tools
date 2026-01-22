@@ -8,7 +8,7 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 import datetime
 
 from routers.stellar import router as stellar_router
-from tests.conftest import MOCK_SERVER_URL, TEST_BOT_TOKEN
+from tests.conftest import TEST_BOT_TOKEN
 from other.global_data import global_data
 
 class MockDbMiddleware(BaseMiddleware):
@@ -16,9 +16,9 @@ class MockDbMiddleware(BaseMiddleware):
         data["session"] = MagicMock()
         return await handler(event, data)
 
-def build_bot():
+def build_bot(mock_server):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     return bot
@@ -32,7 +32,7 @@ async def cleanup_router():
 @pytest.mark.asyncio
 async def test_fee_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(stellar_router)
@@ -62,7 +62,7 @@ async def test_fee_command(mock_server, dp):
 @pytest.mark.asyncio
 async def test_balance_command(mock_server, dp):
     session = AiohttpSession(
-        api=TelegramAPIServer.from_base(MOCK_SERVER_URL)
+        api=TelegramAPIServer.from_base(mock_server.base_url)
     )
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     dp.include_router(stellar_router)
@@ -95,7 +95,7 @@ async def test_balance_command(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_decode_command(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     
     with patch("routers.stellar.decode_xdr", return_value=["Decoded", "XDR"]), \
@@ -139,7 +139,7 @@ async def test_decode_command(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_show_bim_command(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -165,7 +165,7 @@ async def test_show_bim_command(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_council_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -191,7 +191,7 @@ async def test_do_council_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_bim_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -217,7 +217,7 @@ async def test_do_bim_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_resend_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -243,7 +243,7 @@ async def test_do_resend_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_all_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.is_skynet_admin", return_value=False):
@@ -268,7 +268,7 @@ async def test_do_all_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_div_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -294,7 +294,7 @@ async def test_do_div_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_sats_div_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -320,7 +320,7 @@ async def test_do_sats_div_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_usdm_div_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -346,7 +346,7 @@ async def test_do_usdm_div_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_usdm_usdm_div_daily_not_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -372,7 +372,7 @@ async def test_do_usdm_usdm_div_daily_not_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_do_usdm_usdm_div_test_wrong_chat(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -397,7 +397,7 @@ async def test_do_usdm_usdm_div_test_wrong_chat(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_vote_fund_xdr_with_arg(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.cmd_get_new_vote_all_mtl", new_callable=AsyncMock, return_value=["XDR"]):
@@ -422,7 +422,7 @@ async def test_get_vote_fund_xdr_with_arg(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_btcmtl_xdr(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.get_btcmtl_xdr", new_callable=AsyncMock, return_value="XDR"), \
@@ -447,7 +447,7 @@ async def test_get_btcmtl_xdr(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_damircoin_xdr(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.get_damircoin_xdr", new_callable=AsyncMock, return_value="XDR"), \
@@ -472,7 +472,7 @@ async def test_get_damircoin_xdr(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_agora_xdr(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.get_agora_xdr", new_callable=AsyncMock, return_value="XDR"), \
@@ -497,7 +497,7 @@ async def test_get_agora_xdr(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_chicago_xdr(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.get_chicago_xdr", new_callable=AsyncMock, return_value=["Line1", "Line2", "XDR"]), \
@@ -522,7 +522,7 @@ async def test_get_chicago_xdr(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_get_toc_xdr(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.get_toc_xdr", new_callable=AsyncMock, return_value="XDR"), \
@@ -547,7 +547,7 @@ async def test_get_toc_xdr(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_update_airdrops_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.is_skynet_admin", return_value=True), \
@@ -574,7 +574,7 @@ async def test_update_airdrops_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_update_fest(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
     dp.message.middleware(MockDbMiddleware())
 
@@ -601,7 +601,7 @@ async def test_update_fest(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_show_data_with_arg(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.cmd_show_data", new_callable=AsyncMock, return_value=["Line1"]), \
@@ -625,7 +625,7 @@ async def test_show_data_with_arg(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_update_bim1_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     mock_wks = AsyncMock()
@@ -665,7 +665,7 @@ async def test_update_bim1_admin(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_check_bim_by_user(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.gs_check_bim", new_callable=AsyncMock, return_value="OK"):
@@ -690,7 +690,7 @@ async def test_check_bim_by_user(mock_server, dp):
 
 @pytest.mark.asyncio
 async def test_check_mtlap_admin(mock_server, dp):
-    bot = build_bot()
+    bot = build_bot(mock_server)
     dp.include_router(stellar_router)
 
     with patch("routers.stellar.is_skynet_admin", return_value=True), \
