@@ -112,10 +112,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
             tg_user_id=tg_user_id,
             amount=amount
         )
-        await message.reply(
-            f"Сделка '{deal.id}' по сообщению успешно обработана. "
-            f"Ваша запись (ID: {participant_entry.id}) с параметром {participant_entry.amount} добавлена."
-        )
+        await message.react([types.ReactionTypeEmoji(emoji="✍️")])
         logger.info(f"Deal {deal.id} processed for user @{tg_username} with amount {amount}")
 
     except DealIsCheckedError as e:
