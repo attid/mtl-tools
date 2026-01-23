@@ -47,7 +47,7 @@ async def test_reaction_in_allowed_chat(mock_server, dp):
         message = _build_message(chat_id=-1001908537713, text="Тебе надо сделать это по-другому")
         await _feed_message(dp, bot, message)
 
-    reaction_req = next((r for r in mock_server if r["method"] == "setMessageReaction"), None)
+    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is not None
 
     await bot.session.close()
@@ -72,7 +72,7 @@ async def test_no_reaction_in_other_chat(mock_server, dp):
         await _feed_message(dp, bot, message)
         mock_classify.assert_not_called()
 
-    reaction_req = next((r for r in mock_server if r["method"] == "setMessageReaction"), None)
+    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is None
 
     await bot.session.close()
@@ -98,7 +98,7 @@ async def test_no_reaction_on_photo(mock_server, dp):
         await _feed_message(dp, bot, message)
         mock_classify.assert_not_called()
 
-    reaction_req = next((r for r in mock_server if r["method"] == "setMessageReaction"), None)
+    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is None
 
     await bot.session.close()

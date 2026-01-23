@@ -9,10 +9,7 @@ from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
 
 from other.config_reader import config
-from other.aiogram_tools import is_admin, cmd_sleep_and_delete
-from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
-from other.pyro_tools import get_group_members
-from routers.admin_system import check_membership
+from other.global_data import MTLChats, BotValueTypes, update_command_info, global_data
 
 router = Router()
 
@@ -121,7 +118,7 @@ async def command_config_loads():
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
 @update_command_info("/set_moderate", "Включает\Выключает режим модерации по топикам/topic", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, bot: Bot):
+async def universal_command_handler(message: Message, bot: Bot, app_context=None):
     command = message.text.lower().split()[0][1:]
     command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
@@ -132,17 +129,17 @@ async def universal_command_handler(message: Message, bot: Bot):
         await message.reply("Technical command. Ignore it.")
         return
 
-    if admin_check == "skynet_admin" and not is_skynet_admin(message):
+    if admin_check == "skynet_admin" and not app_context.utils_service.is_skynet_admin(message):
         await message.reply("You are not my admin.")
         return
-    elif admin_check == "admin" and not await is_admin(message):
-        await message.reply("You are not admin.")
-        return
+    elif admin_check == "admin":
+        if not await app_context.utils_service.is_admin(message):
+            await message.reply("You are not admin.")
+            return
 
     if action_type == "toggle_chat" and command_arg and len(command_arg) > 5:
         dest_chat = command_arg.split(":")[0]
-        dest_admin = await is_admin(message, dest_chat)
-        if not dest_admin:
+        if not await app_context.utils_service.is_admin(message, dest_chat):
             await message.reply("Bad target chat. Or you are not admin.")
             return
 
@@ -150,27 +147,27 @@ async def universal_command_handler(message: Message, bot: Bot):
                                    reaction=[ReactionTypeEmoji(emoji='👀')])
 
     if action_type in ["add_list", "del_list", "show_list"]:
-        await list_command_handler(message, command_info)
+        await list_command_handler(message, command_info, app_context=app_context)
 
     if action_type in ["add_list_topic", "del_list_topic", "show_list_topic"]:
         if not message.message_thread_id:
             await message.reply("Run this command in thread.")
             return
-        await list_command_handler_topic(message, command_info)
+        await list_command_handler_topic(message, command_info, app_context=app_context)
 
     if action_type == "toggle_chat":
-        await handle_command(message, command_info)
+        await handle_command(message, command_info, app_context=app_context)
         return
 
     if action_type == "toggle_entry_channel":
-        await handle_entry_channel_toggle(message, command_info)
+        await handle_entry_channel_toggle(message, command_info, app_context=app_context)
         return
 
     if action_type == "toggle":
-        await handle_command(message, command_info)
+        await handle_command(message, command_info, app_context=app_context)
 
 
-async def handle_command(message: Message, command_info):
+async def handle_command(message: Message, command_info, app_context=None):
     chat_id = message.chat.id
     global_data_field = command_info[0]
     db_value_type = command_info[1]
@@ -182,7 +179,9 @@ async def handle_command(message: Message, command_info):
             global_data_field.pop(chat_id)
         else:
             global_data_field.remove(chat_id)
-        await global_data.mongo_config.save_bot_value(chat_id, db_value_type, None)
+            
+        await app_context.config_service.save_bot_value(chat_id, db_value_type, None)
+            
         info_message = await message.reply('Removed')
     else:
         value_to_set = command_args[0] if command_args else '1'
@@ -191,17 +190,18 @@ async def handle_command(message: Message, command_info):
         else:
             global_data_field.append(chat_id)
 
-        await global_data.mongo_config.save_bot_value(chat_id, db_value_type, value_to_set)
+        await app_context.config_service.save_bot_value(chat_id, db_value_type, value_to_set)
+            
         info_message = await message.reply('Added')
 
-    await cmd_sleep_and_delete(info_message, 5)
+    await app_context.utils_service.sleep_and_delete(info_message, 5)
 
     with suppress(TelegramBadRequest):
         await asyncio.sleep(1)
         await message.delete()
 
 
-async def handle_entry_channel_toggle(message: Message, command_info):
+async def handle_entry_channel_toggle(message: Message, command_info, app_context=None):
     chat_id = message.chat.id
     global_data_field = command_info[0]
 
@@ -209,17 +209,18 @@ async def handle_entry_channel_toggle(message: Message, command_info):
         command_args = message.text.split()[1:]
         if not command_args:
             info_message = await message.reply('Необходимо указать канал или чат в формате -100123456 или @channel.')
-            await cmd_sleep_and_delete(info_message, 10)
+            await app_context.utils_service.sleep_and_delete(info_message, 10)
             with suppress(TelegramBadRequest):
                 await asyncio.sleep(1)
                 await message.delete()
             return
 
-    await handle_command(message, command_info)
+    await handle_command(message, command_info, app_context=app_context)
 
 
-async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str) -> tuple[bool, bool]:
-    is_member, _ = await check_membership(bot, required_channel, user_id)
+async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None) -> tuple[bool, bool]:
+    is_member, _ = await app_context.group_service.check_membership(bot, required_channel, user_id)
+        
     if is_member:
         return True, False
 
@@ -232,12 +233,13 @@ async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_c
         return False, False
 
 
-async def run_entry_channel_check(bot: Bot, chat_id: int) -> tuple[int, int]:
+async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> tuple[int, int]:
     required_channel = global_data.entry_channel.get(chat_id)
     if not required_channel:
         raise ValueError('entry_channel setting is not enabled for this chat')
 
-    members = await get_group_members(chat_id)
+    members = await app_context.group_service.get_members(chat_id)
+
     checked_count = 0
     action_count = 0
 
@@ -247,7 +249,7 @@ async def run_entry_channel_check(bot: Bot, chat_id: int) -> tuple[int, int]:
 
         checked_count += 1
 
-        membership_ok, action_applied = await enforce_entry_channel(bot, chat_id, member.user_id, required_channel)
+        membership_ok, action_applied = await enforce_entry_channel(bot, chat_id, member.user_id, required_channel, app_context=app_context)
         if membership_ok:
             await asyncio.sleep(0.1)
             continue
@@ -259,7 +261,8 @@ async def run_entry_channel_check(bot: Bot, chat_id: int) -> tuple[int, int]:
 
     return checked_count, action_count
 
-async def list_command_handler(message: Message, command_info):
+
+async def list_command_handler(message: Message, command_info, app_context=None):
     global_data_field = command_info[0]
     db_value_type = command_info[1]
     action_type = command_info[2]
@@ -271,7 +274,7 @@ async def list_command_handler(message: Message, command_info):
             await message.reply("Необходимо указать аргументы.")
         else:
             global_data_field.extend(command_args)
-            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Added: {" ".join(command_args)}')
 
     elif action_type == "del_list":
@@ -281,7 +284,7 @@ async def list_command_handler(message: Message, command_info):
             for arg in command_args:
                 if arg in global_data_field:
                     global_data_field.remove(arg)
-            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Removed: {" ".join(command_args)}')
 
     elif action_type == "show_list":
@@ -291,7 +294,7 @@ async def list_command_handler(message: Message, command_info):
             await message.reply('The list is empty.')
 
 
-async def list_command_handler_topic(message: Message, command_info):
+async def list_command_handler_topic(message: Message, command_info, app_context=None):
     global_data_field = command_info[0]  # will be dict
     db_value_type = command_info[1]
     action_type = command_info[2]
@@ -306,7 +309,7 @@ async def list_command_handler_topic(message: Message, command_info):
             if chat_thread_key not in global_data_field:
                 global_data_field[chat_thread_key] = []
             global_data_field[chat_thread_key].extend(command_args)
-            await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
 
     elif action_type == "del_list_topic":
@@ -317,7 +320,7 @@ async def list_command_handler_topic(message: Message, command_info):
                 for arg in command_args:
                     if arg in global_data_field[chat_thread_key]:
                         global_data_field[chat_thread_key].remove(arg)
-                await global_data.mongo_config.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+                await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
             else:
                 await message.reply('This thread has no items in the list.')
@@ -340,6 +343,4 @@ def register_handlers(dp, bot):
 
 
 if __name__ == "__main__":
-    tmp_bot = Bot(token=config.bot_token.get_secret_value())
-    a = asyncio.run(check_membership(tmp_bot, MTLChats.MonteliberoChanel, int(6822818006)))
-    print(a)
+    pass

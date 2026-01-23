@@ -1,14 +1,20 @@
 from aiogram import Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from loguru import logger
+from sqlalchemy.orm import Session
 
 from other.global_data import global_data
 
 router = Router()
 
-
 @router.inline_query()
-async def inline_handler(inline_query: InlineQuery):
+async def inline_handler(inline_query: InlineQuery, session: Session, app_context=None):
+    # session usually injected by middleware if registered.
+    # checking global_data usage. It's safe to use global_data for read-only config info_cmd.
+    # But if app_context is provided, we might want to use something from it?
+    # Currently inline router logic is purely global_data read.
+    # We will keep it simple but allow app_context signature.
+    
     switch_text = "По Вашему запросу найдено :"
     answers = []
     query_text = inline_query.query.upper()
@@ -28,6 +34,8 @@ async def inline_handler(inline_query: InlineQuery):
     if len(query_text) == 0:
         query_text = ' '
 
+    # Using global_data directly as it is config data.
+    # We could abstract it via config_service but it's a dict.
     for key, value in global_data.info_cmd.items():
         if (key.upper().find(query_text) > -1) or (value['info'].upper().find(query_text) > -1):
             ico = ""
@@ -37,7 +45,12 @@ async def inline_handler(inline_query: InlineQuery):
                     ico = "🟢 " if chat_id in attr_list else "🔴 "
                 if value["cmd_type"] in (3,):
                     #    if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
-                    ico = "🟢 " if chat_id in attr_list and user_id in attr_list[chat_id] else "🔴 "
+                    # Need check logic for nested dicts if checking user_id
+                    in_list = False
+                    if chat_id in attr_list:
+                        if isinstance(attr_list[chat_id], list):
+                             in_list = user_id in attr_list[chat_id]
+                    ico = "🟢 " if in_list else "🔴 "
 
             answers.append(InlineQueryResultArticle(
                 id=str(len(answers)),

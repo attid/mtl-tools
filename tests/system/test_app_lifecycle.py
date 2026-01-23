@@ -37,10 +37,10 @@ async def test_startup_sends_message_to_admin(mock_server, dp):
         # Verify
         # Expecting: setMyCommands (2 calls: private Scopes, admin Scope) + sendMessage
         
-        cmds_reqs = [r for r in mock_server if r["method"] == "setMyCommands"]
+        cmds_reqs = [r for r in mock_server.get_requests() if r["method"] == "setMyCommands"]
         assert len(cmds_reqs) >= 2
         
-        msg_req = next((r for r in mock_server if r["method"] == "sendMessage"), None)
+        msg_req = next((r for r in mock_server.get_requests() if r["method"] == "sendMessage"), None)
         assert msg_req is not None
         assert "Bot started" in msg_req["data"]["text"]
         # MTLChats.ITolstov is hardcoded in start.py

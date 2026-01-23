@@ -77,8 +77,11 @@ async def cmd_create_topic(message: Message):
 
 @update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")
 @router.message(Command(commands=["all"]))
-async def cmd_all(message: Message):
-    user_list = await get_group_members(message.chat.id)
+async def cmd_all(message: Message, app_context=None):
+    if app_context:
+        user_list = await app_context.group_service.get_members(message.chat.id)
+    else:
+        user_list = await get_group_members(message.chat.id)
     members = []
     for user in user_list:
         if user.is_bot:
@@ -96,28 +99,39 @@ async def cmd_all(message: Message):
 @update_command_info("/check_entry_channel",
                      "Запустить проверку всех участников на подписку в обязательный канал.")
 @router.message(Command(commands=["check_entry_channel"]))
-async def cmd_check_entry_channel(message: Message, bot: Bot):
+async def cmd_check_entry_channel(message: Message, bot: Bot, app_context=None):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
 
     try:
-        checked_count, action_count = await run_entry_channel_check(bot, message.chat.id)
+        if app_context:
+             checked_count, action_count = await run_entry_channel_check(bot, message.chat.id, app_context.group_service)
+        else:
+             checked_count, action_count = await run_entry_channel_check(bot, message.chat.id)
     except ValueError:
         info_message = await message.reply('Настройка обязательного канала не включена в этом чате.')
-        await cmd_sleep_and_delete(info_message, 10)
-        await cmd_sleep_and_delete(message, 10)
+        if app_context:
+            await app_context.utils_service.sleep_and_delete(info_message, 10)
+            await app_context.utils_service.sleep_and_delete(message, 10)
+        else:
+            await cmd_sleep_and_delete(info_message, 10)
+            await cmd_sleep_and_delete(message, 10)
         return
 
     info_message = await message.reply(
         f'Проверено участников: {checked_count}. Применено ограничений: {action_count}.')
-    await cmd_sleep_and_delete(info_message, 30)
-    await cmd_sleep_and_delete(message, 30)
+    if app_context:
+        await app_context.utils_service.sleep_and_delete(info_message, 30)
+        await app_context.utils_service.sleep_and_delete(message, 30)
+    else:
+        await cmd_sleep_and_delete(info_message, 30)
+        await cmd_sleep_and_delete(message, 30)
 
 
 
 @router.message(Command(commands=["delete_dead_members"]))
-async def cmd_delete_dead_members(message: Message, state: FSMContext):
+async def cmd_delete_dead_members(message: Message, state: FSMContext, app_context=None):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -153,7 +167,10 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext):
 
     await message.reply("Starting to remove deleted users. This may take some time...")
     try:
-        count = await remove_deleted_users(chat_id)
+        if app_context:
+            count = await app_context.group_service.remove_deleted_users(chat_id)
+        else:
+            count = await remove_deleted_users(chat_id)
         await message.reply(f"Finished removing deleted users. \n Total deleted users: {count}")
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")
@@ -368,9 +385,9 @@ async def cmd_send_me(message: Message, bot: Bot):
 
 
 @update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)", 3,
-                     "alert_me")
+                      "alert_me")
 @router.message(Command(commands=["alert_me"]))
-async def cmd_set_alert_me(message: Message, session: Session):
+async def cmd_set_alert_me(message: Message, session: Session, app_context=None):
     if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
         global_data.alert_me[message.chat.id].remove(message.from_user.id)
         await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
@@ -384,8 +401,12 @@ async def cmd_set_alert_me(message: Message, session: Session):
                                                       json.dumps(global_data.alert_me[message.chat.id]))
         msg = await message.reply('Added')
 
-    await cmd_sleep_and_delete(message, 60)
-    await cmd_sleep_and_delete(msg, 60)
+    if app_context:
+        await app_context.utils_service.sleep_and_delete(message, 60)
+        await app_context.utils_service.sleep_and_delete(msg, 60)
+    else:
+        await cmd_sleep_and_delete(message, 60)
+        await cmd_sleep_and_delete(msg, 60)
 
 
 @update_command_info("/calc", "Посчитать сообщения от ответного")
@@ -487,7 +508,7 @@ async def cmd_show_all_topic_admin(message: Message):
 
 @update_command_info("/get_users_csv", "Получить CSV файл со списком пользователей чата")
 @router.message(Command(commands=["get_users_csv"]))
-async def cmd_get_users_csv(message: Message, bot: Bot):
+async def cmd_get_users_csv(message: Message, bot: Bot, app_context=None):
     if message.chat.id != MTLChats.MTLIDGroup:
         return
 
@@ -532,7 +553,10 @@ async def cmd_get_users_csv(message: Message, bot: Bot):
     await message.reply("Processing... This may take a while for large chats.")
 
     try:
-        members = await get_group_members(target_chat_id)
+        if app_context:
+            members = await app_context.group_service.get_members(target_chat_id)
+        else:
+            members = await get_group_members(target_chat_id)
     except Exception as e:
         await message.reply(f"Failed to get group members: {e}")
         logger.error(f"Failed to get group members for {target_chat_id}: {e}")

@@ -77,10 +77,13 @@ def build_confirmation_keyboard(username: Optional[str]) -> InlineKeyboardMarkup
     )
 
 
-async def build_trustline_checks(stellar_address: str) -> list[str]:
+async def build_trustline_checks(stellar_address: str, stellar_service=None) -> list[str]:
     asset_codes = ("MTL", "USDM", "EURMTL")
     try:
-        balances = await get_balances(stellar_address)
+        if stellar_service:
+            balances = await stellar_service.get_balances(stellar_address)
+        else:
+            balances = await get_balances(stellar_address)
     except Exception as exc:
         logger.warning(f"Не удалось получить балансы для {stellar_address}: {exc}")
         return ["Не удалось получить данные о трастлайнах"]
@@ -95,9 +98,12 @@ async def build_trustline_checks(stellar_address: str) -> list[str]:
     return checks
 
 
-async def check_source_balance(source_address: str, asset_code: str, amount: str) -> tuple[bool, str]:
+async def check_source_balance(source_address: str, asset_code: str, amount: str, stellar_service=None) -> tuple[bool, str]:
     try:
-        balances = await get_balances(source_address)
+        if stellar_service:
+            balances = await stellar_service.get_balances(source_address)
+        else:
+            balances = await get_balances(source_address)
     except Exception as exc:
         logger.error(f"Не удалось получить балансы источника {source_address}: {exc}")
         return False, "Не удалось получить балансы источника"
@@ -131,7 +137,7 @@ def build_airdrop_asset(config_item: AirdropConfigItem) -> Asset:
 
 
 async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int,
-                                  request_data: dict, config_item: AirdropConfigItem):
+                                  request_data: dict, config_item: AirdropConfigItem, app_context=None):
     try:
         asset = build_airdrop_asset(config_item)
     except ValueError as exc:
@@ -143,18 +149,27 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         AIRDROP_SOURCE_ADDRESS,
         config_item.asset_code,
         config_item.amount,
+        app_context.stellar_service if app_context else None
     )
     if not balance_ok:
         await callback.message.answer(balance_message)
         return
 
     try:
-        tx_result = await send_payment_async(
-            source_address=AIRDROP_SOURCE_ADDRESS,
-            destination=request_data["stellar_address"],
-            asset=asset,
-            amount=config_item.amount,
-        )
+        if app_context:
+            tx_result = await app_context.stellar_service.send_payment_async(
+                source_address=AIRDROP_SOURCE_ADDRESS,
+                destination=request_data["stellar_address"],
+                asset=asset,
+                amount=config_item.amount,
+            )
+        else:
+            tx_result = await send_payment_async(
+                source_address=AIRDROP_SOURCE_ADDRESS,
+                destination=request_data["stellar_address"],
+                asset=asset,
+                amount=config_item.amount,
+            )
     except Exception as exc:
         logger.error(f"Ошибка при отправке аирдропа: {exc}")
         await callback.message.answer("Не удалось отправить аирдроп. Проверьте логи.")
@@ -162,14 +177,24 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
 
     tx_hash = tx_result.get("hash") or tx_result.get("id") or ""
     try:
-        await grist_log_airdrop_payment(
-            tg_id=request_data["tg_id"],
-            public_key=request_data["stellar_address"],
-            nickname=request_data["username"],
-            tx_hash=tx_hash,
-            amount=float(config_item.amount),
-            currency=config_item.asset_code
-        )
+        if app_context:
+            await app_context.airdrop_service.log_payment(
+                tg_id=request_data["tg_id"],
+                public_key=request_data["stellar_address"],
+                nickname=request_data["username"],
+                tx_hash=tx_hash,
+                amount=float(config_item.amount),
+                currency=config_item.asset_code
+            )
+        else:
+            await grist_log_airdrop_payment(
+                tg_id=request_data["tg_id"],
+                public_key=request_data["stellar_address"],
+                nickname=request_data["username"],
+                tx_hash=tx_hash,
+                amount=float(config_item.amount),
+                currency=config_item.asset_code
+            )
     except Exception as exc:
         logger.error(f"Не удалось записать аирдроп в Grist: {exc}")
 
@@ -185,7 +210,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
 
 
 @router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
-async def handle_address_messages(message: types.Message):
+async def handle_address_messages(message: types.Message, app_context=None):
     html_text = message.html_text or message.text or ''
     plain_text = message.text or ''
     id_matches = list(re.finditer(r'#ID(\d+)', html_text))
@@ -203,7 +228,7 @@ async def handle_address_messages(message: types.Message):
     username_display = html.escape(username) if username else 'Отсутствует'
 
     results = []
-    trustline_checks = await build_trustline_checks(stellar_address)
+    trustline_checks = await build_trustline_checks(stellar_address, app_context.stellar_service if app_context else None)
     results.extend(trustline_checks)
     chat_list = (
         (MTLChats.MonteliberoChanel, "канал Montelibero ru"),
@@ -222,8 +247,12 @@ async def handle_address_messages(message: types.Message):
         else:
             results.append(f"Пользователь не подписан на {chat_name}")
 
-    results.extend(await grist_check_airdrop_records(tg_id, stellar_address))
-    configs = await grist_load_airdrop_configs()
+    if app_context:
+        results.extend(await app_context.airdrop_service.check_records(tg_id, stellar_address))
+        configs = await app_context.airdrop_service.load_configs()
+    else:
+        results.extend(await grist_check_airdrop_records(tg_id, stellar_address))
+        configs = await grist_load_airdrop_configs()
     if not configs:
         results.append("Нет активных конфигураций аирдропа в таблице CONFIG")
 
@@ -254,7 +283,7 @@ async def handle_address_messages(message: types.Message):
 
 
 @router.callback_query(AirdropCallbackData.filter())
-async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: AirdropCallbackData):
+async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: AirdropCallbackData, app_context=None):
     action = callback_data.action
     message_id = callback_data.message_id
     config_id = callback_data.config_id
@@ -277,7 +306,7 @@ async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: 
         if not config_item:
             await callback.answer("Конфиг не найден", show_alert=True)
             return
-        await process_airdrop_payment(callback, message_id, request_data, config_item)
+        await process_airdrop_payment(callback, message_id, request_data, config_item, app_context)
 
 
 def register_handlers(dp, bot):

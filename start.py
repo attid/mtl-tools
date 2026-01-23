@@ -28,6 +28,7 @@ from middlewares.emoji_reaction import EmojiReactionMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
+from middlewares.app_context import AppContextMiddleware
 from other.config_reader import config
 from other.global_data import MTLChats, global_data, global_tasks
 from other.pyro_tools import pyro_start
@@ -160,12 +161,21 @@ async def main():
     global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot)))
 
     # Настройка middleware
+    app_context_middleware = AppContextMiddleware(bot)
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
+    
+    dp.message.middleware(app_context_middleware)
+    dp.callback_query.middleware(app_context_middleware)
+    dp.chat_member.middleware(app_context_middleware)
+    dp.channel_post.middleware(app_context_middleware)
+    dp.edited_channel_post.middleware(app_context_middleware)
+    dp.poll_answer.middleware(app_context_middleware)
+
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
     dp.message.middleware(EmojiReactionMiddleware())
 

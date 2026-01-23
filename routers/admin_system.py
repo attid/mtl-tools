@@ -68,11 +68,14 @@ async def cmd_log(message: Message):
 
 
 @router.message(Command(commands=["ping_piro"]))
-async def cmd_ping_piro(message: Message):
+async def cmd_ping_piro(message: Message, app_context=None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
-    await pyro_test()
+    if app_context:
+        await app_context.group_service.ping_piro()
+    else:
+        await pyro_test()
 
 
 async def cmd_send_file(message: Message, filename):
@@ -350,10 +353,14 @@ async def cmd_eurmtl(message: Message):
 
 @router.message(Command(commands=["grist"]))
 @router.message(CommandStart(deep_link=True, magic=F.args == 'grist'), F.chat.type == "private")
-async def cmd_grist(message: Message):
+async def cmd_grist(message: Message, app_context=None):
     user_id = message.from_user.id
     try:
-        access_records = await grist_manager.load_table_data(MTLGrist.GRIST_access)
+        if app_context:
+            access_records = await app_context.grist_service.load_table_data(MTLGrist.GRIST_access)
+        else:
+            access_records = await grist_manager.load_table_data(MTLGrist.GRIST_access)
+            
         for r in access_records:
             print(r)
 
@@ -374,8 +381,12 @@ async def cmd_grist(message: Message):
                 }
             }]
         }
-
-        await grist_manager.patch_data(MTLGrist.GRIST_access, update_data)
+        
+        if app_context:
+            await app_context.grist_service.patch_data(MTLGrist.GRIST_access, update_data)
+        else:
+            await grist_manager.patch_data(MTLGrist.GRIST_access, update_data)
+        
         await message.answer(f"✅ Новый ключ доступа:\n<code>{new_key}</code>")
 
     except Exception as e:
@@ -384,12 +395,15 @@ async def cmd_grist(message: Message):
 
 
 @router.message(Command(commands=["update_mtlap"]))
-async def cmd_update_mtlap(message: Message, bot: Bot):
+async def cmd_update_mtlap(message: Message, bot: Bot, app_context=None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
 
-    data = await gs_get_all_mtlap()
+    if app_context:
+        data = await app_context.gspread_service.get_all_mtlap()
+    else:
+        data = await gs_get_all_mtlap()
 
     if not data or len(data) < 1:
         await message.reply("Ошибка: таблица пуста или не найдены данные.")
@@ -415,12 +429,18 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
         except Exception:
             results.append(False)
         await asyncio.sleep(0.1)
-
-    await gs_get_update_mtlap_skynet_row(results)
+    
+    if app_context:
+        await app_context.gspread_service.get_update_mtlap_skynet_row(results)
+    else:
+        await gs_get_update_mtlap_skynet_row(results)
 
     await message.reply("Готово 1")
-
-    result = await check_consul_mtla_chats(message.bot)
+    
+    if app_context:
+        result = await app_context.mtl_service.check_consul_mtla_chats(message.bot)
+    else:
+        result = await check_consul_mtla_chats(message.bot)
 
     if result:
         await message.reply('\n'.join(result))
@@ -429,13 +449,17 @@ async def cmd_update_mtlap(message: Message, bot: Bot):
 
 
 @router.message(Command(commands=["update_chats_info"]))
-async def cmd_chats_info(message: Message):
+async def cmd_chats_info(message: Message, app_context=None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
     await message.answer(text="Обновление информации о чатах...")
     for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
-        await global_data.mongo_config.update_chat_info(chat_id, await get_group_members(chat_id))
+        if app_context:
+            members = await app_context.group_service.get_members(chat_id)
+        else:
+            members = await get_group_members(chat_id)
+        await global_data.mongo_config.update_chat_info(chat_id, members)
     await message.answer(text="Обновление информации о чатах... Done.")
 
 
@@ -470,7 +494,7 @@ async def cmd_push(message: Message, bot: Bot):
 
 @router.message(Command(commands=["get_info"]))
 @router.message(Command(re.compile(r"get_info_(\d+)")))
-async def cmd_get_info(message: Message, bot: Bot):
+async def cmd_get_info(message: Message, bot: Bot, app_context=None):
     if not is_skynet_admin(message):
         if message.chat.id != MTLChats.HelperChat:
             await message.reply('You are not my admin.')
@@ -518,7 +542,13 @@ async def cmd_get_info(message: Message, bot: Bot):
                 messages.append("<b>!Внимание: нет юзернейма</b>")
         else:
             messages.append(f"Пользователь не подписан на {chat_name}")
+    
     #messages.extend(await gs_find_user(user_id))
+    # if app_context:
+    #      messages.extend(await app_context.gspread_service.find_user(user_id))
+    # else:
+    #      messages.extend(await gs_find_user(user_id))
+          
     messages.append(f"Я больше не умею проверять на айдропы, гуглшит не работает")
 
     await message.reply('\n'.join(messages))
