@@ -1,10 +1,13 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, SmallInteger, Float, ForeignKey, Boolean, Text
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, SmallInteger, Float, ForeignKey, Boolean, Text, JSON
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
 Base = declarative_base()
+
+# Define a JSON type that uses JSONB on PostgreSQL and generic JSON (TEXT) on SQLite/others
+JSON_VARIANT = JSON().with_variant(JSONB, "postgresql")
 
 # --- Firebird-derived models (adapted for PostgreSQL) ---
 
@@ -140,14 +143,14 @@ class TSavedMessages(Base):
 class KVStore(Base):
     __tablename__ = 'kv_store'
     kv_key = Column(String, primary_key=True)
-    kv_value = Column(JSONB)
+    kv_value = Column(JSON_VARIANT)
 
 class BotConfig(Base):
     __tablename__ = 'bot_config'
     chat_id = Column(BigInteger, primary_key=True)
     chat_key = Column(BigInteger, primary_key=True)
     chat_key_name = Column(String)
-    chat_value = Column(JSONB) # Using JSONB for flexibility
+    chat_value = Column(JSON_VARIANT) # Using JSONB variant for flexibility
 
 class Chat(Base):
     __tablename__ = 'chats'
@@ -156,8 +159,8 @@ class Chat(Base):
     title = Column(String)
     created_at = Column(DateTime)
     last_updated = Column(DateTime)
-    admins = Column(ARRAY(BigInteger)) # PostgreSQL array type
-    metadata_ = Column('metadata', JSONB) # Using metadata_ to avoid Python keyword conflict
+    admins = Column(JSON_VARIANT) # Using JSON variant instead of ARRAY for compatibility
+    metadata_ = Column('metadata', JSON_VARIANT) # Using metadata_ to avoid Python keyword conflict
 
     members = relationship("ChatMember", back_populates="chat")
 
@@ -167,7 +170,7 @@ class ChatMember(Base):
     user_id = Column(BigInteger, ForeignKey('bot_users.user_id'), primary_key=True) # FK to bot_users
     created_at = Column(DateTime)
     left_at = Column(DateTime)
-    metadata_ = Column('metadata', JSONB) # For any other user-specific chat metadata
+    metadata_ = Column('metadata', JSON_VARIANT) # For any other user-specific chat metadata
 
     chat = relationship("Chat", back_populates="members")
     user = relationship("BotUsers") # Relationship to the BotUsers table

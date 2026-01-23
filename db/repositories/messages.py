@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from db.repositories.base import BaseRepository
 from shared.infrastructure.database.models import TMessage, TSavedMessages, TSummary
-from other.global_data import MTLChats
+from other.constants import MTLChats
 
 
 class MessageRepository(BaseRepository):

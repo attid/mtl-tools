@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from routers.time_handlers import cmd_send_message_1m, time_clear
-from other.global_data import MTLChats
+from other.constants import MTLChats
 
 @pytest.mark.asyncio
 async def test_cmd_send_message_1m(mock_server, router_app_context):
@@ -22,8 +22,10 @@ async def test_cmd_send_message_1m(mock_server, router_app_context):
     mock_record.topic_id = 0
     mock_record.button_json = "{}"
     
-    # Mock db_load_new_message
-    with patch("routers.time_handlers.db_load_new_message", return_value=[mock_record]):
+    # Mock MessageRepository
+    with patch("routers.time_handlers.MessageRepository") as MockRepo:
+        mock_repo_instance = MockRepo.return_value
+        mock_repo_instance.load_new_messages.return_value = [mock_record]
         
         await cmd_send_message_1m(bot, mock_pool)
         

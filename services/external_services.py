@@ -196,6 +196,7 @@ class AntispamService:
 class PollService:
     async def save_poll(self, chat_id, message_id, poll_data):
         from other.global_data import global_data
+        from other.constants import MTLChats
         import json
         await global_data.mongo_config.save_bot_value(chat_id, -1 * message_id, json.dumps(poll_data))
 
@@ -206,12 +207,14 @@ class PollService:
         return json.loads(await global_data.mongo_config.load_bot_value(chat_id, -1 * message_id, empty_poll))
 
     async def save_mtla_poll(self, poll_id, poll_data):
-        from other.global_data import global_data, MTLChats
+        from other.global_data import global_data
+        from other.constants import MTLChats
         import json
         await global_data.mongo_config.save_bot_value(MTLChats.MTLA_Poll, int(poll_id), json.dumps(poll_data))
 
     async def load_mtla_poll(self, poll_id):
-        from other.global_data import global_data, MTLChats
+        from other.global_data import global_data
+        from other.constants import MTLChats
         import json
         from routers.polls import empty_poll
         return json.loads(await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll_id), empty_poll))
@@ -349,7 +352,8 @@ class TalkService:
                     )
 
     async def remind(self, message, session, app_context=None):
-        from other.global_data import global_data, BotValueTypes, is_skynet_admin
+        from other.global_data import global_data, is_skynet_admin
+        from other.constants import BotValueTypes
         from other.stellar_tools import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
         if message.reply_to_message and message.reply_to_message.forward_from_chat:

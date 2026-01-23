@@ -14,9 +14,9 @@ from db.repositories import MessageRepository, FinanceRepository
 from other.config_reader import start_path, config
 from other.global_data import MTLChats
 from other.gspread_tools import gs_copy_sheets_with_style, agcm
-from other.stellar_tools import stellar_get_issuer_assets, stellar_get_trade_cost, get_pool_balances, get_balances, \ 
-    stellar_get_offers, MTLAddresses, get_asset_swap_spread, MTLAssets, cmd_gen_mtl_vote_list, \ 
-    stellar_add_mtl_holders_info, resolve_account, cmd_show_guards_list, cmd_show_donates, stellar_get_transactions, \ 
+from other.stellar_tools import stellar_get_issuer_assets, stellar_get_trade_cost, get_pool_balances, get_balances, \
+    stellar_get_offers, MTLAddresses, get_asset_swap_spread, MTLAssets, cmd_gen_mtl_vote_list, \
+    stellar_add_mtl_holders_info, resolve_account, cmd_show_guards_list, cmd_show_donates, stellar_get_transactions, \
     decode_data_value, stellar_get_holders
 
 from other.web_tools import get_debank_balance
@@ -50,9 +50,9 @@ async def update_main_report(session: Session):
     # aum
     s = requests.get(
         'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
-    s = s[s.find("offers"): ]
+    s = s[s.find('"offers":'):]
     # print(s)
-    s = s[s.find("price": ") + 10:]
+    s = s[s.find('"price": "') + 10:]
     s = s[:s.find('"')]
     await wks.update('D6', float(s))
 

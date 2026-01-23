@@ -53,3 +53,33 @@ async def test_cmd_balance(mock_telegram, mock_horizon, router_app_context):
     messages = [r for r in mock_telegram if r['method'] == 'sendMessage']
     assert "100.0 XLM" in messages[-1]['data']['text']
 ```
+
+## Database Tests
+
+We have migrated from a monolithic `db/requests.py` to a Repository Pattern in `db/repositories/`. 
+Tests have been added to verify the new architecture without requiring a live Postgres connection (using in-memory SQLite).
+
+### Running Tests
+
+To run the database unit tests:
+
+```bash
+uv run pytest tests/db/
+```
+
+### Test Coverage
+
+1.  **Repositories (`tests/db/test_repositories.py`)**:
+    *   **ConfigRepository**:
+        *   Saving/loading bot values (handling Strings, JSON objects, legacy formats).
+        *   Updating dictionary values.
+        *   KVStore operations.
+    *   **ChatsRepository**:
+        *   Creating and updating Chat info.
+        *   Managing Chat Members (add/remove).
+        *   Tracking joined/left users (filtering by date).
+
+2.  **Service Layer (`tests/db/test_database_service.py`)**:
+    *   Verifies that `DatabaseService` correctly delegates calls to repositories.
+    *   Ensures sessions are committed.
+    *   Mocks `SessionPool` and Repositories to isolate logic.
