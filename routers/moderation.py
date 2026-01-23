@@ -53,7 +53,7 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context=None
                     user_id = app_context.moderation_service.get_user_id(session, message.text.split()[1])
                 else:
                     from db.requests import db_get_user_id
-                    user_id = db_get_user_id(session, message.text.split()[1])
+                    user_id = ChatsRepository(session).get_user_id(message.text.split()[1])
                 username = None
             except ValueError as e:
                 await message.reply(str(e))
@@ -102,7 +102,7 @@ async def cmd_unban(message: Message, session: Session, bot: Bot, app_context=No
                     user_id = app_context.moderation_service.get_user_id(session, param)
                 else:
                     from db.requests import db_get_user_id
-                    user_id = db_get_user_id(session, param)
+                    user_id = ChatsRepository(session).get_user_id(param)
         except ValueError as e:
             await message.reply(str(e))
             return
@@ -136,7 +136,7 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context=
                     user_id = app_context.moderation_service.get_user_id(session, param)
                 else:
                     from db.requests import db_get_user_id
-                    user_id = db_get_user_id(session, param)
+                    user_id = ChatsRepository(session).get_user_id(param)
         except ValueError as e:
             await message.reply(str(e))
             return

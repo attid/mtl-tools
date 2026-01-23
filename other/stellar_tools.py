@@ -22,9 +22,7 @@ from stellar_sdk.sep.federation import resolve_account_id_async
 
 from other.loguru_tools import safe_catch_async
 from shared.infrastructure.database.models import TDivList, TOperations, TPayments, TTransaction
-from db.requests import (cmd_load_transactions, db_count_unpacked_payments, db_count_unsent_transactions,
-                         db_get_div_list, db_get_new_effects_for_token, db_get_operations_by_asset, db_get_payments,
-                         db_get_total_user_div, db_get_user_id)
+from db.repositories import (FinanceRepository, ChatsRepository)
 from other.config_reader import config
 from other.global_data import float2str, global_data, MTLChats
 from other.grist_tools import MTLGrist, grist_manager
@@ -378,7 +376,7 @@ async def send_by_list(bot: Bot, all_users: list, message: Message, session: Ses
     for user in all_users:
         if len(user) > 2 and user[0] == '@':
             try:
-                chat_id = db_get_user_id(session, user)
+                chat_id = ChatsRepository(session).get_user_id(user)
                 await bot.send_message(chat_id=chat_id, text=msg)
                 good_users.append(user)
             except Exception as ex:
@@ -659,7 +657,7 @@ async def cmd_show_bim(session: Session):
     bod_list = await get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
-    total_sum = db_get_total_user_div(session)
+    total_sum = FinanceRepository(session).get_total_user_div()
 
     result += f'Всего {len(bod_list)} участников'
     result += f'\n{len(good)} участников c доступом к EURMTL'
@@ -815,7 +813,7 @@ def get_key_1(key):
 
 
 def cmd_gen_xdr(session: Session, list_id: int):
-    div_list = db_get_div_list(session, list_id)
+    div_list = FinanceRepository(session).get_div_list(list_id)
     memo = div_list.memo
     pay_type = div_list.pay_type
     server = Server(horizon_url=config.horizon_url)
@@ -844,7 +842,7 @@ def cmd_gen_xdr(session: Session, list_id: int):
                                      base_fee=base_fee)
     transaction.set_timeout(60 * 60 * 24 * 7)
 
-    for payment in db_get_payments(session, list_id, pack_count):
+    for payment in FinanceRepository(session).get_payments(list_id, pack_count):
         if round(payment.user_div, 7) > 0:
             transaction.append_payment_op(destination=payment.user_key, amount=str(round(payment.user_div, 7)),
                                           asset=asset)
@@ -858,7 +856,7 @@ def cmd_gen_xdr(session: Session, list_id: int):
 
     session.add(TTransaction(xdr=xdr, id_div_list=list_id, xdr_id=0))
     session.commit()
-    need = db_count_unpacked_payments(session, list_id)
+    need = FinanceRepository(session).count_unpacked_payments(list_id)
     # print(f'need {need} more')
     return need
 
@@ -867,7 +865,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
     # records = fb.execsql(f"select first 3 t.id, t.xdr from t_transaction t where t.was_send = 0 and t.id_div_list = ?",
     #                     [list_id])
 
-    for db_transaction in cmd_load_transactions(session, list_id):
+    for db_transaction in FinanceRepository(session).load_transactions(list_id):
         transaction = TransactionEnvelope.from_xdr(db_transaction.xdr,
                                                    network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         server = Server(horizon_url=config.horizon_url)
@@ -881,7 +879,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int):
         db_transaction.xdr_id = sequence
     session.commit()
 
-    return db_count_unsent_transactions(session, list_id)
+    return FinanceRepository(session).count_unsent_transactions(list_id)
 
 
 async def stellar_async_submit(xdr: str):
@@ -1259,7 +1257,7 @@ async def cmd_calc_usdm_usdm_divs(session: Session, div_list_id: int, test_sum=0
         if current_date == period_start:
             break
 
-        for record in db_get_operations_by_asset(session, MTLAssets.usdm_asset.code, current_date):
+        for record in FinanceRepository(session).get_operations_by_asset(MTLAssets.usdm_asset.code, current_date):
             if record.for_account in div_accounts_dict:
                 if record.operation == 'account_credited':
                     div_accounts_dict[record.for_account] -= float(record.amount1)
@@ -2131,7 +2129,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         # Если last_id равен None, просто сохраняем его и выходим
         if last_id is None:
             # Получаем данные для определения текущего max_id
-            data = db_get_new_effects_for_token(session, asset_name, '-1', filter_sum)
+            data = FinanceRepository(session).get_new_effects_for_token( asset_name, '-1', filter_sum)
             if data:
                 # Сохраняем id последнего эффекта как начальный last_id
                 await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
@@ -2140,7 +2138,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         max_id = last_id
 
         # Получаем новые эффекты для токена
-        data = db_get_new_effects_for_token(session, asset_name, last_id, filter_sum)
+        data = FinanceRepository(session).get_new_effects_for_token( asset_name, last_id, filter_sum)
         for row in data:
             try:
                 effect = await decode_db_effect(row)

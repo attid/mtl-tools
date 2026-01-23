@@ -279,8 +279,8 @@ class ModerationService:
         return global_data.check_user(user_id)
 
     def get_user_id(self, session, username):
-        from db.requests import db_get_user_id
-        return db_get_user_id(session, username)
+        from db.repositories import ChatsRepository
+        return ChatsRepository(session).get_user_id(username)
 
     def add_bot_user(self, session, user_id, username, user_type):
         from start import add_bot_users
@@ -351,7 +351,7 @@ class TalkService:
     async def remind(self, message, session, app_context=None):
         from other.global_data import global_data, BotValueTypes, is_skynet_admin
         from other.stellar_tools import cmd_alarm_url, send_by_list
-        from db.requests import extract_url
+        from other.text_tools import extract_url
         if message.reply_to_message and message.reply_to_message.forward_from_chat:
             alarm_list = cmd_alarm_url(extract_url(message.reply_to_message.text))
             msg = alarm_list + '\nСмотрите топик / Look at the topic message'

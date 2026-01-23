@@ -1,9 +1,15 @@
+import asyncio
 import sentry_sdk
+import aiohttp
+from loguru import logger
+from sqlalchemy.orm import Session
 
 from other.global_data import BotValueTypes
 from other.stellar_tools import *
-from db.models import TLedgers, TOperations
-from db.quik_pool import quik_pool
+from shared.infrastructure.database.models import TLedgers, TOperations
+from db.session import SessionPool
+from db.repositories import FinanceRepository, ConfigRepository
+from other.config_reader import config
 
 watch_list = []
 
@@ -17,14 +23,14 @@ async def extra_run():
     queue = asyncio.Queue()
 
     # create task
-    master1_task = asyncio.create_task(master_update_list(f'master1', quik_pool))
-    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, quik_pool))
+    master1_task = asyncio.create_task(master_update_list(f'master1', SessionPool))
+    master2_task = asyncio.create_task(master_get_new_ledgers(f'master2', queue, SessionPool))
     # wait for a little while to allow master_get_new_ledgers to populate the queue
     # await asyncio.sleep(15)
 
     tasks = [master1_task, master2_task]
     for i in range(10):
-        task = asyncio.create_task(worker_get_ledger(f'worker-{i}', queue, quik_pool))
+        task = asyncio.create_task(worker_get_ledger(f'worker-{i}', queue, SessionPool))
         tasks.append(task)
 
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -38,7 +44,7 @@ async def master_update_list(name, session_pool):
     while True:
         global watch_list
         with session_pool() as session:
-            watch_list = db_get_watch_list(session)
+            watch_list = FinanceRepository(session).get_watch_list()
         logger.info(f'{name} watch_list was update {len(watch_list)}')
         await asyncio.sleep(60 * 60 * 1)
 
@@ -58,7 +64,7 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session_pool):
         if queue.empty():
             # put data
             with session_pool() as session:
-                resend_data = db_get_first_100_ledgers(session)
+                resend_data = FinanceRepository(session).get_first_100_ledgers()
             if len(resend_data) > 0:
                 logger.info(f'{name} load {len(resend_data)} from old')
             for record in resend_data:
@@ -75,7 +81,9 @@ async def master_get_new_ledgers(name, queue: asyncio.Queue, session_pool):
 
 
 async def load_from_stellar(name, queue, session):
-    saved_ledger = int(db_load_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+    # Using the passed session for config load as well
+    saved_ledger = int(ConfigRepository(session).load_legacy_bot_value(0, BotValueTypes.LastLedger, '45407700'))
+    
     async with aiohttp.ClientSession() as httpsession:
         async with httpsession.get(config.horizon_url) as resp:
             json_resp = await resp.json()
@@ -83,12 +91,13 @@ async def load_from_stellar(name, queue, session):
             if core_latest_ledger > saved_ledger:
                 for i in range(saved_ledger + 1, core_latest_ledger + 1):
                     logger.info(f'{name} new ledger found {i}')
-                    ledger = TLedgers(i)
+                    ledger = TLedgers(ledger=i)
                     session.add(ledger)
                     queue.put_nowait(ledger.ledger)
                     session.commit()
 
-                db_save_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, core_latest_ledger)
+                ConfigRepository(session).save_legacy_bot_value(0, BotValueTypes.LastLedger, core_latest_ledger)
+                session.commit()
 
 
 ########################################################################################################################
@@ -101,11 +110,12 @@ async def worker_get_ledger(name, queue: asyncio.Queue, session_pool):
         try:
             logger.info(f'{name} {ledger_id} start')
             with session_pool() as session:
-                ledger = db_get_ledger(session, ledger_id)
+                ledger = FinanceRepository(session).get_ledger(ledger_id)
                 await asyncio.wait_for(
                     cmd_check_ledger(start_ledger_id=ledger_id, session=session), timeout=60)
-                session.delete(ledger)
-                session.commit()
+                if ledger:
+                    session.delete(ledger)
+                    session.commit()
                 logger.info(f'{name} {ledger_id} checked')
         except asyncio.exceptions.TimeoutError as timeout_err:
             logger.info(f'{name} {ledger_id} timeout error: {timeout_err}')
@@ -123,7 +133,17 @@ async def cmd_check_ledger(start_ledger_id=None, session: Session = None):
     if start_ledger_id:
         ledger_id = start_ledger_id
     else:
-        ledger_id = int(db_load_bot_value_ext(quik_pool(), 0, BotValueTypes.LastLedger, '45407700'))
+        # If session is None, we need to create one, but this function expects session to be passed if called from worker
+        # If called standalone (not from worker), we might need to handle it.
+        # Assuming session is always passed if start_ledger_id is passed.
+        # If not passed, we use ConfigRepository(session)
+        if session:
+             ledger_id = int(ConfigRepository(session).load_legacy_bot_value(0, BotValueTypes.LastLedger, '45407700'))
+        else:
+             # Fallback if session not provided (should not happen in current flow)
+             with SessionPool() as temp_session:
+                 ledger_id = int(ConfigRepository(temp_session).load_legacy_bot_value(0, BotValueTypes.LastLedger, '45407700'))
+
     max_ledger_id = ledger_id + 17
 
     while max_ledger_id > ledger_id:
@@ -147,15 +167,17 @@ async def cmd_check_ledger(start_ledger_id=None, session: Session = None):
 
         for data in ledger_data:
             try:
-                session.add(
-                    TOperations(dt=data[0], operation=data[1], amount1=data[2], code1=data[3], amount2=data[4],
-                                code2=data[5], from_account=data[6], for_account=data[7], transaction_hash=data[8],
-                                memo=data[9], id=data[10], ledger=data[11]
-                                )
-                )  # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token', 'ledger']]]
-                session.commit()
+                if session:
+                    session.add(
+                        TOperations(dt=data[0], operation=data[1], amount1=data[2], code1=data[3], amount2=data[4],
+                                    code2=data[5], from_account=data[6], for_account=data[7], transaction_hash=data[8],
+                                    memo=data[9], id=data[10], ledger=data[11]
+                                    )
+                    )  # ['Дата', 'Операция', 'Сумма 1', 'Код', 'Сумма 2', 'Код 2', 'От кого', 'Кому', 'Хеш транзы', 'Мемо', 'paging_token', 'ledger']]]
+                    session.commit()
             except Exception as e:
-                session.rollback()
+                if session:
+                    session.rollback()
                 logger.warning(f'ledger_data {data} failed {type(e)}')
         # logger.info(f'ledger_data {ledger_data}')
         return

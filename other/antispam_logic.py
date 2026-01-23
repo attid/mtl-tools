@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import extract_url
+from other.text_tools import extract_url
 from start import add_bot_users
 from other.global_data import MTLChats, BotValueTypes, global_data
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer

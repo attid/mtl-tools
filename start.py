@@ -22,7 +22,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 # Local application imports
-from db.requests import db_load_bot_users, db_save_bot_user
+from db.repositories import ChatsRepository
 from middlewares.db import DbSessionMiddleware
 from middlewares.emoji_reaction import EmojiReactionMiddleware
 from middlewares.retry import RetryRequestMiddleware
@@ -196,7 +196,7 @@ async def main():
 
 
 async def load_globals(session: Session, bot: Bot):
-    for user in db_load_bot_users(session):
+    for user in ChatsRepository(session).load_bot_users():
         global_data.users_list[user.user_id] = user.user_type
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='globals loaded')
@@ -210,7 +210,7 @@ def add_bot_users(session: Session, user_id: int, username: str | None, new_user
     ### user_type_now = global_data.users_list.get(user_id)
     ### # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
     ### if not user_type_now or (new_user_type > user_type_now):
-    db_save_bot_user(session, user_id, username, new_user_type)
+    ChatsRepository(session).save_bot_user(user_id, username, new_user_type)
 
 
 if __name__ == "__main__":

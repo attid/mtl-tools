@@ -6,7 +6,7 @@ from aiogram.types import (Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import extract_url
+from other.text_tools import extract_url
 from middlewares.throttling import rate_limit
 from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info

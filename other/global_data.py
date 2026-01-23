@@ -5,8 +5,7 @@ from loguru import logger
 
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 
-from db.mongo import BotMongoConfig
-from db.quik_pool import quik_pool
+from services.database_service import DatabaseService
 
 
 class MTLChats:
@@ -153,12 +152,12 @@ class GlobalData:
     first_vote_data = {}
     moderate = []
     entry_channel = {}
-    mongo_config: BotMongoConfig
+    mongo_config: DatabaseService
     reboot = False
 
 
 global_data = GlobalData()
-global_data.mongo_config = BotMongoConfig(quik_pool)
+global_data.mongo_config = DatabaseService()
 global_tasks = []
 
 

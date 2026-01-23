@@ -15,7 +15,8 @@ from aiogram.fsm.context import FSMContext
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import extract_url, db_save_message, db_get_user_id, db_update_user_chat_date
+from other.text_tools import extract_url
+from db.repositories import MessageRepository, ChatsRepository
 from middlewares.throttling import rate_limit
 from start import add_bot_users
 from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
@@ -118,7 +119,7 @@ async def check_alert(bot, message, session):
             if entity.type == 'mention':
                 username = entity.extract_from(message.text)
                 try:
-                    user_id = db_get_user_id(session, username)
+                    user_id = ChatsRepository(session).get_user_id(username)
                 except ValueError as ex:
                     user_id = 0
                     logger.warning(ex)
@@ -139,7 +140,7 @@ async def check_alert(bot, message, session):
 
 async def save_last(message, session):
     if message.chat.id in global_data.save_last_message_date:
-        db_update_user_chat_date(session, message.from_user.id, message.chat.id)
+        ChatsRepository(session).update_user_chat_date(message.from_user.id, message.chat.id)
 
 
 async def notify_message(message: Message):
@@ -210,7 +211,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot, sta
         await state.update_data(reply_only_expiration=expiration_time.isoformat())
 
     if message.reply_to_message or message.forward_from_chat or has_hashtag or has_temp_permission or message.is_automatic_forward:
-        db_save_message(session=session, user_id=message.from_user.id, username=message.from_user.username,
+        MessageRepository(session).save_message(user_id=message.from_user.id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
     else:
@@ -382,7 +383,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
     add_bot_users(session, user_id, message.from_user.username, 1)
 
     if message.chat.id in global_data.listen:
-        db_save_message(session=session, user_id=user_id, username=message.from_user.username,
+        MessageRepository(session).save_message(user_id=user_id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
 

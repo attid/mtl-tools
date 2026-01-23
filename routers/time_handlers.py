@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
 from other import aiogram_tools
-from db.requests import db_load_new_message
+from db.repositories import MessageRepository
 from other.config_reader import config
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async, safe_catch
@@ -56,7 +56,7 @@ async def cmd_send_message_start_month(bot: Bot):
 @safe_catch_async
 async def cmd_send_message_1m(bot: Bot, session_pool):
     with session_pool() as session:
-        for record in db_load_new_message(session):
+        for record in MessageRepository(session).load_new_messages():
             try:
                 if record.update_id > 0:
                     reply_markup = None

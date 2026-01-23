@@ -1,7 +1,7 @@
 import aiohttp
 from sqlalchemy.orm import Session
 
-from db.requests import db_send_admin_message
+from db.repositories import MessageRepository
 from other.stellar_tools import stellar_get_receive_path
 from scripts.mtl_exchange import *
 

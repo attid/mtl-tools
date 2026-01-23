@@ -18,7 +18,7 @@ from aiogram.types import (Message, FSInputFile, InlineKeyboardMarkup, InlineKey
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import db_get_messages_without_summary, db_add_summary, db_get_summary
+from db.repositories import MessageRepository
 from other.aiogram_tools import is_admin
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
@@ -105,7 +105,7 @@ async def cmd_get_summary(message: Message, session: Session):
         return
 
     try:
-        data = db_get_messages_without_summary(session, chat_id=message.chat.id,
+        data = MessageRepository(session).get_messages_without_summary(chat_id=message.chat.id,
                                              thread_id=message.message_thread_id if message.is_topic_message else None)
 
         if not data:
@@ -113,7 +113,7 @@ async def cmd_get_summary(message: Message, session: Session):
             return
 
         text = ''
-        summary = db_add_summary(session=session, text=text)
+        summary = MessageRepository(session).add_summary(text=text)
         session.flush()
 
         try:
@@ -126,7 +126,7 @@ async def cmd_get_summary(message: Message, session: Session):
                 else:
                     summary.text = await talk_get_summary(text)
                     session.flush()
-                    summary = db_add_summary(session=session, text='')
+                    summary = MessageRepository(session).add_summary(text='')
                     session.flush()
                     text = record.username + ': ' + record.text + '\n\n'
                     record.summary_id = summary.id
@@ -136,7 +136,7 @@ async def cmd_get_summary(message: Message, session: Session):
                 summary.text = await talk_get_summary(text)
                 session.flush()
 
-            summaries = db_get_summary(session=session, chat_id=message.chat.id,
+            summaries = MessageRepository(session).get_summary(chat_id=message.chat.id,
                                      thread_id=message.message_thread_id if message.is_topic_message else None)
 
             if not summaries:

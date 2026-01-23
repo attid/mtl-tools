@@ -7,7 +7,7 @@ from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import db_save_bot_user
+from db.repositories import ChatsRepository
 from other.global_data import MTLChats, update_command_info
 from other.stellar_tools import MTLAddresses
 
@@ -49,7 +49,7 @@ links_msg = f"""
 @router.message(CommandStart(deep_link=False, magic=F.args.is_(None)), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext, session: Session, bot: Bot):
     await state.clear()
-    db_save_bot_user(session, message.from_user.id, message.from_user.username)
+    ChatsRepository(session).save_bot_user(message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
 
 

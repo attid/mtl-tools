@@ -15,7 +15,7 @@ from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineK
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.requests import db_send_admin_message
+from db.repositories import MessageRepository
 # from routers.multi_handler import check_membership, enforce_entry_channel
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
@@ -340,7 +340,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
                 except Exception as e:
-                    db_send_admin_message(session, f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
+                    MessageRepository(session).send_admin_message(f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
 
             answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,

@@ -7,7 +7,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from stellar_sdk import Server
 
-from db.requests import db_cmd_add_message
+from db.repositories import MessageRepository
 from other.config_reader import config
 from other.global_data import MTLChats, global_data
 from other.grist_tools import grist_manager, MTLGrist
@@ -141,7 +141,7 @@ async def cmd_check_price(session: Session):
     # print('\n'.join(msg))
     # print(bt)
 
-    db_cmd_add_message(session, MTLChats.EURMTLClubGroup, '\n'.join(msg), False, 6568, json.dumps(bt))
+    MessageRepository(session).add_message(MTLChats.EURMTLClubGroup, '\n'.join(msg), 0, 6568, json.dumps(bt))
 
 
 async def grist_upload_users(table, data):

@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 import json
-
 import asyncio
 from typing import cast
 
@@ -11,14 +10,13 @@ from sqlalchemy.orm import Session
 from stellar_sdk import Asset, AiohttpClient
 from stellar_sdk.sep.federation import resolve_stellar_address_async
 
-from db.requests import db_send_admin_message, db_get_wallet_stats, db_get_log_count, db_cmd_add_message, \
-    get_mmwb_use_date, db_get_wallet_info, db_get_operations
+from db.repositories import MessageRepository, FinanceRepository
 from other.config_reader import start_path, config
 from other.global_data import MTLChats
 from other.gspread_tools import gs_copy_sheets_with_style, agcm
-from other.stellar_tools import stellar_get_issuer_assets, stellar_get_trade_cost, get_pool_balances, get_balances, \
-    stellar_get_offers, MTLAddresses, get_asset_swap_spread, MTLAssets, cmd_gen_mtl_vote_list, \
-    stellar_add_mtl_holders_info, resolve_account, cmd_show_guards_list, cmd_show_donates, stellar_get_transactions, \
+from other.stellar_tools import stellar_get_issuer_assets, stellar_get_trade_cost, get_pool_balances, get_balances, \ 
+    stellar_get_offers, MTLAddresses, get_asset_swap_spread, MTLAssets, cmd_gen_mtl_vote_list, \ 
+    stellar_add_mtl_holders_info, resolve_account, cmd_show_guards_list, cmd_show_donates, stellar_get_transactions, \ 
     decode_data_value, stellar_get_holders
 
 from other.web_tools import get_debank_balance
@@ -52,9 +50,9 @@ async def update_main_report(session: Session):
     # aum
     s = requests.get(
         'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
-    s = s[s.find('"offers":'):]
+    s = s[s.find("offers"): ]
     # print(s)
-    s = s[s.find('"price": "') + 10:]
+    s = s[s.find("price": ") + 10:]
     s = s[:s.find('"')]
     await wks.update('D6', float(s))
 
@@ -236,7 +234,7 @@ async def update_fire(session: Session):
             continue
         break
     else:
-        db_send_admin_message(session, 'bad fire value')
+        MessageRepository(session).send_admin_message('bad fire value')
         raise Exception('bad fire value')
 
     logger.info(f'cost_fire {cost_fire}')
@@ -253,15 +251,7 @@ async def update_guarantors_report():
 
     # Update a range of cells using the top left corner address
     now = datetime.now()
-    # print(now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    # user_entered_format = gspread_formatting.get_user_entered_format(wks,'D2')
-    # print(user_entered_format)
-    # gspread_formatting.format_cell_range(wks,'D4',
-    #   gspread_formatting.CellFormat(numberFormat={"type":"DATE","pattern":"dd.mm.yyyy"}))
-    # user_entered_format = gspread_formatting.get_user_entered_format(wks,'D4')
-    # print(user_entered_format)
-    # gspread_formatting.batch_updater(gc)
     address_list = await wks.col_values(2)
     address_list.pop(0)
     address_list.pop(0)
@@ -310,7 +300,6 @@ async def update_guarantors_report():
         update_list.append([dt_google, eur_sum, debt_sum])
 
     await wks.update('E3', update_list)
-    # wks.format("E3:E40", {"numberFormat": {"type": "DATE", "pattern": "dd.mm.yyyy"}})
 
     # rects
     address_list = await wks.col_values(3)
@@ -326,8 +315,6 @@ async def update_guarantors_report():
 
     await wks.update('H3', update_list)
 
-    # dt1 = datetime.strptime(record["created_at"], '%Y-%m-%dT%H:%M:%SZ')
-    # print(update_list)
     await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'report Guarantors all done {now}')
@@ -376,7 +363,7 @@ async def update_top_holders_report(session: Session):
     for record in records:
         if record[0] != '0':
             text = f'You need update votes <a href="{gd_link}">more info</a>'
-            db_cmd_add_message(session, MTLChats.SignGroup, text, use_alarm=1, topic_id=59558)
+            MessageRepository(session).add_message(MTLChats.SignGroup, text, use_alarm=1, topic_id=59558)
             break
 
     logger.info(f'report topholders all done {now}')
@@ -402,37 +389,6 @@ async def update_bdm_report():
     await wks.update('A2', bdm_list)
     await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'update bdm_report all done {now}')
-
-
-@safe_catch_async
-async def update_bim_data(session: Session):
-    agc = await agcm.authorize()
-
-    now = datetime.now()
-
-    ss = await agc.open("MTL_BIM_register")
-    wks = await ss.worksheet("List")
-
-    use_date_list = []
-    mtl_amount_list = []
-    data = await wks.get_all_values()
-    for record in data[2:]:
-        mtl_amount = 0
-        mmwb_date = None
-        if len(record[4]) == 56 and record[10] == 'TRUE':
-            use_date = get_mmwb_use_date(session, record[4])
-            if use_date:
-                mmwb_date = use_date.strftime('%d.%m.%Y %H:%M:%S')
-            # get balance
-            balances = await get_balances(record[4])
-            mtl_amount = float(balances.get('MTL', 0) + balances.get('MTLRECT', 0))
-        mtl_amount_list.append([mtl_amount])
-        use_date_list.append([mmwb_date])
-
-    await wks.update('R3', mtl_amount_list)
-    await wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
-    await wks.update('AG1', now.strftime('%d.%m.%Y %H:%M:%S'))
     logger.info(f'update bdm_report all done {now}')
 
 
@@ -509,7 +465,7 @@ async def update_mmwb_report(session: Session):
     for record in records:
         value = float(record[0].replace(',', '.'))
         if value < 0.2 or value > 0.8:
-            db_send_admin_message(session, f'update_mmwb_report balance error {value}')
+            MessageRepository(session).send_admin_message(f'update_mmwb_report balance error {value}')
 
     await wks.update('Q1', now.strftime('%d.%m.%Y %H:%M:%S'))
     logger.info(f'update mmwb_report all done {now}')
@@ -530,7 +486,6 @@ async def update_airdrop():
 
     # Update a range of cells using the top left corner address
     now = datetime.now()
-    # print(now.strftime('%d.%m.%Y %H:%M:%S'))
 
     address_list = await wks.col_values(4)
     fed_address_list = await wks.col_values(5)
@@ -681,68 +636,6 @@ async def update_donates_new():
     logger.info(f'new done {now}')
 
 
-async def update_wallet_report(session: Session):
-    agc = await agcm.authorize()
-
-    # Open a sheet from a spreadsheet in one go
-    ss = await agc.open("Табличка с кошелька")
-    wks = await ss.worksheet("RawData")
-
-    # Update a range of cells using the top left corner address
-    now = datetime.now()
-
-    list_wallet = db_get_wallet_info(session)
-
-    update_list = []
-
-    for wallet in list_wallet:
-        balances = await get_balances(wallet.public_key)
-        if balances:
-            date = wallet.last_use_day.strftime('%d.%m.%Y %H:%M:%S') if wallet.last_use_day else None
-            update_list.append([wallet.public_key, wallet.free_wallet, wallet.default_wallet, date,
-                                float(balances.get('EURMTL', 0)),
-                                float(balances.get('MTL', 0))])
-
-    # print(update_list)
-    # print(update_list)
-    await wks.update('A4', update_list)
-    await wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
-
-    logger.info(f'wallet report all done {now}')
-
-
-async def update_wallet_report2(session: Session):
-    agc = await agcm.authorize()
-
-    # Open a sheet from a spreadsheet in one go
-    ss = await agc.open("Табличка с кошелька")
-    wks = await ss.worksheet("DayByDay")
-
-    # Update a range of cells using the top left corner address
-    now = datetime.now()
-
-    update_data = [(now - timedelta(days=1)).strftime('%d.%m.%Y')]
-
-    for record in db_get_wallet_stats(session):
-        update_data.append(record)
-        # update_data.append(record[1])
-        # update_data.append(record[2])
-        # update_data.append(record[3])
-
-    update_data.append(db_get_log_count(session, 'callback'))
-    update_data.append(db_get_log_count(session, 'sign'))
-
-    update_data = [update_data, ['LAST']]
-
-    last_row = (await wks.find('LAST', in_column=1)).row
-
-    # print(update_list)
-    await wks.update(f'A{last_row}', update_data)
-    await wks.update('K1', now.strftime('%d.%m.%Y %H:%M:%S'))
-
-    logger.info(f'wallet report 2 all done {now}')
-
-
 async def update_export(session: Session):
     agc = await agcm.authorize()
 
@@ -759,10 +652,8 @@ async def update_export(session: Session):
     last_row = (await wks.find('LAST', in_column=1)).row
     last_id = (await wks.get_values(f'A{last_row - 1}'))[0][0]
 
-    list_operation = db_get_operations(session, last_id)
-    ##fb.execsql("select first 3000 o.id, o.dt, o.operation, o.amount1, o.code1, o.amount2, o.code2, "
-    #                        "o.from_account, o.for_account, o.ledger from t_operations o "
-    #                        "where o.id > ? order by o.id", (last_id,))
+    list_operation = FinanceRepository(session).get_operations(last_id)
+    
     for record in list_operation:
         update_list.append(
             [record.id, record.dt.strftime('%d.%m.%Y %H:%M:%S'), record.operation,
@@ -806,7 +697,6 @@ async def update_fest(session: Session):
             # total_amount = sum(transaction.amount for transaction in transactions if transaction)
             total_amount = 0
             for transaction in transactions:
-                # {'_links': {'self': {'href': 'https://horizon.stellar.org/operations/209303707773333505'}, 'transaction': {'href': 'https://horizon.stellar.org/transactions/2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9'}, 'effects': {'href': 'https://horizon.stellar.org/operations/209303707773333505/effects'}, 'succeeds': {'href': 'https://horizon.stellar.org/effects?order=desc&cursor=209303707773333505'}, 'precedes': {'href': 'https://horizon.stellar.org/effects?order=asc&cursor=209303707773333505'}}, 'id': '209303707773333505', 'paging_token': '209303707773333505', 'transaction_successful': True, 'source_account': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'type': 'payment', 'type_i': 1, 'created_at': '2023-10-26T14:03:53Z', 'transaction_hash': '2c46bcae7f62198f5d670bc0f1e990078637afe414f057d6eff016324e933ff9', 'asset_type': 'credit_alphanum12', 'asset_code': 'EURMTL', 'asset_issuer': 'GACKTN5DAZGWXRWB2WLM6OPBDHAMT6SJNGLJZPQMEZBUR4JUGBX2UK7V', 'from': 'GBGGX7QD3JCPFKOJTLBRAFU3SIME3WSNDXETWI63EDCORLBB6HIP2CRR', 'to': 'GD6HELZFBGZJUBCQBUFZM2OYC3HKWDNMC3PDTTDGB7EY4UKUQ2MMELSS', 'amount': '11.0000000'}
                 if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
                         and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer
                         and transaction.get('type') == 'payment' and transaction.get('to') == address):
@@ -825,22 +715,20 @@ async def update_fest(session: Session):
 
 
 async def main_report():
-    from db.quik_pool import quik_pool
+    from db.session import SessionPool
 
     logger.add("logs/update_report.log", rotation="1 MB")
 
-    # await asyncio.gather( old
-
-    await update_main_report(quik_pool())
+    await update_main_report(SessionPool())
     await update_guarantors_report()
-    await update_bim_data(quik_pool())
-    await update_top_holders_report(quik_pool())
-    await update_mmwb_report(quik_pool())
+    # await update_bim_data(SessionPool())
+    await update_top_holders_report(SessionPool())
+    await update_mmwb_report(SessionPool())
     await update_donates_new()
-    await update_wallet_report(quik_pool())
-    await update_wallet_report2(quik_pool())
-    # await update_export(quik_pool())
-    # await update_fire(quik_pool())
+    # await update_wallet_report(SessionPool())
+    # await update_wallet_report2(SessionPool())
+    # await update_export(SessionPool())
+    # await update_fire(SessionPool())
 
 
 @safe_catch_async
@@ -854,16 +742,16 @@ async def lite_report(session_pool):
         await update_top_holders_report(session)
         await asyncio.sleep(10)
         await update_mmwb_report(session)
-        await update_wallet_report(session)
-        await update_wallet_report2(session)
+        # await update_wallet_report(session)
+        # await update_wallet_report2(session)
 
 
 async def test_report():
-    from db.quik_pool import quik_pool
+    from db.session import SessionPool
 
     logger.add("logs/update_report.log", rotation="1 MB")
 
-    await update_top_holders_report(quik_pool())
+    await update_top_holders_report(SessionPool())
 
 
 if __name__ == "__main__":
