@@ -335,7 +335,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                     kb_captcha = create_emoji_captcha_keyboard(event.new_chat_member.user.id, random_color)
 
                 try:
-                    await event.chat.restrict(event.new_chat_member.user.id,
+                    await bot.restrict_chat_member(event.chat.id, event.new_chat_member.user.id,
                                               permissions=ChatPermissions(can_send_messages=False,
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
@@ -461,7 +461,7 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
     if query.from_user.id == answer:
         await query.answer("Thanks !", show_alert=True)
         chat = await bot.get_chat(query.message.chat.id)
-        await query.message.chat.restrict(query.from_user.id, permissions=chat.permissions)
+        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions)
     else:
         await query.answer("For other user", show_alert=True)
     await query.answer()
@@ -474,7 +474,7 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
         if get_last_digit_of_sum(callback_data.num) == index:
             await query.answer("Thanks !", show_alert=True)
             chat = await bot.get_chat(query.message.chat.id)
-            await query.message.chat.restrict(query.from_user.id, permissions=chat.permissions)
+            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions)
         else:
             await query.answer("Wrong answer", show_alert=True)
             await query.message.delete_reply_markup()

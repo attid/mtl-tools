@@ -164,6 +164,7 @@ async def main():
     app_context_middleware = AppContextMiddleware(bot)
     dp.message.middleware(DbSessionMiddleware(db_pool))
     dp.callback_query.middleware(DbSessionMiddleware(db_pool))
+    dp.inline_query.middleware(DbSessionMiddleware(db_pool))
     dp.chat_member.middleware(DbSessionMiddleware(db_pool))
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
@@ -171,6 +172,7 @@ async def main():
     
     dp.message.middleware(app_context_middleware)
     dp.callback_query.middleware(app_context_middleware)
+    dp.inline_query.middleware(app_context_middleware)
     dp.chat_member.middleware(app_context_middleware)
     dp.channel_post.middleware(app_context_middleware)
     dp.edited_channel_post.middleware(app_context_middleware)
