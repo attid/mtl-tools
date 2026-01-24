@@ -1,21 +1,21 @@
 import pytest
-import asyncio
 import sys
 import os
 import socket
 import random
 import string
-from unittest.mock import AsyncMock, MagicMock
+from contextlib import suppress
 from aiohttp import web
 from aiogram import Dispatcher, Bot, types
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.append(os.getcwd())
+
+from tests.fakes import FakeMongoConfig, FakeSession, TestAppContext
+from other.global_data import global_data
 
 # Import interfaces and classes for type hinting and mocking specific to your project
 # Adjust imports based on your actual project structure
@@ -40,6 +40,14 @@ def random_address():
     """Generates a random Stellar-like address for testing."""
     return "G" + "".join(random.choices(string.ascii_uppercase + string.digits, k=55))
 
+
+@pytest.fixture(autouse=True)
+def fake_mongo_config():
+    original = global_data.mongo_config
+    global_data.mongo_config = FakeMongoConfig()
+    yield
+    global_data.mongo_config = original
+
 # --- Fixtures: Config ---
 
 @pytest.fixture(scope="function")
@@ -57,83 +65,31 @@ def grist_server_config():
     port = get_free_port()
     return {"host": "localhost", "port": port, "url": f"http://localhost:{port}"}
 
-# --- Fixtures: Mocks ---
-
-@pytest.fixture
-def mock_app_context():
-    """
-    Creates a standard mock AppContext for DI-based tests.
-    """
-    ctx = MagicMock()
-    ctx.localization_service = MagicMock()
-    # Simple get_text mock that returns the key
-    ctx.localization_service.get_text.side_effect = lambda user_id, key, params=(): key
-    
-    ctx.stellar_service = AsyncMock()
-    ctx.repository_factory = MagicMock()
-    ctx.use_case_factory = MagicMock()
-    ctx.bot = AsyncMock(spec=Bot)
-    ctx.encryption_service = MagicMock()
-    
-    # Mock dispatcher storage
-    ctx.dispatcher = MagicMock(spec=Dispatcher)
-    ctx.dispatcher.storage = MagicMock()
-    ctx.dispatcher.storage.get_data = AsyncMock(return_value={})
-    ctx.dispatcher.storage.update_data = AsyncMock()
-    
-    ctx.group_service = MagicMock()
-    ctx.group_service.get_members = AsyncMock()
-    ctx.group_service.check_membership = AsyncMock()
-    ctx.group_service.enforce_entry_channel = AsyncMock()
-
-    ctx.utils_service = MagicMock()
-    ctx.utils_service.sleep_and_delete = AsyncMock()
-    ctx.utils_service.multi_reply = AsyncMock()
-    ctx.utils_service.is_admin = AsyncMock()
-
-    ctx.config_service = MagicMock()
-    ctx.config_service.save_bot_value = AsyncMock()
-    ctx.config_service.load_bot_value = AsyncMock()
-    ctx.config_service.get_chat_dict_by_key = AsyncMock()
-    ctx.config_service.get_chat_ids_by_key = AsyncMock()
-    ctx.config_service.add_user_to_chat = AsyncMock()
-    ctx.config_service.remove_user_from_chat = AsyncMock()
-
-    ctx.grist_service = AsyncMock()
-    ctx.gspread_service = AsyncMock()
-    ctx.mtl_service = AsyncMock()
-    ctx.stellar_service = AsyncMock()
-    ctx.airdrop_service = AsyncMock()
-    ctx.report_service = AsyncMock()
-    ctx.web_service = AsyncMock()
-    ctx.antispam_service = AsyncMock()
-    ctx.poll_service = AsyncMock()
-    ctx.moderation_service = MagicMock()
-    ctx.moderation_service.ban_user = AsyncMock()
-    ctx.moderation_service.unban_user = AsyncMock()
-    ctx.ai_service = AsyncMock()
-    ctx.talk_service = AsyncMock()
-    
-    ctx.admin_id = 123456
-    return ctx
-
 # --- Mock Servers ---
 
 # 1. Mock Telegram Server
 @pytest.fixture
-async def mock_server(telegram_server_config):
+async def mock_telegram(telegram_server_config):
     """Starts a local mock Telegram server."""
     class TelegramMockState:
         def __init__(self):
             self.received_requests = []
             self.custom_responses = {}  # method -> response_dict
             self.base_url = telegram_server_config["url"]
+            self.files_by_id = {}
+            self.files_by_path = {}
 
         def add_response(self, method, response):
             self.custom_responses[method] = response
 
         def get_requests(self):
             return self.received_requests
+
+        def add_file(self, file_id, content, file_path=None):
+            if file_path is None:
+                file_path = f"files/{file_id}.bin"
+            self.files_by_id[file_id] = {"file_path": file_path, "content": content}
+            self.files_by_path[file_path] = content
 
     state = TelegramMockState()
     routes = web.RouteTableDef()
@@ -149,7 +105,15 @@ async def mock_server(telegram_server_config):
             except Exception:
                 data = {}
         else:
-            data = await request.post()
+            if request.content_type.startswith('multipart/'):
+                with suppress(Exception):
+                    await request.read()
+                data = {}
+            else:
+                try:
+                    data = await request.post()
+                except Exception:
+                    data = {}
             
         data = dict(data)
         state.received_requests.append({"method": method, "token": token, "data": data})
@@ -164,7 +128,7 @@ async def mock_server(telegram_server_config):
                 "ok": True,
                 "result": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"}
             })
-        elif method in ("sendMessage", "sendPhoto", "sendDocument"):
+        elif method in ("sendMessage", "forwardMessage"):
             chat_id = data.get('chat_id', 0)
             text = data.get('text', '')
             return web.json_response({
@@ -175,6 +139,45 @@ async def mock_server(telegram_server_config):
                     "chat": {"id": chat_id, "type": "private"},
                     "text": text
                 }
+            })
+        elif method == "sendPhoto":
+            chat_id = data.get('chat_id', 0)
+            caption = data.get('caption')
+            return web.json_response({
+                "ok": True,
+                "result": {
+                    "message_id": random.randint(1, 1000),
+                    "date": 1234567890,
+                    "chat": {"id": chat_id, "type": "private"},
+                    "caption": caption,
+                    "photo": [{
+                        "file_id": "photo_id",
+                        "file_unique_id": "photo_unique",
+                        "width": 1,
+                        "height": 1
+                    }]
+                }
+            })
+        elif method == "sendDocument":
+            chat_id = data.get('chat_id', 0)
+            return web.json_response({
+                "ok": True,
+                "result": {
+                    "message_id": random.randint(1, 1000),
+                    "date": 1234567890,
+                    "chat": {"id": chat_id, "type": "private"},
+                    "document": {
+                        "file_id": "doc_id",
+                        "file_unique_id": "doc_unique",
+                        "file_name": "file.txt",
+                        "mime_type": "text/plain"
+                    }
+                }
+            })
+        elif method == "copyMessage":
+            return web.json_response({
+                "ok": True,
+                "result": {"message_id": random.randint(1, 1000)}
             })
         elif method == "sendPoll":
             return web.json_response({
@@ -195,13 +198,68 @@ async def mock_server(telegram_server_config):
                 "ok": True,
                 "result": [{
                     "status": "creator",
-                    "user": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"}
+                    "user": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"},
+                    "is_anonymous": False,
+                    "custom_title": None
                 }]
              })
+        elif method == "getChatMember":
+            return web.json_response({
+                "ok": True,
+                "result": {
+                    "user": {"id": data.get("user_id", 0), "is_bot": False, "first_name": "User"},
+                    "status": "member"
+                }
+            })
+        elif method == "getChat":
+            return web.json_response({
+                "ok": True,
+                "result": {
+                    "id": data.get("chat_id", 0),
+                    "type": "supergroup",
+                    "title": "Test Chat",
+                    "accent_color_id": 0,
+                    "max_reaction_count": 0,
+                    "accepted_gift_types": {
+                        "unlimited_gifts": True,
+                        "limited_gifts": False,
+                        "unique_gifts": False,
+                        "premium_subscription": False
+                    }
+                }
+            })
+        elif method == "getFile":
+            file_id = data.get("file_id")
+            if file_id in state.files_by_id:
+                return web.json_response({
+                    "ok": True,
+                    "result": {
+                        "file_id": file_id,
+                        "file_unique_id": str(file_id),
+                        "file_path": state.files_by_id[file_id]["file_path"],
+                        "file_size": len(state.files_by_id[file_id]["content"])
+                    }
+                })
+            return web.json_response({
+                "ok": True,
+                "result": {
+                    "file_id": file_id,
+                    "file_unique_id": str(file_id),
+                    "file_path": f"files/{file_id}.bin"
+                }
+            })
         
         return web.json_response({"ok": True, "result": True})
 
-    app = web.Application()
+    @routes.get("/file/bot{token}/{file_path:.*}")
+    async def handle_file(request):
+        file_path = request.match_info["file_path"]
+        content = state.files_by_path.get(file_path)
+        if content is None:
+            return web.Response(status=404)
+        return web.Response(body=content)
+
+    app = web.Application(client_max_size=200 * 1024 * 1024)
     app.add_routes(routes)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -361,7 +419,7 @@ async def mock_grist(grist_server_config):
 # --- Router Test Infrastructure ---
 
 @pytest.fixture
-async def router_bot(mock_server, telegram_server_config):
+async def router_bot(mock_telegram, telegram_server_config):
     """Creates a Bot instance connected to mock Telegram server."""
     session = AiohttpSession(api=TelegramAPIServer.from_base(telegram_server_config["url"]))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
@@ -374,21 +432,12 @@ def dp():
     return Dispatcher(storage=MemoryStorage())
 
 @pytest.fixture
-async def router_app_context(mock_app_context, router_bot, horizon_server_config, mock_horizon):
+async def router_app_context(mock_telegram, router_bot, horizon_server_config, mock_horizon):
     """
     Standard app_context for router tests.
-    Combines mock_app_context with real bot connected to mock_server.
-    Uses real StellarService connected to mock_horizon.
+    Uses fake services and real Bot connected to mock_telegram.
     """
-    # from infrastructure.services.stellar_service import StellarService
-    
-    mock_app_context.bot = router_bot
-    mock_app_context.dispatcher = Dispatcher(storage=MemoryStorage())
-    
-    # Initialize real StellarService pointing to mock horizon - DISABLED as class not found
-    # mock_app_context.stellar_service = StellarService(horizon_url=horizon_server_config["url"])
-    
-    return mock_app_context
+    return TestAppContext(bot=router_bot, dispatcher=Dispatcher(storage=MemoryStorage()))
 
 class RouterTestMiddleware(BaseMiddleware):
     """
@@ -399,14 +448,14 @@ class RouterTestMiddleware(BaseMiddleware):
 
     async def __call__(self, handler, event, data):
         data["app_context"] = self.app_context
-        data["session"] = MagicMock() # Mock DB session (MagicMock to support sync .query)
+        data["session"] = FakeSession()
         if hasattr(self.app_context, 'localization_service'):
             data["l10n"] = self.app_context.localization_service
         return await handler(event, data)
 
 class MockDbMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
-        data["session"] = MagicMock()
+        data["session"] = FakeSession()
         return await handler(event, data)
 
 # --- Updates Factories ---

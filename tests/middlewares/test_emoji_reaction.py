@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiogram import Bot, Dispatcher, Router, types
@@ -29,8 +28,8 @@ async def _feed_message(dp: Dispatcher, bot: Bot, message: types.Message) -> Non
 
 
 @pytest.mark.asyncio
-async def test_reaction_in_allowed_chat(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
+async def test_reaction_in_allowed_chat(mock_telegram, dp, monkeypatch):
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_telegram.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 
@@ -42,20 +41,22 @@ async def test_reaction_in_allowed_chat(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
     dp.message.middleware(EmojiReactionMiddleware())
 
-    with patch("middlewares.emoji_reaction.classify_message", new_callable=AsyncMock) as mock_classify:
-        mock_classify.return_value = "backseat"
-        message = _build_message(chat_id=-1001908537713, text="Тебе надо сделать это по-другому")
-        await _feed_message(dp, bot, message)
+    async def fake_classify(message):
+        return "backseat"
 
-    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
+    monkeypatch.setattr("middlewares.emoji_reaction.classify_message", fake_classify)
+    message = _build_message(chat_id=-1001908537713, text="Тебе надо сделать это по-другому")
+    await _feed_message(dp, bot, message)
+
+    reaction_req = next((r for r in mock_telegram.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is not None
 
     await bot.session.close()
 
 
 @pytest.mark.asyncio
-async def test_no_reaction_in_other_chat(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
+async def test_no_reaction_in_other_chat(mock_telegram, dp, monkeypatch):
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_telegram.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 
@@ -67,20 +68,26 @@ async def test_no_reaction_in_other_chat(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
     dp.message.middleware(EmojiReactionMiddleware())
 
-    with patch("middlewares.emoji_reaction.classify_message", new_callable=AsyncMock) as mock_classify:
-        message = _build_message(chat_id=-1001908537999, text="Тебе надо сделать это по-другому")
-        await _feed_message(dp, bot, message)
-        mock_classify.assert_not_called()
+    calls = []
 
-    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
+    async def fake_classify(message):
+        calls.append(message)
+        return "backseat"
+
+    monkeypatch.setattr("middlewares.emoji_reaction.classify_message", fake_classify)
+    message = _build_message(chat_id=-1001908537999, text="Тебе надо сделать это по-другому")
+    await _feed_message(dp, bot, message)
+    assert len(calls) == 0
+
+    reaction_req = next((r for r in mock_telegram.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is None
 
     await bot.session.close()
 
 
 @pytest.mark.asyncio
-async def test_no_reaction_on_photo(mock_server, dp):
-    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_server.base_url))
+async def test_no_reaction_on_photo(mock_telegram, dp, monkeypatch):
+    session = AiohttpSession(api=TelegramAPIServer.from_base(mock_telegram.base_url))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     router = Router()
 
@@ -92,13 +99,19 @@ async def test_no_reaction_on_photo(mock_server, dp):
     dp.message.middleware(MockDbMiddleware())
     dp.message.middleware(EmojiReactionMiddleware())
 
-    with patch("middlewares.emoji_reaction.classify_message", new_callable=AsyncMock) as mock_classify:
-        photo = [types.PhotoSize(file_id="1", file_unique_id="1", width=1, height=1)]
-        message = _build_message(chat_id=-1001908537713, text=None, photo=photo)
-        await _feed_message(dp, bot, message)
-        mock_classify.assert_not_called()
+    calls = []
 
-    reaction_req = next((r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"), None)
+    async def fake_classify(message):
+        calls.append(message)
+        return "backseat"
+
+    monkeypatch.setattr("middlewares.emoji_reaction.classify_message", fake_classify)
+    photo = [types.PhotoSize(file_id="1", file_unique_id="1", width=1, height=1)]
+    message = _build_message(chat_id=-1001908537713, text=None, photo=photo)
+    await _feed_message(dp, bot, message)
+    assert len(calls) == 0
+
+    reaction_req = next((r for r in mock_telegram.get_requests() if r["method"] == "setMessageReaction"), None)
     assert reaction_req is None
 
     await bot.session.close()

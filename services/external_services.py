@@ -445,7 +445,7 @@ class UtilsService:
         return await multi_reply(message, text)
         
     async def is_admin(self, message, chat_id=None):
-        from other.global_data import is_admin
+        from other.aiogram_tools import is_admin
         return await is_admin(message, chat_id=chat_id)
 
 

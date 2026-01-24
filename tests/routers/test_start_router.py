@@ -11,7 +11,7 @@ def cleanup_router():
         start_router._parent_router = None
 
 @pytest.mark.asyncio
-async def test_start_command(mock_server, router_app_context):
+async def test_start_command(mock_telegram, router_app_context):
     """
     Test /start command.
     """
@@ -30,14 +30,14 @@ async def test_start_command(mock_server, router_app_context):
     
     # 3. Verify Output
     # Check that the bot sent the correct message via mock_server
-    req = next((r for r in mock_server.get_requests() if r["method"] == "sendMessage" and "/start" not in r["data"].get("text", "")), None)
+    req = next((r for r in mock_telegram.get_requests() if r["method"] == "sendMessage" and "/start" not in r["data"].get("text", "")), None)
     # Note: we filter out the command itself if it was somehow echoed, but mainly we look for the response
     
     # Actually, we should look for the last sendMessage
     # The /start handler replies with "Привет, я бот из"
     
     # Get all sendMessage requests
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     last_message = messages[-1]
     
@@ -49,7 +49,7 @@ async def test_start_command(mock_server, router_app_context):
     # If we wanted to verify db_save_bot_user called commit, we'd need to capture the session in the middleware.
 
 @pytest.mark.asyncio
-async def test_links_command(mock_server, router_app_context):
+async def test_links_command(mock_telegram, router_app_context):
     """
     Test /links command.
     """
@@ -62,12 +62,12 @@ async def test_links_command(mock_server, router_app_context):
         create_message_update(123, "/links")
     )
     
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert "Полезные ссылки" in messages[-1]["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_emoji_command_no_args(mock_server, router_app_context):
+async def test_emoji_command_no_args(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(start_router)
@@ -77,12 +77,12 @@ async def test_emoji_command_no_args(mock_server, router_app_context):
         create_message_update(123, "/emoji")
     )
 
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert "Используйте: /emoji" in messages[-1]["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_emoji_command_reaction(mock_server, router_app_context):
+async def test_emoji_command_reaction(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(start_router)
@@ -93,17 +93,17 @@ async def test_emoji_command_reaction(mock_server, router_app_context):
     )
 
     # Verify reaction was set
-    reactions = [r for r in mock_server.get_requests() if r["method"] == "setMessageReaction"]
+    reactions = [r for r in mock_telegram.get_requests() if r["method"] == "setMessageReaction"]
     assert len(reactions) > 0
     assert int(reactions[-1]["data"]["message_id"]) == 456
     
     # Verify confirmation message
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert "Реакция 👀 добавлена" in messages[-1]["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_save_command_admin(mock_server, router_app_context):
+async def test_save_command_admin(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(start_router)
@@ -118,12 +118,12 @@ async def test_save_command_admin(mock_server, router_app_context):
         create_message_update(84131737, "/save")
     )
 
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert messages[-1]["data"]["text"] == "Готово"
 
 @pytest.mark.asyncio
-async def test_link_command_reply_with_addresses(mock_server, router_app_context):
+async def test_link_command_reply_with_addresses(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(start_router)
@@ -156,6 +156,6 @@ async def test_link_command_reply_with_addresses(mock_server, router_app_context
 
     await dp.feed_update(router_app_context.bot, update)
 
-    messages = [r for r in mock_server.get_requests() if r["method"] == "sendMessage"]
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert "viewer.eurmtl.me" in messages[-1]["data"]["text"]

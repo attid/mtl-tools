@@ -1,13 +1,10 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from aiogram import Bot, types
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
 import datetime
-import os
+from aiogram import types
 
 from routers.stellar import router as stellar_router
-from tests.conftest import RouterTestMiddleware, TEST_BOT_TOKEN
+from tests.conftest import RouterTestMiddleware
+from tests.fakes import FakeWebResponse
 from other.global_data import global_data, MTLChats
 
 @pytest.fixture(autouse=True)
@@ -18,12 +15,12 @@ async def cleanup_router():
     global_data.skynet_admins = []
 
 @pytest.mark.asyncio
-async def test_fee_command(mock_server, router_app_context):
+async def test_fee_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
-    router_app_context.stellar_service.check_fee = MagicMock(return_value="100-200 stroops")
+    router_app_context.stellar_service.check_fee.return_value = "100-200 stroops"
     
     update = types.Update(
         update_id=1,
@@ -38,19 +35,18 @@ async def test_fee_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "100-200 stroops" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_decode_command(mock_server, router_app_context):
+async def test_decode_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
     router_app_context.stellar_service.decode_xdr.return_value = ["Decoded", "XDR"]
-    router_app_context.config_service.is_full_data.return_value = False
     
     update = types.Update(
         update_id=2,
@@ -65,12 +61,11 @@ async def test_decode_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    router_app_context.utils_service.multi_reply.assert_called_once()
-    args, _ = router_app_context.utils_service.multi_reply.call_args
-    assert "Decoded" in args[1]
+    requests = mock_telegram.get_requests()
+    assert any("Decoded" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
-async def test_show_bim_command(mock_server, router_app_context):
+async def test_show_bim_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
@@ -90,25 +85,25 @@ async def test_show_bim_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "BIM Info" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_do_council(mock_server, router_app_context):
+async def test_do_council(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
     router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
-    router_app_context.web_service.get.return_value = MagicMock(data={
+    router_app_context.web_service.get.return_value = FakeWebResponse({
         "distribution": {"GABC...": 10},
         "xdr": "AAAA..."
     })
-    router_app_context.stellar_service.sign = MagicMock(return_value="SIGNED_XDR")
-    router_app_context.stellar_service.async_submit = AsyncMock()
+    router_app_context.stellar_service.sign.return_value = "SIGNED_XDR"
+    router_app_context.stellar_service.async_submit.return_value = None
     
     update = types.Update(
         update_id=4,
@@ -123,7 +118,7 @@ async def test_do_council(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     # Check messages
     texts = [r["data"]["text"] for r in requests if r["method"] == "sendMessage"]
     assert any("Distribution" in t for t in texts)
@@ -132,13 +127,13 @@ async def test_do_council(mock_server, router_app_context):
     assert router_app_context.stellar_service.async_submit.called
 
 @pytest.mark.asyncio
-async def test_update_airdrops(mock_server, router_app_context):
+async def test_update_airdrops(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
-    router_app_context.report_service.update_airdrop = AsyncMock()
+    router_app_context.report_service.update_airdrop.return_value = None
     
     update = types.Update(
         update_id=5,
@@ -154,12 +149,12 @@ async def test_update_airdrops(mock_server, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     assert router_app_context.report_service.update_airdrop.called
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     texts = [r["data"]["text"] for r in requests if r["method"] == "sendMessage"]
     assert any("Обновление завершено" in t for t in texts)
 
 @pytest.mark.asyncio
-async def test_check_bim(mock_server, router_app_context):
+async def test_check_bim(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
@@ -179,19 +174,19 @@ async def test_check_bim(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Check Result" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_check_mtlap(mock_server, router_app_context):
+async def test_check_mtlap(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
-    router_app_context.stellar_service.find_public_key = MagicMock(return_value="GABC...")
+    router_app_context.stellar_service.find_public_key.return_value = "GABC..."
     router_app_context.stellar_service.check_mtlap.return_value = "MTLAP Info"
     
     update = types.Update(
@@ -207,7 +202,7 @@ async def test_check_mtlap(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "MTLAP Info" in req["data"]["text"]

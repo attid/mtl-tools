@@ -1,10 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from aiogram import Bot, types
-import datetime
+from aiogram import types
 
 from routers.inline import router as inline_router
-from tests.conftest import RouterTestMiddleware, TEST_BOT_TOKEN
+from tests.conftest import RouterTestMiddleware
 from other.global_data import global_data
 
 @pytest.fixture(autouse=True)
@@ -14,11 +12,11 @@ async def cleanup_router():
          inline_router._parent_router = None
 
 @pytest.mark.asyncio
-async def test_inline_query_handler(mock_server, router_app_context):
+async def test_inline_query_handler(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     
     # Inline handler expects session, middleware provides it.
-    # RouterTestMiddleware provides session=MagicMock()
+    # RouterTestMiddleware provides FakeSession
     dp.inline_query.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(inline_router)
     
@@ -44,7 +42,7 @@ async def test_inline_query_handler(mock_server, router_app_context):
         
         await dp.feed_update(bot=router_app_context.bot, update=update)
         
-        requests = mock_server.get_requests()
+        requests = mock_telegram.get_requests()
         ans_req = next((r for r in requests if r["method"] == "answerInlineQuery"), None)
         assert ans_req is not None
         assert len(ans_req["data"]["results"]) > 0

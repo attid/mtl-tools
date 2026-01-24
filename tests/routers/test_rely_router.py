@@ -2,7 +2,6 @@ import pytest
 from decimal import Decimal
 from aiogram import types
 import datetime
-from unittest.mock import AsyncMock
 
 from routers.rely_router import router as rely_router, GRIST_BASE_URL
 from tests.conftest import RouterTestMiddleware
@@ -28,7 +27,7 @@ async def reset_grist_session():
         grist_manager.session_manager.session = None
 
 @pytest.mark.asyncio
-async def test_deal_command(mock_server, router_app_context, mock_grist, grist_server_config, monkeypatch):
+async def test_deal_command(mock_telegram, router_app_context, mock_grist, grist_server_config, monkeypatch):
     # Redirect Grist calls to the mock server with correct path prefix
     monkeypatch.setattr("routers.rely_router.GRIST_BASE_URL", f"{grist_server_config['url']}/api/docs")
 
@@ -82,11 +81,11 @@ async def test_deal_command(mock_server, router_app_context, mock_grist, grist_s
     assert len(mock_grist.records["Conditions"]) == 1
     assert str(mock_grist.records["Conditions"][0]["fields"]["Amount"]) == "0.5"
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any(r["method"] == "setMessageReaction" for r in requests)
 
 @pytest.mark.asyncio
-async def test_resolve_command(mock_server, router_app_context, mock_grist, grist_server_config, monkeypatch):
+async def test_resolve_command(mock_telegram, router_app_context, mock_grist, grist_server_config, monkeypatch):
     monkeypatch.setattr("routers.rely_router.GRIST_BASE_URL", f"{grist_server_config['url']}/api/docs")
 
     dp = router_app_context.dispatcher
@@ -126,7 +125,7 @@ async def test_resolve_command(mock_server, router_app_context, mock_grist, gris
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Check that notification was sent (sendMessage to RELY_DEAL_CHAT_ID)
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     # Looking for sendMessage with text containing "#101"
     resolve_notifications = [
         r for r in requests 

@@ -3086,7 +3086,6 @@ async def get_market_price(
 
 
 async def test():
-    from db.quik_pool import quik_pool
     a = await stellar_get_issuer_assets('GDHDC4GBNPMENZAOBB4NCQ25TGZPDRK6ZGWUGSI22TVFATOLRPSUUSDM')
     print (a)
     print(len(a))

@@ -1,16 +1,11 @@
 import pytest
 import os
 import hashlib
-import json
-from unittest.mock import MagicMock, AsyncMock
-from aiogram import types, Bot
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
+from aiogram import types
 from routers.admin_system import router as admin_router
-from tests.conftest import RouterTestMiddleware, create_message_update
+from tests.conftest import RouterTestMiddleware
 from other.global_data import MTLChats, global_data
 import datetime
-from io import BytesIO
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():
@@ -27,7 +22,7 @@ async def cleanup_router():
              os.remove("skynet.log")
 
 @pytest.mark.asyncio
-async def test_sha256_command(mock_server, router_app_context):
+async def test_sha256_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -48,13 +43,13 @@ async def test_sha256_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert msg_req is not None
     assert expected_hash in msg_req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_log_command(mock_server, router_app_context):
+async def test_log_command(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
@@ -77,19 +72,18 @@ async def test_log_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     doc_req = next((r for r in requests if r["method"] == "sendDocument"), None)
     assert doc_req is not None
 
 @pytest.mark.asyncio
-async def test_ping_piro(mock_server, router_app_context):
+async def test_ping_piro(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
     
-    # Mock group_service.ping_piro
-    router_app_context.group_service.ping_piro = AsyncMock()
+    router_app_context.group_service.ping_piro.return_value = None
     
     update = types.Update(
         update_id=6,
@@ -102,22 +96,19 @@ async def test_ping_piro(mock_server, router_app_context):
         )
     )
     
-    print(f"DEBUG: ITolstov={MTLChats.ITolstov}")
-    print(f"DEBUG: Message User ID={update.message.from_user.id}")
-    
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     assert router_app_context.group_service.ping_piro.called
 
 
 @pytest.mark.asyncio
-async def test_check_gs_command(mock_server, router_app_context):
+async def test_check_gs_command(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    router_app_context.gspread_service.check_credentials = AsyncMock(return_value=(True, "1"))
+    router_app_context.gspread_service.check_credentials.return_value = (True, "1")
 
     update = types.Update(
         update_id=7,
@@ -132,13 +123,13 @@ async def test_check_gs_command(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert msg_req is not None
     assert "Google ключ: OK" in msg_req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_grist_command(mock_server, router_app_context):
+async def test_grist_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -147,7 +138,7 @@ async def test_grist_command(mock_server, router_app_context):
     router_app_context.grist_service.load_table_data.return_value = [
         {"user_id": MTLChats.ITolstov, "id": 1, "fields": {}}
     ]
-    router_app_context.grist_service.patch_data = AsyncMock()
+    router_app_context.grist_service.patch_data.return_value = None
     
     update = types.Update(
         update_id=12,
@@ -162,7 +153,7 @@ async def test_grist_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert msg_req is not None
     assert "новый ключ" in msg_req["data"]["text"].lower()
@@ -170,7 +161,7 @@ async def test_grist_command(mock_server, router_app_context):
     assert router_app_context.grist_service.patch_data.called
 
 @pytest.mark.asyncio
-async def test_update_mtlap(mock_server, router_app_context):
+async def test_update_mtlap(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
@@ -186,7 +177,7 @@ async def test_update_mtlap(mock_server, router_app_context):
     row[1] = "12345"
     
     router_app_context.gspread_service.get_all_mtlap.return_value = [headers, row, row]
-    router_app_context.gspread_service.get_update_mtlap_skynet_row = AsyncMock()
+    router_app_context.gspread_service.get_update_mtlap_skynet_row.return_value = None
     router_app_context.mtl_service.check_consul_mtla_chats.return_value = ["Chat updated"]
     
     update = types.Update(
@@ -202,7 +193,7 @@ async def test_update_mtlap(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     # Check for "Готово 1", "Chat updated", "Готово 2"
     messages = [r["data"]["text"] for r in requests if r["method"] == "sendMessage"]
     assert "Готово 1" in messages
@@ -210,14 +201,13 @@ async def test_update_mtlap(mock_server, router_app_context):
     assert "Готово 2" in messages
 
 @pytest.mark.asyncio
-async def test_sha1_command(mock_server, router_app_context):
+async def test_sha1_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
     
-    # Mock bot.download directly on the instance
     file_bytes = b"test"
-    router_app_context.bot.download = AsyncMock(return_value=BytesIO(file_bytes))
+    mock_telegram.add_file("1", file_bytes, file_path="files/test.txt")
     
     update = types.Update(
         update_id=8,
@@ -238,13 +228,13 @@ async def test_sha1_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert msg_req is not None
     assert "SHA-1" in msg_req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_exit_command(mock_server, router_app_context):
+async def test_exit_command(mock_telegram, router_app_context):
     global_data.skynet_admins = ["@admin"]
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
@@ -264,7 +254,7 @@ async def test_exit_command(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert msg_req is not None
     assert "боюсь" in msg_req["data"]["text"]

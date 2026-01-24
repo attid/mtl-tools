@@ -1,12 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from aiogram import Bot, Dispatcher, types
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
 import datetime
+from aiogram import types
 
 from routers.airdrops import router as airdrop_router, AirdropConfigItem, AirdropCallbackData
-from tests.conftest import RouterTestMiddleware, TEST_BOT_TOKEN
+from tests.conftest import RouterTestMiddleware
 
 @pytest.fixture
 def airdrop_config_item():
@@ -25,7 +22,7 @@ async def cleanup_router():
          airdrop_router._parent_router = None
 
 @pytest.mark.asyncio
-async def test_airdrop_request_flow(mock_server, router_app_context, airdrop_config_item):
+async def test_airdrop_request_flow(mock_telegram, router_app_context, airdrop_config_item):
     """
     Test flow:
     1. User sends message with #ID123 and Stellar Address
@@ -48,7 +45,7 @@ async def test_airdrop_request_flow(mock_server, router_app_context, airdrop_con
     # Airdrop Service
     router_app_context.airdrop_service.check_records.return_value = ["Grist check passed"]
     router_app_context.airdrop_service.load_configs.return_value = [airdrop_config_item]
-    router_app_context.airdrop_service.log_payment = AsyncMock() # check call later
+    router_app_context.airdrop_service.log_payment.return_value = None
     
     # 2. Simulate User Message
     USER_ID = 111
@@ -57,7 +54,7 @@ async def test_airdrop_request_flow(mock_server, router_app_context, airdrop_con
     TEXT = f"Some text #ID{USER_ID} {STELLAR_ADDR}"
     
     # Mock getChatMember via mock_server (since check_membership uses bot.get_chat_member)
-    mock_server.add_response("getChatMember", {
+    mock_telegram.add_response("getChatMember", {
         "ok": True,
         "result": {
             "status": "member",
@@ -79,7 +76,7 @@ async def test_airdrop_request_flow(mock_server, router_app_context, airdrop_con
     await dp.feed_update(bot=router_app_context.bot, update=update_message)
     
     # Verify Analysis Reply
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req_analysis = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req_analysis is not None
     assert "Новый запрос!" in req_analysis["data"]["text"]
@@ -151,7 +148,7 @@ async def test_airdrop_request_flow(mock_server, router_app_context, airdrop_con
     assert router_app_context.airdrop_service.log_payment.called
     
     # Verify "Sent" Reply
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     # Logic: New requests are appended.
     # We look for sendMessage with "отправлен"
     req_sent = next((r for r in requests if r["method"] == "sendMessage" and "отправлен" in r["data"]["text"]), None)

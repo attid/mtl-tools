@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime
 
 import asyncio
@@ -8,12 +9,20 @@ from sqlalchemy.orm import Session
 from stellar_sdk import Server
 
 from db.repositories import MessageRepository
+from db.session import SessionPool
 from other.config_reader import config
 from other.global_data import MTLChats, global_data
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async
 from other.stellar_tools import cmd_check_last_operation, exchange_bots, MTLAddresses, stellar_get_orders_sum, \
     MTLAssets, cmd_check_new_transaction, cmd_check_new_asset_transaction, get_balances
+
+
+def db_cmd_add_message(session, chat_id, text, topic_id=0):
+    if topic_id is None:
+        topic_id = 0
+    MessageRepository(session).add_message(chat_id, text, topic_id=topic_id)
+    session.commit()
 
 
 @safe_catch_async
@@ -181,9 +190,9 @@ if __name__ == "__main__":
     #
     # if 'check_transaction' in sys.argv:
     #     # pass
-    #     asyncio.run(cmd_check_cron_transaction(quik_pool()))
+    #     asyncio.run(cmd_check_cron_transaction(SessionPool))
     # elif 'check_bot' in sys.argv:
-    #     asyncio.run(cmd_check_bot(quik_pool()))
+    #     asyncio.run(cmd_check_bot(SessionPool))
     # elif 'check_grist' in sys.argv:
     #     pass
     #     asyncio.run(cmd_check_grist())

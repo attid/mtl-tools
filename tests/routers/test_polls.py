@@ -1,13 +1,11 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from aiogram import Bot, types
 import datetime
-import json
 from contextlib import suppress
+from aiogram import types
 
 from routers.polls import router as polls_router, PollCallbackData, chat_to_address
-from tests.conftest import RouterTestMiddleware, TEST_BOT_TOKEN
-from other.global_data import global_data, MTLChats, BotValueTypes
+from tests.conftest import RouterTestMiddleware
+from other.global_data import global_data, MTLChats
 from other.stellar_tools import MTLAddresses
 
 @pytest.fixture(autouse=True)
@@ -18,7 +16,7 @@ async def cleanup_router():
     global_data.votes.clear()
 
 @pytest.mark.asyncio
-async def test_poll_command(mock_server, router_app_context):
+async def test_poll_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -52,11 +50,11 @@ async def test_poll_command(mock_server, router_app_context):
     # Verify poll service called
     assert router_app_context.poll_service.save_poll.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any("Q?" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
-async def test_poll_callback(mock_server, router_app_context):
+async def test_poll_callback(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -66,7 +64,7 @@ async def test_poll_callback(mock_server, router_app_context):
         "question": "Q?", "closed": False, "message_id": 10,
         "buttons": [["A", 0, []]]
     }
-    router_app_context.poll_service.load_poll.return_value = my_poll
+    router_app_context.poll_service._polls[(MTLChats.TestGroup, 10)] = my_poll
     
     # Setup votes weight
     # We must match the chat_to_address key for the test chat
@@ -94,7 +92,7 @@ async def test_poll_callback(mock_server, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Verify text update
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any(r["method"] == "editMessageText" for r in requests)
     assert any("(5)" in r["data"]["text"] for r in requests if r["method"] == "editMessageText")
     
@@ -102,7 +100,7 @@ async def test_poll_callback(mock_server, router_app_context):
     assert router_app_context.poll_service.save_poll.called
 
 @pytest.mark.asyncio
-async def test_apoll_command(mock_server, router_app_context):
+async def test_apoll_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -139,11 +137,11 @@ async def test_apoll_command(mock_server, router_app_context):
     assert router_app_context.gspread_service.copy_a_table.called
     assert router_app_context.poll_service.save_mtla_poll.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any(r["method"] == "sendPoll" for r in requests)
 
 @pytest.mark.asyncio
-async def test_poll_answer(mock_server, router_app_context):
+async def test_poll_answer(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.poll_answer.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -168,11 +166,11 @@ async def test_poll_answer(mock_server, router_app_context):
     
     assert router_app_context.gspread_service.update_a_table_vote.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any(r["method"] == "editMessageText" for r in requests)
 
 @pytest.mark.asyncio
-async def test_channel_post_creates_poll(mock_server, router_app_context):
+async def test_channel_post_creates_poll(mock_telegram, router_app_context):
     """Test automatic poll handling in specific channels."""
     dp = router_app_context.dispatcher
     dp.channel_post.middleware(RouterTestMiddleware(router_app_context))
@@ -205,7 +203,7 @@ async def test_channel_post_creates_poll(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Channel Question" in req["data"]["text"]
@@ -213,7 +211,7 @@ async def test_channel_post_creates_poll(mock_server, router_app_context):
     assert router_app_context.poll_service.save_poll.called
 
 @pytest.mark.asyncio
-async def test_poll_replace_text(mock_server, router_app_context):
+async def test_poll_replace_text(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -221,7 +219,7 @@ async def test_poll_replace_text(mock_server, router_app_context):
     my_poll = {
         "question": "Old", "closed": False, "message_id": 11, "buttons": [["A", 0, []]]
     }
-    router_app_context.poll_service.load_poll.return_value = my_poll
+    router_app_context.poll_service._polls[(MTLChats.TestGroup, 11)] = my_poll
     
     poll_msg = types.Message(
         message_id=11,
@@ -250,7 +248,7 @@ async def test_poll_replace_text(mock_server, router_app_context):
     assert args[0][2]["question"] == "New Question"
 
 @pytest.mark.asyncio
-async def test_poll_close(mock_server, router_app_context):
+async def test_poll_close(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -258,7 +256,7 @@ async def test_poll_close(mock_server, router_app_context):
     my_poll = {
         "question": "Q", "closed": False, "message_id": 12, "buttons": []
     }
-    router_app_context.poll_service.load_poll.return_value = my_poll
+    router_app_context.poll_service._polls[(MTLChats.TestGroup, 12)] = my_poll
     
     poll_msg = types.Message(
         message_id=12,
@@ -287,7 +285,7 @@ async def test_poll_close(mock_server, router_app_context):
     assert args[0][2]["closed"] is True
 
 @pytest.mark.asyncio
-async def test_poll_check_remaining_voters(mock_server, router_app_context):
+async def test_poll_check_remaining_voters(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -306,7 +304,7 @@ async def test_poll_check_remaining_voters(mock_server, router_app_context):
         "question": "Q?", "closed": False, "message_id": 99,
         "buttons": [["Opt1", 10, ["@user1"]]]
     }
-    router_app_context.poll_service.load_poll.return_value = my_poll
+    router_app_context.poll_service._polls[(chat_id, 99)] = my_poll
 
     poll_msg = types.Message(
         message_id=99,
@@ -329,7 +327,7 @@ async def test_poll_check_remaining_voters(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     # User 2 should be listed as not voted
@@ -337,48 +335,38 @@ async def test_poll_check_remaining_voters(mock_server, router_app_context):
     assert "Смотрите голосование" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_poll_reload_vote_admin(mock_server, router_app_context):
+async def test_poll_reload_vote_admin(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
     
-    router_app_context.utils_service.is_skynet_admin.return_value = True # Should mock is_skynet_admin utility
-    # But router uses global_data.is_skynet_admin.
-    # We can patch it or add user to global_data.skynet_admins.
-    
-    # Patch global_data.is_skynet_admin is tricky if it is imported in router.
-    # router imports: from other.global_data import ..., is_skynet_admin
-    # So we need to patch routers.polls.is_skynet_admin
-    
+    global_data.skynet_admins = ["@admin"]
     # Mock stellar service
-    router_app_context.stellar_service.get_balances.return_value = ([], [{"key": "G1", "weight": 1}])
+    router_app_context.stellar_service.get_balances.return_value = ({}, [{"key": "G1", "weight": 1}])
     router_app_context.stellar_service.address_id_to_username.return_value = "@user"
     
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("routers.polls.is_skynet_admin", lambda m: True)
-        
-        update = types.Update(
-            update_id=9,
-            message=types.Message(
-                message_id=101,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=123, type='supergroup'),
-                from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-                text="/poll_reload_vote"
-            )
+    update = types.Update(
+        update_id=9,
+        message=types.Message(
+            message_id=101,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type='supergroup'),
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/poll_reload_vote"
         )
-        
-        await dp.feed_update(bot=router_app_context.bot, update=update)
-        
-        requests = mock_server.get_requests()
-        # Should reply "reload complete"
-        assert any("reload complete" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
-        
-        # Verify save called
-        assert router_app_context.config_service.save_bot_value.called
+    )
+    
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+    
+    requests = mock_telegram.get_requests()
+    # Should reply "reload complete"
+    assert any("reload complete" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    
+    # Verify save called
+    assert router_app_context.config_service.save_bot_value.called
 
 @pytest.mark.asyncio
-async def test_apoll_check_reply(mock_server, router_app_context):
+async def test_apoll_check_reply(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -417,13 +405,13 @@ async def test_apoll_check_reply(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "delegates" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_poll_answer_user_not_found(mock_server, router_app_context):
+async def test_poll_answer_user_not_found(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.poll_answer.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
@@ -445,7 +433,7 @@ async def test_poll_answer_user_not_found(mock_server, router_app_context):
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "not found" in req["data"]["text"]

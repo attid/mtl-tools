@@ -8,6 +8,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery
 from loguru import logger
 
+from db.repositories import ChatsRepository
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.global_data import global_data, is_skynet_admin, update_command_info, MTLChats
 

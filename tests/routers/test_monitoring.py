@@ -15,7 +15,7 @@ async def cleanup_router():
     global_data.last_pong_response = None
 
 @pytest.mark.asyncio
-async def test_monitoring_pong_update(mock_server, router_app_context):
+async def test_monitoring_pong_update(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.channel_post.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(monitoring_router)

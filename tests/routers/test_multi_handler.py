@@ -1,11 +1,12 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from aiogram import Bot, types
 import datetime
 import json
+import asyncio
+from aiogram import types
 
 from routers.multi_handler import router as multi_router, on_startup, commands_info
-from tests.conftest import RouterTestMiddleware, TEST_BOT_TOKEN
+from tests.conftest import RouterTestMiddleware
+from tests.fakes import FakeMongoConfig
 from other.global_data import global_data, MTLChats, BotValueTypes
 
 @pytest.fixture(autouse=True)
@@ -20,14 +21,12 @@ async def cleanup_router():
     global_data.topic_admins.clear()
 
 @pytest.mark.asyncio
-async def test_universal_command_toggle(mock_server, router_app_context):
+async def test_universal_command_toggle(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
     
-    router_app_context.utils_service.is_admin.return_value = True
-    router_app_context.utils_service.is_skynet_admin.return_value = True
-    
+    # default mock_telegram admin is user_id=123456
     # Pre-add to list to test removal
     if MTLChats.TestGroup not in global_data.reply_only:
         global_data.reply_only.append(MTLChats.TestGroup)
@@ -38,7 +37,7 @@ async def test_universal_command_toggle(mock_server, router_app_context):
             message_id=1,
             date=datetime.datetime.now(),
             chat=types.Chat(id=MTLChats.TestGroup, type='supergroup'),
-            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
             text="/set_reply_only"
         )
     )
@@ -49,23 +48,18 @@ async def test_universal_command_toggle(mock_server, router_app_context):
     assert MTLChats.TestGroup not in global_data.reply_only
     assert router_app_context.config_service.save_bot_value.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any("Removed" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
-async def test_list_command_add(mock_server, router_app_context):
+async def test_list_command_add(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
     
-    router_app_context.utils_service.is_skynet_admin.return_value = True
-    
-    # Reset list
     global_data.skynet_admins.clear()
-    
-    # Also ensure commands_info list is cleared if they are different (they shouldn't be but let's check)
+    global_data.skynet_admins.append("@admin")
     skynet_admins_ref = commands_info["add_skynet_admin"][0]
-    skynet_admins_ref.clear()
     
     update = types.Update(
         update_id=2,
@@ -84,16 +78,16 @@ async def test_list_command_add(mock_server, router_app_context):
     assert "@new_admin" in global_data.skynet_admins or "@new_admin" in skynet_admins_ref
     assert router_app_context.config_service.save_bot_value.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any("Added" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
-async def test_topic_admin_management(mock_server, router_app_context):
+async def test_topic_admin_management(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
     
-    router_app_context.utils_service.is_admin.return_value = True
+    # default mock_telegram admin is user_id=123456
     
     chat_id = MTLChats.TestGroup
     thread_id = 5
@@ -110,7 +104,7 @@ async def test_topic_admin_management(mock_server, router_app_context):
             date=datetime.datetime.now(),
             chat=types.Chat(id=chat_id, type='supergroup', title="Group"),
             message_thread_id=thread_id,
-            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
             text="/add_topic_admin @topicadmin"
         )
     )
@@ -124,16 +118,35 @@ async def test_topic_admin_management(mock_server, router_app_context):
     # Verify save
     assert router_app_context.config_service.save_bot_value.called
     
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     assert any("Added at this thread" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
-async def test_on_startup_triggers_loads():
-    # Since on_startup uses asyncio.create_task(command_config_loads()), we mock command_config_loads
-    with patch("routers.multi_handler.command_config_loads", new_callable=AsyncMock) as mock_loads, \
-         patch("routers.multi_handler.asyncio.create_task") as mock_task:
-        await on_startup()
-        assert mock_task.called
-        # Verify it passed the coroutine
-        # We can't easily check the arg of create_task without more complex matching, 
-        # but calling create_task is the main side effect.
+async def test_on_startup_triggers_loads(monkeypatch):
+    class FakeMongoConfig:
+        async def get_chat_dict_by_key(self, *args, **kwargs):
+            return {}
+
+        async def get_chat_ids_by_key(self, *args, **kwargs):
+            return []
+
+        async def load_bot_value(self, *args, **kwargs):
+            return "{}"
+
+    monkeypatch.setattr(global_data, "mongo_config", FakeMongoConfig())
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_command_config_loads():
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr("routers.multi_handler.command_config_loads", fake_command_config_loads)
+
+    await on_startup()
+    await asyncio.wait_for(started.wait(), timeout=1)
+    assert started.is_set()
+
+    release.set()
+    await asyncio.sleep(0)

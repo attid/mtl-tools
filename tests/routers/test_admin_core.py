@@ -1,14 +1,10 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock
-from aiogram import types, Bot
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
+from aiogram import types
 from routers.admin_core import router as admin_router, message_reaction as message_reaction_handler
-from tests.conftest import RouterTestMiddleware, create_message_update
-from other.global_data import global_data, BotValueTypes, MTLChats
+from tests.conftest import RouterTestMiddleware
+from other.global_data import global_data, MTLChats
 from other.pyro_tools import GroupMember
 import datetime
-import json
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():
@@ -39,13 +35,13 @@ def setup_is_admin(mock_server, user_id, is_admin=True):
     })
 
 @pytest.mark.asyncio
-async def test_ro_command(mock_server, router_app_context):
+async def test_ro_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
     
     # Configure is_admin
-    setup_is_admin(mock_server, 999, True)
+    setup_is_admin(mock_telegram, 999, True)
         
     reply_msg = types.Message(
         message_id=5,
@@ -70,21 +66,21 @@ async def test_ro_command(mock_server, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Verify restrict called
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
     assert req is not None
     assert int(req["data"]["user_id"]) == 789
 
 @pytest.mark.asyncio
-async def test_topic_command(mock_server, router_app_context):
+async def test_topic_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
     
-    setup_is_admin(mock_server, 999, True)
+    setup_is_admin(mock_telegram, 999, True)
     
     # Mock createForumTopic response
-    mock_server.add_response("createForumTopic", {
+    mock_telegram.add_response("createForumTopic", {
         "ok": True,
         "result": {
             "message_thread_id": 123,
@@ -108,14 +104,14 @@ async def test_topic_command(mock_server, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Verify createForumTopic called
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "createForumTopic"), None)
     assert req is not None
     assert req["data"]["name"] == "NewTopic"
     assert req["data"]["icon_custom_emoji_id"] == "🔵"
 
 @pytest.mark.asyncio
-async def test_mute_command(mock_server, router_app_context):
+async def test_mute_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -129,8 +125,7 @@ async def test_mute_command(mock_server, router_app_context):
     if chat_id not in global_data.moderate:
         global_data.moderate.append(chat_id)
 
-    # Mock mongo config save
-    global_data.mongo_config.save_bot_value = AsyncMock()
+    # Fake mongo config is provided in conftest
 
     reply_msg = types.Message(
         message_id=10,
@@ -165,7 +160,7 @@ async def test_mute_command(mock_server, router_app_context):
     global_data.mongo_config.save_bot_value.assert_called()
 
 @pytest.mark.asyncio
-async def test_all_command(mock_server, router_app_context):
+async def test_all_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -189,18 +184,18 @@ async def test_all_command(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "@user1" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_check_entry_channel_not_admin(mock_server, router_app_context):
+async def test_check_entry_channel_not_admin(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    setup_is_admin(mock_server, 999, False)
+    setup_is_admin(mock_telegram, 999, False)
 
     update = types.Update(
         update_id=6,
@@ -215,18 +210,18 @@ async def test_check_entry_channel_not_admin(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not admin" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_delete_dead_members_invalid_format(mock_server, router_app_context):
+async def test_delete_dead_members_invalid_format(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    setup_is_admin(mock_server, 999, True)
+    setup_is_admin(mock_telegram, 999, True)
 
     update = types.Update(
         update_id=7,
@@ -241,13 +236,13 @@ async def test_delete_dead_members_invalid_format(mock_server, router_app_contex
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Please provide a chat ID" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_show_mutes_no_admins(mock_server, router_app_context):
+async def test_show_mutes_no_admins(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -269,7 +264,7 @@ async def test_show_mutes_no_admins(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Local admins not set yet" in req["data"]["text"]
@@ -281,18 +276,25 @@ async def test_message_reaction_no_action(router_app_context):
     
     bot = router_app_context.bot
     
-    reaction_update = MagicMock()
-    reaction_update.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
-    reaction_update.reaction = types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")
-    reaction_update.chat = types.Chat(id=123, type='supergroup', title="Group")
-    reaction_update.message_thread_id = None
-    reaction_update.reply_to_message = None
+    class ReactionEvent:
+        def __init__(self):
+            self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
+            self.reaction = types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")
+            self.chat = types.Chat(id=123, type='supergroup', title="Group")
+            self.message_thread_id = None
+            self.reply_to_message = None
+            self._replies = []
+
+        async def reply(self, text):
+            self._replies.append(text)
+
+    reaction_update = ReactionEvent()
 
     await message_reaction_handler(reaction_update, bot)
     # Assert nothing bad happened
 
 @pytest.mark.asyncio
-async def test_on_my_chat_member_added(mock_server, router_app_context):
+async def test_on_my_chat_member_added(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -310,13 +312,13 @@ async def test_on_my_chat_member_added(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Thanks for adding me" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_on_migrate(mock_server, router_app_context):
+async def test_on_migrate(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -335,18 +337,18 @@ async def test_on_migrate(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "migrated" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_send_me_not_admin(mock_server, router_app_context):
+async def test_send_me_not_admin(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    setup_is_admin(mock_server, 999, False)
+    setup_is_admin(mock_telegram, 999, False)
 
     update = types.Update(
         update_id=12,
@@ -361,22 +363,19 @@ async def test_send_me_not_admin(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not admin" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_alert_me_add(mock_server, router_app_context):
+async def test_alert_me_add(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
     global_data.alert_me = {}
-    global_data.mongo_config.save_bot_value = AsyncMock()
-    
-    # Mock utils service
-    router_app_context.utils_service.sleep_and_delete = AsyncMock()
+    # Fake mongo config is provided in conftest
 
     update = types.Update(
         update_id=13,
@@ -391,15 +390,15 @@ async def test_alert_me_add(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage" and "Added" in r["data"]["text"]), None)
     assert req is not None
     
     # Verify sleep_and_delete called
-    assert router_app_context.utils_service.sleep_and_delete.call_count == 2
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
 
 @pytest.mark.asyncio
-async def test_calc_requires_reply(mock_server, router_app_context):
+async def test_calc_requires_reply(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -417,13 +416,13 @@ async def test_calc_requires_reply(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "must be used in reply" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_web_pin_in_group(mock_server, router_app_context):
+async def test_web_pin_in_group(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -441,17 +440,17 @@ async def test_web_pin_in_group(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "editMessageReplyMarkup"), None)
     assert req is not None
 
 @pytest.mark.asyncio
-async def test_show_all_topic_admin_not_admin(mock_server, router_app_context):
+async def test_show_all_topic_admin_not_admin(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    setup_is_admin(mock_server, 999, False)
+    setup_is_admin(mock_telegram, 999, False)
 
     update = types.Update(
         update_id=16,
@@ -466,13 +465,13 @@ async def test_show_all_topic_admin_not_admin(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not an admin" in req["data"]["text"]
 
 @pytest.mark.asyncio
-async def test_get_users_csv_usage(mock_server, router_app_context):
+async def test_get_users_csv_usage(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -490,7 +489,7 @@ async def test_get_users_csv_usage(mock_server, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    requests = mock_server.get_requests()
+    requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Usage" in req["data"]["text"]
