@@ -11,6 +11,16 @@ class GristService:
     async def patch_data(self, table_id, data):
         return await grist_manager.patch_data(table_id, data)
 
+
+
+    async def post_data(self, table, json_data):
+        from other.grist_tools import grist_manager
+        return await grist_manager.post_data(table, json_data)
+
+    async def fetch_data(self, table, filter_dict=None):
+        from other.grist_tools import grist_manager
+        return await grist_manager.fetch_data(table, filter_dict)
+
 class GSpreadService:
     async def get_all_mtlap(self):
         return await gs_get_all_mtlap()
@@ -24,6 +34,22 @@ class GSpreadService:
     async def check_bim(self, user_id_or_name):
         from other.gspread_tools import gs_check_bim
         return await gs_check_bim(user_id_or_name)
+
+    async def copy_a_table(self, title):
+        from other.gspread_tools import gs_copy_a_table
+        return await gs_copy_a_table(title)
+
+    async def update_a_table_first(self, google_id, question, options, votes):
+        from other.gspread_tools import gs_update_a_table_first
+        return await gs_update_a_table_first(google_id, question, options, votes)
+
+    async def update_a_table_vote(self, google_id, address, options):
+        from other.gspread_tools import gs_update_a_table_vote
+        return await gs_update_a_table_vote(google_id, address, options)
+
+    async def check_vote_table(self, google_id):
+        from other.gspread_tools import gs_check_vote_table
+        return await gs_check_vote_table(google_id)
 
 class WebService:
     async def get(self, url, return_type='json'):
@@ -172,6 +198,26 @@ class ReportService:
         from scripts.update_report import update_airdrop
         return await update_airdrop()
 
+    async def update_guarantors_report(self):
+        from scripts.update_report import update_guarantors_report
+        return await update_guarantors_report()
+
+    async def update_main_report(self, session):
+        from scripts.update_report import update_main_report
+        return await update_main_report(session)
+
+    async def update_donate_report(self, session):
+        from scripts.update_report import update_donate_report
+        return await update_donate_report(session)
+
+    async def update_mmwb_report(self, session):
+        from scripts.update_report import update_mmwb_report
+        return await update_mmwb_report(session)
+
+    async def update_bim_data(self, session):
+        from scripts.update_report import update_bim_data
+        return await update_bim_data(session)
+
 class AntispamService:
     async def check_spam(self, message, session=None):
         from other.antispam_logic import check_spam
@@ -196,7 +242,7 @@ class AntispamService:
 class PollService:
     async def save_poll(self, chat_id, message_id, poll_data):
         from other.global_data import global_data
-        from other.constants import MTLChats
+
         import json
         await global_data.mongo_config.save_bot_value(chat_id, -1 * message_id, json.dumps(poll_data))
 
@@ -219,39 +265,9 @@ class PollService:
         from routers.polls import empty_poll
         return json.loads(await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll_id), empty_poll))
 
-class GSpreadService:
-    async def copy_a_table(self, title):
-        from other.gspread_tools import gs_copy_a_table
-        return await gs_copy_a_table(title)
 
-    async def update_a_table_first(self, google_id, question, options, votes):
-        from other.gspread_tools import gs_update_a_table_first
-        return await gs_update_a_table_first(google_id, question, options, votes)
 
-    async def update_a_table_vote(self, google_id, address, options):
-        from other.gspread_tools import gs_update_a_table_vote
-        return await gs_update_a_table_vote(google_id, address, options)
 
-    async def check_vote_table(self, google_id):
-        from other.gspread_tools import gs_check_vote_table
-        return await gs_check_vote_table(google_id)
-
-class GristService:
-    async def load_table_data(self, table_id, filter_dict=None):
-        from other.grist_tools import grist_manager
-        return await grist_manager.load_table_data(table_id, filter_dict=filter_dict)
-
-    async def patch_data(self, table_id, data):
-        from other.grist_tools import grist_manager
-        return await grist_manager.patch_data(table_id, data)
-
-    async def post_data(self, table, json_data):
-        from other.grist_tools import grist_manager
-        return await grist_manager.post_data(table, json_data)
-
-    async def fetch_data(self, table, filter_dict=None):
-        from other.grist_tools import grist_manager
-        return await grist_manager.fetch_data(table, filter_dict)
 
 class ModerationService:
     async def ban_user(self, session, chat_id, user_id, bot, revoke_messages=True):
@@ -296,7 +312,7 @@ class AIService:
 
     async def talk(self, chat_id, text, gpt4=False, googleit=False):
         from other.open_ai_tools import talk
-        return await talk(chat_id, text, gpt4=gpt4, googleit=googleit)
+        return await talk(chat_id, text, gpt_maxi=gpt4, googleit=googleit)
 
     async def talk_get_comment(self, chat_id, text):
         from other.open_ai_tools import talk_get_comment
@@ -310,26 +326,7 @@ class AIService:
         from other.open_ai_tools import get_horoscope
         return get_horoscope()
 
-class ReportService:
-    async def update_guarantors_report(self):
-        from scripts.update_report import update_guarantors_report
-        return await update_guarantors_report()
 
-    async def update_main_report(self, session):
-        from scripts.update_report import update_main_report
-        return await update_main_report(session)
-
-    async def update_donate_report(self, session):
-        from scripts.update_report import update_donate_report
-        return await update_donate_report(session)
-
-    async def update_mmwb_report(self, session):
-        from scripts.update_report import update_mmwb_report
-        return await update_mmwb_report(session)
-
-    async def update_bim_data(self, session):
-        from scripts.update_report import update_bim_data
-        return await update_bim_data(session)
 
 class TalkService:
     def __init__(self, bot):
@@ -432,9 +429,7 @@ class GroupService:
         from other.group_tools import check_membership
         return await check_membership(bot, chat_id, user_id)
 
-    async def enforce_entry_channel(self, bot, chat_id, user_id, required_channel):
-        from other.group_tools import enforce_entry_channel
-        return await enforce_entry_channel(bot, chat_id, user_id, required_channel)
+
 
 class UtilsService:
     async def sleep_and_delete(self, message, seconds=None):
@@ -449,9 +444,6 @@ class UtilsService:
         from other.global_data import is_admin
         return await is_admin(message, chat_id=chat_id)
 
-    async def multi_reply(self, message, text):
-        from other.aiogram_tools import multi_reply
-        return await multi_reply(message, text)
 
     async def multi_answer(self, message, text):
         from other.aiogram_tools import multi_answer
