@@ -110,11 +110,15 @@ postgres_data
 *.bak
 *.sql
 *.dump
+backup/
+data/
 
 # Other
 .DS_Store
 Thumbs.db
+.git/
 .idea/
 .vscode/
+.mypy_cache/
+.ruff_cache/
 *.swp
-

@@ -78,6 +78,26 @@ async def cmd_ping_piro(message: Message, app_context=None):
         await pyro_test()
 
 
+@router.message(Command(commands=["check_gs"]))
+async def cmd_check_gs(message: Message, app_context=None):
+    if not is_skynet_admin(message):
+        await message.reply('You are not my admin.')
+        return False
+    if not app_context or not app_context.gspread_service:
+        await message.reply('GSpread сервис недоступен.')
+        return False
+
+    ok, info = await app_context.gspread_service.check_credentials()
+    info = (info or "").strip()
+    if len(info) > 200:
+        info = info[:200] + "..."
+
+    if ok:
+        await message.reply(f'Google ключ: OK. Таблиц: {info}')
+    else:
+        await message.reply(f'Google ключ: ошибка. {info}')
+
+
 async def cmd_send_file(message: Message, filename):
     try:
         if not os.path.isfile(filename):

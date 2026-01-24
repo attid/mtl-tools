@@ -109,6 +109,34 @@ async def test_ping_piro(mock_server, router_app_context):
     
     assert router_app_context.group_service.ping_piro.called
 
+
+@pytest.mark.asyncio
+async def test_check_gs_command(mock_server, router_app_context):
+    global_data.skynet_admins = ["@admin"]
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    router_app_context.gspread_service.check_credentials = AsyncMock(return_value=(True, "1"))
+
+    update = types.Update(
+        update_id=7,
+        message=types.Message(
+            message_id=7,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type='private'),
+            from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
+            text="/check_gs"
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_server.get_requests()
+    msg_req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert msg_req is not None
+    assert "Google ключ: OK" in msg_req["data"]["text"]
+
 @pytest.mark.asyncio
 async def test_grist_command(mock_server, router_app_context):
     dp = router_app_context.dispatcher

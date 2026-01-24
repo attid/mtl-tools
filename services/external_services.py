@@ -51,6 +51,10 @@ class GSpreadService:
         from other.gspread_tools import gs_check_vote_table
         return await gs_check_vote_table(google_id)
 
+    async def check_credentials(self):
+        from other.gspread_tools import gs_check_credentials
+        return await gs_check_credentials()
+
 class WebService:
     async def get(self, url, return_type='json'):
         from other.web_tools import http_session_manager

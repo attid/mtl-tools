@@ -8,6 +8,7 @@ import gspread_asyncio
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
+from loguru import logger
 
 from other.config_reader import start_path
 from other.global_data import float2str
@@ -39,6 +40,16 @@ def get_creds():
 # will give us access to the Spreadsheet API.
 
 agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
+
+
+async def gs_check_credentials():
+    try:
+        agc = await agcm.authorize()
+        spreadsheets = await agc.openall()
+        return True, str(len(spreadsheets))
+    except Exception as e:
+        logger.error(f"Google credentials check failed: {e}")
+        return False, str(e)
 
 
 async def gs_check_bim(user_id=None, user_name=None):
