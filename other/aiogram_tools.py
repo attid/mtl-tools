@@ -133,17 +133,19 @@ async def cmd_sleep_and_delete(message: Message, sleep_time=3*60):
 
 
 async def cmd_sleep_and_delete_task(message: Message, sleep_time):
+    if sleep_time is None:
+        sleep_time = 0
     await asyncio.sleep(sleep_time)
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
 
 
 async def cmd_delete_by_scheduler(message: Message):
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
 
 
