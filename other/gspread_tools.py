@@ -1,3 +1,4 @@
+import asyncio
 import json
 import math
 import os
@@ -6,6 +7,7 @@ from datetime import datetime
 import gspread_asyncio
 # from google-auth package
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 from loguru import logger
@@ -44,9 +46,11 @@ agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
 
 async def gs_check_credentials():
     try:
-        agc = await agcm.authorize()
-        spreadsheets = await agc.openall()
-        return True, str(len(spreadsheets))
+        creds = get_creds()
+        await asyncio.to_thread(creds.refresh, Request())
+        if not creds.valid:
+            return False, "Credentials invalid"
+        return True, "token refreshed"
     except Exception as e:
         logger.error(f"Google credentials check failed: {e}")
         return False, str(e)
