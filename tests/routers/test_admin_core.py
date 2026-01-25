@@ -279,7 +279,6 @@ async def test_message_reaction_no_action(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
-            self.reaction = types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")
             self.chat = types.Chat(id=123, type='supergroup', title="Group")
             self.message_thread_id = None
             self.reply_to_message = None

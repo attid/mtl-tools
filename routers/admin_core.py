@@ -265,7 +265,7 @@ async def cmd_show_mutes(message: Message):
 
 @router.message_reaction(ChatInOption('moderate'))
 async def message_reaction(message: MessageReactionUpdated, bot: Bot):
-    if message.new_reaction and message.reaction.type == ReactionTypeCustomEmoji:
+    if message.new_reaction and isinstance(message.new_reaction[0], ReactionTypeCustomEmoji):
         reaction:ReactionTypeCustomEmoji = message.new_reaction[0]
 
         if reaction.custom_emoji_id == '5220151067429335888':  # X emoji
