@@ -5,7 +5,7 @@ from aiogram import types
 import routers.last_handler as last_handler
 from routers.last_handler import router as last_router, SpamCheckCallbackData, ReplyCallbackData, FirstMessageCallbackData
 from tests.conftest import RouterTestMiddleware
-from tests.fakes import FakeAsyncMethod
+from tests.fakes import FakeAsyncMethod, FakeSession
 from other.global_data import global_data, MTLChats
 
 
@@ -67,6 +67,8 @@ async def test_spam_detection_delegation(mock_telegram, router_app_context):
     
     # Verify check_spam called
     assert router_app_context.antispam_service.check_spam.called
+    args, _ = router_app_context.antispam_service.check_spam.call_args
+    assert isinstance(args[1], FakeSession)
 
 @pytest.mark.asyncio
 async def test_mute_enforcement(mock_telegram, router_app_context):
