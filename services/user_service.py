@@ -18,6 +18,7 @@ class UserService:
     def __init__(self, chats_repo: IChatsRepository):
         self._repo = chats_repo
         self._cache: dict[int, UserType] = {}
+        self._name_cache: dict[str, str] = {}
         self._lock = Lock()
 
     def get_user_type(self, user_id: int) -> UserType:
@@ -112,3 +113,25 @@ class UserService:
         """Get number of cached users (for monitoring)."""
         with self._lock:
             return len(self._cache)
+
+    # Name cache methods (replaces global_data.name_list)
+
+    def cache_name(self, key: str, name: str) -> None:
+        """Cache a name for user_id or address."""
+        with self._lock:
+            self._name_cache[key] = name
+
+    def get_cached_name(self, key: str) -> Optional[str]:
+        """Get cached name by user_id or address."""
+        with self._lock:
+            return self._name_cache.get(key)
+
+    def load_name_cache(self, names: dict[str, str]) -> None:
+        """Bulk load name cache."""
+        with self._lock:
+            self._name_cache = names.copy()
+
+    def get_all_names(self) -> dict[str, str]:
+        """Get all cached names."""
+        with self._lock:
+            return self._name_cache.copy()
