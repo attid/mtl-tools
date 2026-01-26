@@ -20,6 +20,11 @@ class ConfigService:
         self._cache: dict[int, BotConfig] = {}
         self._lock = Lock()
 
+        # In-memory caches for per-chat configurations
+        self._welcome_messages: dict[int, Any] = {}
+        self._welcome_buttons: dict[int, Any] = {}
+        self._delete_income: dict[int, Any] = {}
+
     def get_config(self, chat_id: int) -> BotConfig:
         """
         Get configuration for chat (cached).
@@ -97,6 +102,69 @@ class ConfigService:
         """Get number of cached configs (for monitoring)."""
         with self._lock:
             return len(self._cache)
+
+    # Welcome messages methods
+    def get_welcome_message(self, chat_id: int) -> Optional[str]:
+        """Get welcome message template for chat."""
+        with self._lock:
+            return self._welcome_messages.get(chat_id)
+
+    def set_welcome_message(self, chat_id: int, message: str) -> None:
+        """Set welcome message for chat."""
+        with self._lock:
+            self._welcome_messages[chat_id] = message
+
+    def remove_welcome_message(self, chat_id: int) -> None:
+        """Remove welcome message for chat."""
+        with self._lock:
+            self._welcome_messages.pop(chat_id, None)
+
+    def load_welcome_messages(self, data: dict[int, Any]) -> None:
+        """Bulk load welcome messages from global_data."""
+        with self._lock:
+            self._welcome_messages.update(data)
+
+    # Welcome button methods
+    def get_welcome_button(self, chat_id: int) -> Optional[dict]:
+        """Get welcome button config for chat."""
+        with self._lock:
+            return self._welcome_buttons.get(chat_id)
+
+    def set_welcome_button(self, chat_id: int, button: dict) -> None:
+        """Set welcome button config for chat."""
+        with self._lock:
+            self._welcome_buttons[chat_id] = button
+
+    def remove_welcome_button(self, chat_id: int) -> None:
+        """Remove welcome button config for chat."""
+        with self._lock:
+            self._welcome_buttons.pop(chat_id, None)
+
+    def load_welcome_buttons(self, data: dict[int, Any]) -> None:
+        """Bulk load welcome buttons from global_data."""
+        with self._lock:
+            self._welcome_buttons.update(data)
+
+    # Delete income methods
+    def get_delete_income(self, chat_id: int) -> Optional[Any]:
+        """Get delete income config for chat."""
+        with self._lock:
+            return self._delete_income.get(chat_id)
+
+    def set_delete_income(self, chat_id: int, config: Any) -> None:
+        """Set delete income config for chat."""
+        with self._lock:
+            self._delete_income[chat_id] = config
+
+    def remove_delete_income(self, chat_id: int) -> None:
+        """Remove delete income config for chat."""
+        with self._lock:
+            self._delete_income.pop(chat_id, None)
+
+    def load_delete_income(self, data: dict[int, Any]) -> None:
+        """Bulk load delete income configs from global_data."""
+        with self._lock:
+            self._delete_income.update(data)
 
     def _get_common_keys(self) -> list[str]:
         """Get list of common config keys to preload."""
