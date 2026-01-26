@@ -5,6 +5,10 @@ from services.external_services import (GristService, GSpreadService, WebService
 from services.user_service import UserService
 from services.config_service import ConfigService
 from services.feature_flags import FeatureFlagsService
+from services.notification_service import NotificationService
+from services.bot_state_service import BotStateService
+from services.voting_service import VotingService
+from services.admin_service import AdminManagementService
 
 
 class AppContext:
@@ -28,6 +32,10 @@ class AppContext:
         self.user_service = None
         self.config_service = None
         self.feature_flags = None
+        self.notification_service = None
+        self.bot_state_service = None
+        self.voting_service = None
+        self.admin_service = None
 
     @classmethod
     def from_bot_session(cls, bot, session=None):
@@ -58,5 +66,10 @@ class AppContext:
             ctx.config_service = ConfigService(config_repo)
             ctx.user_service = UserService(chats_repo)
             ctx.feature_flags = FeatureFlagsService(ctx.config_service)
+
+        # Services that don't depend on session
+        ctx.bot_state_service = BotStateService()
+        ctx.voting_service = VotingService()
+        ctx.admin_service = AdminManagementService()
 
         return ctx
