@@ -1,7 +1,11 @@
-from services.external_services import (GristService, GSpreadService, WebService, MtlService, 
+from services.external_services import (GristService, GSpreadService, WebService, MtlService,
                                        StellarService, AirdropService, ReportService, AntispamService,
                                        PollService, ModerationService, AIService, TalkService,
-                                       GroupService, UtilsService, ConfigService)
+                                       GroupService, UtilsService, ConfigService as LegacyConfigService)
+from services.user_service import UserService
+from services.config_service import ConfigService
+from services.feature_flags import FeatureFlagsService
+
 
 class AppContext:
     def __init__(self):
@@ -19,10 +23,14 @@ class AppContext:
         self.talk_service = None
         self.group_service = None
         self.utils_service = None
+        self.legacy_config_service = None
+        # New DI-based services
+        self.user_service = None
         self.config_service = None
+        self.feature_flags = None
 
     @classmethod
-    def from_bot_session(cls, bot):
+    def from_bot_session(cls, bot, session=None):
         ctx = cls()
         ctx.grist_service = GristService()
         ctx.gspread_service = GSpreadService()
@@ -38,5 +46,17 @@ class AppContext:
         ctx.talk_service = TalkService(bot)
         ctx.group_service = GroupService()
         ctx.utils_service = UtilsService()
-        ctx.config_service = ConfigService()
+        ctx.legacy_config_service = LegacyConfigService()
+
+        # Initialize new DI-based services if session provided
+        if session:
+            from db.repositories import ConfigRepository, ChatsRepository
+
+            config_repo = ConfigRepository(session)
+            chats_repo = ChatsRepository(session)
+
+            ctx.config_service = ConfigService(config_repo)
+            ctx.user_service = UserService(chats_repo)
+            ctx.feature_flags = FeatureFlagsService(ctx.config_service)
+
         return ctx

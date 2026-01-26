@@ -397,3 +397,19 @@ class ChatsRepository(BaseRepository):
         else:
             new_record = BotUserChats(user_id=user_id, chat_id=chat_id, dt_last=datetime.now())
             self.session.add(new_record)
+
+    def get_user_by_id(self, user_id: int) -> Optional[BotUsers]:
+        """Get user by ID."""
+        result = self.session.execute(
+            select(BotUsers).where(BotUsers.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    def save_user_type(self, user_id: int, user_type: int) -> None:
+        """Update user type."""
+        user = self.get_user_by_id(user_id)
+        if user:
+            user.user_type = user_type
+        else:
+            new_user = BotUsers(user_id=user_id, user_name=None, user_type=user_type)
+            self.session.add(new_user)
