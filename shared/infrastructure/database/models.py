@@ -110,14 +110,6 @@ class MyMtlWalletBot(Base):
     balances = Column(Text)
     balances_event_id = Column(String(32), default='0')
 
-class MyMtlWalletBotLog(Base):
-    __tablename__ = 'mymtlwalletbot_log'
-    log_id = Column('log_id', Integer, primary_key=True)
-    user_id = Column('user_id', BigInteger)
-    log_dt = Column('log_dt', DateTime)
-    log_operation = Column('log_operation', String(32))
-    log_operation_info = Column('log_operation_info', String(32))
-
 class TSummary(Base):
     __tablename__ = 't_summary'
     id = Column(Integer, primary_key=True)
