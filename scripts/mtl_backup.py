@@ -10,6 +10,9 @@ from other.stellar_tools import *
 
 def save_account(account: str):
     rq = requests.get(f'{config.horizon_url}/accounts/{account}')
+    import os
+    if not os.path.exists("backup"):
+        os.makedirs("backup")
     with open(f"backup/{account}.json", "w") as fp:
         json.dump(rq.json(), fp, indent=2)
 
@@ -32,9 +35,14 @@ async def save_assets(assets: list):
 
     # Сохраняем данные в файл с уникальным идентификатором
     d = datetime.now().day % 5
-    with open(f"{start_path}/backup/all.{d}.json", "w") as fp:
+    import os
+    backup_dir = f"{start_path}/backup"
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+
+    with open(f"{backup_dir}/all.{d}.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
-    with open(f"{start_path}/backup/all.last.json", "w") as fp:
+    with open(f"{backup_dir}/all.last.json", "w") as fp:
         json.dump(accounts, fp, indent=2)
 
 

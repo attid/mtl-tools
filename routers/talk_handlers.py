@@ -227,6 +227,11 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
     if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+        from scripts.mtl_backup import save_assets
+        from other.stellar_tools import MTLAssets
+        await save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
+
         if report_service:
             await report_service.update_main_report(session)
         else:
