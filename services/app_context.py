@@ -9,6 +9,7 @@ from services.notification_service import NotificationService
 from services.bot_state_service import BotStateService
 from services.voting_service import VotingService
 from services.admin_service import AdminManagementService
+from services.command_registry_service import CommandRegistryService
 
 
 class AppContext:
@@ -36,6 +37,7 @@ class AppContext:
         self.bot_state_service = None
         self.voting_service = None
         self.admin_service = None
+        self.command_registry = None
 
     @classmethod
     def from_bot_session(cls, bot, session=None):
@@ -72,5 +74,6 @@ class AppContext:
         ctx.voting_service = VotingService()
         ctx.admin_service = AdminManagementService()
         ctx.notification_service = NotificationService()
+        ctx.command_registry = CommandRegistryService()
 
         return ctx
