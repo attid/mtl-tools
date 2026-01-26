@@ -44,7 +44,10 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context=None
                 await cmd_sleep_and_delete(message.reply_to_message, 5)
                 
             msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
-            spam_check = message.chat.id in global_data.no_first_link
+            if app_context and app_context.feature_flags:
+                spam_check = app_context.feature_flags.is_enabled(message.chat.id, 'no_first_link')
+            else:
+                spam_check = message.chat.id in global_data.no_first_link
             chat_url = html.link(message.chat.title, message.get_url())
             await msg.reply(f"Was banned by {message.from_user.username} in {chat_url} chat.\n"
                             f"Spam check: {spam_check}")
