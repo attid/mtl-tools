@@ -26,7 +26,7 @@ from other.global_data import MTLChats, BotValueTypes, global_data
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.stellar_tools import check_url_xdr
-from other.telegraph_tools import telegraph
+from other.miniapps_tools import miniapps
 
 router = Router()
 
@@ -123,7 +123,7 @@ async def check_alert(bot, message, session):
                 topic_info = f'Топик <a href="{thread_link}">id {thread_id}</a>\n'
 
         # Создаем Telegraph страницу один раз для всего сообщения
-        telegraph_link = await telegraph.create_uuid_page(msg_info)
+        telegraph_link = await miniapps.create_uuid_page(msg_info)
         chat_name_display = (msg_info.chat_name or "")[:30]
         buttons = [[InlineKeyboardButton(text=f'ПП {chat_name_display}',
                                          url=telegraph_link.url)]]

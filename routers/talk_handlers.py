@@ -11,7 +11,7 @@ from middlewares.throttling import rate_limit
 from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
-from other.telegraph_tools import telegraph
+from other.miniapps_tools import miniapps
 
 router = Router()
 
@@ -274,7 +274,7 @@ async def handle_private_message_links(message: Message, bot: Bot):
                                     f"Топик <a href=\"{thread_link}\"> \"{msg_info.thread_name}\"</a>")
 
                             if msg_info.message_text:
-                                telegraph_link = await telegraph.create_uuid_page(msg_info)
+                                telegraph_link = await miniapps.create_uuid_page(msg_info)
                                 buttons.append([InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
                                                                      url=telegraph_link.url)])
                     except TelegramBadRequest as e:

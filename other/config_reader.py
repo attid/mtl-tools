@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     #mongodb_url: str
     pyro_api_id: int = 0
     pyro_api_hash: SecretStr = ''
-    telegraph_token: str
     grist_token: str
+    miniapps_key: str | None = None
     test_mode: bool = True
 
     model_config = SettingsConfigDict(

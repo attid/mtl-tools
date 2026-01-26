@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 from loguru import logger
-from pyrogram import Client  # pyrofork
+from pyrogram import Client  # kurigram
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import FloodWait, PeerIdInvalid, UserNotMutualContact
 from sentry_sdk import capture_exception
@@ -14,7 +14,8 @@ from sentry_sdk import capture_exception
 from other.config_reader import config, start_path
 
 
-# https://pyrofork.mayuri.my.id/main/api/client.html
+# https://docs.kurigram.icu/intro/quickstart/
+
 
 @dataclass
 class MessageInfo:
@@ -80,7 +81,7 @@ def extract_telegram_info(url):
 
 
 async def pyro_update_msg_info(msg: MessageInfo):
-    # await pyro_app.send_message("itolstov", "Greetings from **Pyrofork**!")
+    # await pyro_app.send_message("itolstov", "Greetings from **Kurigram**!")
     # from_user can be None for channel/anonymous messages; fall back to sender_chat.
     def _get_sender_name(message) -> str:
         if message.from_user:

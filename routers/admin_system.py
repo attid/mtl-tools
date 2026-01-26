@@ -25,7 +25,8 @@ from other.open_ai_tools import talk_get_summary
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
-from other.pyro_tools import get_group_members, pyro_test
+from other.pyro_tools import get_group_members, pyro_test, MessageInfo
+from other.miniapps_tools import miniapps
 from other.stellar_tools import send_by_list
 
 router = Router()
@@ -76,6 +77,30 @@ async def cmd_ping_piro(message: Message, app_context=None):
         await app_context.group_service.ping_piro()
     else:
         await pyro_test()
+
+
+@router.message(Command(commands=["test"]))
+async def cmd_test_miniapps(message: Message):
+    if not is_skynet_admin(message):
+         await message.reply("Only for admins")
+         return
+
+    msg_info = MessageInfo(
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        user_from=message.from_user.username or "Unknown",
+        message_text="This is a test message from Skynet Bot to verify MiniApps integration.\n<b>Bold Text</b>",
+        reply_to_message=None
+    )
+    
+    try:
+        page = await miniapps.create_uuid_page(msg_info)
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Open MiniApp Page", url=page.url)]
+        ])
+        await message.reply(f"Generated page: {page.url}", reply_markup=markup)
+    except Exception as e:
+        await message.reply(f"Error generating page: {e}")
 
 
 @router.message(Command(commands=["check_gs"]))

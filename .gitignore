@@ -143,4 +143,3 @@ members_key.json
 /.vscode/settings.json
 /docs/tasks.md
 /test*.py
-/tmpdocs/*

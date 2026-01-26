@@ -122,3 +122,4 @@ Thumbs.db
 .mypy_cache/
 .ruff_cache/
 *.swp
+local_doc/
