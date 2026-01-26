@@ -384,3 +384,47 @@ async def test_auto_all_no_username(mock_telegram, router_app_context):
     assert "@existing" in members
 
     global_data.auto_all.remove(chat_id)
+
+@pytest.mark.asyncio
+async def test_cq_captcha_restores_permissions(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(welcome_router)
+
+    chat_id = -1011
+    user_id = 123
+    
+    # Callback data must match user_id
+    cb_data = CaptchaCallbackData(answer=user_id).pack()
+    
+    update = types.Update(
+        update_id=211,
+        callback_query=types.CallbackQuery(
+            id="cb_captcha",
+            chat_instance="ci_captcha",
+            from_user=types.User(id=user_id, is_bot=False, first_name="User", username="user"),
+            message=types.Message(
+                message_id=11, 
+                date=datetime.datetime.now(), 
+                chat=types.Chat(id=chat_id, type='supergroup', title="Test Chat"), 
+                text="Welcome"
+            ),
+            data=cb_data
+        )
+    )
+    
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+    
+    requests = mock_telegram.get_requests()
+    
+    # Verify restrictChatMember was called
+    restrict_req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
+    assert restrict_req is not None
+    assert int(restrict_req["data"]["user_id"]) == user_id
+    assert int(restrict_req["data"]["chat_id"]) == chat_id
+    
+    # Verify until_date is present
+    # Aiogram converts timedelta to timestamp (int)
+    until_date = restrict_req["data"].get("until_date")
+    assert until_date is not None
+    assert int(until_date) > datetime.datetime.now().timestamp()

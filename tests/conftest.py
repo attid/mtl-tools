@@ -220,6 +220,7 @@ async def mock_telegram(telegram_server_config):
                     "title": "Test Chat",
                     "accent_color_id": 0,
                     "max_reaction_count": 0,
+                    "permissions": {"can_send_messages": True},
                     "accepted_gift_types": {
                         "unlimited_gifts": True,
                         "limited_gifts": False,
