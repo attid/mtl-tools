@@ -443,3 +443,134 @@ class TestAppContext:
         self.group_service = FakeGroupService()
         self.admin_id = 123456
 
+
+# ============================================================================
+# Protocol-compatible fake implementations for clean architecture
+# ============================================================================
+
+class FakeStellarSDK:
+    """
+    Fake implementation of IStellarSDK Protocol for testing.
+
+    Provides test helpers to set up expected responses and verify interactions.
+    """
+
+    def __init__(
+        self,
+        accounts: dict = None,
+        balances: dict = None,
+        holders: dict = None,
+    ):
+        from decimal import Decimal
+        self._accounts = accounts or {}
+        self._balances = balances or {}
+        self._holders = holders or {}
+        self._submitted_transactions: list = []
+
+    async def get_account(self, address: str):
+        return self._accounts.get(address)
+
+    async def get_balances(self, address: str):
+        return self._balances.get(address, {})
+
+    async def get_holders(self, asset, limit: int = 200):
+        key = f"{asset.code}:{asset.issuer}"
+        return self._holders.get(key, [])[:limit]
+
+    async def submit_transaction(self, xdr: str):
+        self._submitted_transactions.append(xdr)
+        return {"hash": f"fake_hash_{len(self._submitted_transactions)}"}
+
+    def sign_transaction(self, xdr: str):
+        return f"signed_{xdr}"
+
+    # Test helpers
+    def set_balance(self, address: str, asset: str, amount):
+        from decimal import Decimal
+        if address not in self._balances:
+            self._balances[address] = {}
+        self._balances[address][asset] = Decimal(str(amount))
+
+    def set_holders(self, asset, holders: list):
+        key = f"{asset.code}:{asset.issuer}"
+        self._holders[key] = holders
+
+    def get_submitted_transactions(self):
+        return self._submitted_transactions.copy()
+
+
+class FakeFinanceRepositoryProtocol:
+    """Fake implementation of IFinanceRepository Protocol."""
+
+    def __init__(self):
+        self.div_lists = {}
+        self.payments = {}
+        self.transactions = []
+        self.watch_list = []
+
+    def get_div_list(self, list_id: int):
+        return self.div_lists.get(list_id)
+
+    def get_payments(self, list_id: int, pack_count: int):
+        return self.payments.get(list_id, [])[:pack_count]
+
+    def count_unpacked_payments(self, list_id: int):
+        return len(self.payments.get(list_id, []))
+
+    def save_transaction(self, list_id: int, xdr: str):
+        self.transactions.append({"list_id": list_id, "xdr": xdr})
+        return True
+
+    def get_watch_list(self):
+        return self.watch_list.copy()
+
+
+class FakeConfigRepositoryProtocol:
+    """Fake implementation of IConfigRepository Protocol."""
+
+    def __init__(self):
+        self.config = {}
+
+    def save_bot_value(self, chat_id: int, chat_key: str, chat_value):
+        self.config[(chat_id, chat_key)] = chat_value
+        return True
+
+    def load_bot_value(self, chat_id: int, chat_key: str, default_value=None):
+        return self.config.get((chat_id, chat_key), default_value)
+
+    def get_chat_ids_by_key(self, chat_key: str):
+        return [k[0] for k in self.config.keys() if k[1] == chat_key]
+
+
+class FakeChatsRepositoryProtocol:
+    """Fake implementation of IChatsRepository Protocol."""
+
+    def __init__(self):
+        self.users = {}
+        self.chats = []
+
+    def get_all_chats(self):
+        return self.chats.copy()
+
+    def add_user_to_chat(self, chat_id: int, member):
+        return True
+
+    def remove_user_from_chat(self, chat_id: int, user_id: int):
+        return True
+
+    def get_user_id(self, username: str):
+        for uid, user in self.users.items():
+            if getattr(user, 'username', None) == username:
+                return uid
+        return None
+
+    def get_user_by_id(self, user_id: int):
+        return self.users.get(user_id)
+
+    def save_user_type(self, user_id: int, user_type: int):
+        if user_id not in self.users:
+            self.users[user_id] = type('User', (), {'user_type': user_type, 'user_id': user_id})()
+        else:
+            self.users[user_id].user_type = user_type
+        return True
+
