@@ -81,6 +81,17 @@ def extract_telegram_info(url):
 
 async def pyro_update_msg_info(msg: MessageInfo):
     # await pyro_app.send_message("itolstov", "Greetings from **Pyrofork**!")
+    # from_user can be None for channel/anonymous messages; fall back to sender_chat.
+    def _get_sender_name(message) -> str:
+        if message.from_user:
+            if message.from_user.username:
+                return message.from_user.username
+            return html.escape(message.from_user.full_name)
+        if getattr(message, "sender_chat", None):
+            if message.sender_chat.username:
+                return message.sender_chat.username
+            return html.escape(message.sender_chat.title or "")
+        return ""
 
     message = await pyro_app.get_messages(chat_id=msg.chat_id, message_ids=msg.message_id)
     if message.chat.username:
@@ -88,8 +99,7 @@ async def pyro_update_msg_info(msg: MessageInfo):
     else:
         msg.chat_name = message.chat.title
 
-    msg.user_from = message.from_user.username if message.from_user.username else html.escape(
-        message.from_user.full_name)
+    msg.user_from = _get_sender_name(message)
 
     if message.topic:
         msg.thread_id = message.topic.id
@@ -110,7 +120,7 @@ async def pyro_update_msg_info(msg: MessageInfo):
                 chat_id=message.reply_to_message.chat.id,
                 message_id=message.reply_to_message.id,
                 message_text=reply_text,
-                user_from=message.reply_to_message.from_user.username,
+                user_from=_get_sender_name(message.reply_to_message),
             )
 
     if message.text:

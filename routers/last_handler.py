@@ -56,6 +56,19 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
 ##########################################  functions  #################################################################
 ########################################################################################################################
 
+def _get_sender_name(message: Message) -> str:
+    # from_user can be None for channel/anonymous messages; fall back to sender_chat.
+    if message.from_user:
+        if message.from_user.username:
+            return message.from_user.username
+        return html.escape(message.from_user.full_name)
+    if message.sender_chat:
+        if message.sender_chat.username:
+            return message.sender_chat.username
+        return html.escape(message.sender_chat.title or "")
+    return ""
+
+
 async def save_url(chat_id, msg_id, msg):
     url = extract_url(msg)
     await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
@@ -82,14 +95,14 @@ async def check_alert(bot, message, session):
     if message.entities and message.chat.id in global_data.alert_me:
         # Создаем msg_info один раз для всего сообщения
         msg_info = MessageInfo(chat_id=message.chat.id,
-                               user_from=message.from_user.username or "",
+                               user_from=_get_sender_name(message),
                                message_id=message.message_id,
                                chat_name=message.chat.title or "",
                                message_text=message.html_text or "")
         if message.reply_to_message:
             msg_info.reply_to_message = MessageInfo(
                 chat_id=message.chat.id,
-                user_from=message.reply_to_message.from_user.username or "" if message.reply_to_message.from_user else "",
+                user_from=_get_sender_name(message.reply_to_message),
                 message_id=message.reply_to_message.message_id,
                 message_text=message.reply_to_message.html_text or "")
         
