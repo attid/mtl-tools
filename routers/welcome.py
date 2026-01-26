@@ -2,6 +2,7 @@ import asyncio
 import json
 import random
 import re
+import datetime
 from contextlib import suppress
 
 from aiogram import Router, Bot, F
@@ -461,7 +462,8 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
     if query.from_user.id == answer:
         await query.answer("Thanks !", show_alert=True)
         chat = await bot.get_chat(query.message.chat.id)
-        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions)
+        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions,
+                                       until_date=datetime.timedelta(seconds=65))
     else:
         await query.answer("For other user", show_alert=True)
     await query.answer()
@@ -474,7 +476,8 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
         if get_last_digit_of_sum(callback_data.num) == index:
             await query.answer("Thanks !", show_alert=True)
             chat = await bot.get_chat(query.message.chat.id)
-            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions)
+            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions,
+                                           until_date=datetime.timedelta(seconds=65))
         else:
             await query.answer("Wrong answer", show_alert=True)
             await query.message.delete_reply_markup()
