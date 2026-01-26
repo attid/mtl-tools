@@ -2,11 +2,13 @@
 """Service interface definitions using Protocol."""
 
 from .stellar_sdk import IStellarSDK
+from .stellar_service import IStellarService
 from .repositories import IFinanceRepository, IChatsRepository, IConfigRepository
 from .external import IGristService, IWebService
 
 __all__ = [
     "IStellarSDK",
+    "IStellarService",
     "IFinanceRepository",
     "IChatsRepository",
     "IConfigRepository",
