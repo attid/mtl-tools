@@ -71,5 +71,6 @@ class AppContext:
         ctx.bot_state_service = BotStateService()
         ctx.voting_service = VotingService()
         ctx.admin_service = AdminManagementService()
+        ctx.notification_service = NotificationService()
 
         return ctx
