@@ -10,8 +10,12 @@ from stellar_sdk import TransactionBuilder, Network, Price, Asset, Server
 from other.config_reader import config
 from other.gspread_tools import get_all_data_from_mmwb_config, get_one_data_mm_from_report
 from other.loguru_tools import safe_catch_async
-from other.stellar_tools import get_private_sign, base_fee, MTLAssets, MTLAddresses, get_balances, stellar_sync_submit, \
-    stellar_sign, stellar_remove_orders, get_asset_swap_spread
+from other.stellar import (
+    get_private_sign, MTLAssets, MTLAddresses, get_balances,
+    stellar_sync_submit, stellar_sign, get_asset_swap_spread,
+)
+from other.stellar.constants import BASE_FEE as base_fee
+from other.stellar_tools import stellar_remove_orders
 
 max_eurmtl = 10000.0  # max offer
 # max_btcmtl = 0.1  # max offer

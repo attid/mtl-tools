@@ -19,9 +19,8 @@ from other.stellar_tools import (
     cmd_calc_usdm_daily,
     cmd_gen_xdr,
     cmd_send_by_list_id,
-    get_balances,
-    MTLAddresses,
 )
+from other.stellar import get_balances, MTLAddresses
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from scripts.mtl_exchange import check_exchange_one
 from scripts.mtl_exchange2 import check_mm, check_mmwb

@@ -1,3 +1,35 @@
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+
+Please migrate your imports to use the new modular `other.stellar` package instead:
+
+    # Old (deprecated):
+    from other.stellar_tools import MTLAddresses, MTLAssets, get_balances
+
+    # New (recommended):
+    from other.stellar import MTLAddresses, MTLAssets, get_balances
+
+The new package provides the same functionality organized into focused modules:
+- other.stellar.constants: MTLAddresses, MTLAssets, BASE_FEE, EXCHANGE_BOTS
+- other.stellar.sdk_utils: get_private_sign, stellar_sign, gen_new, etc.
+- other.stellar.address_utils: find_stellar_public_key, address_id_to_username, etc.
+- other.stellar.balance_utils: get_balances, stellar_get_holders, etc.
+- other.stellar.payment_service: send_payment_async, stellar_sync_submit, etc.
+- other.stellar.exchange_utils: stellar_get_offers, get_asset_swap_spread, etc.
+- other.stellar.dividend_calc: calculate_eurmtl_dividends, etc.
+
+See other/stellar/__init__.py for full list of available exports.
+"""
+
+import warnings
+
+warnings.warn(
+    "other.stellar_tools is deprecated. Use other.stellar instead. "
+    "See the module docstring for migration details.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 import asyncio
 import base64
 import math

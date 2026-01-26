@@ -1,7 +1,11 @@
+import asyncio
 import json
+from datetime import datetime
 
-from other.config_reader import start_path
-from other.stellar_tools import *
+import requests
+
+from other.config_reader import start_path, config
+from other.stellar import stellar_get_holders, MTLAssets
 
 # MASTERASSETS = ['BTCDEBT', 'BTCMTL', 'EURDEBT', 'EURMTL', 'GRAFDRON',
 #                 'MonteAqua', 'MonteCrafto', 'MTL', 'MTLBR', 'MTLBRO', 'MTLCAMP', 'MTLCITY',

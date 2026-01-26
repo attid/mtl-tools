@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from db.repositories import ChatsRepository
 from other.global_data import MTLChats, update_command_info
-from other.stellar_tools import MTLAddresses
+from other.stellar import MTLAddresses
 
 router = Router()
 

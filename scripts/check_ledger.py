@@ -5,7 +5,9 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from other.global_data import BotValueTypes
-from other.stellar_tools import *
+from datetime import datetime
+from stellar_sdk.server_async import ServerAsync
+from other.stellar_tools import decode_data_value
 from shared.infrastructure.database.models import TLedgers, TOperations
 from db.session import SessionPool
 from db.repositories import FinanceRepository, ConfigRepository

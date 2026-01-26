@@ -2,7 +2,7 @@ import aiohttp
 from sqlalchemy.orm import Session
 
 from db.repositories import MessageRepository
-from other.stellar_tools import stellar_get_receive_path
+from other.stellar import stellar_get_receive_path
 from scripts.mtl_exchange import *
 
 from stellar_sdk import TransactionBuilder, Network, ServerAsync, AiohttpClient

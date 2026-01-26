@@ -1,7 +1,7 @@
 from other.grist_tools import grist_manager
 from other.gspread_tools import gs_get_all_mtlap, gs_get_update_mtlap_skynet_row, gs_find_user
 from other.mtl_tools import check_consul_mtla_chats
-from other.stellar_tools import get_balances, send_payment_async
+from other.stellar import get_balances, send_payment_async
 from other.grist_tools import grist_check_airdrop_records, grist_log_airdrop_payment, grist_load_airdrop_configs
 
 class GristService:

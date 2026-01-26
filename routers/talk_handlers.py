@@ -229,7 +229,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
         from scripts.mtl_backup import save_assets
-        from other.stellar_tools import MTLAssets
+        from other.stellar import MTLAssets
         await save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
 
         if report_service:

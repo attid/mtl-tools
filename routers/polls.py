@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
 from other.grist_tools import MTLGrist
-from other.stellar_tools import MTLAddresses
+from other.stellar import MTLAddresses
 
 router = Router()
 
@@ -261,7 +261,7 @@ async def cmd_save_votes(session: Session, app_context=None):
             if app_context:
                 _, signers = await app_context.stellar_service.get_balances(address=address, return_signers=True)
             else:
-                from other.stellar_tools import get_balances
+                from other.stellar import get_balances
                 _, signers = await get_balances(address=address, return_signers=True)
                 
             for signer in signers:
@@ -270,7 +270,7 @@ async def cmd_save_votes(session: Session, app_context=None):
                     if app_context:
                          username = await app_context.stellar_service.address_id_to_username(signer['key'], full_data=True)
                     else:
-                        from other.stellar_tools import address_id_to_username
+                        from other.stellar import address_id_to_username
                         username = await address_id_to_username(signer['key'], full_data=True)
                     
                     key_ = username.lower()

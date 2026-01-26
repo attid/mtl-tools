@@ -14,8 +14,11 @@ from other.config_reader import config
 from other.global_data import MTLChats, global_data
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async
-from other.stellar_tools import cmd_check_last_operation, exchange_bots, MTLAddresses, stellar_get_orders_sum, \
-    MTLAssets, cmd_check_new_transaction, cmd_check_new_asset_transaction, get_balances
+from other.stellar import MTLAddresses, MTLAssets, get_balances, stellar_get_orders_sum
+from other.stellar_tools import (
+    cmd_check_last_operation, exchange_bots,
+    cmd_check_new_transaction, cmd_check_new_asset_transaction,
+)
 
 
 def db_cmd_add_message(session, chat_id, text, topic_id=0):
