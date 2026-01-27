@@ -217,6 +217,11 @@ class FakeConfigService:
         self._no_first_link = set()
         self._full_data = set()
         self._user_status = {}
+        # In-memory caches for DI service interface
+        self._welcome_messages = {}
+        self._welcome_buttons = {}
+        self._delete_income = {}
+        # Async methods for legacy interface
         self.save_bot_value = FakeAsyncMethod(side_effect=self._save_bot_value)
         self.load_bot_value = FakeAsyncMethod(side_effect=self._load_bot_value)
         self.get_chat_dict_by_key = FakeAsyncMethod(side_effect=self._get_chat_dict_by_key)
@@ -272,6 +277,35 @@ class FakeConfigService:
             self._full_data.add(chat_id)
         else:
             self._full_data.discard(chat_id)
+
+    # DI service interface methods (synchronous)
+    def get_welcome_message(self, chat_id):
+        return self._welcome_messages.get(chat_id)
+
+    def set_welcome_message(self, chat_id, message):
+        self._welcome_messages[chat_id] = message
+
+    def remove_welcome_message(self, chat_id):
+        self._welcome_messages.pop(chat_id, None)
+
+    def get_welcome_button(self, chat_id):
+        return self._welcome_buttons.get(chat_id)
+
+    def set_welcome_button(self, chat_id, button):
+        self._welcome_buttons[chat_id] = button
+
+    def remove_welcome_button(self, chat_id):
+        self._welcome_buttons.pop(chat_id, None)
+
+    def get_delete_income(self, chat_id):
+        return self._delete_income.get(chat_id)
+
+    def set_delete_income(self, chat_id, config):
+        self._delete_income[chat_id] = config
+
+    def load_value(self, chat_id, key, default=None):
+        """Synchronous load_value for DI service interface."""
+        return self._bot_values.get((chat_id, key), default)
 
 
 class FakeAIService:
@@ -537,13 +571,94 @@ class FakeVotingService:
         self._first_vote_data.pop(chat_id, None)
 
 
+class FakeNotificationService:
+    """Fake NotificationService for testing."""
+
+    def __init__(self):
+        self._notify_join: dict = {}
+        self._notify_message: dict = {}
+        self._alert_me: dict = {}
+
+    def is_join_notify_enabled(self, chat_id: int) -> bool:
+        return bool(self._notify_join.get(chat_id))
+
+    def get_join_notify_config(self, chat_id: int):
+        return self._notify_join.get(chat_id)
+
+    def set_join_notify(self, chat_id: int, config) -> None:
+        self._notify_join[chat_id] = config
+
+    def disable_join_notify(self, chat_id: int) -> None:
+        self._notify_join.pop(chat_id, None)
+
+    def is_message_notify_enabled(self, chat_id: int) -> bool:
+        return bool(self._notify_message.get(chat_id))
+
+    def get_message_notify_config(self, chat_id: int):
+        return self._notify_message.get(chat_id)
+
+    def set_message_notify(self, chat_id: int, config) -> None:
+        self._notify_message[chat_id] = config
+
+    def get_alert_config(self, user_id: int):
+        return self._alert_me.get(user_id)
+
+    def set_alert_config(self, user_id: int, config) -> None:
+        self._alert_me[user_id] = config
+
+
+class FakeAdminService:
+    """Fake AdminManagementService for testing."""
+
+    def __init__(self):
+        self._skynet_admins: list[str] = []
+        self._skynet_img: list[str] = []
+        self._chat_admins: dict[int, list[int]] = {}
+
+    def is_skynet_admin(self, username: str) -> bool:
+        if not username:
+            return False
+        normalized = username if username.startswith('@') else f'@{username}'
+        return normalized.lower() in [u.lower() for u in self._skynet_admins]
+
+    def is_skynet_img_user(self, username: str) -> bool:
+        if not username:
+            return False
+        normalized = username if username.startswith('@') else f'@{username}'
+        return normalized.lower() in [u.lower() for u in self._skynet_img]
+
+    def set_skynet_admins(self, usernames: list[str]) -> None:
+        self._skynet_admins = usernames.copy()
+
+    def set_skynet_img_users(self, usernames: list[str]) -> None:
+        self._skynet_img = usernames.copy()
+
+    def add_skynet_admin(self, username: str) -> None:
+        normalized = username if username.startswith('@') else f'@{username}'
+        if normalized not in self._skynet_admins:
+            self._skynet_admins.append(normalized)
+
+    def add_skynet_img_user(self, username: str) -> None:
+        normalized = username if username.startswith('@') else f'@{username}'
+        if normalized not in self._skynet_img:
+            self._skynet_img.append(normalized)
+
+    def set_chat_admins(self, chat_id: int, admin_ids: list[int]) -> None:
+        self._chat_admins[chat_id] = admin_ids.copy()
+
+    def get_chat_admins(self, chat_id: int) -> list[int]:
+        return self._chat_admins.get(chat_id, []).copy()
+
+
 class TestAppContext:
     def __init__(self, bot, dispatcher):
         self.bot = bot
         self.dispatcher = dispatcher
         self.localization_service = FakeLocalizationService()
         self.utils_service = TestUtilsService()
+        # FakeConfigService serves as both the new config_service and legacy_config_service
         self.config_service = FakeConfigService()
+        self.legacy_config_service = self.config_service  # Same instance for backward compatibility
         self.ai_service = FakeAIService()
         self.talk_service = FakeTalkService()
         self.antispam_service = FakeAntispamService()
@@ -560,6 +675,8 @@ class TestAppContext:
         self.bot_state_service = BotStateService()
         self.feature_flags = FakeFeatureFlagsService()
         self.voting_service = FakeVotingService()
+        self.admin_service = FakeAdminService()
+        self.notification_service = FakeNotificationService()
         self.admin_id = 123456
 
 

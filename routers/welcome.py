@@ -109,15 +109,27 @@ async def cmd_delete_welcome(message: Message, session: Session, app_context=Non
         admin = await app_context.utils_service.is_admin(message)
     else:
         admin = await is_admin(message)
-        
+
     if not admin:
         await message.reply('You are not admin.')
         return False
 
-    if message.chat.id in global_data.welcome_messages:
+    # Check if welcome message exists using DI service or global_data fallback
+    has_welcome = False
+    if app_context and app_context.config_service:
+        has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
+    else:
+        has_welcome = message.chat.id in global_data.welcome_messages
+
+    if has_welcome:
+        # Update both DI service and global_data for consistency
+        if app_context and app_context.config_service:
+            app_context.config_service.remove_welcome_message(message.chat.id)
         global_data.welcome_messages[message.chat.id] = None
-        if app_context:
-            await app_context.config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
+
+        # Persist to database
+        if app_context and app_context.legacy_config_service:
+            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
         else:
             await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
 
@@ -138,19 +150,26 @@ async def cmd_set_welcome(message: Message, session: Session, app_context=None):
         admin = await app_context.utils_service.is_admin(message)
     else:
         admin = await is_admin(message)
-        
+
     if not admin:
         await message.reply('You are not admin.')
         return False
 
     if len(message.text.split()) > 1:
-        global_data.welcome_messages[message.chat.id] = message.html_text[13:]
-        if app_context:
-            await app_context.config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
-                                                          message.html_text[13:])
+        welcome_text = message.html_text[13:]
+
+        # Update both DI service and global_data for consistency
+        if app_context and app_context.config_service:
+            app_context.config_service.set_welcome_message(message.chat.id, welcome_text)
+        global_data.welcome_messages[message.chat.id] = welcome_text
+
+        # Persist to database
+        if app_context and app_context.legacy_config_service:
+            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
+                                                          welcome_text)
         else:
             await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
-                                                          message.html_text[13:])
+                                                          welcome_text)
         msg = await message.reply('Added')
         if app_context:
             await app_context.utils_service.sleep_and_delete(msg, 60)
@@ -172,16 +191,22 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
         admin = await app_context.utils_service.is_admin(message)
     else:
         admin = await is_admin(message)
-        
+
     if not admin:
         await message.reply('You are not admin.')
         return False
 
     if len(message.text.split()) > 1:
         text = message.text[19:].strip()
+
+        # Update both DI service and global_data for consistency
+        if app_context and app_context.config_service:
+            app_context.config_service.set_welcome_button(message.chat.id, text)
         global_data.welcome_button[message.chat.id] = text
-        if app_context:
-            await app_context.config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
+
+        # Persist to database
+        if app_context and app_context.legacy_config_service:
+            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
         else:
             await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
         msg = await message.reply('Added')
@@ -205,13 +230,21 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
 async def cmd_stop_exchange(message: Message, session: Session, app_context=None):
-    if not is_skynet_admin(message):
+    # Check skynet admin using DI service or global_data fallback
+    is_admin_user = False
+    if app_context and app_context.admin_service:
+        is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
+    else:
+        is_admin_user = is_skynet_admin(message)
+
+    if not is_admin_user:
         await message.reply('You are not my admin.')
         return False
 
-    if app_context:
-        await app_context.config_service.save_bot_value(0, BotValueTypes.StopExchange, 1)
-        app_context.stellar_service.stop_all_exchange() # Sync
+    # Persist to database
+    if app_context and app_context.legacy_config_service:
+        await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.StopExchange, 1)
+        app_context.stellar_service.stop_all_exchange()  # Sync
     else:
         await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, 1)
         from other.stellar_tools import stellar_stop_all_exchange
@@ -223,12 +256,20 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context=None
 @update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
 async def cmd_start_exchange(message: Message, session: Session, app_context=None):
-    if not is_skynet_admin(message):
+    # Check skynet admin using DI service or global_data fallback
+    is_admin_user = False
+    if app_context and app_context.admin_service:
+        is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
+    else:
+        is_admin_user = is_skynet_admin(message)
+
+    if not is_admin_user:
         await message.reply('You are not my admin.')
         return False
 
-    if app_context:
-        await app_context.config_service.save_bot_value(0, BotValueTypes.StopExchange, None)
+    # Persist to database
+    if app_context and app_context.legacy_config_service:
+        await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.StopExchange, None)
     else:
         await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, None)
 
@@ -241,17 +282,18 @@ bad_names = ['ЧВК ВАГНЕР', 'ЧВК ВАГНЕР']
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
     new_user_id = event.new_chat_member.user.id
+    chat_id = event.chat.id
     is_spam1 = False
     is_spam2 = False
-    
+
     if app_context:
         is_spam1 = await app_context.antispam_service.combo_check_spammer(new_user_id)
     else:
         from other.spam_cheker import combo_check_spammer
         is_spam1 = await combo_check_spammer(new_user_id)
-        
+
     if is_spam1:
-        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         await bot.send_message(MTLChats.SpamGroup,
                                f'{event.new_chat_member.user.mention_html()} '
                                f'был забанен в чате {get_chat_link(event.chat)}'
@@ -266,7 +308,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
         is_spam2 = await lols_check_spammer(new_user_id)
 
     if is_spam2:
-        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         await bot.send_message(MTLChats.SpamGroup,
                                f'{event.new_chat_member.user.mention_html()} '
                                f'был забанен в чате {get_chat_link(event.chat)}'
@@ -275,21 +317,26 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
         return
 
     if event.new_chat_member.user.full_name in bad_names:
-        await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+        await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         await bot.send_message(MTLChats.SpamGroup,
                                f'{event.new_chat_member.user.mention_html()} '
                                f'был забанен в чате {get_chat_link(event.chat)}'
                                f' за использование запрещенного никнейма')
         return
 
-    required_channel = global_data.entry_channel.get(event.chat.id)
+    # Check entry channel requirement using DI service or global_data fallback
+    if app_context and app_context.config_service:
+        required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
+    else:
+        required_channel = global_data.entry_channel.get(chat_id)
+
     if required_channel:
         if app_context:
-            membership_ok, _ = await app_context.group_service.enforce_entry_channel(bot, event.chat.id, new_user_id, required_channel)
+            membership_ok, _ = await app_context.group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
         else:
             from other.group_tools import enforce_entry_channel
-            membership_ok, _ = await enforce_entry_channel(bot, event.chat.id, new_user_id, required_channel)
-            
+            membership_ok, _ = await enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
+
         if not membership_ok:
             return
 
@@ -297,35 +344,54 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                          username=event.new_chat_member.user.username,
                          full_name=event.new_chat_member.user.full_name,
                          is_admin=False)
-    
-    if app_context:
-        _ = asyncio.create_task(app_context.config_service.add_user_to_chat(event.chat.id, member))
-        user_type_now = app_context.config_service.check_user(event.new_chat_member.user.id)
+
+    # Add user to chat and check user type using DI service or global_data fallback
+    if app_context and app_context.legacy_config_service:
+        _ = asyncio.create_task(app_context.legacy_config_service.add_user_to_chat(chat_id, member))
+        user_type_now = app_context.legacy_config_service.check_user(event.new_chat_member.user.id)
     else:
-        _ = asyncio.create_task(global_data.mongo_config.add_user_to_chat(event.chat.id, member))
+        _ = asyncio.create_task(global_data.mongo_config.add_user_to_chat(chat_id, member))
         user_type_now = global_data.check_user(event.new_chat_member.user.id)
-        
+
     username = get_username_link(event.new_chat_member.user)
     if user_type_now == 2:
         with suppress(TelegramBadRequest):
-            await bot.ban_chat_member(event.chat.id, event.new_chat_member.user.id)
+            await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text='unban',
                                  callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
-                                                                 chat_id=event.chat.id).pack())
+                                                                 chat_id=chat_id).pack())
         ]])
-        # await bot.send_message(event.chat.id, f'{username} was banned', reply_markup=kb_unban)
+        # await bot.send_message(chat_id, f'{username} was banned', reply_markup=kb_unban)
         await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
                                reply_markup=kb_unban)
 
-    if event.chat.id in global_data.welcome_messages:
+    # Check for welcome message using DI service or global_data fallback
+    if app_context and app_context.config_service:
+        welcome_msg = app_context.config_service.get_welcome_message(chat_id)
+    else:
+        welcome_msg = global_data.welcome_messages.get(chat_id) if chat_id in global_data.welcome_messages else None
+
+    if welcome_msg:
         if event.new_chat_member.user:
-            msg = global_data.welcome_messages.get(event.chat.id, 'Hi new user')
+            msg = welcome_msg if welcome_msg else 'Hi new user'
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
-            if event.chat.id in global_data.captcha:
-                btn_msg = global_data.welcome_button.get(event.chat.id, "I'm not bot")
+            # Check captcha enabled using DI service or global_data fallback
+            captcha_enabled = False
+            if app_context and app_context.feature_flags:
+                captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'captcha')
+            else:
+                captcha_enabled = chat_id in global_data.captcha
+
+            if captcha_enabled:
+                # Get welcome button text using DI service or global_data fallback
+                if app_context and app_context.config_service:
+                    btn_msg = app_context.config_service.get_welcome_button(chat_id) or "I'm not bot"
+                else:
+                    btn_msg = global_data.welcome_button.get(chat_id, "I'm not bot")
+
                 kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text=btn_msg,
                                          callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack())
@@ -336,14 +402,14 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                     kb_captcha = create_emoji_captcha_keyboard(event.new_chat_member.user.id, random_color)
 
                 try:
-                    await bot.restrict_chat_member(event.chat.id, event.new_chat_member.user.id,
+                    await bot.restrict_chat_member(chat_id, event.new_chat_member.user.id,
                                               permissions=ChatPermissions(can_send_messages=False,
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
                 except Exception as e:
                     MessageRepository(session).send_admin_message(f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
 
-            answer = await bot.send_message(event.chat.id, msg, parse_mode=ParseMode.HTML,
+            answer = await bot.send_message(chat_id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
                                             reply_markup=kb_captcha)
             if app_context:
@@ -351,57 +417,81 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             else:
                 await cmd_sleep_and_delete(answer)
 
-    if event.chat.id in global_data.auto_all:
-        if app_context:
-            json_str = await app_context.config_service.load_bot_value(event.chat.id, BotValueTypes.All)
+    # Check auto_all enabled using DI service or global_data fallback
+    auto_all_enabled = False
+    if app_context and app_context.feature_flags:
+        auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
+    else:
+        auto_all_enabled = chat_id in global_data.auto_all
+
+    if auto_all_enabled:
+        if app_context and app_context.legacy_config_service:
+            json_str = await app_context.legacy_config_service.load_bot_value(chat_id, BotValueTypes.All)
         else:
-            json_str = await global_data.mongo_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]')
-        
+            json_str = await global_data.mongo_config.load_bot_value(chat_id, BotValueTypes.All, '[]')
+
         members = json.loads(json_str) if json_str else []
-        
+
         if event.new_chat_member.user.username:
             members.append('@' + event.new_chat_member.user.username)
         else:
-            await bot.send_message(event.chat.id,
+            await bot.send_message(chat_id,
                                    f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
-        
-        if app_context:
-            await app_context.config_service.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+
+        if app_context and app_context.legacy_config_service:
+            await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
         else:
-            await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
-    if app_context:
-        _ = asyncio.create_task(app_context.config_service.remove_user_from_chat(event.chat.id,
+    chat_id = event.chat.id
+
+    # Remove user from chat using DI service or global_data fallback
+    if app_context and app_context.legacy_config_service:
+        _ = asyncio.create_task(app_context.legacy_config_service.remove_user_from_chat(chat_id,
                                                                                event.new_chat_member.user.id))
     else:
-        _ = asyncio.create_task(global_data.mongo_config.remove_user_from_chat(event.chat.id,
+        _ = asyncio.create_task(global_data.mongo_config.remove_user_from_chat(chat_id,
                                                                                event.new_chat_member.user.id))
-                                                                               
-    if event.chat.id in global_data.auto_all:
-        if app_context:
-            json_str = await app_context.config_service.load_bot_value(event.chat.id, BotValueTypes.All)
+
+    # Check auto_all enabled using DI service or global_data fallback
+    auto_all_enabled = False
+    if app_context and app_context.feature_flags:
+        auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
+    else:
+        auto_all_enabled = chat_id in global_data.auto_all
+
+    if auto_all_enabled:
+        if app_context and app_context.legacy_config_service:
+            json_str = await app_context.legacy_config_service.load_bot_value(chat_id, BotValueTypes.All)
         else:
-            json_str = await global_data.mongo_config.load_bot_value(event.chat.id, BotValueTypes.All, '[]')
-            
+            json_str = await global_data.mongo_config.load_bot_value(chat_id, BotValueTypes.All, '[]')
+
         members = json.loads(json_str) if json_str else []
-        
+
         if event.from_user.username:
             username = '@' + event.from_user.username
             if username in members:
                 members.remove(username)
-            if app_context:
-                await app_context.config_service.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
+            if app_context and app_context.legacy_config_service:
+                await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
             else:
-                await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.All, json.dumps(members))
-            
+                await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
+
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
-        if is_skynet_admin(event):
+        # Check skynet admin using DI service or global_data fallback
+        is_admin_user = False
+        if app_context and app_context.admin_service:
+            is_admin_user = app_context.admin_service.is_skynet_admin(event.from_user.username)
+        else:
+            is_admin_user = is_skynet_admin(event)
+
+        if is_admin_user:
             logger.info(
                 f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
-                
+
             in_other_chats = False
             if app_context:
                 c1, _ = await app_context.group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
@@ -414,7 +504,7 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot,
                 c2, _ = await check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
                 c3, _ = await check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
                 in_other_chats = c1 or c2 or c3
-                
+
             if in_other_chats:
                 return
 
@@ -423,7 +513,7 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot,
             kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text='unban',
                                      callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
-                                                                     chat_id=event.chat.id).pack())
+                                                                     chat_id=chat_id).pack())
             ]])
             await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
                                    reply_markup=kb_unban)
@@ -443,13 +533,22 @@ def contains_emoji(s: str) -> bool:
 
 @router.message(F.new_chat_members)
 @router.message(F.left_chat_member)
-async def msg_delete_income(message: Message):
+async def msg_delete_income(message: Message, app_context=None):
     """
     # только удаляем сообщения о входе
     """
-    if message.chat.id in global_data.delete_income:
+    chat_id = message.chat.id
+
+    # Get delete_income config using DI service or global_data fallback
+    delete_income_config = None
+    if app_context and app_context.config_service:
+        delete_income_config = app_context.config_service.get_delete_income(chat_id)
+    else:
+        delete_income_config = global_data.delete_income.get(chat_id) if chat_id in global_data.delete_income else None
+
+    if delete_income_config is not None:
         with suppress(TelegramBadRequest):
-            if global_data.delete_income[message.chat.id] == 2:
+            if delete_income_config == 2:
                 if contains_emoji(message.from_user.full_name):
                     await message.delete()
             else:
@@ -526,22 +625,35 @@ async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_con
 @router.chat_member(ChatMemberUpdatedFilter(PROMOTED_TRANSITION))
 @router.chat_member(ChatMemberUpdatedFilter(ADMINISTRATOR >> MEMBER))
 async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
+    chat_id = event.chat.id
     members = await event.chat.get_administrators()
     new_admins = [member.user.id for member in members]
-    global_data.admins[event.chat.id] = new_admins
-    if app_context:
-        await app_context.config_service.save_bot_value(event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
+
+    # Update both DI service and global_data for consistency
+    if app_context and app_context.admin_service:
+        app_context.admin_service.set_chat_admins(chat_id, new_admins)
+    global_data.admins[chat_id] = new_admins
+
+    # Persist to database
+    if app_context and app_context.legacy_config_service:
+        await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
     else:
-        await global_data.mongo_config.save_bot_value(event.chat.id, BotValueTypes.Admins, json.dumps(new_admins))
+        await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
 
 
 @router.chat_join_request()
-async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot):
+async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot, app_context=None):
     chat_id = chat_join_request.chat.id
     user_id = chat_join_request.from_user.id
 
-    if chat_id in global_data.notify_join:
-        info_chat_id = global_data.notify_join[chat_id]
+    # Get notify_join config using DI service or global_data fallback
+    info_chat_id = None
+    if app_context and app_context.notification_service:
+        info_chat_id = app_context.notification_service.get_join_notify_config(chat_id)
+    else:
+        info_chat_id = global_data.notify_join.get(chat_id)
+
+    if info_chat_id:
         username = get_username_link(chat_join_request.from_user)
 
         kb_join = InlineKeyboardMarkup(inline_keyboard=[[
@@ -553,7 +665,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
                                                                 can_join=False).pack())
         ]])
 
-        if len(info_chat_id) > 5:
+        if len(str(info_chat_id)) > 5:
             await bot.send_message(
                 info_chat_id,
                 f"Новый участник {username} хочет присоединиться к чату \"{chat_join_request.chat.title}\". "
@@ -566,7 +678,15 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot)
                 f"Новый участник {username} хочет присоединиться к чату. Требуется подтверждение.",
                 reply_markup=kb_join
             )
-        if chat_id in global_data.join_request_captcha:
+
+        # Check join_request_captcha enabled using DI service or global_data fallback
+        join_request_captcha_enabled = False
+        if app_context and app_context.feature_flags:
+            join_request_captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'join_request_captcha')
+        else:
+            join_request_captcha_enabled = chat_id in global_data.join_request_captcha
+
+        if join_request_captcha_enabled:
             with suppress(TelegramBadRequest, TelegramForbiddenError):
                 edit_button_url = f'https://t.me/myMTLbot/JoinCaptcha?startapp={chat_id}'
 
