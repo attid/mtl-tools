@@ -22,8 +22,6 @@ from other.stellar_tools import (
 )
 from other.stellar import get_balances, MTLAddresses
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
-from scripts.mtl_exchange import check_exchange_one
-from scripts.mtl_exchange2 import check_mm, check_mmwb
 from other.global_data import MTLChats
 from scripts.update_report import lite_report
 
@@ -101,18 +99,6 @@ async def time_check_ledger(bot: Bot, session_pool):
 
 
 @safe_catch_async
-async def time_check_mm(bot: Bot, session_pool):
-    with session_pool() as session:
-        await check_mm(session)
-
-
-@safe_catch_async
-async def time_check_mmwb(bot: Bot, session_pool):
-    with session_pool() as session:
-        await check_mmwb(session)
-
-
-@safe_catch_async
 async def time_clear(bot: Bot):
     chats = await grist_manager.load_table_data(
         MTLGrist.CONFIG_auto_clean,
@@ -179,12 +165,6 @@ async def time_usdm_daily(session_pool, bot: Bot):
 @safe_catch
 def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
-    # scheduler.add_job(time_check_ledger, "interval", minutes=15, args=(bot, session_pool), misfire_grace_time=360,
-    #                   jitter=5 * 60)
-    scheduler.add_job(time_check_mm, "interval", hours=1, args=(bot, session_pool), misfire_grace_time=360,
-                      jitter=10 * 60)
-    scheduler.add_job(time_check_mmwb, "interval", hours=6, args=(bot, session_pool), misfire_grace_time=360,
-                      jitter=10 * 60)
 
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
                       misfire_grace_time=360)
@@ -203,15 +183,6 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     # Задача проверки бота Stellar три раза в день
     # 10 */6 * * * /home/skynet_bot/deploy/check_stellar.sh check_bot
     scheduler.add_job(cmd_check_bot, "interval", hours=6, minutes=10, args=(session_pool,),
-                      misfire_grace_time=360, jitter=120)
-
-
-    # обмен
-    # */13 * * * * /home/skynet_bot/deploy/mtl_exchange.sh check_exchange
-    # 17 10 * * * /home/skynet_bot/deploy/mtl_exchange.sh one_exchange
-    # scheduler.add_job(check_exchange, "interval", minutes=13,
-    #                   misfire_grace_time=360, jitter=120)
-    scheduler.add_job(check_exchange_one, "interval", hours=18,
                       misfire_grace_time=360, jitter=120)
 
 
