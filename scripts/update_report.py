@@ -21,9 +21,10 @@ from other.stellar import (
     stellar_get_transactions,
 )
 from other.stellar_tools import (
-    stellar_get_trade_cost, get_pool_balances, cmd_gen_mtl_vote_list,
+    stellar_get_trade_cost, get_pool_balances,
     stellar_add_mtl_holders_info, cmd_show_guards_list, cmd_show_donates,
 )
+from other.stellar import cmd_gen_mtl_vote_list
 from other.stellar import decode_data_value
 
 from other.web_tools import get_debank_balance

@@ -61,6 +61,7 @@ from other.grist_tools import MTLGrist, grist_manager
 from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
+from other.stellar.monitoring import stellar_get_transactions
 
 base_fee = config.base_fee
 
@@ -1444,38 +1445,7 @@ async def cmd_calc_usdm_daily(session: Session, div_list_id: int, test_sum=0, te
         return div_accounts
 
 
-async def cmd_get_new_vote_all_mtl(public_key, remove_master=False):
-    if len(public_key) > 10:
-        vote_list = await cmd_gen_mtl_vote_list()
-        result = [gen_vote_xdr(public_key, vote_list, remove_master=remove_master, source=public_key)]
-    else:
-        vote_list = await cmd_gen_mtl_vote_list()
-        # address_list = await gs_get_accounts_multi_list()
-        accounts = await grist_manager.load_table_data(
-            MTLGrist.EURMTL_accounts,
-            filter_dict={"signers_type": ['multisp']}
-        )
-
-        result = []
-        transaction = TransactionBuilder(
-            source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer),
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
-        sequence = transaction.source_account.sequence
-        transaction.set_timeout(60 * 60 * 24 * 7)
-        xdr = None
-        for account in accounts:
-            account_id = account["account_id"]
-            vote_list_copy = deepcopy(vote_list)
-            # return sequence because every build inc number
-            transaction.source_account.sequence = sequence
-            if len(transaction.operations) < 80:
-                xdr = gen_vote_xdr(account_id, vote_list_copy, transaction, source=account_id, remove_master=True)
-
-        result.append(xdr)
-
-    # print(gen_vote_xdr(public_new,vote_list2))
-
-    return result
+# cmd_get_new_vote_all_mtl moved to other/stellar/voting_utils.py
 
 
 async def get_damircoin_xdr(div_sum: int):
@@ -1634,16 +1604,7 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
     return result_data
 
 
-def decode_data_value(data_value: str):
-    try:
-        base64_message = data_value
-        base64_bytes = base64_message.encode('ascii')
-        message_bytes = base64.b64decode(base64_bytes)
-        message = message_bytes.decode('ascii')
-        return message
-    except Exception as ex:
-        logger.info(f"decode_data_value error: {ex}")
-        return 'decode error'
+# decode_data_value moved to other/stellar/xdr_utils.py
 
 
 async def cmd_show_donates(return_json=False, return_table=False):
@@ -1745,165 +1706,7 @@ async def cmd_show_guards_list():
     return result_data
 
 
-async def cmd_gen_mtl_vote_list(trim_count=20, delegate_list=None) -> list[MyShareHolder]:
-    if delegate_list is None:
-        delegate_list = {}
-    shareholder_list = []
-
-    # Get current signers from issuer account
-    server = Server(horizon_url=config.horizon_url)
-    source_account = server.load_account(MTLAddresses.public_issuer)
-    sg = source_account.load_ed25519_public_key_signers()
-
-    # Create dictionary for quick signer lookup
-    signer_weights = {s.account_id: s.weight for s in sg}
-
-    accounts = await stellar_get_all_mtl_holders()
-
-    # mtl
-    for account in accounts:
-        balances = account["balances"]
-        balance_mtl = 0  # не имею голоса с 2025
-        balance_rect = 0
-
-        for balance in balances:
-            if balance["asset_type"][0:15] == "credit_alphanum":
-                # if balance["asset_code"] == "MTL" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                # balance_mtl = int(float(balance["balance"])) * k  # 0.75 0.5 0.25
-                if balance["asset_code"] == "MTLRECT" and balance["asset_issuer"] == MTLAddresses.public_issuer:
-                    balance_rect = int(float(balance["balance"]))
-
-        account_id = account["account_id"]
-        if account_id != MTLAddresses.public_issuer:
-            # Set votes from signer weights
-            votes = signer_weights.get(account_id, 0)
-
-            shareholder = MyShareHolder(
-                account_id=account_id,
-                balance_mtl=balance_mtl,
-                balance_rect=balance_rect,
-                data=account.get('data'),
-                votes=votes
-            )
-            shareholder_list.append(shareholder)
-
-    # Add signers that are not in shareholder_list but have weight > 0
-    existing_account_ids = {sh.account_id for sh in shareholder_list}
-    for signer_id, weight in signer_weights.items():
-        if weight > 0 and signer_id not in existing_account_ids:
-            shareholder = MyShareHolder(
-                account_id=signer_id,
-                balance_mtl=0,
-                balance_rect=0,
-                votes=weight
-            )
-            shareholder_list.append(shareholder)
-
-    # Фильтруем shareholder_list, оставляя только аккаунты с балансом >= 1
-    shareholder_list = [sh for sh in shareholder_list if sh.balance >= 1]
-
-    # Сортируем shareholder_list по убыванию баланса
-    shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
-
-    # find delegate
-    for shareholder in shareholder_list:
-        if shareholder.data:
-            data = shareholder.data
-            for data_name in list(data):
-                data_value = data[data_name]
-                if data_name in ('delegate', 'mtl_delegate'):
-                    delegate_list[shareholder.account_id] = decode_data_value(data_value)
-
-    # Многошаговая делегация
-    max_steps = 3  # Максимальное количество шагов делегирования
-
-    for step in range(max_steps):
-        changes_made = False
-        temp_delegate_list = delegate_list.copy()  # Создаем копию для безопасного изменения
-
-        for shareholder in shareholder_list:
-            if shareholder.account_id in temp_delegate_list:
-                delegate_id = temp_delegate_list[shareholder.account_id]
-                delegate = next((s for s in shareholder_list if s.account_id == delegate_id), None)
-
-                if delegate:
-                    delegate.balance_delegated += shareholder.balance + shareholder.balance_delegated
-                    shareholder.balance_delegated = 0
-                    shareholder.balance_mtl = 0
-                    shareholder.balance_rect = 0
-                    changes_made = True
-
-        # Обновляем delegate_list только после завершения итерации
-        delegate_list = temp_delegate_list
-
-        # Если изменений не было, прерываем цикл
-        if not changes_made:
-            break
-
-    # Очищаем delegate_list после завершения всех шагов
-    delegate_list.clear()
-
-    # delete blacklist user
-    bl = cmd_get_blacklist()
-    # Обработка черного списка для shareholder_list
-    for shareholder in shareholder_list:
-        if bl.get(shareholder.account_id):
-            # Обнуляем соответствующие значения
-            shareholder.balance_mtl = 0
-            shareholder.balance_rect = 0
-            shareholder.balance_delegated = 0
-
-    # Если итоговый баланс (с учетом делегирования) меньше 500 MTLRECT,
-    # право голоса MTLRECT обнуляется. Участник остается в списке.
-    # №for shareholder in shareholder_list:
-    #    if shareholder.balance_rect < 500:
-    #        shareholder.balance_mtl = 0
-    #        shareholder.balance_rect = 0
-
-    # Сортируем shareholder_list по убыванию баланса
-    shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
-
-    # Фильтруем участников с балансом MTLRECT >= 500 для расчета голосов
-    eligible_shareholders = [sh for sh in shareholder_list if sh.balance_rect >= 500]
-
-    if eligible_shareholders:
-        total_sum = 0
-        for account in eligible_shareholders:
-            total_sum += account.balance
-
-        total_vote = 0
-        for account in eligible_shareholders:
-            account.calculated_votes = math.ceil(account.balance * 100 / total_sum)
-            total_vote += account.calculated_votes
-
-        big_vote = eligible_shareholders[0].calculated_votes
-
-        for account in eligible_shareholders:
-            account.calculated_votes = round(account.calculated_votes ** (
-                    1 - (1.74 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
-        # =C8^(1-(1,45-($C$2-$C$22/3)/$C$22)*($C$2-$C$22/3)/$C$22)
-
-        major_percent = eligible_shareholders[0].calculated_votes / sum(
-            sh.calculated_votes for sh in eligible_shareholders) * 100
-        if major_percent < 33 or major_percent > 36:
-            logger.warning(f"Внимание! Мажор имеет {major_percent:.2f}% голосов (вне диапазона 33-36%)")
-        else:
-            logger.info(f"Мажор имеет {major_percent:.2f}% голосов (в пределах 33-36%)")
-        # Обновляем calculated_votes в основном списке shareholder_list
-        # Создаем словарь для быстрого поиска рассчитанных голосов
-        calculated_votes_dict = {sh.account_id: sh.calculated_votes for sh in eligible_shareholders}
-
-        # Обновляем calculated_votes для всех участников в основном списке
-        for shareholder in shareholder_list:
-            if shareholder.account_id in calculated_votes_dict:
-                shareholder.calculated_votes = calculated_votes_dict[shareholder.account_id]
-            else:
-                shareholder.calculated_votes = 0  # Участники без права голоса получают 0
-
-    # Двойная сортировка: сначала по calculated_votes, потом по votes, потом по балансу
-    shareholder_list.sort(key=lambda sh: (sh.calculated_votes, sh.votes, sh.balance), reverse=True)
-
-    return shareholder_list[:trim_count]
+# cmd_gen_mtl_vote_list moved to other/stellar/voting_utils.py
 
 
 async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
@@ -2085,143 +1888,6 @@ def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, s
     # print(f"xdr: {xdr}")
 
     return xdr
-
-
-async def cmd_check_new_transaction(ignore_operation: List,
-                                    account_id=MTLAddresses.public_issuer, cash=None, chat_id=None):
-    result = []
-
-    try:
-        # Проверяем, есть ли данные в кэше
-        if cash is not None and account_id in cash:
-            tr = cash[account_id]
-        else:
-            # Если данных в кэше нет, выполняем запрос
-            server = Server(horizon_url=config.horizon_url)
-            tr = server.transactions().for_account(account_id).order(desc=True).call()
-            # Сохраняем полученные данные в кэш
-            if cash is not None:
-                cash[account_id] = tr
-
-        # Получаем last_id из базы данных
-        last_id = await global_data.mongo_config.load_kv_value(account_id + chat_id)
-
-        # Если last_id равен None, сохраняем текущий last_id и выходим
-        if last_id is None:
-            if tr["_embedded"]["records"]:
-                last_id = tr["_embedded"]["records"][0]["paging_token"]
-                await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
-            return result
-
-        new_transactions = []
-        for record in tr["_embedded"]["records"]:
-            if record["paging_token"] == last_id:
-                break
-            new_transactions.append(record)
-
-        for transaction in new_transactions:
-            if transaction["paging_token"] > last_id:
-                last_id = transaction["paging_token"]
-            try:
-                tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
-                if tr and 0 < len(tr) < 90:
-                    link = f'https://viewer.eurmtl.me/transaction/{transaction["hash"]}'
-                    try:
-                        tr_details = await decode_xdr(transaction["envelope_xdr"])
-                        if tr_details:
-                            tr_details.insert(0, f'(<a href="{link}">expert link</a>)')
-                            result.append(tr_details)
-                    except Exception as ex:
-                        logger.error(f"Error decoding XDR details for transaction {transaction['paging_token']}: {ex}")
-                        # Добавляем базовую информацию о транзакции, если детальное декодирование не удалось
-                        result.append([f'(<a href="{link}">expert link</a>)', 'Error decoding transaction details'])
-            except Exception as ex:
-                logger.error(f"Error processing transaction {transaction['paging_token']}: {ex}")
-                continue
-
-        await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
-
-    except Exception as ex:
-        logger.error(f"Error in cmd_check_new_transaction for account {account_id}: {ex}")
-
-    return result
-
-
-async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_sum: int = -1,
-                                          filter_operation=None, filter_asset=None, chat_id=None):
-    try:
-        if filter_operation is None:
-            filter_operation = []
-        result = []
-        asset_name = asset.split('-')[0]
-
-        # Получаем last_id из базы данных
-        last_id = await global_data.mongo_config.load_kv_value(asset + chat_id)
-
-        # Если last_id равен None, просто сохраняем его и выходим
-        if last_id is None:
-            # Получаем данные для определения текущего max_id
-            data = FinanceRepository(session).get_new_effects_for_token( asset_name, '-1', filter_sum)
-            if data:
-                # Сохраняем id последнего эффекта как начальный last_id
-                await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
-            return result
-
-        max_id = last_id
-
-        # Получаем новые эффекты для токена
-        data = FinanceRepository(session).get_new_effects_for_token( asset_name, last_id, filter_sum)
-        for row in data:
-            try:
-                effect = await decode_db_effect(row)
-                if effect:  # Проверяем, что effect не пустой
-                    result.append(effect)
-                    max_id = row.id
-            except Exception as ex:
-                logger.error(f"Error decoding effect for row {row.id}: {ex}")
-                continue
-
-        # Сохраняем новый max_id, если он больше last_id
-        if max_id > last_id:
-            await global_data.mongo_config.save_kv_value(asset + chat_id, max_id)
-
-        return result
-
-    except Exception as ex:
-        logger.error(f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}")
-        return []
-
-
-async def decode_db_effect(row: TOperations):
-    try:
-        result = f'<a href="https://viewer.eurmtl.me/operation/{row.id.split("-")[0]}">' \
-                 f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
-        if row.operation == 'trade':
-            result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'
-        else:
-            result += f'  {row.operation} for {float2str(row.amount1)} {row.code1} \n'
-        return result
-    except Exception as ex:
-        logger.error(f"Error in decode_db_effect for operation {row.id}: {ex}")
-        return None
-
-
-def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
-    operations = Server(horizon_url=config.horizon_url).operations().for_account(address).order().limit(
-        1).call()
-    op = operations['_embedded']['records'][0]
-    # print(operation["created_at"])  # 2022-08-23T13:47:33Z
-    dt = datetime.strptime(op["created_at"], '%Y-%m-%dT%H:%M:%SZ')
-    # print(dt)
-
-    return dt
-
-
-def get_memo_by_op(op: str):
-    operation = Server(horizon_url=config.horizon_url).operations().operation(op).call()
-    transaction = Server(horizon_url=config.horizon_url).transactions().transaction(
-        operation['transaction_hash']).call()
-    return transaction.get('memo', 'None')
 
 
 async def resolve_account(account_id: str):
@@ -2446,27 +2112,6 @@ def determine_working_range():
         start_range = datetime(today.year, today.month, 1)
         end_range = datetime(today.year, today.month, 14)
     return start_range, end_range
-
-
-async def stellar_get_transactions(address, start_range, end_range):
-    transactions = []
-    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
-        # Запускаем получение страниц транзакций
-        payments_call_builder = server.payments().for_account(account_id=address).limit(200).order()
-        page_records = await payments_call_builder.call()
-        while page_records["_embedded"]["records"]:
-            # Проверяем каждую транзакцию на соответствие диапазону
-            for record in page_records["_embedded"]["records"]:
-                tx_date = datetime.strptime(record['created_at'], "%Y-%m-%dT%H:%M:%SZ")
-                if tx_date < start_range:
-                    # Если дата транзакции выходит за пределы начала диапазона, прекращаем получение данных
-                    return transactions
-                if start_range.date() <= tx_date.date() <= end_range.date():
-                    transactions.append(record)
-            # Получаем следующую страницу записей
-            page_records = await payments_call_builder.next()
-
-    return transactions
 
 
 async def get_chicago_xdr():
