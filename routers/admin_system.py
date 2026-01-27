@@ -35,7 +35,7 @@ router = Router()
 
 @router.message(Command(commands=["exit"]))
 @router.message(Command(commands=["restart"]))
-async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext = None):
+async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -46,10 +46,9 @@ async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext 
     if my_state == 'StateExit':
         await state.update_data(MyState=None)
         await message.reply(":[[[ ушла в закат =(")
-        if app_context and app_context.bot_state_service:
-            app_context.bot_state_service.request_reboot()
-        else:
-            global_data.reboot = True
+        if not app_context or not app_context.bot_state_service:
+            raise ValueError("app_context with bot_state_service required")
+        app_context.bot_state_service.request_reboot()
         exit()
     else:
         await state.update_data(MyState='StateExit')
@@ -73,14 +72,13 @@ async def cmd_log(message: Message):
 
 
 @router.message(Command(commands=["ping_piro"]))
-async def cmd_ping_piro(message: Message, app_context=None):
+async def cmd_ping_piro(message: Message, app_context: AppContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
-    if app_context:
-        await app_context.group_service.ping_piro()
-    else:
-        await pyro_test()
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
+    await app_context.group_service.ping_piro()
 
 
 @router.message(Command(commands=["test"]))
@@ -144,17 +142,15 @@ async def cmd_send_file(message: Message, filename):
 
 
 @router.message(Command(commands=["summary"]))
-async def cmd_get_summary(message: Message, session: Session, app_context: AppContext = None):
+async def cmd_get_summary(message: Message, session: Session, app_context: AppContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
 
     # Check if listening is enabled for this chat
-    is_listening = False
-    if app_context and app_context.feature_flags:
-        is_listening = app_context.feature_flags.is_listening(message.chat.id)
-    else:
-        is_listening = message.chat.id in global_data.listen
+    if not app_context or not app_context.feature_flags:
+        raise ValueError("app_context with feature_flags required")
+    is_listening = app_context.feature_flags.is_listening(message.chat.id)
 
     if not is_listening:
         await message.reply('No messages 1')
@@ -249,7 +245,7 @@ async def cmd_sha256(message: Message):
 
 @update_command_info("/sync", "Синхронизирует сообщение в чате с постом в канале")
 @router.message(Command(commands=["sync"]))
-async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = None):
+async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -268,6 +264,9 @@ async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = No
         await message.reply('Произошла непредвиденная ошибка при получении информации о канале')
         return
 
+    if not app_context or not app_context.bot_state_service:
+        raise ValueError("app_context with bot_state_service required")
+
     try:
         post_id = message.reply_to_message.forward_from_message_id
         url = f'https://t.me/c/{str(chat.id)[4:]}/{post_id}'
@@ -283,12 +282,7 @@ async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = No
 
         # Get sync state for this channel
         sync_key = str(chat.id)
-        if app_context and app_context.bot_state_service:
-            channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
-        else:
-            if chat.id not in global_data.sync:
-                global_data.sync[chat.id] = {}
-            channel_sync = global_data.sync[chat.id]
+        channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
 
         if str(post_id) not in channel_sync:
             channel_sync[str(post_id)] = []
@@ -298,10 +292,7 @@ async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = No
                                            'url': url})
 
         # Save sync state
-        if app_context and app_context.bot_state_service:
-            app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
-        else:
-            global_data.sync[chat.id] = channel_sync
+        app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
         await global_data.mongo_config.save_bot_value(chat.id, BotValueTypes.Sync,
                                                       json.dumps(channel_sync))
@@ -318,7 +309,7 @@ async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = No
 
 @update_command_info("/resync", "Восстанавливает синхронизацию сообщения с постом в канале")
 @router.message(Command(commands=["resync"]))
-async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_context: AppContext = None):
+async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -326,6 +317,9 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
     if not message.reply_to_message or not message.reply_to_message.from_user.id == bot.id:
         await message.reply('Нужно ответить на сообщение, отправленное ботом')
         return
+
+    if not app_context or not app_context.bot_state_service:
+        raise ValueError("app_context with bot_state_service required")
 
     try:
         # Получаем клавиатуру из сообщения бота
@@ -353,12 +347,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
         # Get sync state for this channel
         sync_key = str(chat_id)
-        if app_context and app_context.bot_state_service:
-            channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
-        else:
-            if chat_id not in global_data.sync:
-                global_data.sync[chat_id] = {}
-            channel_sync = global_data.sync[chat_id]
+        channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
 
         if post_id not in channel_sync:
             channel_sync[post_id] = []
@@ -379,10 +368,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             })
 
             # Save sync state
-            if app_context and app_context.bot_state_service:
-                app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
-            else:
-                global_data.sync[chat_id] = channel_sync
+            app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
             # Сохраняем обновленные данные в БД
             await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Sync,
@@ -400,13 +386,12 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
 
 @router.edited_channel_post(F.text)
-async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppContext = None):
+async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.bot_state_service:
+        raise ValueError("app_context with bot_state_service required")
     # Get sync state for this channel
     sync_key = str(message.chat.id)
-    if app_context and app_context.bot_state_service:
-        channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
-    else:
-        channel_sync = global_data.sync.get(message.chat.id, {})
+    channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
 
     if str(message.message_id) in channel_sync:
         for data in channel_sync[str(message.message_id)]:
@@ -438,14 +423,13 @@ async def cmd_eurmtl(message: Message):
 
 @router.message(Command(commands=["grist"]))
 @router.message(CommandStart(deep_link=True, magic=F.args == 'grist'), F.chat.type == "private")
-async def cmd_grist(message: Message, app_context=None):
+async def cmd_grist(message: Message, app_context: AppContext):
+    if not app_context or not app_context.grist_service:
+        raise ValueError("app_context with grist_service required")
     user_id = message.from_user.id
     try:
-        if app_context:
-            access_records = await app_context.grist_service.load_table_data(MTLGrist.GRIST_access)
-        else:
-            access_records = await grist_manager.load_table_data(MTLGrist.GRIST_access)
-            
+        access_records = await app_context.grist_service.load_table_data(MTLGrist.GRIST_access)
+
         for r in access_records:
             print(r)
 
@@ -466,12 +450,9 @@ async def cmd_grist(message: Message, app_context=None):
                 }
             }]
         }
-        
-        if app_context:
-            await app_context.grist_service.patch_data(MTLGrist.GRIST_access, update_data)
-        else:
-            await grist_manager.patch_data(MTLGrist.GRIST_access, update_data)
-        
+
+        await app_context.grist_service.patch_data(MTLGrist.GRIST_access, update_data)
+
         await message.answer(f"✅ Новый ключ доступа:\n<code>{new_key}</code>")
 
     except Exception as e:
@@ -480,15 +461,15 @@ async def cmd_grist(message: Message, app_context=None):
 
 
 @router.message(Command(commands=["update_mtlap"]))
-async def cmd_update_mtlap(message: Message, bot: Bot, app_context=None):
+async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
 
-    if app_context:
-        data = await app_context.gspread_service.get_all_mtlap()
-    else:
-        data = await gs_get_all_mtlap()
+    if not app_context or not app_context.gspread_service or not app_context.mtl_service:
+        raise ValueError("app_context with gspread_service and mtl_service required")
+
+    data = await app_context.gspread_service.get_all_mtlap()
 
     if not data or len(data) < 1:
         await message.reply("Ошибка: таблица пуста или не найдены данные.")
@@ -514,18 +495,12 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context=None):
         except Exception:
             results.append(False)
         await asyncio.sleep(0.1)
-    
-    if app_context:
-        await app_context.gspread_service.get_update_mtlap_skynet_row(results)
-    else:
-        await gs_get_update_mtlap_skynet_row(results)
+
+    await app_context.gspread_service.get_update_mtlap_skynet_row(results)
 
     await message.reply("Готово 1")
-    
-    if app_context:
-        result = await app_context.mtl_service.check_consul_mtla_chats(message.bot)
-    else:
-        result = await check_consul_mtla_chats(message.bot)
+
+    result = await app_context.mtl_service.check_consul_mtla_chats(message.bot)
 
     if result:
         await message.reply('\n'.join(result))
@@ -534,16 +509,15 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context=None):
 
 
 @router.message(Command(commands=["update_chats_info"]))
-async def cmd_chats_info(message: Message, app_context=None):
+async def cmd_chats_info(message: Message, app_context: AppContext):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
     await message.answer(text="Обновление информации о чатах...")
     for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
-        if app_context:
-            members = await app_context.group_service.get_members(chat_id)
-        else:
-            members = await get_group_members(chat_id)
+        members = await app_context.group_service.get_members(chat_id)
         await global_data.mongo_config.update_chat_info(chat_id, members)
     await message.answer(text="Обновление информации о чатах... Done.")
 
@@ -579,7 +553,7 @@ async def cmd_push(message: Message, bot: Bot):
 
 @router.message(Command(commands=["get_info"]))
 @router.message(Command(re.compile(r"get_info_(\d+)")))
-async def cmd_get_info(message: Message, bot: Bot, app_context=None):
+async def cmd_get_info(message: Message, bot: Bot, app_context: AppContext = None):
     if not is_skynet_admin(message):
         if message.chat.id != MTLChats.HelperChat:
             await message.reply('You are not my admin.')

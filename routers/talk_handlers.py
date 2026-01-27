@@ -12,45 +12,39 @@ from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, Rep
 from other.global_data import MTLChats, BotValueTypes, update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
 from other.miniapps_tools import miniapps
+from services.app_context import AppContext
 
 router = Router()
 
 my_talk_message = []
 
 
-def _is_skynet_img_user(username: str, app_context=None) -> bool:
+def _is_skynet_img_user(username: str, app_context) -> bool:
     """Check if user is allowed to use /img command."""
-    if app_context and app_context.admin_service:
-        return app_context.admin_service.is_skynet_img_user(username)
-    # Fallback to global_data
-    from other.global_data import global_data
-    normalized = f'@{username.lower()}' if username else ''
-    return normalized in global_data.skynet_img
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return app_context.admin_service.is_skynet_img_user(username)
 
 
-def _is_skynet_admin(message, app_context=None) -> bool:
+def _is_skynet_admin(message, app_context) -> bool:
     """Check if user is a skynet admin."""
-    if app_context and app_context.admin_service:
-        username = message.from_user.username if message.from_user else None
-        return app_context.admin_service.is_skynet_admin(username)
-    # Fallback to global_data
-    from other.global_data import is_skynet_admin
-    return is_skynet_admin(message)
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    username = message.from_user.username if message.from_user else None
+    return app_context.admin_service.is_skynet_admin(username)
 
 
 @router.message(Command(commands=["img"]))
-async def cmd_img(message: Message, bot: Bot, app_context=None):
+async def cmd_img(message: Message, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.ai_service or not app_context.admin_service:
+        raise ValueError("app_context with ai_service and admin_service required")
     username = message.from_user.username if message.from_user else None
     if message.chat.id in (MTLChats.CyberGroup,) or _is_skynet_img_user(username, app_context):
         await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
         await bot.send_message(chat_id=MTLChats.ITolstov, text=f'{message.from_user.username}:{message.text}')
         text = message.text[5:]
-        
-        if app_context:
-            image_urls = await app_context.ai_service.generate_image(text)
-        else:
-            from other.open_ai_tools import generate_image
-            image_urls = await generate_image(text)
+
+        image_urls = await app_context.ai_service.generate_image(text)
 
         for url in image_urls:
             image_file = URLInputFile(url, filename="image.png")
@@ -61,7 +55,9 @@ async def cmd_img(message: Message, bot: Bot, app_context=None):
 
 
 @router.message(Command(commands=["comment"]))
-async def cmd_comment(message: Message, app_context=None):
+async def cmd_comment(message: Message, app_context: AppContext):
+    if not app_context or not app_context.ai_service:
+        raise ValueError("app_context with ai_service required")
     if message.reply_to_message is None:
         await message.reply('А чего комментировать то?')
         return
@@ -73,38 +69,28 @@ async def cmd_comment(message: Message, app_context=None):
         await message.delete()
     except:
         pass
-        
-    if app_context:
-        msg = await app_context.ai_service.talk_get_comment(message.chat.id, msg)
-    else:
-        from other.open_ai_tools import talk_get_comment
-        msg = await talk_get_comment(message.chat.id, msg)
-        
+
+    msg = await app_context.ai_service.talk_get_comment(message.chat.id, msg)
+
     msg = await message.reply_to_message.reply(msg)
     my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
 
 @router.message(F.text, F.reply_to_message, ReplyToBot(), F.chat.type != ChatType.PRIVATE)
-async def cmd_last_check_reply_to_bot(message: Message, app_context=None):
+async def cmd_last_check_reply_to_bot(message: Message, app_context: AppContext):
+    if not app_context or not app_context.ai_service or not app_context.talk_service:
+        raise ValueError("app_context with ai_service and talk_service required")
     if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
         # answer on bot message
-        if app_context:
-            msg_text = await app_context.ai_service.talk(message.chat.id, message.text)
-        else:
-            from other.open_ai_tools import talk
-            msg_text = await talk(message.chat.id, message.text)
-            
+        msg_text = await app_context.ai_service.talk(message.chat.id, message.text)
+
         try:
             msg = await message.reply(msg_text, parse_mode=ParseMode.MARKDOWN)
         except:
             msg = await message.reply(msg_text)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
-    if app_context:
-        await app_context.talk_service.answer_notify_message(message)
-    else:
-        from routers.talk_handlers import answer_notify_message
-        await answer_notify_message(message)
+    await app_context.talk_service.answer_notify_message(message)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -115,7 +101,9 @@ async def cmd_last_check_nap(message: Message):
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ДЕКОДИРУЙ', 'decode')))
-async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.stellar_service or not app_context.utils_service or not app_context.config_service:
+        raise ValueError("app_context with stellar_service, utils_service, and config_service required")
     if message.reply_to_message:
         url = None
         if message.reply_to_message.text:
@@ -133,50 +121,32 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
                         url = None
 
         if url:
-            if app_context:
-                msg = await app_context.stellar_service.check_url_xdr(url)
-            else:
-                from other.stellar_tools import check_url_xdr
-                msg = await check_url_xdr(url)
+            msg = await app_context.stellar_service.check_url_xdr(url)
             msg = '\n'.join(msg)
-            if app_context:
-                await app_context.utils_service.multi_reply(message, msg)
-            else:
-                from other.aiogram_tools import multi_reply
-                await multi_reply(message, msg)
+            await app_context.utils_service.multi_reply(message, msg)
         else:
             await message.reply('Ссылка не найдена')
     else:
-        if app_context:
-            pinned_url = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
-            msg = await app_context.stellar_service.check_url_xdr(pinned_url)
-        else:
-            from other.global_data import global_data
-            from other.stellar_tools import check_url_xdr
-            msg = await check_url_xdr(await global_data.mongo_config.load_bot_value(
-                message.chat.id, BotValueTypes.PinnedUrl))
+        pinned_url = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+        msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         msg = '\n'.join(msg)
-        if app_context:
-            await app_context.utils_service.multi_reply(message, msg[:4000])
-        else:
-            from other.aiogram_tools import multi_reply
-            await multi_reply(message, msg[:4000])
+        await app_context.utils_service.multi_reply(message, msg[:4000])
 
 
 @update_command_info("Скайнет напомни", "Попросить Скайнет напомнить про подпись транзакции. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('НАПОМНИ',)))
-async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context=None):
-    if app_context:
-        await app_context.talk_service.remind(message, session)
-    else:
-        from routers.talk_handlers import remind
-        await remind(message, session, bot)
+async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.talk_service:
+        raise ValueError("app_context with talk_service required")
+    await app_context.talk_service.remind(message, session)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('задач',)))
-async def cmd_last_check_task(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_last_check_task(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.ai_service:
+        raise ValueError("app_context with ai_service required")
     tmp_msg = await message.reply('Анализирую задачу...')
     msg = ''
     if message.reply_to_message:
@@ -188,24 +158,18 @@ async def cmd_last_check_task(message: Message, session: Session, bot: Bot, app_
     msg += f'ссылка: {message.get_url()}\n'
     msg += f'текст: """{message.text[7:]}"""\n\n\n'
 
-    if app_context:
-        msg = await app_context.ai_service.add_task_to_google(msg)
-    else:
-        from other.open_ai_tools import add_task_to_google
-        msg = await add_task_to_google(msg)
-        
+    msg = await app_context.ai_service.add_task_to_google(msg)
+
     await message.reply(msg)
     await tmp_msg.delete()
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('гороскоп',)))
-async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot, app_context=None):
-    if app_context:
-        horoscope = app_context.ai_service.get_horoscope()
-    else:
-        from other.open_ai_tools import get_horoscope
-        horoscope = get_horoscope()
+async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.ai_service:
+        raise ValueError("app_context with ai_service required")
+    horoscope = app_context.ai_service.get_horoscope()
     await message.answer('\n'.join(horoscope), parse_mode=ParseMode.MARKDOWN)
 
 
@@ -213,39 +177,29 @@ async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot,
 @update_command_info("Скайнет обнови гарантов", "Попросить Скайнет обновить файл гарантов. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ОБНОВИ',)))
-async def cmd_last_check_update(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_last_check_update(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.admin_service or not app_context.report_service:
+        raise ValueError("app_context with admin_service and report_service required")
     if not _is_skynet_admin(message, app_context):
         await message.reply('You are not my admin.')
         return False
-        
-    report_service = app_context.report_service if app_context else None
-    
+
+    report_service = app_context.report_service
+
     if has_words(message.text, ['MM', 'ММ']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        if report_service:
-            await report_service.update_mmwb_report(session)
-        else:
-            from scripts.update_report import update_mmwb_report
-            await update_mmwb_report(session)
+        await report_service.update_mmwb_report(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['БДМ', 'BIM']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        if report_service:
-            await report_service.update_bim_data(session)
-        else:
-            from scripts.update_report import update_bim_data
-            await update_bim_data(session)
+        await report_service.update_bim_data(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['ГАРАНТОВ']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        if report_service:
-            await report_service.update_guarantors_report()
-        else:
-            from scripts.update_report import update_guarantors_report
-            await update_guarantors_report()
+        await report_service.update_guarantors_report()
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
         msg = await message.reply('Зай, я запустила обновление')
@@ -255,20 +209,12 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
         from other.stellar import MTLAssets
         await save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
 
-        if report_service:
-            await report_service.update_main_report(session)
-        else:
-            from scripts.update_report import update_main_report
-            await update_main_report(session)
+        await report_service.update_main_report(session)
         await msg.reply('Обновление завершено')
     if has_words(message.text, ['donate', 'donates', 'donated']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        if report_service:
-            await report_service.update_donate_report(session)
-        else:
-            from scripts.update_report import update_donate_report
-            await update_donate_report(session)
+        await report_service.update_donate_report(session)
         await msg.reply('Обновление завершено')
 
 
@@ -319,7 +265,9 @@ async def handle_private_message_links(message: Message, bot: Bot):
 @router.message(F.chat.type == ChatType.PRIVATE, F.text)
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ', 'SKYNET4', 'СКАЙНЕТ4')), F.text)
 @router.message(Command(commands=["skynet"]))
-async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.ai_service:
+        raise ValueError("app_context with ai_service required")
     gpt4 = False
     if len(message.text) > 7 and message.text[7] == '4':
         if message.chat.id != MTLChats.CyberGroup:
@@ -332,13 +280,9 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_con
         msg = f"{message.reply_to_message.text} \n================\n{message.text}"
 
     googleit = 'загугли' in message.text.lower()
-    
-    if app_context:
-        msg = await app_context.ai_service.talk(message.chat.id, msg, gpt4, googleit=googleit)
-    else:
-        from other.open_ai_tools import talk
-        msg = await talk(message.chat.id, msg, gpt4, googleit=googleit)
-        
+
+    msg = await app_context.ai_service.talk(message.chat.id, msg, gpt4, googleit=googleit)
+
     if msg is None:
         msg = '=( connection error, retry again )='
     try:

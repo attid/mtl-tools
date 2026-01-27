@@ -59,81 +59,74 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
 ########################################################################################################################
 
 def _is_feature_enabled(app_context, chat_id: int, feature: str, global_list: list) -> bool:
-    """Check if feature is enabled using DI service or global_data fallback."""
-    if app_context and app_context.feature_flags:
-        return app_context.feature_flags.is_enabled(chat_id, feature)
-    return chat_id in global_list
+    """Check if feature is enabled using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.feature_flags:
+        raise ValueError("app_context with feature_flags required")
+    return app_context.feature_flags.is_enabled(chat_id, feature)
 
 
 def _get_user_type(app_context, user_id: int) -> int:
-    """Get user type using DI service or global_data fallback. Returns int for backward compatibility."""
-    if app_context and app_context.user_service:
-        user_type = app_context.user_service.get_user_type(user_id)
-        return user_type.value
-    return global_data.check_user(user_id)
+    """Get user type using DI service. Returns int for backward compatibility. Raises error if app_context not available."""
+    if not app_context or not app_context.user_service:
+        raise ValueError("app_context with user_service required")
+    user_type = app_context.user_service.get_user_type(user_id)
+    return user_type.value
 
 
 def _is_first_vote_enabled(app_context, chat_id: int) -> bool:
-    """Check if first vote is enabled using DI service or global_data fallback."""
-    if app_context and app_context.voting_service:
-        return app_context.voting_service.is_first_vote_enabled(chat_id)
-    return chat_id in global_data.first_vote
+    """Check if first vote is enabled using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.voting_service:
+        raise ValueError("app_context with voting_service required")
+    return app_context.voting_service.is_first_vote_enabled(chat_id)
 
 
 def _get_first_vote_data(app_context, key: str, default: dict) -> dict:
-    """Get first vote data by key using DI service or global_data fallback."""
-    if app_context and app_context.voting_service:
-        return app_context.voting_service.get_first_vote_data_by_key(key, default)
-    return global_data.first_vote_data.get(key, default)
+    """Get first vote data by key using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.voting_service:
+        raise ValueError("app_context with voting_service required")
+    return app_context.voting_service.get_first_vote_data_by_key(key, default)
 
 
 def _set_first_vote_data(app_context, key: str, data: dict) -> None:
-    """Set first vote data by key using DI service or global_data fallback."""
-    if app_context and app_context.voting_service:
-        app_context.voting_service.set_first_vote_data_by_key(key, data)
-    else:
-        global_data.first_vote_data[key] = data
+    """Set first vote data by key using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.voting_service:
+        raise ValueError("app_context with voting_service required")
+    app_context.voting_service.set_first_vote_data_by_key(key, data)
 
 
 def _has_alert_users(app_context, chat_id: int) -> bool:
-    """Check if chat has alert users using DI service or global_data fallback."""
-    if app_context and app_context.notification_service:
-        return bool(app_context.notification_service.get_alert_users(chat_id))
-    return chat_id in global_data.alert_me
+    """Check if chat has alert users using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.notification_service:
+        raise ValueError("app_context with notification_service required")
+    return bool(app_context.notification_service.get_alert_users(chat_id))
 
 
 def _get_alert_users(app_context, chat_id: int) -> list:
-    """Get alert users for chat using DI service or global_data fallback."""
-    if app_context and app_context.notification_service:
-        return app_context.notification_service.get_alert_users(chat_id)
-    return global_data.alert_me.get(chat_id, [])
+    """Get alert users for chat using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.notification_service:
+        raise ValueError("app_context with notification_service required")
+    return app_context.notification_service.get_alert_users(chat_id)
 
 
 def _get_message_notify_config(app_context, chat_id: int) -> Optional[str]:
-    """Get message notification config using DI service or global_data fallback."""
-    if app_context and app_context.notification_service:
-        return app_context.notification_service.get_message_notify_config(chat_id)
-    return global_data.notify_message.get(chat_id)
+    """Get message notification config using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.notification_service:
+        raise ValueError("app_context with notification_service required")
+    return app_context.notification_service.get_message_notify_config(chat_id)
 
 
 def _get_topic_mutes(app_context, chat_id: int, thread_id: int) -> dict:
-    """Get topic mutes using DI service or global_data fallback."""
-    if app_context and app_context.admin_service:
-        return app_context.admin_service.get_topic_mutes(chat_id, thread_id)
-    chat_thread_key = f"{chat_id}-{thread_id}"
-    return global_data.topic_mute.get(chat_thread_key, {})
+    """Get topic mutes using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return app_context.admin_service.get_topic_mutes(chat_id, thread_id)
 
 
 def _remove_topic_mute(app_context, chat_id: int, thread_id: int, user_id: int) -> None:
-    """Remove topic mute using DI service or global_data fallback."""
-    if app_context and app_context.admin_service:
-        app_context.admin_service.remove_user_mute(chat_id, thread_id, user_id)
-    else:
-        chat_thread_key = f"{chat_id}-{thread_id}"
-        if chat_thread_key in global_data.topic_mute and user_id in global_data.topic_mute[chat_thread_key]:
-            del global_data.topic_mute[chat_thread_key][user_id]
-            if not global_data.topic_mute[chat_thread_key]:
-                del global_data.topic_mute[chat_thread_key]
+    """Remove topic mute using DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    app_context.admin_service.remove_user_mute(chat_id, thread_id, user_id)
 
 
 async def _save_topic_mutes_to_db(app_context) -> None:

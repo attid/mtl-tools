@@ -21,102 +21,87 @@ router = Router()
 # =============================================================================
 
 def _get_feature_flag_list(ctx, feature_name: str) -> list:
-    """Get feature flag list from DI service or fallback to global_data."""
-    if ctx and ctx.feature_flags:
-        # For DI, we return a proxy that checks the service
-        # But commands_info expects mutable list, so return global_data for now
-        pass
-    return getattr(global_data, feature_name, [])
+    """Get feature flag list from DI service. Raises error if ctx not available."""
+    if not ctx or not ctx.feature_flags:
+        raise ValueError("app_context with feature_flags required")
+    return ctx.feature_flags.get_feature_list(feature_name)
 
 
 def _get_feature_flag_dict(ctx, feature_name: str) -> dict:
-    """Get feature flag dict from DI service or fallback to global_data."""
-    return getattr(global_data, feature_name, {})
+    """Get feature flag dict from DI service. Raises error if ctx not available."""
+    if not ctx or not ctx.feature_flags:
+        raise ValueError("app_context with feature_flags required")
+    return ctx.feature_flags.get_feature_dict(feature_name)
 
 
 def _is_feature_enabled(ctx, chat_id: int, feature: str) -> bool:
-    """Check if feature is enabled using DI or fallback."""
-    if ctx and ctx.feature_flags:
-        return ctx.feature_flags.is_enabled(chat_id, feature)
-    # Fallback to global_data
-    feature_data = getattr(global_data, feature, None)
-    if isinstance(feature_data, list):
-        return chat_id in feature_data
-    elif isinstance(feature_data, dict):
-        return chat_id in feature_data
-    return False
+    """Check if feature is enabled using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.feature_flags:
+        raise ValueError("app_context with feature_flags required")
+    return ctx.feature_flags.is_enabled(chat_id, feature)
 
 
 def _get_delete_income(ctx, chat_id: int) -> Optional[Any]:
-    """Get delete income config using DI or fallback."""
-    if ctx and ctx.config_service:
-        return ctx.config_service.get_delete_income(chat_id)
-    return global_data.delete_income.get(chat_id)
+    """Get delete income config using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.config_service:
+        raise ValueError("app_context with config_service required")
+    return ctx.config_service.get_delete_income(chat_id)
 
 
 def _needs_decode(ctx, chat_id: int) -> bool:
-    """Check if chat needs decode using DI or fallback."""
-    if ctx and ctx.bot_state_service:
-        return ctx.bot_state_service.needs_decode(chat_id)
-    return chat_id in global_data.need_decode
+    """Check if chat needs decode using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.bot_state_service:
+        raise ValueError("app_context with bot_state_service required")
+    return ctx.bot_state_service.needs_decode(chat_id)
 
 
 def _is_first_vote_enabled(ctx, chat_id: int) -> bool:
-    """Check if first vote is enabled using DI or fallback."""
-    if ctx and ctx.voting_service:
-        return ctx.voting_service.is_first_vote_enabled(chat_id)
-    return chat_id in global_data.first_vote
+    """Check if first vote is enabled using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.voting_service:
+        raise ValueError("app_context with voting_service required")
+    return ctx.voting_service.is_first_vote_enabled(chat_id)
 
 
 def _get_join_notify_config(ctx, chat_id: int) -> Optional[Any]:
-    """Get join notify config using DI or fallback."""
-    if ctx and ctx.notification_service:
-        return ctx.notification_service.get_join_notify_config(chat_id)
-    return global_data.notify_join.get(chat_id)
+    """Get join notify config using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.notification_service:
+        raise ValueError("app_context with notification_service required")
+    return ctx.notification_service.get_join_notify_config(chat_id)
 
 
 def _get_message_notify_config(ctx, chat_id: int) -> Optional[Any]:
-    """Get message notify config using DI or fallback."""
-    if ctx and ctx.notification_service:
-        return ctx.notification_service.get_message_notify_config(chat_id)
-    return global_data.notify_message.get(chat_id)
+    """Get message notify config using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.notification_service:
+        raise ValueError("app_context with notification_service required")
+    return ctx.notification_service.get_message_notify_config(chat_id)
 
 
 def _is_topic_admin(ctx, chat_id: int, thread_id: int, username: str) -> bool:
-    """Check if user is topic admin using DI or fallback."""
-    if ctx and ctx.admin_service:
-        return ctx.admin_service.is_topic_admin(chat_id, thread_id, username)
-    # Fallback to global_data
-    chat_thread_key = f"{chat_id}-{thread_id}"
-    if chat_thread_key not in global_data.topic_admins:
-        return False
-    normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
-    return normalized in global_data.topic_admins.get(chat_thread_key, [])
+    """Check if user is topic admin using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return ctx.admin_service.is_topic_admin(chat_id, thread_id, username)
 
 
 def _is_topic_muted(ctx, chat_id: int, thread_id: int) -> bool:
-    """Check if topic has mutes using DI or fallback."""
-    if ctx and ctx.admin_service:
-        return ctx.admin_service.has_topic_mutes(chat_id, thread_id)
-    chat_thread_key = f"{chat_id}-{thread_id}"
-    return chat_thread_key in global_data.topic_mute
+    """Check if topic has mutes using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return ctx.admin_service.has_topic_mutes(chat_id, thread_id)
 
 
 def _is_skynet_admin(ctx, username: str) -> bool:
-    """Check if user is skynet admin using DI or fallback."""
-    if ctx and ctx.admin_service:
-        return ctx.admin_service.is_skynet_admin(username)
-    # Fallback
-    if not username:
-        return False
-    normalized = username if username.startswith('@') else f'@{username}'
-    return normalized.lower() in [u.lower() for u in global_data.skynet_admins]
+    """Check if user is skynet admin using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return ctx.admin_service.is_skynet_admin(username)
 
 
 def _get_entry_channel(ctx, chat_id: int) -> Optional[str]:
-    """Get entry channel config using DI or fallback."""
-    # Currently uses global_data directly, no DI service migration yet
-    return global_data.entry_channel.get(chat_id)
+    """Get entry channel config using DI. Raises error if ctx not available."""
+    if not ctx or not ctx.config_service:
+        raise ValueError("app_context with config_service required")
+    return ctx.config_service.load_value(chat_id, 'entry_channel')
 
 
 # =============================================================================

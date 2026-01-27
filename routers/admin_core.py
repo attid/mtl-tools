@@ -23,33 +23,32 @@ from other.global_data import global_data, BotValueTypes, update_command_info, i
 from other.pyro_tools import get_group_members, remove_deleted_users
 from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
+from services.app_context import AppContext
 
 router = Router()
 
 
 def _check_topic_admin(event: Union[Message, ChatMemberUpdated, CallbackQuery, MessageReactionUpdated],
-                       app_context=None) -> bool:
-    """Check if user is topic admin using DI service or fallback to global_data."""
+                       app_context) -> bool:
+    """Check if user is topic admin using DI service."""
     if not event.message_thread_id:
         return False
 
-    if app_context and app_context.admin_service:
-        username = event.from_user.username if event.from_user else None
-        return app_context.admin_service.is_topic_admin(
-            event.chat.id, event.message_thread_id, username
-        )
-    # Fallback to global_data
-    return is_topic_admin(event)
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    username = event.from_user.username if event.from_user else None
+    return app_context.admin_service.is_topic_admin(
+        event.chat.id, event.message_thread_id, username
+    )
 
 
-def _has_topic_admins(chat_id: int, thread_id: int, app_context=None) -> bool:
-    """Check if topic has admins configured using DI service or fallback to global_data."""
+def _has_topic_admins(chat_id: int, thread_id: int, app_context) -> bool:
+    """Check if topic has admins configured using DI service."""
     chat_thread_key = f"{chat_id}-{thread_id}"
 
-    if app_context and app_context.admin_service:
-        return app_context.admin_service.has_topic_admins_by_key(chat_thread_key)
-    # Fallback to global_data
-    return chat_thread_key in global_data.topic_admins
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    return app_context.admin_service.has_topic_admins_by_key(chat_thread_key)
 
 
 @router.message(F.text.startswith("!ro"))
@@ -103,11 +102,10 @@ async def cmd_create_topic(message: Message):
 
 @update_command_info("/all", "тегнуть всех пользователей. работает зависимо от чата. и только в рабочих чатах")
 @router.message(Command(commands=["all"]))
-async def cmd_all(message: Message, app_context=None):
-    if app_context:
-        user_list = await app_context.group_service.get_members(message.chat.id)
-    else:
-        user_list = await get_group_members(message.chat.id)
+async def cmd_all(message: Message, app_context: AppContext):
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
+    user_list = await app_context.group_service.get_members(message.chat.id)
     members = []
     for user in user_list:
         if user.is_bot:
@@ -125,39 +123,32 @@ async def cmd_all(message: Message, app_context=None):
 @update_command_info("/check_entry_channel",
                      "Запустить проверку всех участников на подписку в обязательный канал.")
 @router.message(Command(commands=["check_entry_channel"]))
-async def cmd_check_entry_channel(message: Message, bot: Bot, app_context=None):
+async def cmd_check_entry_channel(message: Message, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.group_service or not app_context.utils_service:
+        raise ValueError("app_context with group_service and utils_service required")
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
 
     try:
-        if app_context:
-             checked_count, action_count = await run_entry_channel_check(bot, message.chat.id, app_context.group_service)
-        else:
-             checked_count, action_count = await run_entry_channel_check(bot, message.chat.id)
+        checked_count, action_count = await run_entry_channel_check(bot, message.chat.id, app_context.group_service)
     except ValueError:
         info_message = await message.reply('Настройка обязательного канала не включена в этом чате.')
-        if app_context:
-            await app_context.utils_service.sleep_and_delete(info_message, 10)
-            await app_context.utils_service.sleep_and_delete(message, 10)
-        else:
-            await cmd_sleep_and_delete(info_message, 10)
-            await cmd_sleep_and_delete(message, 10)
+        await app_context.utils_service.sleep_and_delete(info_message, 10)
+        await app_context.utils_service.sleep_and_delete(message, 10)
         return
 
     info_message = await message.reply(
         f'Проверено участников: {checked_count}. Применено ограничений: {action_count}.')
-    if app_context:
-        await app_context.utils_service.sleep_and_delete(info_message, 30)
-        await app_context.utils_service.sleep_and_delete(message, 30)
-    else:
-        await cmd_sleep_and_delete(info_message, 30)
-        await cmd_sleep_and_delete(message, 30)
+    await app_context.utils_service.sleep_and_delete(info_message, 30)
+    await app_context.utils_service.sleep_and_delete(message, 30)
 
 
 
 @router.message(Command(commands=["delete_dead_members"]))
-async def cmd_delete_dead_members(message: Message, state: FSMContext, app_context=None):
+async def cmd_delete_dead_members(message: Message, state: FSMContext, app_context: AppContext):
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -193,10 +184,7 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
     await message.reply("Starting to remove deleted users. This may take some time...")
     try:
-        if app_context:
-            count = await app_context.group_service.remove_deleted_users(chat_id)
-        else:
-            count = await remove_deleted_users(chat_id)
+        count = await app_context.group_service.remove_deleted_users(chat_id)
         await message.reply(f"Finished removing deleted users. \n Total deleted users: {count}")
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")
@@ -205,7 +193,9 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
 @update_command_info("/mute", "Блокирует пользователя в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["mute"]))
-async def cmd_mute(message: Message, app_context=None):
+async def cmd_mute(message: Message, app_context: AppContext):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
     if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
@@ -232,23 +222,19 @@ async def cmd_mute(message: Message, app_context=None):
 
     end_time_str = (datetime.now() + delta).isoformat()
 
-    # Use DI service if available, fallback to global_data
-    if app_context and app_context.admin_service:
-        app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
-        all_mutes = app_context.admin_service.get_all_topic_mutes()
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
-    else:
-        if chat_thread_key not in global_data.topic_mute:
-            global_data.topic_mute[chat_thread_key] = {}
-        global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
+    # Use DI service
+    app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+    all_mutes = app_context.admin_service.get_all_topic_mutes()
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
 
 @update_command_info("/show_mute", "Показывает пользователей, которые заблокированы в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["show_mute"]))
-async def cmd_show_mutes(message: Message, app_context=None):
+async def cmd_show_mutes(message: Message, app_context: AppContext):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
     if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
@@ -259,11 +245,8 @@ async def cmd_show_mutes(message: Message, app_context=None):
         await message.reply('You are not local admin')
         return False
 
-    # Get mutes using DI service or fallback to global_data
-    if app_context and app_context.admin_service:
-        topic_mutes = app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
-    else:
-        topic_mutes = global_data.topic_mute.get(chat_thread_key, {})
+    # Get mutes using DI service
+    topic_mutes = app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
 
     if not topic_mutes:
         await message.reply('No users are currently muted in this topic')
@@ -288,16 +271,10 @@ async def cmd_show_mutes(message: Message, app_context=None):
 
     # Remove expired mutes
     if users_to_remove:
-        if app_context and app_context.admin_service:
-            for user_id in users_to_remove:
-                app_context.admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
-            all_mutes = app_context.admin_service.get_all_topic_mutes()
-            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
-        else:
-            for user_id in users_to_remove:
-                del global_data.topic_mute[chat_thread_key][user_id]
-            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                          json.dumps(global_data.topic_mute))
+        for user_id in users_to_remove:
+            app_context.admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
+        all_mutes = app_context.admin_service.get_all_topic_mutes()
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     if muted_users:
         mute_list = "\n".join(muted_users)
@@ -307,7 +284,9 @@ async def cmd_show_mutes(message: Message, app_context=None):
 
 
 @router.message_reaction(ChatInOption('moderate'))
-async def message_reaction(message: MessageReactionUpdated, bot: Bot, app_context=None):
+async def message_reaction(message: MessageReactionUpdated, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
     if message.new_reaction and isinstance(message.new_reaction[0], ReactionTypeCustomEmoji):
         reaction: ReactionTypeCustomEmoji = message.new_reaction[0]
 
@@ -335,17 +314,10 @@ async def message_reaction(message: MessageReactionUpdated, bot: Bot, app_contex
 
             user = get_username_link(message.reply_to_message.from_user)
 
-            # Use DI service if available, fallback to global_data
-            if app_context and app_context.admin_service:
-                app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
-                all_mutes = app_context.admin_service.get_all_topic_mutes()
-                await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
-            else:
-                if chat_thread_key not in global_data.topic_mute:
-                    global_data.topic_mute[chat_thread_key] = {}
-                global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
-                await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                              json.dumps(global_data.topic_mute))
+            # Use DI service
+            app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+            all_mutes = app_context.admin_service.get_all_topic_mutes()
+            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
             await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
@@ -437,36 +409,20 @@ async def cmd_send_me(message: Message, bot: Bot):
 @update_command_info("/alert_me", "Делает подписку на упоминания и сообщает об упоминаниях в личку(alarm)", 3,
                       "alert_me")
 @router.message(Command(commands=["alert_me"]))
-async def cmd_set_alert_me(message: Message, session: Session, app_context=None):
+async def cmd_set_alert_me(message: Message, session: Session, app_context: AppContext):
+    if not app_context or not app_context.notification_service or not app_context.utils_service:
+        raise ValueError("app_context with notification_service and utils_service required")
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    # Use DI service if available, fallback to global_data
-    if app_context and app_context.notification_service:
-        is_subscribed = app_context.notification_service.toggle_alert_user(chat_id, user_id)
-        alert_users = app_context.notification_service.get_alert_users(chat_id)
-        await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
-        msg = await message.reply('Added' if is_subscribed else 'Removed')
-    else:
-        if chat_id in global_data.alert_me and user_id in global_data.alert_me[chat_id]:
-            global_data.alert_me[chat_id].remove(user_id)
-            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe,
-                                                          json.dumps(global_data.alert_me[chat_id]))
-            msg = await message.reply('Removed')
-        else:
-            if chat_id not in global_data.alert_me:
-                global_data.alert_me[chat_id] = []
-            global_data.alert_me[chat_id].append(user_id)
-            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe,
-                                                          json.dumps(global_data.alert_me[chat_id]))
-            msg = await message.reply('Added')
+    # Use DI service
+    is_subscribed = app_context.notification_service.toggle_alert_user(chat_id, user_id)
+    alert_users = app_context.notification_service.get_alert_users(chat_id)
+    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
+    msg = await message.reply('Added' if is_subscribed else 'Removed')
 
-    if app_context:
-        await app_context.utils_service.sleep_and_delete(message, 60)
-        await app_context.utils_service.sleep_and_delete(msg, 60)
-    else:
-        await cmd_sleep_and_delete(message, 60)
-        await cmd_sleep_and_delete(msg, 60)
+    await app_context.utils_service.sleep_and_delete(message, 60)
+    await app_context.utils_service.sleep_and_delete(msg, 60)
 
 
 @update_command_info("/calc", "Посчитать сообщения от ответного")
@@ -533,7 +489,9 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
 @update_command_info("/show_all_topic_admin", "Показать всех администраторов всех топиков")
 @router.message(Command(commands=["show_all_topic_admin"]))
-async def cmd_show_all_topic_admin(message: Message, app_context=None):
+async def cmd_show_all_topic_admin(message: Message, app_context: AppContext):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
     if not await is_admin(message):
         await message.reply("You are not an admin.")
         return
@@ -542,11 +500,8 @@ async def cmd_show_all_topic_admin(message: Message, app_context=None):
     chat_admins = {}
     prefix = f"{chat_id}-"
 
-    # Get topic admins using DI service or fallback to global_data
-    if app_context and app_context.admin_service:
-        all_topic_admins = app_context.admin_service.get_all_topic_admins()
-    else:
-        all_topic_admins = global_data.topic_admins
+    # Get topic admins using DI service
+    all_topic_admins = app_context.admin_service.get_all_topic_admins()
 
     for key, admins in all_topic_admins.items():
         if key.startswith(prefix):
@@ -575,7 +530,9 @@ async def cmd_show_all_topic_admin(message: Message, app_context=None):
 
 @update_command_info("/get_users_csv", "Получить CSV файл со списком пользователей чата")
 @router.message(Command(commands=["get_users_csv"]))
-async def cmd_get_users_csv(message: Message, bot: Bot, app_context=None):
+async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext):
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
     if message.chat.id != MTLChats.MTLIDGroup:
         return
 
@@ -620,10 +577,7 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context=None):
     await message.reply("Processing... This may take a while for large chats.")
 
     try:
-        if app_context:
-            members = await app_context.group_service.get_members(target_chat_id)
-        else:
-            members = await get_group_members(target_chat_id)
+        members = await app_context.group_service.get_members(target_chat_id)
     except Exception as e:
         await message.reply(f"Failed to get group members: {e}")
         logger.error(f"Failed to get group members for {target_chat_id}: {e}")

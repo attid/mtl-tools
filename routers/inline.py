@@ -3,55 +3,55 @@ from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessag
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from other.global_data import global_data
+from services.app_context import AppContext
 
 router = Router()
 
 
 def _get_commands_dict(app_context):
-    """Get commands dict from DI service or fallback to global_data."""
-    if app_context and app_context.command_registry:
-        # Convert CommandInfo objects to legacy format for compatibility
-        commands = app_context.command_registry.get_all_commands()
-        return {
-            name: {
-                'info': cmd.description,
-                'cmd_type': cmd.cmd_type,
-                'cmd_list': cmd.cmd_list[0] if cmd.cmd_list else ''
-            }
-            for name, cmd in commands.items()
+    """Get commands dict from DI service. Raises error if app_context not available."""
+    if not app_context or not app_context.command_registry:
+        raise ValueError("app_context with command_registry required")
+    # Convert CommandInfo objects to legacy format for compatibility
+    commands = app_context.command_registry.get_all_commands()
+    return {
+        name: {
+            'info': cmd.description,
+            'cmd_type': cmd.cmd_type,
+            'cmd_list': cmd.cmd_list[0] if cmd.cmd_list else ''
         }
-    return global_data.info_cmd
+        for name, cmd in commands.items()
+    }
 
 
 def _check_alert_me(app_context, chat_id: int, user_id: int) -> bool:
-    """Check if user has alert_me enabled for the chat using DI service or fallback."""
-    if app_context and app_context.notification_service:
-        alert_config = app_context.notification_service.get_alert_config(chat_id)
-        if alert_config and isinstance(alert_config, list):
-            return user_id in alert_config
-        return False
-    # Fallback to global_data
-    if chat_id in global_data.alert_me:
-        alert_list = global_data.alert_me[chat_id]
-        if isinstance(alert_list, list):
-            return user_id in alert_list
+    """Check if user has alert_me enabled for the chat using DI service."""
+    if not app_context or not app_context.notification_service:
+        raise ValueError("app_context with notification_service required")
+    alert_config = app_context.notification_service.get_alert_config(chat_id)
+    if alert_config and isinstance(alert_config, list):
+        return user_id in alert_config
     return False
 
 
 def _get_attr_list(app_context, attr_name: str):
-    """Get attribute list from app_context services or fallback to global_data."""
+    """Get attribute list from app_context services."""
+    if not app_context:
+        raise ValueError("app_context required")
     # For alert_me, use notification_service
     if attr_name == 'alert_me':
-        if app_context and app_context.notification_service:
-            return app_context.notification_service.get_all_alerts()
-        return global_data.alert_me
-    # For other attributes, fallback to global_data
-    return getattr(global_data, attr_name, {})
+        if not app_context.notification_service:
+            raise ValueError("app_context with notification_service required")
+        return app_context.notification_service.get_all_alerts()
+    # For other attributes, use feature_flags or config_service as appropriate
+    # Return empty dict as safe default - the service should provide the data
+    if app_context.feature_flags:
+        return app_context.feature_flags.get_feature_list(attr_name)
+    return {}
 
 
 @router.inline_query()
-async def inline_handler(inline_query: InlineQuery, session: Session, app_context=None):
+async def inline_handler(inline_query: InlineQuery, session: Session, app_context: AppContext):
     switch_text = "По Вашему запросу найдено :"
     answers = []
     query_text = inline_query.query.upper()

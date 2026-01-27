@@ -275,9 +275,11 @@ async def test_show_mutes_no_admins(mock_telegram, router_app_context):
 async def test_message_reaction_no_action(router_app_context):
     # This handler uses bot directly, but we can call it manually or via dispatch if we want.
     # The original test called it manually.
-    
+
     bot = router_app_context.bot
-    
+    # router_app_context IS the app_context (a TestAppContext instance)
+    app_context = router_app_context
+
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
@@ -291,7 +293,7 @@ async def test_message_reaction_no_action(router_app_context):
 
     reaction_update = ReactionEvent()
 
-    await message_reaction_handler(reaction_update, bot)
+    await message_reaction_handler(reaction_update, bot, app_context)
     # Assert nothing bad happened
 
 @pytest.mark.asyncio
