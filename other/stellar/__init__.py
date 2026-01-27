@@ -12,6 +12,9 @@ organized by responsibility:
 - payment_service: Payment operations and submissions
 - dividend_calc: Dividend calculation logic
 - exchange_utils: Exchange operations and swaps
+- asset_xdr: Asset-specific XDR generation (dividends, payments)
+- monitoring: Transaction monitoring and detection
+- xdr_utils: XDR decoding and transaction utilities
 """
 
 # Constants
@@ -79,6 +82,33 @@ from .exchange_utils import (
     build_cancel_offers_xdr,
 )
 
+# Asset-specific XDR generation
+from .asset_xdr import (
+    get_damircoin_xdr,
+    get_agora_xdr,
+    get_toc_xdr,
+    get_btcmtl_xdr,
+    get_chicago_xdr,
+)
+
+# Transaction monitoring
+from .monitoring import (
+    cmd_check_new_transaction,
+    cmd_check_new_asset_transaction,
+    cmd_check_last_operation,
+    get_memo_by_op,
+    stellar_get_transactions,
+)
+
+# XDR utilities
+from .xdr_utils import (
+    check_url_xdr,
+    decode_xdr,
+    cmd_check_fee,
+    stellar_get_transaction_builder,
+    decode_data_value,
+)
+
 
 __all__ = [
     # Constants
@@ -125,4 +155,22 @@ __all__ = [
     "stellar_get_receive_path",
     "build_swap_xdr",
     "build_cancel_offers_xdr",
+    # Asset XDR
+    "get_damircoin_xdr",
+    "get_agora_xdr",
+    "get_toc_xdr",
+    "get_btcmtl_xdr",
+    "get_chicago_xdr",
+    # Monitoring
+    "cmd_check_new_transaction",
+    "cmd_check_new_asset_transaction",
+    "cmd_check_last_operation",
+    "get_memo_by_op",
+    "stellar_get_transactions",
+    # XDR utilities
+    "check_url_xdr",
+    "decode_xdr",
+    "cmd_check_fee",
+    "stellar_get_transaction_builder",
+    "decode_data_value",
 ]

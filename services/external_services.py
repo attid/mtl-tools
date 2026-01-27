@@ -72,15 +72,15 @@ class StellarService:
         return await send_payment_async(source_address, destination, asset, amount)
 
     def check_fee(self):
-        from other.stellar_tools import cmd_check_fee
+        from other.stellar import cmd_check_fee
         return cmd_check_fee()
 
     async def check_url_xdr(self, url, full_data=False):
-        from other.stellar_tools import check_url_xdr
+        from other.stellar import check_url_xdr
         return await check_url_xdr(url, full_data=full_data)
 
     async def decode_xdr(self, xdr, full_data=False):
-        from other.stellar_tools import decode_xdr
+        from other.stellar import decode_xdr
         return await decode_xdr(xdr, full_data=full_data)
 
     async def show_bim(self, session):
@@ -120,7 +120,7 @@ class StellarService:
         return await cmd_get_new_vote_all_mtl(address)
 
     async def get_btcmtl_xdr(self, amount, address, memo):
-        from other.stellar_tools import get_btcmtl_xdr
+        from other.stellar import get_btcmtl_xdr
         return await get_btcmtl_xdr(amount, address, memo)
 
     async def show_data(self, key):
@@ -128,7 +128,7 @@ class StellarService:
         return await cmd_show_data(key)
 
     async def get_damircoin_xdr(self, amount):
-        from other.stellar_tools import get_damircoin_xdr
+        from other.stellar import get_damircoin_xdr
         return await get_damircoin_xdr(amount)
 
     async def calc_usdm_divs(self, session, list_id):
@@ -136,7 +136,7 @@ class StellarService:
         return await cmd_calc_usdm_divs(session, list_id)
 
     async def get_toc_xdr(self, amount):
-        from other.stellar_tools import get_toc_xdr
+        from other.stellar import get_toc_xdr
         return await get_toc_xdr(amount)
 
     def find_public_key(self, text):
@@ -148,11 +148,11 @@ class StellarService:
         return await check_mtlap(key)
 
     async def get_agora_xdr(self):
-        from other.stellar_tools import get_agora_xdr
+        from other.stellar import get_agora_xdr
         return await get_agora_xdr()
 
     async def get_chicago_xdr(self):
-        from other.stellar_tools import get_chicago_xdr
+        from other.stellar import get_chicago_xdr
         return await get_chicago_xdr()
 
     async def calc_usdm_usdm_divs(self, session, div_list_id, test_sum, test_for_address):
