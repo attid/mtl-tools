@@ -27,7 +27,6 @@ from other.stellar_tools import (
 
 from other.web_tools import get_debank_balance
 from scripts.mtl_backup import save_assets
-from scripts.mtl_exchange import check_fire
 from loguru import logger
 from other.loguru_tools import safe_catch_async
 
