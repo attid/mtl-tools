@@ -84,35 +84,35 @@ class StellarService:
         return await decode_xdr(xdr, full_data=full_data)
 
     async def show_bim(self, session):
-        from other.stellar_tools import cmd_show_bim
+        from other.stellar import cmd_show_bim
         return await cmd_show_bim(session)
 
     async def get_cash_balance(self, chat_id):
-        from other.stellar_tools import get_cash_balance
+        from other.stellar import get_cash_balance
         return await get_cash_balance(chat_id)
 
     def create_list(self, session, name, type_id):
-        from other.stellar_tools import cmd_create_list
+        from other.stellar import cmd_create_list
         return cmd_create_list(session, name, type_id)
 
     async def calc_bim_pays(self, session, list_id):
-        from other.stellar_tools import cmd_calc_bim_pays
+        from other.stellar import cmd_calc_bim_pays
         return await cmd_calc_bim_pays(session, list_id)
 
     def gen_xdr(self, session, list_id):
-        from other.stellar_tools import cmd_gen_xdr
+        from other.stellar import cmd_gen_xdr
         return cmd_gen_xdr(session, list_id)
 
     async def send_by_list_id(self, session, list_id):
-        from other.stellar_tools import cmd_send_by_list_id
+        from other.stellar import cmd_send_by_list_id
         return await cmd_send_by_list_id(session, list_id)
 
     async def calc_divs(self, session, div_list_id, donate_list_id):
-        from other.stellar_tools import cmd_calc_divs
+        from other.stellar import cmd_calc_divs
         return await cmd_calc_divs(session, div_list_id, donate_list_id)
 
     async def calc_sats_divs(self, session, div_list_id):
-        from other.stellar_tools import cmd_calc_sats_divs
+        from other.stellar import cmd_calc_sats_divs
         return await cmd_calc_sats_divs(session, div_list_id)
 
     async def get_new_vote_all_mtl(self, address):
@@ -124,7 +124,7 @@ class StellarService:
         return await get_btcmtl_xdr(amount, address, memo)
 
     async def show_data(self, key):
-        from other.stellar_tools import cmd_show_data
+        from other.stellar import cmd_show_data
         return await cmd_show_data(key)
 
     async def get_damircoin_xdr(self, amount):
@@ -132,7 +132,7 @@ class StellarService:
         return await get_damircoin_xdr(amount)
 
     async def calc_usdm_divs(self, session, list_id):
-        from other.stellar_tools import cmd_calc_usdm_divs
+        from other.stellar import cmd_calc_usdm_divs
         return await cmd_calc_usdm_divs(session, list_id)
 
     async def get_toc_xdr(self, amount):
@@ -140,11 +140,11 @@ class StellarService:
         return await get_toc_xdr(amount)
 
     def find_public_key(self, text):
-        from other.stellar_tools import find_stellar_public_key
+        from other.stellar import find_stellar_public_key
         return find_stellar_public_key(text)
 
     async def check_mtlap(self, key):
-        from other.stellar_tools import check_mtlap
+        from other.stellar import check_mtlap
         return await check_mtlap(key)
 
     async def get_agora_xdr(self):
@@ -156,23 +156,23 @@ class StellarService:
         return await get_chicago_xdr()
 
     async def calc_usdm_usdm_divs(self, session, div_list_id, test_sum, test_for_address):
-        from other.stellar_tools import cmd_calc_usdm_usdm_divs
+        from other.stellar import cmd_calc_usdm_usdm_divs
         return await cmd_calc_usdm_usdm_divs(session, div_list_id, test_sum, test_for_address)
 
     async def async_submit(self, xdr):
-        from other.stellar_tools import stellar_async_submit
+        from other.stellar import stellar_async_submit
         return await stellar_async_submit(xdr)
 
     def sign(self, xdr):
-        from other.stellar_tools import stellar_sign
+        from other.stellar import stellar_sign
         return stellar_sign(xdr)
 
     async def calc_usdm_daily(self, session, list_id):
-        from other.stellar_tools import cmd_calc_usdm_daily
+        from other.stellar import cmd_calc_usdm_daily
         return await cmd_calc_usdm_daily(session, list_id)
         
     def stop_all_exchange(self):
-        from other.stellar_tools import stellar_stop_all_exchange
+        from other.stellar import stellar_stop_all_exchange
         return stellar_stop_all_exchange()
 
     async def get_mtlap_votes(self):
@@ -180,7 +180,7 @@ class StellarService:
         return await get_mtlap_votes()
 
     async def address_id_to_username(self, address, full_data=False):
-        from other.stellar_tools import address_id_to_username
+        from other.stellar import address_id_to_username
         return await address_id_to_username(address, full_data=full_data)
 
 class AirdropService:
@@ -355,7 +355,7 @@ class TalkService:
     async def remind(self, message, session, app_context=None):
         from other.global_data import global_data, is_skynet_admin
         from other.constants import BotValueTypes
-        from other.stellar_tools import cmd_alarm_url, send_by_list
+        from other.stellar import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
         if message.reply_to_message and message.reply_to_message.forward_from_chat:
             alarm_list = cmd_alarm_url(extract_url(message.reply_to_message.text))

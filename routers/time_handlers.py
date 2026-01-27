@@ -14,7 +14,7 @@ from other.config_reader import config
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async, safe_catch
 from other.pyro_tools import remove_deleted_users
-from other.stellar_tools import (
+from other.stellar import (
     cmd_create_list,
     cmd_calc_usdm_daily,
     cmd_gen_xdr,
