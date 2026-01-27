@@ -4,6 +4,7 @@ import csv
 import io
 from contextlib import suppress
 from datetime import datetime
+from typing import Union
 
 import aiohttp
 from aiogram import Router, Bot, F
@@ -12,7 +13,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ChatPermissions, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton, \
-    MessageReactionUpdated, ReactionTypeCustomEmoji, BufferedInputFile
+    MessageReactionUpdated, ReactionTypeCustomEmoji, BufferedInputFile, CallbackQuery
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,31 @@ from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
 
 router = Router()
+
+
+def _check_topic_admin(event: Union[Message, ChatMemberUpdated, CallbackQuery, MessageReactionUpdated],
+                       app_context=None) -> bool:
+    """Check if user is topic admin using DI service or fallback to global_data."""
+    if not event.message_thread_id:
+        return False
+
+    if app_context and app_context.admin_service:
+        username = event.from_user.username if event.from_user else None
+        return app_context.admin_service.is_topic_admin(
+            event.chat.id, event.message_thread_id, username
+        )
+    # Fallback to global_data
+    return is_topic_admin(event)
+
+
+def _has_topic_admins(chat_id: int, thread_id: int, app_context=None) -> bool:
+    """Check if topic has admins configured using DI service or fallback to global_data."""
+    chat_thread_key = f"{chat_id}-{thread_id}"
+
+    if app_context and app_context.admin_service:
+        return app_context.admin_service.has_topic_admins_by_key(chat_thread_key)
+    # Fallback to global_data
+    return chat_thread_key in global_data.topic_admins
 
 
 @router.message(F.text.startswith("!ro"))
@@ -179,13 +205,14 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
 @update_command_info("/mute", "Блокирует пользователя в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["mute"]))
-async def cmd_mute(message: Message):
+async def cmd_mute(message: Message, app_context=None):
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
-    if chat_thread_key not in global_data.topic_admins:
+
+    if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
         await message.reply('Local admins not set yet')
         return False
 
-    if not is_topic_admin(message):
+    if not _check_topic_admin(message, app_context):
         await message.reply('You are not local admin')
         return False
 
@@ -194,7 +221,7 @@ async def cmd_mute(message: Message):
         return
 
     delta = await parse_timedelta_from_message(message)
-    
+
     # Check if the message is from a channel (sender_chat) or a user (from_user)
     if message.reply_to_message.sender_chat:
         user_id = message.reply_to_message.sender_chat.id
@@ -205,30 +232,40 @@ async def cmd_mute(message: Message):
 
     end_time_str = (datetime.now() + delta).isoformat()
 
-    if chat_thread_key not in global_data.topic_mute:
-        global_data.topic_mute[chat_thread_key] = {}
-
-    
-    global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
-    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
+    # Use DI service if available, fallback to global_data
+    if app_context and app_context.admin_service:
+        app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+        all_mutes = app_context.admin_service.get_all_topic_mutes()
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+    else:
+        if chat_thread_key not in global_data.topic_mute:
+            global_data.topic_mute[chat_thread_key] = {}
+        global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
+        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
 
     await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
 
 @update_command_info("/show_mute", "Показывает пользователей, которые заблокированы в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["show_mute"]))
-async def cmd_show_mutes(message: Message):
+async def cmd_show_mutes(message: Message, app_context=None):
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
-    if chat_thread_key not in global_data.topic_admins:
+    if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
         await message.reply('Local admins not set yet')
         return False
 
-    if not is_topic_admin(message):
+    if not _check_topic_admin(message, app_context):
         await message.reply('You are not local admin')
         return False
 
-    if chat_thread_key not in global_data.topic_mute or not global_data.topic_mute[chat_thread_key]:
+    # Get mutes using DI service or fallback to global_data
+    if app_context and app_context.admin_service:
+        topic_mutes = app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    else:
+        topic_mutes = global_data.topic_mute.get(chat_thread_key, {})
+
+    if not topic_mutes:
         await message.reply('No users are currently muted in this topic')
         return
 
@@ -236,7 +273,7 @@ async def cmd_show_mutes(message: Message):
     muted_users = []
     users_to_remove = []
 
-    mute_items = list(global_data.topic_mute[chat_thread_key].items())
+    mute_items = list(topic_mutes.items())
 
     for user_id, mute_info in mute_items:
         try:
@@ -249,12 +286,18 @@ async def cmd_show_mutes(message: Message):
         except (ValueError, KeyError):
             continue
 
-    for user_id in users_to_remove:
-        del global_data.topic_mute[chat_thread_key][user_id]
-
+    # Remove expired mutes
     if users_to_remove:
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                      json.dumps(global_data.topic_mute))
+        if app_context and app_context.admin_service:
+            for user_id in users_to_remove:
+                app_context.admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
+            all_mutes = app_context.admin_service.get_all_topic_mutes()
+            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+        else:
+            for user_id in users_to_remove:
+                del global_data.topic_mute[chat_thread_key][user_id]
+            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                          json.dumps(global_data.topic_mute))
 
     if muted_users:
         mute_list = "\n".join(muted_users)
@@ -264,20 +307,21 @@ async def cmd_show_mutes(message: Message):
 
 
 @router.message_reaction(ChatInOption('moderate'))
-async def message_reaction(message: MessageReactionUpdated, bot: Bot):
+async def message_reaction(message: MessageReactionUpdated, bot: Bot, app_context=None):
     if message.new_reaction and isinstance(message.new_reaction[0], ReactionTypeCustomEmoji):
-        reaction:ReactionTypeCustomEmoji = message.new_reaction[0]
+        reaction: ReactionTypeCustomEmoji = message.new_reaction[0]
 
         if reaction.custom_emoji_id == '5220151067429335888':  # X emoji
             pass
 
         if reaction.custom_emoji_id in ['5220090169088045319', '5220223291599383581', '5221946956464548565']:
             chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
-            if chat_thread_key not in global_data.topic_admins:
+
+            if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
                 await message.reply('Local admins not set yet')
                 return False
 
-            if not is_topic_admin(message):
+            if not _check_topic_admin(message, app_context):
                 await message.reply('You are not local admin')
                 return False
 
@@ -289,13 +333,19 @@ async def message_reaction(message: MessageReactionUpdated, bot: Bot):
             user_id = message.reply_to_message.from_user.id
             end_time_str = (datetime.now() + delta).isoformat()
 
-            if chat_thread_key not in global_data.topic_mute:
-                global_data.topic_mute[chat_thread_key] = {}
-
             user = get_username_link(message.reply_to_message.from_user)
-            global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
-            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                          json.dumps(global_data.topic_mute))
+
+            # Use DI service if available, fallback to global_data
+            if app_context and app_context.admin_service:
+                app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+                all_mutes = app_context.admin_service.get_all_topic_mutes()
+                await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+            else:
+                if chat_thread_key not in global_data.topic_mute:
+                    global_data.topic_mute[chat_thread_key] = {}
+                global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time_str, "user": user}
+                await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                              json.dumps(global_data.topic_mute))
 
             await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
@@ -388,18 +438,28 @@ async def cmd_send_me(message: Message, bot: Bot):
                       "alert_me")
 @router.message(Command(commands=["alert_me"]))
 async def cmd_set_alert_me(message: Message, session: Session, app_context=None):
-    if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
-        global_data.alert_me[message.chat.id].remove(message.from_user.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                                                      json.dumps(global_data.alert_me[message.chat.id]))
-        msg = await message.reply('Removed')
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    # Use DI service if available, fallback to global_data
+    if app_context and app_context.notification_service:
+        is_subscribed = app_context.notification_service.toggle_alert_user(chat_id, user_id)
+        alert_users = app_context.notification_service.get_alert_users(chat_id)
+        await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
+        msg = await message.reply('Added' if is_subscribed else 'Removed')
     else:
-        if message.chat.id not in global_data.alert_me:
-            global_data.alert_me[message.chat.id] = []
-        global_data.alert_me[message.chat.id].append(message.from_user.id)
-        await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.AlertMe,
-                                                      json.dumps(global_data.alert_me[message.chat.id]))
-        msg = await message.reply('Added')
+        if chat_id in global_data.alert_me and user_id in global_data.alert_me[chat_id]:
+            global_data.alert_me[chat_id].remove(user_id)
+            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe,
+                                                          json.dumps(global_data.alert_me[chat_id]))
+            msg = await message.reply('Removed')
+        else:
+            if chat_id not in global_data.alert_me:
+                global_data.alert_me[chat_id] = []
+            global_data.alert_me[chat_id].append(user_id)
+            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe,
+                                                          json.dumps(global_data.alert_me[chat_id]))
+            msg = await message.reply('Added')
 
     if app_context:
         await app_context.utils_service.sleep_and_delete(message, 60)
@@ -473,7 +533,7 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
 @update_command_info("/show_all_topic_admin", "Показать всех администраторов всех топиков")
 @router.message(Command(commands=["show_all_topic_admin"]))
-async def cmd_show_all_topic_admin(message: Message):
+async def cmd_show_all_topic_admin(message: Message, app_context=None):
     if not await is_admin(message):
         await message.reply("You are not an admin.")
         return
@@ -481,7 +541,14 @@ async def cmd_show_all_topic_admin(message: Message):
     chat_id = message.chat.id
     chat_admins = {}
     prefix = f"{chat_id}-"
-    for key, admins in global_data.topic_admins.items():
+
+    # Get topic admins using DI service or fallback to global_data
+    if app_context and app_context.admin_service:
+        all_topic_admins = app_context.admin_service.get_all_topic_admins()
+    else:
+        all_topic_admins = global_data.topic_admins
+
+    for key, admins in all_topic_admins.items():
         if key.startswith(prefix):
             try:
                 topic_id = key[len(prefix):]
