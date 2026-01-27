@@ -570,6 +570,18 @@ class FakeVotingService:
     def clear_first_vote_data(self, chat_id):
         self._first_vote_data.pop(chat_id, None)
 
+    # Key-based first vote data methods (for message-specific voting)
+    def get_first_vote_data_by_key(self, key, default=None):
+        """Get first vote data by string key (e.g., '{message_id}{chat_id}')."""
+        data = self._first_vote_data.get(key)
+        if data is not None:
+            return data.copy()
+        return default.copy() if default else {}
+
+    def set_first_vote_data_by_key(self, key, data):
+        """Set first vote data by string key."""
+        self._first_vote_data[key] = data.copy()
+
 
 class FakeNotificationService:
     """Fake NotificationService for testing."""
@@ -577,7 +589,7 @@ class FakeNotificationService:
     def __init__(self):
         self._notify_join: dict = {}
         self._notify_message: dict = {}
-        self._alert_me: dict = {}
+        self._alert_me: dict = {}  # chat_id -> list of user_ids
 
     def is_join_notify_enabled(self, chat_id: int) -> bool:
         return bool(self._notify_join.get(chat_id))
@@ -600,11 +612,50 @@ class FakeNotificationService:
     def set_message_notify(self, chat_id: int, config) -> None:
         self._notify_message[chat_id] = config
 
-    def get_alert_config(self, user_id: int):
-        return self._alert_me.get(user_id)
+    def disable_message_notify(self, chat_id: int) -> None:
+        self._notify_message.pop(chat_id, None)
 
-    def set_alert_config(self, user_id: int, config) -> None:
-        self._alert_me[user_id] = config
+    def get_all_message_notify(self) -> dict:
+        return self._notify_message.copy()
+
+    # Alert me methods (per-chat user alert subscriptions)
+    def get_alert_users(self, chat_id: int) -> list:
+        """Get list of user_ids subscribed to alerts in this chat."""
+        return self._alert_me.get(chat_id, []).copy()
+
+    def is_user_subscribed(self, chat_id: int, user_id: int) -> bool:
+        """Check if user is subscribed to alerts in this chat."""
+        return user_id in self._alert_me.get(chat_id, [])
+
+    def add_alert_user(self, chat_id: int, user_id: int) -> None:
+        """Subscribe user to alerts in this chat."""
+        if chat_id not in self._alert_me:
+            self._alert_me[chat_id] = []
+        if user_id not in self._alert_me[chat_id]:
+            self._alert_me[chat_id].append(user_id)
+
+    def remove_alert_user(self, chat_id: int, user_id: int) -> None:
+        """Unsubscribe user from alerts in this chat."""
+        if chat_id in self._alert_me and user_id in self._alert_me[chat_id]:
+            self._alert_me[chat_id].remove(user_id)
+
+    def toggle_alert_user(self, chat_id: int, user_id: int) -> bool:
+        """Toggle user's alert subscription. Returns True if now subscribed, False if unsubscribed."""
+        if chat_id not in self._alert_me:
+            self._alert_me[chat_id] = []
+        if user_id in self._alert_me[chat_id]:
+            self._alert_me[chat_id].remove(user_id)
+            return False
+        else:
+            self._alert_me[chat_id].append(user_id)
+            return True
+
+    def get_all_alerts(self) -> dict:
+        """Get all alert subscriptions for persistence."""
+        return {k: v.copy() for k, v in self._alert_me.items()}
+
+    def load_alert_me(self, data: dict) -> None:
+        self._alert_me = data.copy()
 
 
 class FakeAdminService:
@@ -614,6 +665,11 @@ class FakeAdminService:
         self._skynet_admins: list[str] = []
         self._skynet_img: list[str] = []
         self._chat_admins: dict[int, list[int]] = {}
+        self._topic_admins: dict[str, list[str]] = {}  # "chat_id-thread_id" -> [usernames with @]
+        self._topic_mute: dict[str, dict] = {}  # "chat_id-thread_id" -> {user_id: {"end_time": str, "user": str}}
+
+    def _topic_key(self, chat_id: int, thread_id: int) -> str:
+        return f"{chat_id}-{thread_id}"
 
     def is_skynet_admin(self, username: str) -> bool:
         if not username:
@@ -649,6 +705,159 @@ class FakeAdminService:
     def get_chat_admins(self, chat_id: int) -> list[int]:
         return self._chat_admins.get(chat_id, []).copy()
 
+    # Topic admin methods
+    def has_topic_admins(self, chat_id: int, thread_id: int) -> bool:
+        key = self._topic_key(chat_id, thread_id)
+        return key in self._topic_admins
+
+    def is_topic_admin(self, chat_id: int, thread_id: int, username: str) -> bool:
+        if not username:
+            return False
+        key = self._topic_key(chat_id, thread_id)
+        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        return normalized in self._topic_admins.get(key, [])
+
+    def get_topic_admins(self, chat_id: int, thread_id: int) -> list[str]:
+        key = self._topic_key(chat_id, thread_id)
+        return self._topic_admins.get(key, []).copy()
+
+    def set_topic_admins(self, chat_id: int, thread_id: int, admin_usernames: list[str]) -> None:
+        key = self._topic_key(chat_id, thread_id)
+        self._topic_admins[key] = admin_usernames.copy()
+
+    def add_topic_admin(self, chat_id: int, thread_id: int, username: str) -> None:
+        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        key = self._topic_key(chat_id, thread_id)
+        if key not in self._topic_admins:
+            self._topic_admins[key] = []
+        if normalized not in self._topic_admins[key]:
+            self._topic_admins[key].append(normalized)
+
+    def get_all_topic_admins(self) -> dict:
+        return {k: v.copy() for k, v in self._topic_admins.items()}
+
+    # Topic mute methods
+    def get_topic_mutes(self, chat_id: int, thread_id: int) -> dict:
+        key = self._topic_key(chat_id, thread_id)
+        mutes = self._topic_mute.get(key, {})
+        return {k: v.copy() for k, v in mutes.items()}
+
+    def has_topic_mutes(self, chat_id: int, thread_id: int) -> bool:
+        key = self._topic_key(chat_id, thread_id)
+        return bool(self._topic_mute.get(key))
+
+    def get_user_mute(self, chat_id: int, thread_id: int, user_id: int):
+        key = self._topic_key(chat_id, thread_id)
+        mute_info = self._topic_mute.get(key, {}).get(user_id)
+        return mute_info.copy() if mute_info else None
+
+    def is_user_muted(self, chat_id: int, thread_id: int, user_id: int) -> bool:
+        key = self._topic_key(chat_id, thread_id)
+        return user_id in self._topic_mute.get(key, {})
+
+    def set_user_mute(self, chat_id: int, thread_id: int, user_id: int, end_time: str, user_display: str) -> None:
+        key = self._topic_key(chat_id, thread_id)
+        if key not in self._topic_mute:
+            self._topic_mute[key] = {}
+        self._topic_mute[key][user_id] = {"end_time": end_time, "user": user_display}
+
+    def remove_user_mute(self, chat_id: int, thread_id: int, user_id: int) -> None:
+        key = self._topic_key(chat_id, thread_id)
+        if key in self._topic_mute and user_id in self._topic_mute[key]:
+            del self._topic_mute[key][user_id]
+
+    def get_all_topic_mutes(self) -> dict:
+        return {k: {uk: uv.copy() for uk, uv in v.items()} for k, v in self._topic_mute.items()}
+
+    def load_topic_mutes(self, data: dict) -> None:
+        self._topic_mute = {}
+        for key, mutes in data.items():
+            self._topic_mute[key] = {}
+            for user_id, mute_info in mutes.items():
+                uid = int(user_id) if isinstance(user_id, str) else user_id
+                self._topic_mute[key][uid] = mute_info.copy()
+
+
+class FakeUserService:
+    """Fake implementation of UserService for testing."""
+
+    def __init__(self):
+        from shared.domain.user import UserType
+        self._cache: dict = {}  # user_id -> UserType
+        self._name_cache: dict = {}
+        self.UserType = UserType
+
+    def get_user_type(self, user_id: int):
+        from shared.domain.user import UserType
+        return self._cache.get(user_id, UserType.REGULAR)
+
+    def get_user(self, user_id: int):
+        from shared.domain.user import User
+        user_type = self.get_user_type(user_id)
+        return User(user_id=user_id, user_type=user_type)
+
+    def set_user_type(self, user_id: int, user_type) -> None:
+        self._cache[user_id] = user_type
+
+    def is_admin(self, user_id: int) -> bool:
+        from shared.domain.user import UserType
+        return self.get_user_type(user_id) >= UserType.ADMIN
+
+    def is_superadmin(self, user_id: int) -> bool:
+        from shared.domain.user import UserType
+        return self.get_user_type(user_id) == UserType.SUPERADMIN
+
+    def is_trusted(self, user_id: int) -> bool:
+        from shared.domain.user import UserType
+        return self.get_user_type(user_id) >= UserType.TRUSTED
+
+    def is_banned(self, user_id: int) -> bool:
+        from shared.domain.user import UserType
+        return self.get_user_type(user_id) == UserType.BANNED
+
+    def ban_user(self, user_id: int) -> None:
+        from shared.domain.user import UserType
+        self.set_user_type(user_id, UserType.BANNED)
+
+    def unban_user(self, user_id: int) -> None:
+        from shared.domain.user import UserType
+        self.set_user_type(user_id, UserType.REGULAR)
+
+    def promote_to_admin(self, user_id: int) -> None:
+        from shared.domain.user import UserType
+        self.set_user_type(user_id, UserType.ADMIN)
+
+    def promote_to_trusted(self, user_id: int) -> None:
+        from shared.domain.user import UserType
+        self.set_user_type(user_id, UserType.TRUSTED)
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+    def invalidate_user(self, user_id: int) -> None:
+        self._cache.pop(user_id, None)
+
+    def preload_users(self, users: dict) -> None:
+        from shared.domain.user import UserType
+        for user_id, user_type in users.items():
+            self._cache[user_id] = UserType(user_type)
+
+    def get_cached_count(self) -> int:
+        return len(self._cache)
+
+    # Name cache methods
+    def cache_name(self, key: str, name: str) -> None:
+        self._name_cache[key] = name
+
+    def get_cached_name(self, key: str):
+        return self._name_cache.get(key)
+
+    def load_name_cache(self, names: dict) -> None:
+        self._name_cache = names.copy()
+
+    def get_all_names(self) -> dict:
+        return self._name_cache.copy()
+
 
 class TestAppContext:
     def __init__(self, bot, dispatcher):
@@ -677,6 +886,7 @@ class TestAppContext:
         self.voting_service = FakeVotingService()
         self.admin_service = FakeAdminService()
         self.notification_service = FakeNotificationService()
+        self.user_service = FakeUserService()
         self.admin_id = 123456
 
 

@@ -84,6 +84,20 @@ class VotingService:
         with self._lock:
             self._first_vote_data.pop(chat_id, None)
 
+    # Key-based first vote data methods (for message-specific voting)
+    def get_first_vote_data_by_key(self, key: str, default: Optional[dict] = None) -> dict:
+        """Get first vote data by string key (e.g., '{message_id}{chat_id}')."""
+        with self._lock:
+            data = self._first_vote_data.get(key)
+            if data is not None:
+                return data.copy()
+            return default.copy() if default else {}
+
+    def set_first_vote_data_by_key(self, key: str, data: dict) -> None:
+        """Set first vote data by string key."""
+        with self._lock:
+            self._first_vote_data[key] = data.copy()
+
     # Bulk loading
     def load_votes(self, votes_data: dict) -> None:
         with self._lock:

@@ -44,14 +44,15 @@ async def test_spam_detection_delegation(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(last_router)
-    
-    # Setup conditions
+
+    # Setup conditions using DI services (preferred) and global_data (fallback)
     chat_id = 123
+    router_app_context.feature_flags.enable(chat_id, 'no_first_link')
     global_data.no_first_link.append(chat_id)
-    
+
     # Mock services
     router_app_context.antispam_service.check_spam.return_value = True # Yes spam
-    
+
     update = types.Update(
         update_id=1,
         message=types.Message(
@@ -62,9 +63,9 @@ async def test_spam_detection_delegation(mock_telegram, router_app_context):
             text="Spam"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     # Verify check_spam called
     assert router_app_context.antispam_service.check_spam.called
     args, _ = router_app_context.antispam_service.check_spam.call_args
@@ -75,17 +76,20 @@ async def test_mute_enforcement(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(last_router)
-    
+
     chat_id = 999
     thread_id = 7
     chat_thread_key = f"{chat_id}-{thread_id}"
     channel_id = -100999999
-    
-    # Setup global data
+    end_time = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
+
+    # Setup using DI services (preferred) and global_data (fallback)
+    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.admin_service.set_user_mute(chat_id, thread_id, channel_id, end_time, "Channel SpamChannel")
     global_data.moderate.append(chat_id)
     global_data.topic_mute[chat_thread_key] = {
         channel_id: {
-            "end_time": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat(),
+            "end_time": end_time,
             "user": "Channel SpamChannel"
         }
     }
@@ -222,6 +226,7 @@ async def test_spam_check_blocked(mock_telegram, router_app_context):
     dp.include_router(last_router)
 
     chat_id = -1001
+    router_app_context.feature_flags.enable(chat_id, 'no_first_link')
     if chat_id not in global_data.no_first_link:
         global_data.no_first_link.append(chat_id)
 
@@ -232,6 +237,7 @@ async def test_spam_check_blocked(mock_telegram, router_app_context):
 
     router_app_context.antispam_service.check_spam.assert_awaited_once()
 
+    router_app_context.feature_flags.disable(chat_id, 'no_first_link')
     global_data.no_first_link.remove(chat_id)
 
 
@@ -242,6 +248,8 @@ async def test_spam_check_passed(mock_telegram, router_app_context):
     dp.include_router(last_router)
 
     chat_id = -1002
+    router_app_context.feature_flags.enable(chat_id, 'no_first_link')
+    router_app_context.feature_flags.enable(chat_id, 'listen')
     if chat_id not in global_data.no_first_link:
         global_data.no_first_link.append(chat_id)
     if chat_id not in global_data.listen:
@@ -254,6 +262,8 @@ async def test_spam_check_passed(mock_telegram, router_app_context):
 
     router_app_context.antispam_service.check_spam.assert_awaited_once()
 
+    router_app_context.feature_flags.disable(chat_id, 'no_first_link')
+    router_app_context.feature_flags.disable(chat_id, 'listen')
     global_data.no_first_link.remove(chat_id)
     global_data.listen.remove(chat_id)
 
@@ -265,11 +275,14 @@ async def test_mute_check_active(mock_telegram, router_app_context):
     dp.include_router(last_router)
 
     chat_id = -1003
+    thread_id = None  # message_thread_id is None for non-topic messages
+    router_app_context.feature_flags.enable(chat_id, 'moderate')
     if chat_id not in global_data.moderate:
         global_data.moderate.append(chat_id)
 
-    chat_thread_key = f"{chat_id}-None"
+    chat_thread_key = f"{chat_id}-{thread_id}"
     future_time = (datetime.datetime.now() + datetime.timedelta(minutes=10)).isoformat()
+    router_app_context.admin_service.set_user_mute(chat_id, thread_id, 123, future_time, "User")
     global_data.topic_mute[chat_thread_key] = {123: {"end_time": future_time}}
 
     update = build_message_update(chat_id=chat_id, user_id=123, text="Muted")
@@ -278,6 +291,7 @@ async def test_mute_check_active(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "deleteMessage" for r in requests)
 
+    router_app_context.feature_flags.disable(chat_id, 'moderate')
     global_data.moderate.remove(chat_id)
     del global_data.topic_mute[chat_thread_key]
 
@@ -289,11 +303,14 @@ async def test_mute_check_expired(mock_telegram, router_app_context):
     dp.include_router(last_router)
 
     chat_id = -1004
+    thread_id = None
+    router_app_context.feature_flags.enable(chat_id, 'moderate')
     if chat_id not in global_data.moderate:
         global_data.moderate.append(chat_id)
 
-    chat_thread_key = f"{chat_id}-None"
+    chat_thread_key = f"{chat_id}-{thread_id}"
     past_time = (datetime.datetime.now() - datetime.timedelta(minutes=10)).isoformat()
+    router_app_context.admin_service.set_user_mute(chat_id, thread_id, 123, past_time, "User")
     global_data.topic_mute[chat_thread_key] = {123: {"end_time": past_time}}
 
     update = build_message_update(chat_id=chat_id, user_id=123, text="Ok")
@@ -301,8 +318,10 @@ async def test_mute_check_expired(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert not any(r["method"] == "deleteMessage" for r in requests)
-    assert 123 not in global_data.topic_mute.get(chat_thread_key, {})
+    # Verify mute was removed from DI service
+    assert not router_app_context.admin_service.is_user_muted(chat_id, thread_id, 123)
 
+    router_app_context.feature_flags.disable(chat_id, 'moderate')
     global_data.moderate.remove(chat_id)
     if chat_thread_key in global_data.topic_mute:
         del global_data.topic_mute[chat_thread_key]
@@ -315,6 +334,7 @@ async def test_reply_only_violation(mock_telegram, router_app_context, monkeypat
     dp.include_router(last_router)
 
     chat_id = -1005
+    router_app_context.feature_flags.enable(chat_id, 'reply_only')
     if chat_id not in global_data.reply_only:
         global_data.reply_only.append(chat_id)
 
@@ -330,6 +350,7 @@ async def test_reply_only_violation(mock_telegram, router_app_context, monkeypat
         for r in requests
     )
 
+    router_app_context.feature_flags.disable(chat_id, 'reply_only')
     global_data.reply_only.remove(chat_id)
 
 
@@ -340,6 +361,7 @@ async def test_reply_only_allowed(mock_telegram, router_app_context):
     dp.include_router(last_router)
 
     chat_id = -1006
+    router_app_context.feature_flags.enable(chat_id, 'reply_only')
     if chat_id not in global_data.reply_only:
         global_data.reply_only.append(chat_id)
 
@@ -359,17 +381,23 @@ async def test_reply_only_allowed(mock_telegram, router_app_context):
         for r in requests
     )
 
+    router_app_context.feature_flags.disable(chat_id, 'reply_only')
+
     global_data.reply_only.remove(chat_id)
 
 
 @pytest.mark.asyncio
 async def test_community_vote_prompt(mock_telegram, router_app_context):
+    from shared.domain.user import UserType
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(last_router)
 
     chat_id = -1007
     user_id = 123
+    # Set user as REGULAR (type 0) using DI service
+    router_app_context.user_service.set_user_type(user_id, UserType.REGULAR)
+    router_app_context.voting_service.enable_first_vote(chat_id)
     global_data.add_user(user_id, 0)
     if chat_id not in global_data.first_vote:
         global_data.first_vote.append(chat_id)
@@ -383,6 +411,7 @@ async def test_community_vote_prompt(mock_telegram, router_app_context):
         for r in requests
     )
 
+    router_app_context.voting_service.disable_first_vote(chat_id)
     global_data.first_vote.remove(chat_id)
     global_data.add_user(user_id, -1)
 
@@ -395,6 +424,8 @@ async def test_notify_message(mock_telegram, router_app_context):
 
     chat_id = -1008
     dest_chat_id = -100555
+    # Set up notification using DI service
+    router_app_context.notification_service.set_message_notify(chat_id, f"{dest_chat_id}")
     global_data.notify_message[chat_id] = f"{dest_chat_id}"
 
     update = build_message_update(chat_id=chat_id, user_id=123, text="Hello")
@@ -406,4 +437,5 @@ async def test_notify_message(mock_telegram, router_app_context):
         for r in requests
     )
 
+    router_app_context.notification_service.disable_message_notify(chat_id)
     del global_data.notify_message[chat_id]

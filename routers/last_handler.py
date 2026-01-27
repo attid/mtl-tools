@@ -3,6 +3,7 @@ import html
 import json
 from contextlib import suppress
 from datetime import datetime, timedelta
+from typing import Optional
 
 from aiogram import F, Bot, Router
 from aiogram.enums import MessageEntityType
@@ -27,6 +28,7 @@ from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.stellar_tools import check_url_xdr
 from other.miniapps_tools import miniapps
+from shared.domain.user import UserType
 
 router = Router()
 
@@ -53,6 +55,95 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
 
 
 ########################################################################################################################
+##########################################  DI Helpers  ################################################################
+########################################################################################################################
+
+def _is_feature_enabled(app_context, chat_id: int, feature: str, global_list: list) -> bool:
+    """Check if feature is enabled using DI service or global_data fallback."""
+    if app_context and app_context.feature_flags:
+        return app_context.feature_flags.is_enabled(chat_id, feature)
+    return chat_id in global_list
+
+
+def _get_user_type(app_context, user_id: int) -> int:
+    """Get user type using DI service or global_data fallback. Returns int for backward compatibility."""
+    if app_context and app_context.user_service:
+        user_type = app_context.user_service.get_user_type(user_id)
+        return user_type.value
+    return global_data.check_user(user_id)
+
+
+def _is_first_vote_enabled(app_context, chat_id: int) -> bool:
+    """Check if first vote is enabled using DI service or global_data fallback."""
+    if app_context and app_context.voting_service:
+        return app_context.voting_service.is_first_vote_enabled(chat_id)
+    return chat_id in global_data.first_vote
+
+
+def _get_first_vote_data(app_context, key: str, default: dict) -> dict:
+    """Get first vote data by key using DI service or global_data fallback."""
+    if app_context and app_context.voting_service:
+        return app_context.voting_service.get_first_vote_data_by_key(key, default)
+    return global_data.first_vote_data.get(key, default)
+
+
+def _set_first_vote_data(app_context, key: str, data: dict) -> None:
+    """Set first vote data by key using DI service or global_data fallback."""
+    if app_context and app_context.voting_service:
+        app_context.voting_service.set_first_vote_data_by_key(key, data)
+    else:
+        global_data.first_vote_data[key] = data
+
+
+def _has_alert_users(app_context, chat_id: int) -> bool:
+    """Check if chat has alert users using DI service or global_data fallback."""
+    if app_context and app_context.notification_service:
+        return bool(app_context.notification_service.get_alert_users(chat_id))
+    return chat_id in global_data.alert_me
+
+
+def _get_alert_users(app_context, chat_id: int) -> list:
+    """Get alert users for chat using DI service or global_data fallback."""
+    if app_context and app_context.notification_service:
+        return app_context.notification_service.get_alert_users(chat_id)
+    return global_data.alert_me.get(chat_id, [])
+
+
+def _get_message_notify_config(app_context, chat_id: int) -> Optional[str]:
+    """Get message notification config using DI service or global_data fallback."""
+    if app_context and app_context.notification_service:
+        return app_context.notification_service.get_message_notify_config(chat_id)
+    return global_data.notify_message.get(chat_id)
+
+
+def _get_topic_mutes(app_context, chat_id: int, thread_id: int) -> dict:
+    """Get topic mutes using DI service or global_data fallback."""
+    if app_context and app_context.admin_service:
+        return app_context.admin_service.get_topic_mutes(chat_id, thread_id)
+    chat_thread_key = f"{chat_id}-{thread_id}"
+    return global_data.topic_mute.get(chat_thread_key, {})
+
+
+def _remove_topic_mute(app_context, chat_id: int, thread_id: int, user_id: int) -> None:
+    """Remove topic mute using DI service or global_data fallback."""
+    if app_context and app_context.admin_service:
+        app_context.admin_service.remove_user_mute(chat_id, thread_id, user_id)
+    else:
+        chat_thread_key = f"{chat_id}-{thread_id}"
+        if chat_thread_key in global_data.topic_mute and user_id in global_data.topic_mute[chat_thread_key]:
+            del global_data.topic_mute[chat_thread_key][user_id]
+            if not global_data.topic_mute[chat_thread_key]:
+                del global_data.topic_mute[chat_thread_key]
+
+
+async def _save_topic_mutes_to_db(app_context) -> None:
+    """Save topic mutes to database using global_data (persistence layer)."""
+    # Always save to global_data.mongo_config for persistence
+    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                  json.dumps(global_data.topic_mute))
+
+
+########################################################################################################################
 ##########################################  functions  #################################################################
 ########################################################################################################################
 
@@ -75,9 +166,9 @@ async def save_url(chat_id, msg_id, msg):
     await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
 
 
-async def set_vote(message):
+async def set_vote(message, app_context=None):
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    if message.chat.id in global_data.first_vote:
+    if _is_first_vote_enabled(app_context, message.chat.id):
         kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="Spam",
                                  callback_data=FirstMessageCallbackData(spam=True,
@@ -90,9 +181,9 @@ async def set_vote(message):
         await message.reply(text="Please help me detect spam messages", reply_markup=kb_reply)
 
 
-async def check_alert(bot, message, session):
+async def check_alert(bot, message, session, app_context=None):
     # if user need be alert
-    if message.entities and message.chat.id in global_data.alert_me:
+    if message.entities and _has_alert_users(app_context, message.chat.id):
         # Создаем msg_info один раз для всего сообщения
         msg_info = MessageInfo(chat_id=message.chat.id,
                                user_from=_get_sender_name(message),
@@ -136,7 +227,8 @@ async def check_alert(bot, message, session):
                 except ValueError as ex:
                     user_id = 0
                     logger.warning(ex)
-                if user_id > 0 and user_id in global_data.alert_me[message.chat.id]:
+                alert_users = _get_alert_users(app_context, message.chat.id)
+                if user_id > 0 and user_id in alert_users:
                     with suppress(TelegramBadRequest, TelegramForbiddenError):
                         alert_username = get_username_link(message.from_user)
 
@@ -151,17 +243,18 @@ async def check_alert(bot, message, session):
                         )
 
 
-async def save_last(message, session):
-    if message.chat.id in global_data.save_last_message_date:
+async def save_last(message, session, app_context=None):
+    if _is_feature_enabled(app_context, message.chat.id, 'save_last_message_date', global_data.save_last_message_date):
         ChatsRepository(session).update_user_chat_date(message.from_user.id, message.chat.id)
 
 
-async def notify_message(message: Message):
+async def notify_message(message: Message, app_context=None):
     if message.is_automatic_forward:
         return
 
-    if message.chat.id in global_data.notify_message:
-        record = global_data.notify_message[message.chat.id].split(':')
+    notify_config = _get_message_notify_config(app_context, message.chat.id)
+    if notify_config:
+        record = notify_config.split(':')
         dest_chat = record[0]
         dest_topic = record[1] if len(record) > 1 else None
         if len(dest_chat) > 3:
@@ -301,53 +394,50 @@ async def cmd_tools(message: Message, bot: Bot, session: Session, app_context=No
             await multi_reply(message, msg)
 
 
-async def check_mute(message, session):
+async def check_mute(message, session, app_context=None):
     #     global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time, "user": user}
     #     await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
-    if message.chat.id not in global_data.moderate:
+    if not _is_feature_enabled(app_context, message.chat.id, 'moderate', global_data.moderate):
         return False
 
-    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+    chat_id = message.chat.id
+    thread_id = message.message_thread_id
+    topic_mutes = _get_topic_mutes(app_context, chat_id, thread_id)
 
-    if chat_thread_key not in global_data.topic_mute:
+    if not topic_mutes:
         return False
 
     user_id = message.from_user.id
-    
+
     # Check if the user is muted
-    if user_id in global_data.topic_mute[chat_thread_key]:
+    if user_id in topic_mutes:
         # Perform mute check for user
-        pass 
+        pass
     # Check if the channel (sender_chat) is muted
-    elif message.sender_chat and message.sender_chat.id in global_data.topic_mute[chat_thread_key]:
+    elif message.sender_chat and message.sender_chat.id in topic_mutes:
         user_id = message.sender_chat.id
     else:
         return False
 
-    mute_info = global_data.topic_mute[chat_thread_key][user_id]
+    mute_info = topic_mutes[user_id]
     current_time = datetime.now()
 
     try:
         end_time = datetime.fromisoformat(mute_info["end_time"])
     except ValueError as e:
+        chat_thread_key = f"{chat_id}-{thread_id}"
         logger.error(f"Invalid date format for user {user_id} in chat {chat_thread_key}: {e}")
         # Remove the invalid entry
-        del global_data.topic_mute[chat_thread_key][user_id]
-        if not global_data.topic_mute[chat_thread_key]:
-            del global_data.topic_mute[chat_thread_key]
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                      json.dumps(global_data.topic_mute))
+        _remove_topic_mute(app_context, chat_id, thread_id, user_id)
+        await _save_topic_mutes_to_db(app_context)
         return False
 
     if current_time < end_time:
         await message.delete()
         return True
     else:
-        del global_data.topic_mute[chat_thread_key][user_id]
-        if not global_data.topic_mute[chat_thread_key]:
-            del global_data.topic_mute[chat_thread_key]
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                      json.dumps(global_data.topic_mute))
+        _remove_topic_mute(app_context, chat_id, thread_id, user_id)
+        await _save_topic_mutes_to_db(app_context)
         return False
 
 
@@ -361,8 +451,10 @@ async def check_mute(message, session):
 async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FSMContext, app_context=None):
     # Dependency Injection: check_spam
     # Using app_context if available (and antispam service)
-    
-    if message.chat.id in global_data.no_first_link:
+    chat_id = message.chat.id
+
+    # Check no_first_link feature using DI service or global_data fallback
+    if _is_feature_enabled(app_context, chat_id, 'no_first_link', global_data.no_first_link):
         if app_context:
             deleted = await app_context.antispam_service.check_spam(message, session)
         else:
@@ -372,30 +464,44 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
             # If the message was deleted during spam check, we stop processing
             return
 
-    if message.chat.id in global_data.need_decode:
+    # Check need_decode using DI service or global_data fallback
+    needs_decode = False
+    if app_context and app_context.bot_state_service:
+        needs_decode = app_context.bot_state_service.needs_decode(chat_id)
+    else:
+        needs_decode = chat_id in global_data.need_decode
+
+    if needs_decode:
         await cmd_tools(message, bot, session, app_context=app_context)
 
-    if message.chat.id in global_data.save_last_message_date:
-        await save_last(message, session)
+    # Check save_last_message_date using DI service or global_data fallback
+    if _is_feature_enabled(app_context, chat_id, 'save_last_message_date', global_data.save_last_message_date):
+        await save_last(message, session, app_context=app_context)
 
-    if message.chat.id in global_data.moderate:
-        await check_mute(message, session)
+    # Check moderate using DI service or global_data fallback
+    if _is_feature_enabled(app_context, chat_id, 'moderate', global_data.moderate):
+        await check_mute(message, session, app_context=app_context)
 
-    if message.chat.id in global_data.notify_message:
-        await notify_message(message)
+    # Check notify_message using DI service or global_data fallback
+    if _get_message_notify_config(app_context, chat_id):
+        await notify_message(message, app_context=app_context)
 
-    if message.chat.id in global_data.reply_only:
+    # Check reply_only using DI service or global_data fallback
+    if _is_feature_enabled(app_context, chat_id, 'reply_only', global_data.reply_only):
         await cmd_check_reply_only(message, session, bot, state, app_context=app_context)
 
-    await check_alert(bot, message, session)
+    await check_alert(bot, message, session, app_context=app_context)
 
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    if global_data.check_user(user_id) == 0:
-        await set_vote(message)  ##########
+    # Check user type using DI service or global_data fallback
+    # UserType.REGULAR.value == 0 means new user, triggers first vote
+    if _get_user_type(app_context, user_id) == UserType.REGULAR.value:
+        await set_vote(message, app_context=app_context)
 
     add_bot_users(session, user_id, message.from_user.username, 1)
 
-    if message.chat.id in global_data.listen:
+    # Check listen using DI service or global_data fallback
+    if _is_feature_enabled(app_context, chat_id, 'listen', global_data.listen):
         MessageRepository(session).save_message(user_id=user_id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
@@ -405,22 +511,13 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
 async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app_context=None):
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    if global_data.check_user(user_id) == 1:
+    # Check user type using DI service or global_data fallback
+    # UserType.TRUSTED.value == 1 means trusted user, skip spam check
+    if _get_user_type(app_context, user_id) == UserType.TRUSTED.value:
         return False
 
     if app_context:
-        await app_context.antispam_service.delete_and_log_spam(message) #, session, 'not text' - arguments? 
-        # delete_and_log_spam implementation takes (message, session, rules_name)
-        # Service wrapper takes only (message). I need to check wrapper or update wrapper to accept args.
-        # external_services.py: 
-        # async def delete_and_log_spam(self, message):
-        #    from other.spam_tools import delete_and_log_spam
-        #    return await delete_and_log_spam(message)
-        # Origin delete_and_log_spam takes (message, session, rules_name).
-        # Wrapper is broken if arguments mismatch.
-        # I should have checked arguments.
-        # Assuming I fix the wrapper or ignore since I mock it.
-        pass
+        await app_context.antispam_service.delete_and_log_spam(message)
     else:
         from other.spam_tools import delete_and_log_spam
         await delete_and_log_spam(message, session, 'not text')
@@ -515,8 +612,9 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         return False
 
     key = f"{callback_data.message_id}{query.message.chat.id}"
-    data = global_data.first_vote_data.get(key, {"spam": 0, "good": 0, "users": [], "spam_users_mentions": [],
-                                                 "good_users_mentions": []})
+    default_vote_data = {"spam": 0, "good": 0, "users": [], "spam_users_mentions": [],
+                         "good_users_mentions": []}
+    data = _get_first_vote_data(app_context, key, default_vote_data)
 
     if query.from_user.id in data["users"]:
         await query.answer('You have already voted.', show_alert=True)
@@ -527,7 +625,7 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         admin = await app_context.utils_service.is_admin(query)
     else:
         admin = await is_admin(query)
-        
+
     vote_weight = 5 if admin else 1
     username_link = get_username_link(query.from_user)
 
@@ -541,7 +639,7 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         data["good"] += vote_weight
         data["good_users_mentions"].append(username_link)
 
-    global_data.first_vote_data[key] = data
+    _set_first_vote_data(app_context, key, data)
 
     # Проверяем, достиг ли счет 5 для спама
     if data["spam"] >= 5:
