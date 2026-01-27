@@ -8,8 +8,8 @@ from other.config_reader import config
 
 
 async def sentry_error_handler(event: ErrorEvent, state: FSMContext = None) -> None:
-    if config.test_mode:
-        logger.exception(f"Error catch: {event.exception} on update: {event.update}")
+    # Always log errors - fail fast principle
+    logger.exception(f"Error catch: {event.exception} on update: {event.update}")
 
     user_id = event.update.message.from_user.id if event.update.message else None
 

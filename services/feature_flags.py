@@ -5,6 +5,7 @@ from typing import Optional
 from dataclasses import dataclass
 from threading import Lock
 
+from other.constants import BotValueTypes
 from services.config_service import ConfigService
 
 
@@ -23,6 +24,20 @@ class ChatFeatures:
     full_data: bool = False
 
 
+# Mapping from feature name to BotValueTypes enum
+FEATURE_TO_ENUM = {
+    "captcha": BotValueTypes.Captcha,
+    "moderate": BotValueTypes.Moderate,
+    "no_first_link": BotValueTypes.NoFirstLink,
+    "reply_only": BotValueTypes.ReplyOnly,
+    "listen": BotValueTypes.Listen,
+    "auto_all": BotValueTypes.AutoAll,
+    "save_last_message_date": BotValueTypes.SaveLastMessageDate,
+    "join_request_captcha": BotValueTypes.JoinRequestCaptcha,
+    "full_data": BotValueTypes.FullData,
+}
+
+
 class FeatureFlagsService:
     """
     Service for chat feature flags.
@@ -31,17 +46,7 @@ class FeatureFlagsService:
     Provides a clean interface for checking and toggling features.
     """
 
-    FEATURE_KEYS = [
-        "captcha",
-        "moderate",
-        "no_first_link",
-        "reply_only",
-        "listen",
-        "auto_all",
-        "save_last_message_date",
-        "join_request_captcha",
-        "full_data",
-    ]
+    FEATURE_KEYS = list(FEATURE_TO_ENUM.keys())
 
     def __init__(self, config_service: ConfigService):
         self._config = config_service
@@ -57,7 +62,8 @@ class FeatureFlagsService:
         features = ChatFeatures(chat_id=chat_id)
 
         for key in self.FEATURE_KEYS:
-            value = self._config.load_value(chat_id, key, False)
+            enum_key = FEATURE_TO_ENUM[key]
+            value = self._config.load_value(chat_id, enum_key, False)
             setattr(features, key, bool(value))
 
         with self._lock:
@@ -82,10 +88,11 @@ class FeatureFlagsService:
 
     def set_feature(self, chat_id: int, feature: str, enabled: bool) -> bool:
         """Enable or disable feature for chat."""
-        if feature not in self.FEATURE_KEYS:
+        if feature not in FEATURE_TO_ENUM:
             return False
 
-        self._config.save_value(chat_id, feature, enabled)
+        enum_key = FEATURE_TO_ENUM[feature]
+        self._config.save_value(chat_id, enum_key, enabled)
 
         # Update cache
         with self._lock:
@@ -102,9 +109,17 @@ class FeatureFlagsService:
 
     def get_chats_with_feature(self, feature: str) -> list[int]:
         """Get all chat IDs with feature enabled."""
-        if feature not in self.FEATURE_KEYS:
+        if feature not in FEATURE_TO_ENUM:
             return []
-        return self._config.get_chats_with_feature(feature)
+        enum_key = FEATURE_TO_ENUM[feature]
+        return self._config.get_chats_with_feature(enum_key)
+
+    def get_feature_list(self, feature: str) -> list[int]:
+        """Get list of chat IDs with feature enabled.
+
+        Alias for get_chats_with_feature for backward compatibility with inline.py.
+        """
+        return self.get_chats_with_feature(feature)
 
     def invalidate_cache(self, chat_id: Optional[int] = None) -> None:
         """Invalidate cache."""

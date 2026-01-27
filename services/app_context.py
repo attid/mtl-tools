@@ -76,4 +76,9 @@ class AppContext:
         ctx.notification_service = NotificationService()
         ctx.command_registry = CommandRegistryService()
 
+        # Load commands from global_data.info_cmd (filled by @update_command_info decorators)
+        from other.global_data import global_data
+        if global_data.info_cmd:
+            ctx.command_registry.load_commands(global_data.info_cmd)
+
         return ctx

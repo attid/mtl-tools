@@ -182,7 +182,35 @@ async def command_config_loads(app_context=None):
     if app_context:
         _sync_to_di_services(app_context)
 
+    # Log loaded feature flags statistics
+    _log_feature_flags_stats()
+
     logger.info('finished command_config_loads task')
+
+
+def _log_feature_flags_stats():
+    """Log statistics of loaded feature flags for startup validation."""
+    stats = [
+        f"no_first_link: {len(global_data.no_first_link)} chats",
+        f"moderate: {len(global_data.moderate)} chats",
+        f"captcha: {len(global_data.captcha)} chats",
+        f"reply_only: {len(global_data.reply_only)} chats",
+        f"listen: {len(global_data.listen)} chats",
+        f"auto_all: {len(global_data.auto_all)} chats",
+        f"save_last_message_date: {len(global_data.save_last_message_date)} chats",
+        f"join_request_captcha: {len(global_data.join_request_captcha)} chats",
+        f"full_data: {len(global_data.full_data)} chats",
+        f"first_vote: {len(global_data.first_vote)} chats",
+        f"need_decode: {len(global_data.need_decode)} chats",
+        f"notify_join: {len(global_data.notify_join)} chats",
+        f"notify_message: {len(global_data.notify_message)} chats",
+        f"entry_channel: {len(global_data.entry_channel)} chats",
+        f"welcome_messages: {len(global_data.welcome_messages)} chats",
+        f"admins: {len(global_data.admins)} chats",
+        f"skynet_admins: {len(global_data.skynet_admins)} users",
+        f"users_list: {len(global_data.users_list)} users",
+    ]
+    logger.info("Feature flags loaded:\n  " + "\n  ".join(stats))
 
 
 def _sync_to_di_services(ctx):

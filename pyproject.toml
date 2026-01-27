@@ -30,6 +30,7 @@ dependencies = [
     "uvloop>=0.21.0",
     "google-api-python-client>=2.188.0",
     "numpy>=2.4.1",
+    "tgcrypto>=1.2.5",
 ]
 
 [dependency-groups]

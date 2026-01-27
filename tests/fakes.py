@@ -494,6 +494,19 @@ class FakeFeatureFlagsService:
         self.set_feature(chat_id, feature, not current)
         return not current
 
+    def get_chats_with_feature(self, feature):
+        """Get all chat IDs with feature enabled."""
+        if feature not in self.FEATURE_KEYS:
+            return []
+        return [
+            chat_id for chat_id, features in self._features.items()
+            if features.get(feature, False)
+        ]
+
+    def get_feature_list(self, feature):
+        """Alias for get_chats_with_feature."""
+        return self.get_chats_with_feature(feature)
+
     def is_listening(self, chat_id):
         return self.is_enabled(chat_id, "listen")
 
@@ -924,24 +937,26 @@ class FakeCommandRegistryService:
     """Fake implementation of CommandRegistryService for testing."""
 
     def __init__(self):
+        from services.command_registry_service import CommandInfo
         self._commands: dict = {}
+        self._CommandInfo = CommandInfo
 
     def register_command(
         self,
         name: str,
         description: str = "",
-        cmd_type: str = "",
+        cmd_type: int = 0,
         cmd_list: list = None,
         hidden: bool = False,
     ) -> None:
         """Register a command with metadata."""
-        self._commands[name] = {
-            "name": name,
-            "description": description,
-            "cmd_type": cmd_type,
-            "cmd_list": cmd_list or [],
-            "hidden": hidden,
-        }
+        self._commands[name] = self._CommandInfo(
+            name=name,
+            description=description,
+            cmd_type=cmd_type,
+            cmd_list=cmd_list or [],
+            hidden=hidden,
+        )
 
     def get_command(self, name: str):
         """Get command info by name."""
@@ -951,16 +966,16 @@ class FakeCommandRegistryService:
         """Get all registered commands."""
         return self._commands.copy()
 
-    def get_commands_by_type(self, cmd_type: str) -> list:
+    def get_commands_by_type(self, cmd_type) -> list:
         """Get commands filtered by type."""
         return [
             cmd for cmd in self._commands.values()
-            if cmd.get("cmd_type") == cmd_type and not cmd.get("hidden", False)
+            if cmd.cmd_type == cmd_type and not cmd.hidden
         ]
 
     def get_visible_commands(self) -> list:
         """Get all non-hidden commands."""
-        return [cmd for cmd in self._commands.values() if not cmd.get("hidden", False)]
+        return [cmd for cmd in self._commands.values() if not cmd.hidden]
 
     def unregister_command(self, name: str) -> bool:
         """Unregister a command. Returns True if existed."""
@@ -977,20 +992,23 @@ class FakeCommandRegistryService:
         """Update existing command fields. Returns True if command exists."""
         if name not in self._commands:
             return False
-        self._commands[name].update(kwargs)
+        cmd = self._commands[name]
+        for key, value in kwargs.items():
+            if hasattr(cmd, key):
+                setattr(cmd, key, value)
         return True
 
     def load_commands(self, commands_data: dict) -> None:
         """Bulk load commands from dict."""
         self._commands = {}
         for name, data in commands_data.items():
-            self._commands[name] = {
-                "name": name,
-                "description": data.get("description", ""),
-                "cmd_type": data.get("cmd_type", ""),
-                "cmd_list": data.get("cmd_list", []),
-                "hidden": data.get("hidden", False),
-            }
+            self._commands[name] = self._CommandInfo(
+                name=name,
+                description=data.get("description", ""),
+                cmd_type=data.get("cmd_type", 0),
+                cmd_list=data.get("cmd_list", []),
+                hidden=data.get("hidden", False),
+            )
 
 
 class TestAppContext:
@@ -1112,15 +1130,25 @@ class FakeConfigRepositoryProtocol:
     def __init__(self):
         self.config = {}
 
-    def save_bot_value(self, chat_id: int, chat_key: str, chat_value):
-        self.config[(chat_id, chat_key)] = chat_value
+    def _normalize_key(self, chat_key):
+        """Convert Enum to its value, like real ConfigRepository."""
+        from enum import Enum
+        if isinstance(chat_key, Enum):
+            return chat_key.value
+        return chat_key
+
+    def save_bot_value(self, chat_id: int, chat_key, chat_value):
+        key = self._normalize_key(chat_key)
+        self.config[(chat_id, key)] = chat_value
         return True
 
-    def load_bot_value(self, chat_id: int, chat_key: str, default_value=None):
-        return self.config.get((chat_id, chat_key), default_value)
+    def load_bot_value(self, chat_id: int, chat_key, default_value=None):
+        key = self._normalize_key(chat_key)
+        return self.config.get((chat_id, key), default_value)
 
-    def get_chat_ids_by_key(self, chat_key: str):
-        return [k[0] for k in self.config.keys() if k[1] == chat_key]
+    def get_chat_ids_by_key(self, chat_key):
+        key = self._normalize_key(chat_key)
+        return [k[0] for k in self.config.keys() if k[1] == key]
 
 
 class FakeChatsRepositoryProtocol:

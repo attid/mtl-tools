@@ -195,7 +195,8 @@ class TestFeatureFlagsService:
         config_service = ConfigService(config_repo)
         flags_service = FeatureFlagsService(config_service)
 
-        config_service.save_value(100, "captcha", True)
+        # Use flags_service.enable() which converts string to enum
+        flags_service.enable(100, "captcha")
 
         assert flags_service.is_enabled(100, "captcha") is True
         assert flags_service.is_enabled(100, "moderate") is False
@@ -240,9 +241,10 @@ class TestFeatureFlagsService:
         config_service = ConfigService(config_repo)
         flags_service = FeatureFlagsService(config_service)
 
-        config_service.save_value(100, "captcha", True)
-        config_service.save_value(100, "moderate", True)
-        config_service.save_value(100, "reply_only", False)
+        # Use flags_service.enable() which converts string to enum
+        flags_service.enable(100, "captcha")
+        flags_service.enable(100, "moderate")
+        # reply_only defaults to False, no need to explicitly set
 
         features = flags_service.get_features(100)
 

@@ -1,7 +1,8 @@
 # services/config_service.py
 """Configuration service with dependency injection."""
 
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, Union
 from threading import Lock
 
 from services.interfaces.repositories import IConfigRepository
@@ -49,7 +50,7 @@ class ConfigService:
 
         return config
 
-    def save_value(self, chat_id: int, key: str, value: Any) -> bool:
+    def save_value(self, chat_id: int, key: Union[str, Enum, int], value: Any) -> bool:
         """Save configuration value."""
         result = self._repo.save_bot_value(chat_id, key, value)
 
@@ -60,7 +61,7 @@ class ConfigService:
 
         return result
 
-    def load_value(self, chat_id: int, key: str, default: Any = None) -> Any:
+    def load_value(self, chat_id: int, key: Union[str, Enum, int], default: Any = None) -> Any:
         """Load configuration value."""
         return self._repo.load_bot_value(chat_id, key, default)
 
@@ -76,7 +77,7 @@ class ConfigService:
 
         return result
 
-    def get_chats_with_feature(self, feature_key: str) -> list[int]:
+    def get_chats_with_feature(self, feature_key: Union[str, Enum, int]) -> list[int]:
         """Get all chat IDs with specific feature enabled."""
         chat_ids = self._repo.get_chat_ids_by_key(feature_key)
         # Filter to only those with truthy values

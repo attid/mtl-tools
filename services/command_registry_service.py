@@ -93,14 +93,25 @@ class CommandRegistryService:
 
     # Bulk loading for initialization
     def load_commands(self, commands_data: dict[str, dict]) -> None:
-        """Bulk load commands from dict."""
+        """Bulk load commands from dict.
+
+        Supports both new format (description, cmd_list as list) and
+        legacy format from global_data.info_cmd (info, cmd_list as string).
+        """
         with self._lock:
             self._commands = {}
             for name, data in commands_data.items():
+                # Support both 'description' and legacy 'info' key
+                description = data.get('description') or data.get('info', '')
+                # Support cmd_list as string (legacy) or list (new)
+                cmd_list = data.get('cmd_list', [])
+                if isinstance(cmd_list, str):
+                    cmd_list = [cmd_list] if cmd_list else []
+
                 self._commands[name] = CommandInfo(
                     name=name,
-                    description=data.get('description', ''),
-                    cmd_type=data.get('cmd_type', ''),
-                    cmd_list=data.get('cmd_list', []),
+                    description=description,
+                    cmd_type=data.get('cmd_type', 0),
+                    cmd_list=cmd_list,
                     hidden=data.get('hidden', False),
                 )
