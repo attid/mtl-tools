@@ -2,7 +2,7 @@ import asyncio
 from aiogram import Bot
 from other.config_reader import config
 from other.grist_tools import MTLGrist, grist_manager
-from other.pyro_tools import get_group_members, pyro_app
+from other.pyro_tools import get_group_members, get_pyro_app
 
 
 async def check_user_in_sp_chats(bot: Bot, need_remove: bool = False):
@@ -150,6 +150,7 @@ async def check_consul_mtla_chats(bot: Bot):
 
 
 async def main():
+    pyro_app = get_pyro_app()
     await pyro_app.start()
 
     async with Bot(

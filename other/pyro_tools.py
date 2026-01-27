@@ -46,14 +46,21 @@ class GroupMember:
 #pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
 #                  workdir=os.path.join(start_path, 'data'))
 
-pyro_app = Client(
-    name="bot",
-    bot_token=config.bot_token.get_secret_value(),
-    api_id=config.pyro_api_id,
-    api_hash=config.pyro_api_hash.get_secret_value(),
-    workdir=os.path.join(start_path, 'data'),
-    no_updates=True,
-)
+_pyro_app: Optional[Client] = None
+
+
+def get_pyro_app() -> Client:
+    global _pyro_app
+    if _pyro_app is None:
+        _pyro_app = Client(
+            name="my_bot",
+            bot_token=config.bot_token.get_secret_value(),
+            api_id=config.pyro_api_id,
+            api_hash=config.pyro_api_hash.get_secret_value(),
+            workdir=os.path.join(start_path, 'data'),
+            no_updates=True,
+        )
+    return _pyro_app
 
 
 
@@ -94,6 +101,7 @@ async def pyro_update_msg_info(msg: MessageInfo):
             return html.escape(message.sender_chat.title or "")
         return ""
 
+    pyro_app = get_pyro_app()
     message = await pyro_app.get_messages(chat_id=msg.chat_id, message_ids=msg.message_id)
     if message.chat.username:
         msg.chat_name = f"{message.chat.username} ({msg.chat_name})"
@@ -135,7 +143,7 @@ async def pyro_start():
         if config.pyro_api_id == 0:
             logger.warning("pyro_api_id is disabled")
             return
-        await pyro_app.start()
+        await get_pyro_app().start()
     except Exception as e:
         logger.error(e)
         capture_exception(e)
@@ -143,9 +151,10 @@ async def pyro_start():
 
 
 async def pyro_test():
-    await pyro_app.send_message("@itolstov", "Greetings from **SkyNet**!")
+    await get_pyro_app().send_message("@itolstov", "Greetings from **SkyNet**!")
 
 async def get_group_members(chat_id: int) -> List[GroupMember]:
+    pyro_app = get_pyro_app()
     members = []
     try:
         async for member in pyro_app.get_chat_members(chat_id):
@@ -166,6 +175,7 @@ async def get_group_members(chat_id: int) -> List[GroupMember]:
 
 
 async def remove_deleted_users(chat_id: int):
+    pyro_app = get_pyro_app()
     try:
         total_removals = 0
         async for member in pyro_app.get_chat_members(chat_id):
@@ -187,6 +197,7 @@ async def remove_deleted_users(chat_id: int):
         capture_exception(e)
 
 async def add_contact(user_id: int):
+    pyro_app = get_pyro_app()
     try:
         # Get user info
         user = await pyro_app.get_users(user_id)
@@ -224,6 +235,7 @@ async def add_contact(user_id: int):
 
 
 async def common_chats(user_id: int|str):
+    pyro_app = get_pyro_app()
     try:
         chats = await pyro_app.get_common_chats(user_id=user_id)
         print(chats)
@@ -232,6 +244,7 @@ async def common_chats(user_id: int|str):
         capture_exception(e)
 
 async def main():
+    pyro_app = get_pyro_app()
     await pyro_app.start()
     a = await pyro_test()
     print(a)
