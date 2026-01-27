@@ -24,7 +24,6 @@ from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_lin
 from other.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
 from other.pyro_tools import GroupMember
 # from other.spam_cheker import combo_check_spammer, lols_check_spammer
-# from other.stellar_tools import stellar_stop_all_exchange
 
 router = Router()
 
