@@ -225,7 +225,8 @@ async def mock_telegram(telegram_server_config):
                         "unlimited_gifts": True,
                         "limited_gifts": False,
                         "unique_gifts": False,
-                        "premium_subscription": False
+                        "premium_subscription": False,
+                        "gifts_from_channels": False
                     }
                 }
             })
