@@ -4,7 +4,6 @@ from aiogram import types
 
 from routers.talk_handlers import router as talk_router, my_talk_message
 from tests.conftest import RouterTestMiddleware
-from other.global_data import global_data
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():
@@ -43,10 +42,10 @@ async def test_img_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(talk_router)
-    
-    global_data.skynet_img.clear()
-    global_data.skynet_img.append("@user")
-    
+
+    # Use admin_service for DI pattern
+    router_app_context.admin_service.set_skynet_img_users(["@user"])
+
     file_bytes = b"img"
     mock_telegram.add_file("img1", file_bytes, file_path="files/img.png")
     image_url = f"{mock_telegram.base_url}/file/bot{router_app_context.bot.token}/files/img.png"

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from other.text_tools import extract_url
 from middlewares.throttling import rate_limit
 from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
-from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
+from other.global_data import MTLChats, BotValueTypes, update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
 from other.miniapps_tools import miniapps
 
@@ -18,9 +18,30 @@ router = Router()
 my_talk_message = []
 
 
+def _is_skynet_img_user(username: str, app_context=None) -> bool:
+    """Check if user is allowed to use /img command."""
+    if app_context and app_context.admin_service:
+        return app_context.admin_service.is_skynet_img_user(username)
+    # Fallback to global_data
+    from other.global_data import global_data
+    normalized = f'@{username.lower()}' if username else ''
+    return normalized in global_data.skynet_img
+
+
+def _is_skynet_admin(message, app_context=None) -> bool:
+    """Check if user is a skynet admin."""
+    if app_context and app_context.admin_service:
+        username = message.from_user.username if message.from_user else None
+        return app_context.admin_service.is_skynet_admin(username)
+    # Fallback to global_data
+    from other.global_data import is_skynet_admin
+    return is_skynet_admin(message)
+
+
 @router.message(Command(commands=["img"]))
 async def cmd_img(message: Message, bot: Bot, app_context=None):
-    if message.chat.id in (MTLChats.CyberGroup,) or f'@{message.from_user.username.lower()}' in global_data.skynet_img:
+    username = message.from_user.username if message.from_user else None
+    if message.chat.id in (MTLChats.CyberGroup,) or _is_skynet_img_user(username, app_context):
         await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
         await bot.send_message(chat_id=MTLChats.ITolstov, text=f'{message.from_user.username}:{message.text}')
         text = message.text[5:]
@@ -130,6 +151,8 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
             pinned_url = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
             msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         else:
+            from other.global_data import global_data
+            from other.stellar_tools import check_url_xdr
             msg = await check_url_xdr(await global_data.mongo_config.load_bot_value(
                 message.chat.id, BotValueTypes.PinnedUrl))
         msg = '\n'.join(msg)
@@ -191,7 +214,7 @@ async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot,
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ОБНОВИ',)))
 async def cmd_last_check_update(message: Message, session: Session, bot: Bot, app_context=None):
-    if not is_skynet_admin(message):
+    if not _is_skynet_admin(message, app_context):
         await message.reply('You are not my admin.')
         return False
         
