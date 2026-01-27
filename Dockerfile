@@ -2,9 +2,11 @@
 
 FROM python:3.12-slim AS runtime
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
@@ -25,16 +27,17 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# Install dependencies first (for caching)
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 RUN useradd --create-home --shell /bin/bash bot
 RUN mkdir -p /app/logs /app/data \
     && chown -R bot:bot /app
 
+# Copy source code
 COPY --chown=bot:bot . .
 
 USER bot
 
-CMD ["python", "start.py"]
+CMD ["uv", "run", "python", "start.py"]
