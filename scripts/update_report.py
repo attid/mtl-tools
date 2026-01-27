@@ -18,12 +18,13 @@ from other.stellar import (
     stellar_get_issuer_assets, get_balances, stellar_get_offers,
     MTLAddresses, get_asset_swap_spread, MTLAssets,
     resolve_account, stellar_get_holders,
+    stellar_get_transactions,
 )
 from other.stellar_tools import (
     stellar_get_trade_cost, get_pool_balances, cmd_gen_mtl_vote_list,
     stellar_add_mtl_holders_info, cmd_show_guards_list, cmd_show_donates,
-    stellar_get_transactions, decode_data_value,
 )
+from other.stellar import decode_data_value
 
 from other.web_tools import get_debank_balance
 from scripts.mtl_backup import save_assets

@@ -26,7 +26,7 @@ from other.open_ai_tools import talk_check_spam
 from other.global_data import MTLChats, BotValueTypes, global_data
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
-from other.stellar_tools import check_url_xdr
+from other.stellar import check_url_xdr
 from other.miniapps_tools import miniapps
 from shared.domain.user import UserType
 

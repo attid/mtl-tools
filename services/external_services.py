@@ -116,7 +116,7 @@ class StellarService:
         return await cmd_calc_sats_divs(session, div_list_id)
 
     async def get_new_vote_all_mtl(self, address):
-        from other.stellar_tools import cmd_get_new_vote_all_mtl
+        from other.stellar import cmd_get_new_vote_all_mtl
         return await cmd_get_new_vote_all_mtl(address)
 
     async def get_btcmtl_xdr(self, amount, address, memo):
@@ -176,7 +176,7 @@ class StellarService:
         return stellar_stop_all_exchange()
 
     async def get_mtlap_votes(self):
-        from other.stellar_tools import get_mtlap_votes
+        from other.stellar import get_mtlap_votes
         return await get_mtlap_votes()
 
     async def address_id_to_username(self, address, full_data=False):
