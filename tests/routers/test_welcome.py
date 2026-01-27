@@ -56,9 +56,11 @@ async def test_new_chat_member_welcome(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.chat_member.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(welcome_router)
-    
+
+    # Set welcome message in both global_data (for fallback) and config_service (for DI)
     global_data.welcome_messages[MTLChats.TestGroup] = "Welcome $$USER$$!"
-    
+    router_app_context.config_service.set_welcome_message(MTLChats.TestGroup, "Welcome $$USER$$!")
+
     # Mocks
     user = types.User(id=123, is_bot=False, first_name="Joiner", username="joiner")
     router_app_context.antispam_service.combo_check_spammer.return_value = False
@@ -73,14 +75,14 @@ async def test_new_chat_member_welcome(mock_telegram, router_app_context):
         old_chat_member=types.ChatMemberLeft(user=user),
         new_chat_member=types.ChatMemberMember(user=user)
     )
-    
+
     update = types.Update(update_id=2, chat_member=event)
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     # Verify add user
     assert router_app_context.config_service.add_user_to_chat.called
-    
+
     # Verify welcome message
     requests = mock_telegram.get_requests()
     assert any("Welcome" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
@@ -90,11 +92,13 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(welcome_router)
-    
+
+    # Set skynet admin in both global_data (for fallback) and admin_service (for DI)
     global_data.skynet_admins = ["@admin"]
-    
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
+
     router_app_context.stellar_service.stop_all_exchange.return_value = None
-    
+
     update = types.Update(
         update_id=3,
         message=types.Message(
@@ -105,9 +109,9 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
             text="/stop_exchange"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     assert router_app_context.stellar_service.stop_all_exchange.called
     requests = mock_telegram.get_requests()
     assert any("Was stop" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
@@ -268,7 +272,9 @@ async def test_welcome_message_simple(mock_telegram, router_app_context):
 
     chat_id = -1006
     user = types.User(id=123, is_bot=False, first_name="Test", username="testuser")
+    # Set welcome message in both global_data (for fallback) and config_service (for DI)
     global_data.welcome_messages[chat_id] = "Hello $$USER$$!"
+    router_app_context.config_service.set_welcome_message(chat_id, "Hello $$USER$$!")
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=206)
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -290,10 +296,14 @@ async def test_welcome_captcha(mock_telegram, router_app_context):
 
     chat_id = -1007
     user = types.User(id=123, is_bot=False, first_name="Test", username="testuser")
+    # Set welcome message and captcha in both global_data (for fallback) and DI services
     global_data.welcome_messages[chat_id] = "Welcome"
+    router_app_context.config_service.set_welcome_message(chat_id, "Welcome")
     if chat_id not in global_data.captcha:
         global_data.captcha.append(chat_id)
+    router_app_context.feature_flags.enable(chat_id, "captcha")
     global_data.welcome_button[chat_id] = "Click me"
+    router_app_context.config_service.set_welcome_button(chat_id, "Click me")
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=207)
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -318,8 +328,10 @@ async def test_auto_all_manager_add(mock_telegram, router_app_context):
 
     chat_id = -1008
     user = types.User(id=123, is_bot=False, first_name="Test", username="testuser")
+    # Enable auto_all in both global_data (for fallback) and feature_flags (for DI)
     if chat_id not in global_data.auto_all:
         global_data.auto_all.append(chat_id)
+    router_app_context.feature_flags.enable(chat_id, "auto_all")
     router_app_context.config_service._bot_values[(chat_id, BotValueTypes.All)] = '["@existing"]'
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=208)
@@ -342,9 +354,12 @@ async def test_welcome_emoji_captcha(mock_telegram, router_app_context):
 
     chat_id = -1009
     user = types.User(id=123, is_bot=False, first_name="Test", username="testuser")
+    # Set welcome message and captcha in both global_data (for fallback) and DI services
     global_data.welcome_messages[chat_id] = "Click the $$COLOR$$ button"
+    router_app_context.config_service.set_welcome_message(chat_id, "Click the $$COLOR$$ button")
     if chat_id not in global_data.captcha:
         global_data.captcha.append(chat_id)
+    router_app_context.feature_flags.enable(chat_id, "captcha")
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=209)
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -368,8 +383,10 @@ async def test_auto_all_no_username(mock_telegram, router_app_context):
 
     chat_id = -1010
     user = types.User(id=777, is_bot=False, first_name="NoUser", username=None)
+    # Enable auto_all in both global_data (for fallback) and feature_flags (for DI)
     if chat_id not in global_data.auto_all:
         global_data.auto_all.append(chat_id)
+    router_app_context.feature_flags.enable(chat_id, "auto_all")
     router_app_context.config_service._bot_values[(chat_id, BotValueTypes.All)] = '["@existing"]'
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=210)

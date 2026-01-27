@@ -115,13 +115,16 @@ async def test_mute_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
-    
+
     # Mock global data for is_topic_admin
     chat_id = 123
     thread_id = 5
     chat_thread_key = f"{chat_id}-{thread_id}"
-    
-    global_data.topic_admins[chat_thread_key] = {"@admin"} # Admin ID username lower match
+
+    # Set up topic admins using the admin_service (DI pattern)
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    # Also set in global_data for fallback path
+    global_data.topic_admins[chat_thread_key] = {"@admin"}
     if chat_id not in global_data.moderate:
         global_data.moderate.append(chat_id)
 
@@ -148,14 +151,13 @@ async def test_mute_command(mock_telegram, router_app_context):
             reply_to_message=reply_msg
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
-    # Verify mute logic: Persistent save called
-    # Check global_data.topic_mute updated
-    assert chat_thread_key in global_data.topic_mute
-    assert 789 in global_data.topic_mute[chat_thread_key]
-    
+
+    # Verify mute logic: Check admin_service.topic_mute updated (DI pattern)
+    mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    assert 789 in mutes
+
     # Verify save_bot_value called
     global_data.mongo_config.save_bot_value.assert_called()
 

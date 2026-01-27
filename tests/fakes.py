@@ -245,7 +245,9 @@ class FakeConfigService:
     async def _get_chat_ids_by_key(self, key):
         return list(self._chat_lists.get(key, []))
 
-    async def _add_user_to_chat(self, chat_id, user_id):
+    async def _add_user_to_chat(self, chat_id, member):
+        # member can be a GroupMember object or just a user_id
+        user_id = getattr(member, 'user_id', member) if hasattr(member, 'user_id') else member
         self._chat_lists.setdefault(chat_id, set()).add(user_id)
         return True
 
@@ -705,10 +707,28 @@ class FakeAdminService:
     def get_chat_admins(self, chat_id: int) -> list[int]:
         return self._chat_admins.get(chat_id, []).copy()
 
+    # Chat admin methods
+    def is_chat_admin(self, chat_id: int, user_id: int) -> bool:
+        return user_id in self._chat_admins.get(chat_id, [])
+
+    def add_chat_admin(self, chat_id: int, user_id: int) -> None:
+        if chat_id not in self._chat_admins:
+            self._chat_admins[chat_id] = []
+        if user_id not in self._chat_admins[chat_id]:
+            self._chat_admins[chat_id].append(user_id)
+
+    def remove_chat_admin(self, chat_id: int, user_id: int) -> None:
+        if chat_id in self._chat_admins and user_id in self._chat_admins[chat_id]:
+            self._chat_admins[chat_id].remove(user_id)
+
     # Topic admin methods
     def has_topic_admins(self, chat_id: int, thread_id: int) -> bool:
         key = self._topic_key(chat_id, thread_id)
         return key in self._topic_admins
+
+    def has_topic_admins_by_key(self, topic_key: str) -> bool:
+        """Check if topic has any admins configured by key string."""
+        return topic_key in self._topic_admins
 
     def is_topic_admin(self, chat_id: int, thread_id: int, username: str) -> bool:
         if not username:
@@ -716,6 +736,13 @@ class FakeAdminService:
         key = self._topic_key(chat_id, thread_id)
         normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
         return normalized in self._topic_admins.get(key, [])
+
+    def is_topic_admin_by_key(self, topic_key: str, username: str) -> bool:
+        """Check if username is topic admin using pre-computed key."""
+        if not username:
+            return False
+        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        return normalized in self._topic_admins.get(topic_key, [])
 
     def get_topic_admins(self, chat_id: int, thread_id: int) -> list[str]:
         key = self._topic_key(chat_id, thread_id)
@@ -742,9 +769,18 @@ class FakeAdminService:
         mutes = self._topic_mute.get(key, {})
         return {k: v.copy() for k, v in mutes.items()}
 
+    def get_topic_mutes_by_key(self, topic_key: str) -> dict:
+        """Get all mutes for a topic by key. Returns {user_id: {"end_time": str, "user": str}}."""
+        mutes = self._topic_mute.get(topic_key, {})
+        return {k: v.copy() for k, v in mutes.items()}
+
     def has_topic_mutes(self, chat_id: int, thread_id: int) -> bool:
         key = self._topic_key(chat_id, thread_id)
         return bool(self._topic_mute.get(key))
+
+    def has_topic_mutes_by_key(self, topic_key: str) -> bool:
+        """Check if topic has any mutes by key."""
+        return bool(self._topic_mute.get(topic_key))
 
     def get_user_mute(self, chat_id: int, thread_id: int, user_id: int):
         key = self._topic_key(chat_id, thread_id)
@@ -761,10 +797,21 @@ class FakeAdminService:
             self._topic_mute[key] = {}
         self._topic_mute[key][user_id] = {"end_time": end_time, "user": user_display}
 
+    def set_user_mute_by_key(self, topic_key: str, user_id: int, end_time: str, user_display: str) -> None:
+        """Set mute for a user in a topic by key."""
+        if topic_key not in self._topic_mute:
+            self._topic_mute[topic_key] = {}
+        self._topic_mute[topic_key][user_id] = {"end_time": end_time, "user": user_display}
+
     def remove_user_mute(self, chat_id: int, thread_id: int, user_id: int) -> None:
         key = self._topic_key(chat_id, thread_id)
         if key in self._topic_mute and user_id in self._topic_mute[key]:
             del self._topic_mute[key][user_id]
+
+    def remove_user_mute_by_key(self, topic_key: str, user_id: int) -> None:
+        """Remove mute for a user in a topic by key."""
+        if topic_key in self._topic_mute and user_id in self._topic_mute[topic_key]:
+            del self._topic_mute[topic_key][user_id]
 
     def get_all_topic_mutes(self) -> dict:
         return {k: {uk: uv.copy() for uk, uv in v.items()} for k, v in self._topic_mute.items()}
@@ -776,6 +823,20 @@ class FakeAdminService:
             for user_id, mute_info in mutes.items():
                 uid = int(user_id) if isinstance(user_id, str) else user_id
                 self._topic_mute[key][uid] = mute_info.copy()
+
+    # Skynet admin getter methods
+    def get_skynet_admins(self) -> list[str]:
+        return self._skynet_admins.copy()
+
+    def get_skynet_img_users(self) -> list[str]:
+        return self._skynet_img.copy()
+
+    # Bulk loading methods
+    def load_admins(self, admins_data: dict) -> None:
+        self._chat_admins = {k: v.copy() for k, v in admins_data.items()}
+
+    def load_topic_admins(self, topic_admins_data: dict) -> None:
+        self._topic_admins = {k: v.copy() for k, v in topic_admins_data.items()}
 
 
 class FakeUserService:
@@ -859,6 +920,79 @@ class FakeUserService:
         return self._name_cache.copy()
 
 
+class FakeCommandRegistryService:
+    """Fake implementation of CommandRegistryService for testing."""
+
+    def __init__(self):
+        self._commands: dict = {}
+
+    def register_command(
+        self,
+        name: str,
+        description: str = "",
+        cmd_type: str = "",
+        cmd_list: list = None,
+        hidden: bool = False,
+    ) -> None:
+        """Register a command with metadata."""
+        self._commands[name] = {
+            "name": name,
+            "description": description,
+            "cmd_type": cmd_type,
+            "cmd_list": cmd_list or [],
+            "hidden": hidden,
+        }
+
+    def get_command(self, name: str):
+        """Get command info by name."""
+        return self._commands.get(name)
+
+    def get_all_commands(self) -> dict:
+        """Get all registered commands."""
+        return self._commands.copy()
+
+    def get_commands_by_type(self, cmd_type: str) -> list:
+        """Get commands filtered by type."""
+        return [
+            cmd for cmd in self._commands.values()
+            if cmd.get("cmd_type") == cmd_type and not cmd.get("hidden", False)
+        ]
+
+    def get_visible_commands(self) -> list:
+        """Get all non-hidden commands."""
+        return [cmd for cmd in self._commands.values() if not cmd.get("hidden", False)]
+
+    def unregister_command(self, name: str) -> bool:
+        """Unregister a command. Returns True if existed."""
+        if name in self._commands:
+            del self._commands[name]
+            return True
+        return False
+
+    def has_command(self, name: str) -> bool:
+        """Check if command is registered."""
+        return name in self._commands
+
+    def update_command(self, name: str, **kwargs) -> bool:
+        """Update existing command fields. Returns True if command exists."""
+        if name not in self._commands:
+            return False
+        self._commands[name].update(kwargs)
+        return True
+
+    def load_commands(self, commands_data: dict) -> None:
+        """Bulk load commands from dict."""
+        self._commands = {}
+        for name, data in commands_data.items():
+            self._commands[name] = {
+                "name": name,
+                "description": data.get("description", ""),
+                "cmd_type": data.get("cmd_type", ""),
+                "cmd_list": data.get("cmd_list", []),
+                "hidden": data.get("hidden", False),
+            }
+
+
 class TestAppContext:
     def __init__(self, bot, dispatcher):
         self.bot = bot
@@ -887,6 +1021,7 @@ class TestAppContext:
         self.admin_service = FakeAdminService()
         self.notification_service = FakeNotificationService()
         self.user_service = FakeUserService()
+        self.command_registry = FakeCommandRegistryService()
         self.admin_id = 123456
 
 

@@ -68,38 +68,48 @@ class TestNotificationServiceMessageNotify:
 
 
 class TestNotificationServiceAlertMe:
-    """Tests for alert me methods."""
+    """Tests for alert me methods (per-user subscriptions)."""
 
-    def test_has_alert_returns_false_when_not_set(self):
+    def test_user_not_subscribed_by_default(self):
         service = NotificationService()
-        assert service.has_alert(123) is False
+        assert service.is_user_subscribed(123, 456) is False
+        assert service.get_alert_users(123) == []
 
-    def test_set_and_get_alert_config(self):
+    def test_add_and_check_alert_user(self):
         service = NotificationService()
-        config = {"pattern": ".*mention.*"}
+        service.add_alert_user(123, 456)
 
-        service.set_alert_config(123, config)
+        assert service.is_user_subscribed(123, 456) is True
+        assert 456 in service.get_alert_users(123)
 
-        assert service.has_alert(123) is True
-        assert service.get_alert_config(123) == config
-
-    def test_remove_alert(self):
+    def test_remove_alert_user(self):
         service = NotificationService()
-        service.set_alert_config(123, {"pattern": "test"})
+        service.add_alert_user(123, 456)
+        service.remove_alert_user(123, 456)
 
-        service.remove_alert(123)
+        assert service.is_user_subscribed(123, 456) is False
 
-        assert service.has_alert(123) is False
-        assert service.get_alert_config(123) is None
+    def test_toggle_alert_user(self):
+        service = NotificationService()
+
+        # First toggle subscribes
+        result = service.toggle_alert_user(123, 456)
+        assert result is True
+        assert service.is_user_subscribed(123, 456) is True
+
+        # Second toggle unsubscribes
+        result = service.toggle_alert_user(123, 456)
+        assert result is False
+        assert service.is_user_subscribed(123, 456) is False
 
     def test_get_all_alerts_returns_copy(self):
         service = NotificationService()
-        service.set_alert_config(1, "alert1")
-        service.set_alert_config(2, "alert2")
+        service.add_alert_user(1, 100)
+        service.add_alert_user(2, 200)
 
         all_alerts = service.get_all_alerts()
 
-        assert all_alerts == {1: "alert1", 2: "alert2"}
+        assert all_alerts == {1: [100], 2: [200]}
 
 
 class TestNotificationServiceBulkLoading:
@@ -125,12 +135,13 @@ class TestNotificationServiceBulkLoading:
 
     def test_load_alert_me(self):
         service = NotificationService()
-        data = {1: "alert1", 2: "alert2"}
+        # alert_me stores user lists, not configs
+        data = {1: [100, 200], 2: [300]}
 
         service.load_alert_me(data)
 
-        assert service.get_alert_config(1) == "alert1"
-        assert service.get_alert_config(2) == "alert2"
+        assert service.get_alert_users(1) == [100, 200]
+        assert service.get_alert_users(2) == [300]
 
     def test_load_creates_copy_of_data(self):
         service = NotificationService()

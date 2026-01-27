@@ -55,52 +55,58 @@ class TestTopicAdmins:
 
     def test_is_topic_admin_returns_false_for_empty(self):
         service = AdminManagementService()
-        assert service.is_topic_admin(123, 1, 456) is False
+        # Test with empty string
+        assert service.is_topic_admin(123, 1, "") is False
+        # Test with non-existent username
+        assert service.is_topic_admin(123, 1, "@nonexistent") is False
 
     def test_set_and_get_topic_admins(self):
         service = AdminManagementService()
-        service.set_topic_admins(123, 5, [100, 200])
+        service.set_topic_admins(123, 5, ["@user100", "@user200"])
 
-        assert service.get_topic_admins(123, 5) == [100, 200]
-        assert service.is_topic_admin(123, 5, 100) is True
-        assert service.is_topic_admin(123, 5, 999) is False
+        assert service.get_topic_admins(123, 5) == ["@user100", "@user200"]
+        assert service.is_topic_admin(123, 5, "@user100") is True
+        assert service.is_topic_admin(123, 5, "@user999") is False
 
     def test_topic_admins_separate_from_chat_admins(self):
         service = AdminManagementService()
         service.set_chat_admins(123, [100])
-        service.set_topic_admins(123, 5, [200])
+        service.set_topic_admins(123, 5, ["@user200"])
 
         assert service.is_chat_admin(123, 100) is True
-        assert service.is_topic_admin(123, 5, 100) is False
-        assert service.is_topic_admin(123, 5, 200) is True
+        assert service.is_topic_admin(123, 5, "@user100") is False
+        assert service.is_topic_admin(123, 5, "@user200") is True
 
     def test_add_topic_admin(self):
         service = AdminManagementService()
-        service.add_topic_admin(123, 5, 100)
-        service.add_topic_admin(123, 5, 100)  # duplicate
+        service.add_topic_admin(123, 5, "@user100")
+        service.add_topic_admin(123, 5, "@user100")  # duplicate
 
-        assert service.get_topic_admins(123, 5) == [100]
+        assert service.get_topic_admins(123, 5) == ["@user100"]
 
 
-class TestTopicMute:
-    """Tests for topic mute methods."""
+class TestTopicUserMute:
+    """Tests for topic user mute methods."""
 
-    def test_is_topic_muted_default_false(self):
+    def test_user_not_muted_by_default(self):
         service = AdminManagementService()
-        assert service.is_topic_muted(123, 5) is False
+        assert service.is_user_muted(123, 5, 456) is False
 
-    def test_set_topic_mute(self):
+    def test_set_user_mute(self):
         service = AdminManagementService()
-        service.set_topic_mute(123, 5, True)
+        service.set_user_mute(123, 5, 456, "2025-12-31T23:59:59", "User456")
 
-        assert service.is_topic_muted(123, 5) is True
+        assert service.is_user_muted(123, 5, 456) is True
+        mute_info = service.get_user_mute(123, 5, 456)
+        assert mute_info["end_time"] == "2025-12-31T23:59:59"
+        assert mute_info["user"] == "User456"
 
-    def test_unmute_topic(self):
+    def test_remove_user_mute(self):
         service = AdminManagementService()
-        service.set_topic_mute(123, 5, True)
-        service.set_topic_mute(123, 5, False)
+        service.set_user_mute(123, 5, 456, "2025-12-31T23:59:59", "User456")
+        service.remove_user_mute(123, 5, 456)
 
-        assert service.is_topic_muted(123, 5) is False
+        assert service.is_user_muted(123, 5, 456) is False
 
 
 class TestSkynetAdmins:
