@@ -16,5 +16,10 @@ class AppContextMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any],
     ) -> Any:
-        data["app_context"] = self.app_context
+        session = data.get("session")
+        data["app_context"] = (
+            AppContext.from_bot_session(data["bot"], session=session)
+            if session
+            else self.app_context
+        )
         return await handler(event, data)
