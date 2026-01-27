@@ -11,12 +11,11 @@
 - `docs/`: Design and improvement notes.
 
 ## Build, Test, and Development Commands
-- Setup env: `python -m venv .venv && source .venv/bin/activate`
-- Install deps: `pip install -r requirements.txt`
+- Install deps: `uv sync`
 - Configure: copy `.env_sample` to `.env` and fill required keys.
-- Run bot locally: `python start.py`
-- Type check: `mypy .` (incrementally fix violations)
-- Lint (if installed): `ruff .` (or your preferred linter)
+- Run bot locally: `uv run python start.py`
+- Type check: `uv run mypy .` (incrementally fix violations)
+- Lint (if installed): `uv run ruff .` (or your preferred linter)
 - Clean caches/logs: `./clean.sh`
 
 ## Coding Style & Naming Conventions
