@@ -1709,77 +1709,9 @@ async def cmd_show_guards_list():
 # cmd_gen_mtl_vote_list moved to other/stellar/voting_utils.py
 
 
-async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin):
-    delegate_key = "tfm_delegate"
-    days_to_track = 365
-    days_inactive = 90
-    top_donors = 10
-    coefficients = [12, 5]
+# cmd_gen_fin_vote_list moved to other/stellar/voting_utils.py
 
-    # Step 1
-    now = datetime.now()
-    one_year_ago = now - timedelta(days=days_to_track)
-
-    donor_dict = {}
-
-    async with ServerAsync(horizon_url=config.horizon_url) as server:
-        payments_call_builder = server.payments().for_account(account_id).order(desc=True)
-        page_records = await payments_call_builder.call()
-
-        while page_records["_embedded"]["records"]:
-            for payment in page_records["_embedded"]["records"]:
-                if payment.get('to') and payment['to'] == account_id and datetime.strptime(payment['created_at'],
-                                                                                           '%Y-%m-%dT%H:%M:%SZ') > one_year_ago:
-                    amount = float(payment['amount'])
-                    last_donation_date = datetime.strptime(payment['created_at'], '%Y-%m-%dT%H:%M:%SZ')
-                    if payment['from'] not in donor_dict:
-                        donor_dict[payment['from']] = {'sum': amount, 'date': last_donation_date}
-                    else:
-                        donor_dict[payment['from']]['sum'] += amount
-                        if last_donation_date > donor_dict[payment['from']]['date']:
-                            donor_dict[payment['from']]['date'] = last_donation_date
-            page_records = await payments_call_builder.next()
-
-        # Step 3
-        ninety_days_ago = now - timedelta(days=days_inactive)
-        for donor, data in list(donor_dict.items()):
-            if data['date'] < ninety_days_ago:
-                donor_dict.pop(donor)
-
-        # Step 4 and 5
-        for donor, data in donor_dict.items():
-            account_data = await server.accounts().account_id(donor).call()
-            delegate_data = account_data['data']
-            if delegate_key in delegate_data:
-                delegate_id = delegate_data[delegate_key]
-                payment_amount = data['sum']
-                payment_date = data['date']
-
-                if delegate_id in donor_dict:
-                    donor_dict[delegate_id]['sum'] += payment_amount
-                    if payment_date > donor_dict[delegate_id]['date']:
-                        donor_dict[delegate_id]['date'] = payment_date
-
-        # Step 6
-        sorted_donors = sorted(donor_dict.items(), key=lambda x: (x[1]['sum'], x[1]['date']), reverse=True)
-
-        # Step 7
-        top_sorted_donors = sorted_donors[:top_donors]
-
-        # Step 8
-        final_list = []
-        for donor, data in top_sorted_donors:
-            sum_of_payments = data['sum']
-            for coeff in coefficients:
-                sum_of_payments /= coeff
-            votes = math.log2(sum_of_payments)
-            final_list.append([donor, data['sum'], int(votes), 0, data['date']])
-
-    return final_list
-
-
-def cmd_get_blacklist():
-    return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
+# cmd_get_blacklist moved to other/stellar/voting_utils.py
 
 
 def stellar_remove_orders(public_key, xdr):
@@ -1817,77 +1749,7 @@ def isfloat(value):
         return False
 
 
-def gen_vote_xdr(public_key, vote_list: list[MyShareHolder], transaction=None, source=None, remove_master=False,
-                 max_count=20, threshold_style=0):
-    # узнать кто в подписантах
-    server = Server(horizon_url=config.horizon_url)
-    source_account = server.load_account(public_key)
-
-    sg = source_account.load_ed25519_public_key_signers()
-
-    for s in sg:
-        was_found = False
-        for arr in vote_list:
-            if arr.account_id == s.account_id:
-                arr.votes = s.weight
-                was_found = True
-        if not was_found and s.account_id != public_key:
-            vote_list.append(MyShareHolder(account_id=s.account_id, votes=s.weight))
-
-    vote_list.sort(key=lambda k: k.calculated_votes, reverse=True)
-
-    # up user to delete
-    tmp_list = []
-    del_count = 0
-
-    # account_list.append([account["account_id"], balance_mtl, lg, 0, account['data'], balance_mtl, balance_rect])
-    for arr in vote_list:
-        if (int(arr.calculated_votes) == 0) & (int(arr.votes) > 0):
-            tmp_list.append(arr)
-            vote_list.remove(arr)
-            del_count += 1
-
-    tmp_list.extend(vote_list)
-
-    while len(tmp_list) > max_count + del_count:
-        arr = tmp_list.pop(max_count + del_count)
-        if arr.votes > 0:
-            del_count += 1
-            tmp_list.insert(0, MyShareHolder(account_id=arr.account_id, votes=arr.votes))
-
-    vote_list = tmp_list
-    # 5
-    server = Server(horizon_url=config.horizon_url)
-    source_account = server.load_account(public_key)
-    root_account = Account(public_key, sequence=source_account.sequence)
-    if transaction is None:
-        transaction = TransactionBuilder(source_account=root_account,
-                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=base_fee)
-        transaction.set_timeout(60 * 60 * 24 * 7)
-    threshold = 0
-
-    for arr in vote_list:
-        if int(arr.calculated_votes) != int(arr.votes):
-            transaction.append_ed25519_public_key_signer(arr.account_id, int(arr.calculated_votes), source=source)
-        threshold += int(arr.calculated_votes)
-
-    if threshold_style == 1:
-        threshold = threshold // 3 * 2
-    else:
-        threshold = threshold // 2 + 1
-
-    if remove_master:
-        transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
-                                          source=source, master_weight=0)
-    else:
-        transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
-                                          source=source)
-
-    transaction = transaction.build()
-    xdr = transaction.to_xdr()
-    # print(f"xdr: {xdr}")
-
-    return xdr
+# gen_vote_xdr moved to other/stellar/voting_utils.py
 
 
 async def resolve_account(account_id: str):
@@ -2177,93 +2039,9 @@ async def get_chicago_xdr():
     return result
 
 
-def check_mtla_delegate(account, result, delegated_list=None):
-    if delegated_list is None:
-        delegated_list = []
-    delegate_to_account = result[account]['delegate']
-    # убираем цикл на себя
-    if delegate_to_account and delegate_to_account == account:
-        result[account]['delegate'] = None
-        return
+# check_mtla_delegate moved to other/stellar/voting_utils.py
 
-    # убираем цикл побольше
-    if delegate_to_account and delegate_to_account in delegated_list:
-        result[account]['delegate'] = None
-        return
-
-    if delegate_to_account:
-        if result[account]['vote'] > 0:
-            delegated_list.append(account)
-        if result[delegate_to_account]['delegate']:
-            result[account]['was_delegate'] = check_mtla_delegate(delegate_to_account, result, delegated_list)
-        else:
-            if 'delegated_list' in result[delegate_to_account]:
-                result[delegate_to_account]['delegated_list'].extend(delegated_list)
-            else:
-                result[delegate_to_account]['delegated_list'] = delegated_list
-            result[account]['was_delegate'] = delegate_to_account
-            return delegate_to_account
-
-
-async def get_mtlap_votes():
-    result = {}
-    # составляем дерево по держателям
-    accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
-    for account in accounts:
-        delegate = None
-        if account['data'] and account['data'].get('mtla_a_delegate'):
-            delegate = decode_data_value(account['data']['mtla_a_delegate'])
-        vote = 0
-        for balance in account['balances']:
-            if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
-                'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
-                vote = int(float(balance['balance']))
-                break
-        result[account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
-
-    # добавляем кого нет
-    find_new = True
-    while find_new:
-        find_new = False
-        for account in list(result):
-            if result[account]['delegate'] and result[account]['delegate'] not in result:
-                find_new = True
-                new_account = await stellar_get_account(result[account]['delegate'])
-                delegate = None
-                if new_account.get('data') and new_account['data'].get('mtla_a_delegate'):
-                    delegate = decode_data_value(new_account['data']['mtla_a_delegate'])
-                vote = 0
-                balances = new_account.get('balances')
-                if balances:
-                    for balance in balances:
-                        if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and \
-                                balance['asset_issuer'] == MTLAssets.mtlap_asset.issuer:
-                            vote = int(float(balance['balance']))
-                            break
-                result[new_account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
-
-    for account in list(result):
-        check_mtla_delegate(account, result)
-
-    # Проверяем, может ли аккаунт голосовать
-    for account in list(result):
-        if not result[account]['can_vote']:
-            # Проверяем, есть ли делегаты с 2 или более токенами
-            if 'delegated_list' in result[account]:
-                for delegator in result[account]['delegated_list']:
-                    if result[delegator]['vote'] >= 2:
-                        result[account]['can_vote'] = True
-                        break
-
-    # Удаляем аккаунты, которые не могут голосовать
-    for account in list(result):
-        if not result[account]['can_vote']:
-            del result[account]
-
-    del result['GDGC46H4MQKRW3TZTNCWUU6R2C7IPXGN7HQLZBJTNQO6TW7ZOS6MSECR']
-    del result['GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA']
-
-    return result
+# get_mtlap_votes moved to other/stellar/voting_utils.py
 
 
 async def get_get_income():
