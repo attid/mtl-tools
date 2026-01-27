@@ -12,6 +12,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from sqlalchemy.orm import Session
 
 from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
+from services.app_context import AppContext
 from other.grist_tools import MTLGrist
 from other.stellar import MTLAddresses
 
@@ -34,7 +35,7 @@ chat_to_address = {-1001649743884: MTLAddresses.public_issuer,
 
 
 @router.channel_post(F.poll)
-async def channel_post(message: Message, session: Session, app_context=None):
+async def channel_post(message: Message, session: Session, app_context: AppContext = None):
     if message.chat.id in (-1001649743884, -1001837984392, -1002042260878, -1002210483308):
         if message.poll:
             buttons = []
@@ -60,7 +61,7 @@ async def channel_post(message: Message, session: Session, app_context=None):
 @update_command_info("/poll", "Создать голование с учетом веса голосов, "
                               "надо слать в ответ на стандартное голосование")
 @router.message(Command(commands=["poll"]))
-async def cmd_poll(message: Message, session: Session, app_context=None):
+async def cmd_poll(message: Message, session: Session, app_context: AppContext = None):
     if message.reply_to_message and message.reply_to_message.poll:
         poll = message.reply_to_message.poll
         buttons = []
@@ -88,7 +89,7 @@ async def cmd_poll(message: Message, session: Session, app_context=None):
                      "Заменить в спец голосовании текст на предлагаемый далее. "
                      "Использовать /poll_replace_text new_text")
 @router.message(Command(commands=["poll_replace_text"]))
-async def cmd_poll_rt(message: Message, session: Session, app_context=None):
+async def cmd_poll_rt(message: Message, session: Session, app_context: AppContext = None):
     if message.reply_to_message:
         if app_context:
              my_poll = await app_context.poll_service.load_poll(message.chat.id, message.reply_to_message.message_id)
@@ -116,7 +117,7 @@ async def cmd_poll_rt(message: Message, session: Session, app_context=None):
 @router.message(Command(commands=["poll_close"]))
 @router.message(Command(commands=["poll_stop"]))
 @router.message(Command(commands=["apoll_stop"]))
-async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_context: AppContext = None):
     if message.reply_to_message and message.reply_to_message.poll:
         await bot.stop_poll(message.chat.id, message.reply_to_message.message_id)
         return
@@ -150,7 +151,7 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_conte
                      "Проверить кто не голосовал. Слать в ответ на спец голосование. "
                      "'кто молчит', 'найди молчунов', 'найди безбилетника'")
 @router.message(Command(commands=["poll_check"]))
-async def cmd_poll_check(message: Message, session: Session, app_context=None):
+async def cmd_poll_check(message: Message, session: Session, app_context: AppContext = None):
     chat_id = message.chat.id
     message_id = None
 
@@ -173,9 +174,8 @@ async def cmd_poll_check(message: Message, session: Session, app_context=None):
                 await global_data.mongo_config.load_bot_value(actual_chat_id, -1 * actual_msg_id, empty_poll))
 
         address_key = chat_to_address.get(actual_chat_id)
-        if address_key and address_key in global_data.votes:
-            votes_detail = global_data.votes[address_key]
-
+        votes_detail = app_context.voting_service.get_vote_weights(address_key) if app_context else None
+        if address_key and votes_detail:
             all_voters = set(votes_detail.keys())
             with suppress(KeyError):
                 all_voters.remove("NEED")
@@ -196,7 +196,7 @@ async def cmd_poll_check(message: Message, session: Session, app_context=None):
 
 
 @router.callback_query(PollCallbackData.filter())
-async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, session: Session, app_context=None):
+async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, session: Session, app_context: AppContext = None):
     answer = callback_data.answer
     user = '@' + query.from_user.username.lower() if query.from_user.username else query.from_user.id
     
@@ -209,7 +209,8 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
     if my_poll["closed"]:
         await query.answer("This poll is closed!", show_alert=True)
     else:
-        local_votes = global_data.votes.get(chat_to_address.get(query.message.chat.id))
+        address = chat_to_address.get(query.message.chat.id)
+        local_votes = app_context.voting_service.get_vote_weights(address) if app_context else None
         if not local_votes:
             await query.answer("No vote data for this chat", show_alert=True)
             return False
@@ -248,7 +249,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
     return True
 
 
-async def cmd_save_votes(session: Session, app_context=None):
+async def cmd_save_votes(session: Session, app_context: AppContext = None):
     vote_list = {}
     for chat_id in chat_to_address:
         address = chat_to_address[chat_id]
@@ -282,16 +283,13 @@ async def cmd_save_votes(session: Session, app_context=None):
 
     if app_context:
         await app_context.config_service.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
-    else:
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
-        
-    global_data.votes = vote_list
+        app_context.voting_service.set_all_vote_weights(vote_list)
     return vote_list
 
 
 @update_command_info("/poll_reload_vote", "Перечитать голоса из блокчейна")
 @router.message(Command(commands=["poll_reload_vote"]))
-async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_context=None):
+async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_context: AppContext = None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -313,7 +311,7 @@ async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_c
 
 @update_command_info('/apoll', 'Создает голосование в Ассоциации')
 @router.message(Command(commands=["apoll"]))
-async def cmd_apoll(message: Message, session: Session, app_context=None):
+async def cmd_apoll(message: Message, session: Session, app_context: AppContext = None):
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
         my_poll = {}
@@ -360,7 +358,7 @@ async def cmd_apoll(message: Message, session: Session, app_context=None):
 
 
 @router.poll_answer()
-async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, app_context=None):
+async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, app_context: AppContext = None):
     if app_context:
         my_poll = await app_context.poll_service.load_mtla_poll(poll.poll_id)
         user_address_data = await app_context.grist_service.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"TGID": [poll.user.id]})
@@ -394,7 +392,7 @@ async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, 
 
 @update_command_info('/apoll_check', 'Проверка голосования в Ассоциации')
 @router.message(Command(commands=["apoll_check"]))
-async def cmd_apoll_check_handler(message: Message, session: Session, app_context=None):
+async def cmd_apoll_check_handler(message: Message, session: Session, app_context: AppContext = None):
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
         

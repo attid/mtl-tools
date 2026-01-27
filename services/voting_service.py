@@ -16,6 +16,7 @@ class VotingService:
         self._votes: dict[int, dict] = {}  # chat_id -> {msg_id: vote_data}
         self._first_vote: list[int] = []  # chat_ids with first-vote enabled
         self._first_vote_data: dict[int, dict] = {}  # chat_id -> vote_state
+        self._vote_weights: dict[str, dict] = {}  # address -> {user: weight, "NEED": {50: X, 75: Y, 100: Z}}
 
     # Poll votes methods
     def get_poll_votes(self, chat_id: int, msg_id: Optional[int] = None) -> dict:
@@ -95,3 +96,31 @@ class VotingService:
     def load_first_vote_data(self, data: dict) -> None:
         with self._lock:
             self._first_vote_data = {k: v.copy() if isinstance(v, dict) else v for k, v in data.items()}
+
+    # Vote weights by address (for weighted polls)
+    def get_vote_weights(self, address: str) -> Optional[dict]:
+        """Get vote weights for a Stellar address."""
+        with self._lock:
+            data = self._vote_weights.get(address)
+            return data.copy() if data else None
+
+    def get_all_vote_weights(self) -> dict:
+        """Get all vote weights."""
+        with self._lock:
+            return {k: v.copy() for k, v in self._vote_weights.items()}
+
+    def set_vote_weights(self, address: str, weights: dict) -> None:
+        """Set vote weights for a Stellar address."""
+        with self._lock:
+            self._vote_weights[address] = weights.copy()
+
+    def set_all_vote_weights(self, vote_weights: dict) -> None:
+        """Set all vote weights (replaces entire structure)."""
+        with self._lock:
+            self._vote_weights = {k: v.copy() if isinstance(v, dict) else v for k, v in vote_weights.items()}
+
+    def get_user_vote_weight(self, address: str, user: str) -> Optional[int]:
+        """Get vote weight for a specific user at an address."""
+        with self._lock:
+            weights = self._vote_weights.get(address, {})
+            return weights.get(user) or weights.get(str(user))

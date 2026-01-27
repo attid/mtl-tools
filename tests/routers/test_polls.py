@@ -65,16 +65,16 @@ async def test_poll_callback(mock_telegram, router_app_context):
         "buttons": [["A", 0, []]]
     }
     router_app_context.poll_service._polls[(MTLChats.TestGroup, 10)] = my_poll
-    
-    # Setup votes weight
+
+    # Setup votes weight using voting_service (DI replacement for global_data.votes)
     # We must match the chat_to_address key for the test chat
     # MTLChats.TestGroup is in chat_to_address
     test_address = chat_to_address.get(MTLChats.TestGroup, MTLAddresses.public_issuer)
-    
-    global_data.votes[test_address] = {
+
+    router_app_context.voting_service.set_vote_weights(test_address, {
         "@user": 5,
         "NEED": {"50": 10, "75": 15, "100": 20}
-    }
+    })
     
     cb_data = PollCallbackData(answer=0).pack()
     
@@ -292,12 +292,13 @@ async def test_poll_check_remaining_voters(mock_telegram, router_app_context):
     
     chat_id = MTLChats.TestGroup
     test_address = chat_to_address.get(chat_id, "G_TEST")
-    
-    global_data.votes[test_address] = {
+
+    # Setup votes weight using voting_service (DI replacement for global_data.votes)
+    router_app_context.voting_service.set_vote_weights(test_address, {
         "@user1": 10,
         "@user2": 5,
         "NEED": {"50": 5, "75": 8, "100": 10}
-    }
+    })
     
     # User 1 has voted
     my_poll = {

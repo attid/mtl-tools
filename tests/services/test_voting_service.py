@@ -154,3 +154,59 @@ class TestVotingServiceBulkLoading:
         service.load_first_vote_data(data)
         assert service.get_first_vote_data(111) == {100: "choice_a"}
         assert service.get_first_vote_data(222) == {200: "choice_b"}
+
+
+class TestVotingServiceVoteWeights:
+    """Tests for vote weights by Stellar address."""
+
+    def test_get_vote_weights_returns_none_when_not_set(self):
+        service = VotingService()
+        result = service.get_vote_weights("GABCD...")
+        assert result is None
+
+    def test_set_and_get_vote_weights(self):
+        service = VotingService()
+        weights = {"@user1": 5, "@user2": 3, "NEED": {"50": 4, "75": 6, "100": 8}}
+        service.set_vote_weights("GABCD...", weights)
+        result = service.get_vote_weights("GABCD...")
+        assert result == {"@user1": 5, "@user2": 3, "NEED": {"50": 4, "75": 6, "100": 8}}
+
+    def test_get_vote_weights_returns_copy(self):
+        service = VotingService()
+        weights = {"@user1": 5}
+        service.set_vote_weights("GABCD...", weights)
+        result = service.get_vote_weights("GABCD...")
+        result["@user2"] = 10
+        assert service.get_vote_weights("GABCD...") == {"@user1": 5}
+
+    def test_get_all_vote_weights(self):
+        service = VotingService()
+        service.set_vote_weights("ADDR1", {"@user1": 5})
+        service.set_vote_weights("ADDR2", {"@user2": 3})
+        result = service.get_all_vote_weights()
+        assert "ADDR1" in result
+        assert "ADDR2" in result
+
+    def test_set_all_vote_weights_replaces_existing(self):
+        service = VotingService()
+        service.set_vote_weights("ADDR1", {"@user1": 5})
+        service.set_all_vote_weights({"ADDR2": {"@user2": 3}})
+        assert service.get_vote_weights("ADDR1") is None
+        assert service.get_vote_weights("ADDR2") == {"@user2": 3}
+
+    def test_get_user_vote_weight(self):
+        service = VotingService()
+        weights = {"@user1": 5, "@user2": 3}
+        service.set_vote_weights("GABCD...", weights)
+        assert service.get_user_vote_weight("GABCD...", "@user1") == 5
+        assert service.get_user_vote_weight("GABCD...", "@user2") == 3
+
+    def test_get_user_vote_weight_returns_none_for_unknown_user(self):
+        service = VotingService()
+        weights = {"@user1": 5}
+        service.set_vote_weights("GABCD...", weights)
+        assert service.get_user_vote_weight("GABCD...", "@unknown") is None
+
+    def test_get_user_vote_weight_returns_none_for_unknown_address(self):
+        service = VotingService()
+        assert service.get_user_vote_weight("UNKNOWN", "@user1") is None
