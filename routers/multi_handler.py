@@ -1,6 +1,7 @@
 import asyncio
 import json
 from contextlib import suppress
+from typing import Any, Optional
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -9,15 +10,126 @@ from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import MTLChats, BotValueTypes, update_command_info, global_data
+from other.global_data import global_data, update_command_info
+from other.constants import MTLChats, BotValueTypes
 
 router = Router()
+
+
+# =============================================================================
+# DI Service Access Helpers with global_data fallback
+# =============================================================================
+
+def _get_feature_flag_list(ctx, feature_name: str) -> list:
+    """Get feature flag list from DI service or fallback to global_data."""
+    if ctx and ctx.feature_flags:
+        # For DI, we return a proxy that checks the service
+        # But commands_info expects mutable list, so return global_data for now
+        pass
+    return getattr(global_data, feature_name, [])
+
+
+def _get_feature_flag_dict(ctx, feature_name: str) -> dict:
+    """Get feature flag dict from DI service or fallback to global_data."""
+    return getattr(global_data, feature_name, {})
+
+
+def _is_feature_enabled(ctx, chat_id: int, feature: str) -> bool:
+    """Check if feature is enabled using DI or fallback."""
+    if ctx and ctx.feature_flags:
+        return ctx.feature_flags.is_enabled(chat_id, feature)
+    # Fallback to global_data
+    feature_data = getattr(global_data, feature, None)
+    if isinstance(feature_data, list):
+        return chat_id in feature_data
+    elif isinstance(feature_data, dict):
+        return chat_id in feature_data
+    return False
+
+
+def _get_delete_income(ctx, chat_id: int) -> Optional[Any]:
+    """Get delete income config using DI or fallback."""
+    if ctx and ctx.config_service:
+        return ctx.config_service.get_delete_income(chat_id)
+    return global_data.delete_income.get(chat_id)
+
+
+def _needs_decode(ctx, chat_id: int) -> bool:
+    """Check if chat needs decode using DI or fallback."""
+    if ctx and ctx.bot_state_service:
+        return ctx.bot_state_service.needs_decode(chat_id)
+    return chat_id in global_data.need_decode
+
+
+def _is_first_vote_enabled(ctx, chat_id: int) -> bool:
+    """Check if first vote is enabled using DI or fallback."""
+    if ctx and ctx.voting_service:
+        return ctx.voting_service.is_first_vote_enabled(chat_id)
+    return chat_id in global_data.first_vote
+
+
+def _get_join_notify_config(ctx, chat_id: int) -> Optional[Any]:
+    """Get join notify config using DI or fallback."""
+    if ctx and ctx.notification_service:
+        return ctx.notification_service.get_join_notify_config(chat_id)
+    return global_data.notify_join.get(chat_id)
+
+
+def _get_message_notify_config(ctx, chat_id: int) -> Optional[Any]:
+    """Get message notify config using DI or fallback."""
+    if ctx and ctx.notification_service:
+        return ctx.notification_service.get_message_notify_config(chat_id)
+    return global_data.notify_message.get(chat_id)
+
+
+def _is_topic_admin(ctx, chat_id: int, thread_id: int, username: str) -> bool:
+    """Check if user is topic admin using DI or fallback."""
+    if ctx and ctx.admin_service:
+        return ctx.admin_service.is_topic_admin(chat_id, thread_id, username)
+    # Fallback to global_data
+    chat_thread_key = f"{chat_id}-{thread_id}"
+    if chat_thread_key not in global_data.topic_admins:
+        return False
+    normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+    return normalized in global_data.topic_admins.get(chat_thread_key, [])
+
+
+def _is_topic_muted(ctx, chat_id: int, thread_id: int) -> bool:
+    """Check if topic has mutes using DI or fallback."""
+    if ctx and ctx.admin_service:
+        return ctx.admin_service.has_topic_mutes(chat_id, thread_id)
+    chat_thread_key = f"{chat_id}-{thread_id}"
+    return chat_thread_key in global_data.topic_mute
+
+
+def _is_skynet_admin(ctx, username: str) -> bool:
+    """Check if user is skynet admin using DI or fallback."""
+    if ctx and ctx.admin_service:
+        return ctx.admin_service.is_skynet_admin(username)
+    # Fallback
+    if not username:
+        return False
+    normalized = username if username.startswith('@') else f'@{username}'
+    return normalized.lower() in [u.lower() for u in global_data.skynet_admins]
+
+
+def _get_entry_channel(ctx, chat_id: int) -> Optional[str]:
+    """Get entry channel config using DI or fallback."""
+    # Currently uses global_data directly, no DI service migration yet
+    return global_data.entry_channel.get(chat_id)
+
+
+# =============================================================================
+# Commands Configuration
+# Note: commands_info uses global_data references for backward compatibility
+# with existing toggle logic. The helpers above provide DI access for reads.
+# =============================================================================
 
 commands_info = {
     "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin", 1),
     "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin", 1),
     "set_no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin", 1),
-    # full_data - чаты с полной расшифровкой по адресу
+    # full_data - chats with full address decoding
     "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin", 1),
     "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin", 1),
     "save_last_message_date": (global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate,
@@ -45,7 +157,13 @@ commands_info = {
 }
 
 
-async def command_config_loads():
+async def command_config_loads(app_context=None):
+    """
+    Load configuration from database into global_data and sync with DI services.
+
+    Args:
+        app_context: Optional app context for DI services sync
+    """
     for command in commands_info:
         global_data_field = commands_info[command][0]
         global_data_key = commands_info[command][1]
@@ -75,7 +193,44 @@ async def command_config_loads():
     global_data.alert_me = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
     global_data.sync = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
 
+    # Sync loaded data to DI services if available
+    if app_context:
+        _sync_to_di_services(app_context)
+
     logger.info('finished command_config_loads task')
+
+
+def _sync_to_di_services(ctx):
+    """Sync loaded global_data to DI services for consistent state."""
+    # Sync voting service
+    if ctx.voting_service:
+        ctx.voting_service.load_votes(global_data.votes)
+        ctx.voting_service.load_first_vote(global_data.first_vote)
+
+    # Sync admin service
+    if ctx.admin_service:
+        ctx.admin_service.load_topic_admins(global_data.topic_admins)
+        ctx.admin_service.load_topic_mutes(global_data.topic_mute)
+        ctx.admin_service.set_skynet_admins(global_data.skynet_admins)
+        ctx.admin_service.set_skynet_img_users(global_data.skynet_img)
+        ctx.admin_service.load_admins(global_data.admins)
+
+    # Sync notification service
+    if ctx.notification_service:
+        ctx.notification_service.load_notify_join(global_data.notify_join)
+        ctx.notification_service.load_notify_message(global_data.notify_message)
+        ctx.notification_service.load_alert_me(global_data.alert_me)
+
+    # Sync config service
+    if ctx.config_service:
+        ctx.config_service.load_welcome_messages(global_data.welcome_messages)
+        ctx.config_service.load_welcome_buttons(global_data.welcome_button)
+        ctx.config_service.load_delete_income(global_data.delete_income)
+
+    # Sync bot state service
+    if ctx.bot_state_service:
+        for chat_id in global_data.need_decode:
+            ctx.bot_state_service.mark_needs_decode(chat_id)
 
 
 
@@ -179,9 +334,12 @@ async def handle_command(message: Message, command_info, app_context=None):
             global_data_field.pop(chat_id)
         else:
             global_data_field.remove(chat_id)
-            
+
         await app_context.config_service.save_bot_value(chat_id, db_value_type, None)
-            
+
+        # Sync removal to DI services
+        _sync_toggle_removal(app_context, db_value_type, chat_id)
+
         info_message = await message.reply('Removed')
     else:
         value_to_set = command_args[0] if command_args else '1'
@@ -191,7 +349,10 @@ async def handle_command(message: Message, command_info, app_context=None):
             global_data_field.append(chat_id)
 
         await app_context.config_service.save_bot_value(chat_id, db_value_type, value_to_set)
-            
+
+        # Sync addition to DI services
+        _sync_toggle_addition(app_context, db_value_type, chat_id, value_to_set)
+
         info_message = await message.reply('Added')
 
     await app_context.utils_service.sleep_and_delete(info_message, 5)
@@ -199,6 +360,40 @@ async def handle_command(message: Message, command_info, app_context=None):
     with suppress(TelegramBadRequest):
         await asyncio.sleep(1)
         await message.delete()
+
+
+def _sync_toggle_removal(ctx, db_value_type: BotValueTypes, chat_id: int):
+    """Sync toggle removal to DI services."""
+    if not ctx:
+        return
+
+    if db_value_type == BotValueTypes.FirstVote and ctx.voting_service:
+        ctx.voting_service.disable_first_vote(chat_id)
+    elif db_value_type == BotValueTypes.NeedDecode and ctx.bot_state_service:
+        ctx.bot_state_service.clear_needs_decode(chat_id)
+    elif db_value_type == BotValueTypes.NotifyJoin and ctx.notification_service:
+        ctx.notification_service.disable_join_notify(chat_id)
+    elif db_value_type == BotValueTypes.NotifyMessage and ctx.notification_service:
+        ctx.notification_service.disable_message_notify(chat_id)
+    elif db_value_type == BotValueTypes.DeleteIncome and ctx.config_service:
+        ctx.config_service.remove_delete_income(chat_id)
+
+
+def _sync_toggle_addition(ctx, db_value_type: BotValueTypes, chat_id: int, value: str):
+    """Sync toggle addition to DI services."""
+    if not ctx:
+        return
+
+    if db_value_type == BotValueTypes.FirstVote and ctx.voting_service:
+        ctx.voting_service.enable_first_vote(chat_id)
+    elif db_value_type == BotValueTypes.NeedDecode and ctx.bot_state_service:
+        ctx.bot_state_service.mark_needs_decode(chat_id)
+    elif db_value_type == BotValueTypes.NotifyJoin and ctx.notification_service:
+        ctx.notification_service.set_join_notify(chat_id, value)
+    elif db_value_type == BotValueTypes.NotifyMessage and ctx.notification_service:
+        ctx.notification_service.set_message_notify(chat_id, value)
+    elif db_value_type == BotValueTypes.DeleteIncome and ctx.config_service:
+        ctx.config_service.set_delete_income(chat_id, value)
 
 
 async def handle_entry_channel_toggle(message: Message, command_info, app_context=None):
@@ -234,7 +429,7 @@ async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_c
 
 
 async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> tuple[int, int]:
-    required_channel = global_data.entry_channel.get(chat_id)
+    required_channel = _get_entry_channel(app_context, chat_id)
     if not required_channel:
         raise ValueError('entry_channel setting is not enabled for this chat')
 
@@ -275,6 +470,8 @@ async def list_command_handler(message: Message, command_info, app_context=None)
         else:
             global_data_field.extend(command_args)
             await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            # Sync to DI services
+            _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added: {" ".join(command_args)}')
 
     elif action_type == "del_list":
@@ -285,6 +482,8 @@ async def list_command_handler(message: Message, command_info, app_context=None)
                 if arg in global_data_field:
                     global_data_field.remove(arg)
             await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            # Sync to DI services
+            _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Removed: {" ".join(command_args)}')
 
     elif action_type == "show_list":
@@ -292,6 +491,17 @@ async def list_command_handler(message: Message, command_info, app_context=None)
             await message.reply(' '.join(global_data_field))
         else:
             await message.reply('The list is empty.')
+
+
+def _sync_list_update(ctx, db_value_type: BotValueTypes, data: list):
+    """Sync list updates to DI services."""
+    if not ctx:
+        return
+
+    if db_value_type == BotValueTypes.SkynetAdmins and ctx.admin_service:
+        ctx.admin_service.set_skynet_admins(data)
+    elif db_value_type == BotValueTypes.SkynetImg and ctx.admin_service:
+        ctx.admin_service.set_skynet_img_users(data)
 
 
 async def list_command_handler_topic(message: Message, command_info, app_context=None):
@@ -310,6 +520,8 @@ async def list_command_handler_topic(message: Message, command_info, app_context
                 global_data_field[chat_thread_key] = []
             global_data_field[chat_thread_key].extend(command_args)
             await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            # Sync to DI services
+            _sync_topic_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
 
     elif action_type == "del_list_topic":
@@ -321,6 +533,8 @@ async def list_command_handler_topic(message: Message, command_info, app_context
                     if arg in global_data_field[chat_thread_key]:
                         global_data_field[chat_thread_key].remove(arg)
                 await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+                # Sync to DI services
+                _sync_topic_list_update(app_context, db_value_type, global_data_field)
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
             else:
                 await message.reply('This thread has no items in the list.')
@@ -330,6 +544,15 @@ async def list_command_handler_topic(message: Message, command_info, app_context
             await message.reply(f'Items in this thread: {" ".join(global_data_field[chat_thread_key])}')
         else:
             await message.reply('The list for this thread is empty.')
+
+
+def _sync_topic_list_update(ctx, db_value_type: BotValueTypes, data: dict):
+    """Sync topic list updates to DI services."""
+    if not ctx:
+        return
+
+    if db_value_type == BotValueTypes.TopicAdmins and ctx.admin_service:
+        ctx.admin_service.load_topic_admins(data)
 
 
 @router.startup()
