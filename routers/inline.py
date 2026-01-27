@@ -7,14 +7,51 @@ from other.global_data import global_data
 
 router = Router()
 
+
+def _get_commands_dict(app_context):
+    """Get commands dict from DI service or fallback to global_data."""
+    if app_context and app_context.command_registry:
+        # Convert CommandInfo objects to legacy format for compatibility
+        commands = app_context.command_registry.get_all_commands()
+        return {
+            name: {
+                'info': cmd.description,
+                'cmd_type': cmd.cmd_type,
+                'cmd_list': cmd.cmd_list[0] if cmd.cmd_list else ''
+            }
+            for name, cmd in commands.items()
+        }
+    return global_data.info_cmd
+
+
+def _check_alert_me(app_context, chat_id: int, user_id: int) -> bool:
+    """Check if user has alert_me enabled for the chat using DI service or fallback."""
+    if app_context and app_context.notification_service:
+        alert_config = app_context.notification_service.get_alert_config(chat_id)
+        if alert_config and isinstance(alert_config, list):
+            return user_id in alert_config
+        return False
+    # Fallback to global_data
+    if chat_id in global_data.alert_me:
+        alert_list = global_data.alert_me[chat_id]
+        if isinstance(alert_list, list):
+            return user_id in alert_list
+    return False
+
+
+def _get_attr_list(app_context, attr_name: str):
+    """Get attribute list from app_context services or fallback to global_data."""
+    # For alert_me, use notification_service
+    if attr_name == 'alert_me':
+        if app_context and app_context.notification_service:
+            return app_context.notification_service.get_all_alerts()
+        return global_data.alert_me
+    # For other attributes, fallback to global_data
+    return getattr(global_data, attr_name, {})
+
+
 @router.inline_query()
 async def inline_handler(inline_query: InlineQuery, session: Session, app_context=None):
-    # session usually injected by middleware if registered.
-    # checking global_data usage. It's safe to use global_data for read-only config info_cmd.
-    # But if app_context is provided, we might want to use something from it?
-    # Currently inline router logic is purely global_data read.
-    # We will keep it simple but allow app_context signature.
-    
     switch_text = "По Вашему запросу найдено :"
     answers = []
     query_text = inline_query.query.upper()
@@ -34,22 +71,22 @@ async def inline_handler(inline_query: InlineQuery, session: Session, app_contex
     if len(query_text) == 0:
         query_text = ' '
 
-    # Using global_data directly as it is config data.
-    # We could abstract it via config_service but it's a dict.
-    for key, value in global_data.info_cmd.items():
+    # Use DI services when available, fallback to global_data for backward compatibility
+    commands_dict = _get_commands_dict(app_context)
+
+    for key, value in commands_dict.items():
         if (key.upper().find(query_text) > -1) or (value['info'].upper().find(query_text) > -1):
             ico = ""
             if (value["cmd_type"] > 0) and (chat_id < 0):
-                attr_list = getattr(global_data, value["cmd_list"])
+                attr_list = _get_attr_list(app_context, value["cmd_list"])
                 if value["cmd_type"] in (1, 2):
                     ico = "🟢 " if chat_id in attr_list else "🔴 "
                 if value["cmd_type"] in (3,):
-                    #    if message.chat.id in global_data.alert_me and message.from_user.id in global_data.alert_me[message.chat.id]:
-                    # Need check logic for nested dicts if checking user_id
+                    # For cmd_type 3, check nested structure: {chat_id: [user_ids]}
                     in_list = False
                     if chat_id in attr_list:
                         if isinstance(attr_list[chat_id], list):
-                             in_list = user_id in attr_list[chat_id]
+                            in_list = user_id in attr_list[chat_id]
                     ico = "🟢 " if in_list else "🔴 "
 
             answers.append(InlineQueryResultArticle(
