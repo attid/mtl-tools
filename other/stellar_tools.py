@@ -62,6 +62,7 @@ from other.gspread_tools import agcm, gs_get_chicago_premium
 from other.mytypes import MyShareHolder
 from other.web_tools import get_eurmtl_xdr
 from other.stellar.monitoring import stellar_get_transactions
+from other.stellar.display_commands import get_donate_list
 
 base_fee = config.base_fee
 
@@ -136,38 +137,14 @@ class MTLAssets:
 
 pack_count = 70  # for select first pack_count - to pack to xdr
 
-exchange_bots = ()
+# exchange_bots moved to other/stellar/constants.py as EXCHANGE_BOTS
 
-
-# exchange_bots = ()(MTLAddresses.public_exchange_eurmtl_xlm, MTLAddresses.public_exchange_usdm_mtlfarm,
-#                  MTLAddresses.public_exchange_eurmtl_usdm, MTLAddresses.public_fire,
-#                  MTLAddresses.public_exchange_usdm_sats)
+# cleanhtml, cmd_alarm_url moved to other/stellar/utils.py
 
 
 async def check_url_xdr(url, full_data=True):
     xdr = await get_eurmtl_xdr(url)
     return await decode_xdr(xdr, full_data=full_data)
-
-
-def cleanhtml(raw_html):
-    clean_regex = re.compile('<.*?>')
-    cleantext = re.sub(clean_regex, '', raw_html)
-    while cleantext.find("\n") > -1:
-        cleantext = cleantext.replace("\n", " ")
-    while cleantext.find("  ") > -1:
-        cleantext = cleantext.replace("  ", " ")
-    return cleantext
-
-
-def cmd_alarm_url(url):
-    rq = requests.get(url).text
-    if rq.find('<h4 class="published">') > -1:
-        return 'Нечего напоминать, транзакция отправлена.'
-    rq = rq[rq.find('<div class="col-10 ignorants-nicks">'):]
-    rq = rq[rq.find('">') + 2:]
-    rq = rq[:rq.find('</div>')]
-    rq = rq.replace("&#x3D;", "=")
-    return cleanhtml(rq)
 
 
 def good_operation(operation, operation_name, filter_operation, ignore_operation):
@@ -400,23 +377,7 @@ async def address_id_to_username(key, full_data=False) -> str:
     return key[:4] + '..' + key[-4:]
 
 
-async def send_by_list(bot: Bot, all_users: list, message: Message, session: Session = None, url=None):
-    good_users = []
-    bad_users = []
-    if url is None:
-        url = message.reply_to_message.get_url()
-    msg = f'@{message.from_user.username} call you here {url}'
-    for user in all_users:
-        if len(user) > 2 and user[0] == '@':
-            try:
-                chat_id = ChatsRepository(session).get_user_id(user)
-                await bot.send_message(chat_id=chat_id, text=msg)
-                good_users.append(user)
-            except Exception as ex:
-                bad_users.append(user)
-                logger.info(ex)
-                pass
-    await message.reply(f'was send to {" ".join(good_users)} \n can`t send to {" ".join(bad_users)}')
+# send_by_list moved to other/stellar/utils.py
 
 
 def cmd_check_fee() -> str:
@@ -507,68 +468,7 @@ async def send_payment_async(source_address: str, destination: str, asset: Asset
     return await stellar_async_submit(transaction.to_xdr())
 
 
-async def get_pool_info(pool_id: str, session) -> dict:
-    async with session.get(f'{config.horizon_url}/liquidity_pools/{pool_id}') as resp:
-        return await resp.json()
-
-
-async def get_pool_balances(address: str) -> list:
-    """
-    Получает информацию о пулах ликвидности для заданного адреса
-
-    Args:
-        address (str): Stellar адрес аккаунта
-
-    Returns:
-        dict: Словарь с информацией о пулах в формате:
-        {
-            pool_id: {
-                'name': 'TOKEN1-TOKEN2',
-                'shares': float,
-                'token1_amount': float,
-                'token2_amount': float
-            }
-        }
-    """
-
-    account = await stellar_get_account(address)
-    pools = []
-
-    async with aiohttp.ClientSession() as session:
-        for balance in account['balances']:
-            if balance['asset_type'] == 'liquidity_pool_shares':
-                pool_id = balance['liquidity_pool_id']
-                user_shares = float(balance['balance'])
-
-                # Получаем детальную информацию о пуле
-                pool_info = await get_pool_info(pool_id, session)
-                total_shares = float(pool_info['total_shares'])
-
-                # Вычисляем долю пользователя
-                user_share_percentage = user_shares / total_shares
-
-                # Извлекаем информацию о резервах
-                reserves = pool_info['reserves']
-                token1 = reserves[0]
-                token2 = reserves[1]
-
-                # Вычисляем токены пользователя
-                user_token1_amount = float(token1['amount']) * user_share_percentage
-                user_token2_amount = float(token2['amount']) * user_share_percentage
-                # Формируем название пула
-                token1_code = token1['asset'].split(':')[0]
-                token2_code = token2['asset'].split(':')[0]
-                pool_name = f"{token1_code}-{token2_code}"
-
-                pools.append({
-                    'pool_id': pool_id,
-                    'name': pool_name,
-                    'shares': user_shares,
-                    'token1_amount': user_token1_amount,
-                    'token2_amount': user_token2_amount
-                })
-
-    return pools
+# get_pool_info, get_pool_balances moved to other/stellar/balance_utils.py
 
 
 async def stellar_get_offers(account_id: str):

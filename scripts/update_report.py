@@ -18,14 +18,11 @@ from other.stellar import (
     stellar_get_issuer_assets, get_balances, stellar_get_offers,
     MTLAddresses, get_asset_swap_spread, MTLAssets,
     resolve_account, stellar_get_holders,
-    stellar_get_transactions,
+    stellar_get_transactions, get_pool_balances,
+    cmd_show_guards_list, cmd_show_donates,
+    cmd_gen_mtl_vote_list, decode_data_value,
+    stellar_add_mtl_holders_info, stellar_get_trade_cost,
 )
-from other.stellar_tools import (
-    stellar_get_trade_cost, get_pool_balances,
-    stellar_add_mtl_holders_info, cmd_show_guards_list, cmd_show_donates,
-)
-from other.stellar import cmd_gen_mtl_vote_list
-from other.stellar import decode_data_value
 
 from other.web_tools import get_debank_balance
 from scripts.mtl_backup import save_assets
