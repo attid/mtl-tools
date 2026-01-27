@@ -17,6 +17,7 @@ organized by responsibility:
 - xdr_utils: XDR decoding and transaction utilities
 - voting_utils: Voting and governance utilities
 - display_commands: Display and show commands for data presentation
+- utils: General utilities (alarm parsing, batch messaging)
 """
 
 # Constants

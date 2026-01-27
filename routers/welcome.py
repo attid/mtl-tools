@@ -247,7 +247,7 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context=None
         app_context.stellar_service.stop_all_exchange()  # Sync
     else:
         await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, 1)
-        from other.stellar_tools import stellar_stop_all_exchange
+        from other.stellar import stellar_stop_all_exchange
         stellar_stop_all_exchange()
 
     await message.reply('Was stop')

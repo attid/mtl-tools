@@ -3,12 +3,13 @@
 
 from typing import Optional
 
+from loguru import logger
 from stellar_sdk import Asset, Network, Server, TransactionBuilder, Price
 from stellar_sdk.client.aiohttp_client import AiohttpClient
 from stellar_sdk.server_async import ServerAsync
 
 from other.config_reader import config
-from .constants import BASE_FEE, MTLAssets
+from .constants import BASE_FEE, EXCHANGE_BOTS, MTLAssets
 
 
 async def stellar_get_offers(account_id: str) -> list[dict]:
@@ -271,3 +272,114 @@ def build_cancel_offers_xdr(
         return built.to_xdr()
 
     return xdr
+
+
+def stellar_remove_orders(public_key: str, xdr: Optional[str] = None) -> Optional[str]:
+    """
+    Build XDR to remove all offers for account.
+
+    Args:
+        public_key: Account with offers to remove
+        xdr: Optional existing XDR to append to
+
+    Returns:
+        Transaction XDR or None if no offers
+    """
+    from .xdr_utils import stellar_get_transaction_builder
+
+    server = Server(horizon_url=config.horizon_url)
+
+    if xdr:
+        transaction = stellar_get_transaction_builder(xdr)
+    else:
+        root_account = server.load_account(public_key)
+        transaction = TransactionBuilder(
+            source_account=root_account,
+            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+            base_fee=BASE_FEE
+        )
+        transaction.set_timeout(60 * 60 * 24 * 7)
+
+    call = server.offers().for_account(public_key).limit(200).call()
+
+    for record in call['_embedded']['records']:
+        transaction.append_manage_sell_offer_op(
+            selling=Asset(
+                record['selling'].get('asset_code', 'XLM'),
+                record['selling'].get('asset_issuer')
+            ),
+            buying=Asset(
+                record['buying'].get('asset_code', 'XLM'),
+                record['buying'].get('asset_issuer')
+            ),
+            amount='0',
+            price=Price(record['price_r']['n'], record['price_r']['d']),
+            offer_id=int(record['id']),
+            source=public_key
+        )
+
+    if transaction.operations:
+        transaction = transaction.build()
+        xdr = transaction.to_xdr()
+
+    return xdr
+
+
+def stellar_stop_all_exchange():
+    """
+    Cancel all open orders for all exchange bots.
+
+    Iterates through EXCHANGE_BOTS and cancels all offers.
+    """
+    from .sdk_utils import stellar_sign
+    from .payment_service import stellar_sync_submit
+
+    xdr = None
+    for bot in EXCHANGE_BOTS:
+        xdr = stellar_remove_orders(bot, xdr)
+
+    if xdr:
+        stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
+
+
+async def stellar_get_trade_cost(asset: Asset) -> float:
+    """
+    Calculate average trade price between given asset and EURMTL based on last 100 trades.
+
+    Args:
+        asset: Stellar SDK Asset object to check trades against EURMTL
+
+    Returns:
+        float: Average trade price or 0 if no trades found
+    """
+    try:
+        async with ServerAsync(
+            horizon_url=config.horizon_url, client=AiohttpClient()
+        ) as server:
+            # Get last 100 trades for the asset pair
+            trades = await server.trades().for_asset_pair(
+                asset, MTLAssets.eurmtl_asset
+            ).limit(100).order(desc=True).call()
+
+            if not trades['_embedded']['records']:
+                return 0
+
+            total_price = 0
+            trade_count = 0
+
+            # Calculate average price from trades
+            for trade in trades['_embedded']['records']:
+                # Check which asset is base/counter to calculate correct price
+                if trade['base_asset_code'] == asset.code:
+                    price = float(trade['price']['n']) / float(trade['price']['d'])
+                else:
+                    price = float(trade['price']['d']) / float(trade['price']['n'])
+
+                total_price += price
+                trade_count += 1
+
+            return total_price / trade_count if trade_count > 0 else 0
+
+    except Exception as ex:
+        logger.error(f"Error getting trade cost for {asset.code}: {ex}")
+        return 0

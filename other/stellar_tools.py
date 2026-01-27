@@ -530,11 +530,7 @@ def get_private_sign():
     return config.private_sign.get_secret_value()
 
 
-def stellar_stop_all_exchange():
-    xdr = None
-    for bot in exchange_bots:
-        xdr = stellar_remove_orders(bot, xdr)
-    stellar_sync_submit(stellar_sign(xdr, config.private_sign.get_secret_value()))
+# stellar_stop_all_exchange moved to other/stellar/exchange_utils.py
 
 
 def stellar_sign(xdr, sign_key=None):
@@ -1613,32 +1609,7 @@ async def cmd_show_guards_list():
 
 # cmd_get_blacklist moved to other/stellar/voting_utils.py
 
-
-def stellar_remove_orders(public_key, xdr):
-    if xdr:
-        transaction = stellar_get_transaction_builder(xdr)
-    else:
-        root_account = Server(horizon_url=config.horizon_url).load_account(public_key)
-        transaction = TransactionBuilder(source_account=root_account,
-                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                                         base_fee=base_fee)
-        transaction.set_timeout(60 * 60 * 24 * 7)
-
-    call = Server(horizon_url=config.horizon_url).offers().for_account(public_key).limit(200).call()
-
-    for record in call['_embedded']['records']:
-        # print(record['price'], record)
-        transaction.append_manage_sell_offer_op(
-            selling=Asset(record['selling'].get('asset_code', 'XLM'), record['selling'].get('asset_issuer')),
-            buying=Asset(record['buying'].get('asset_code', 'XLM'), record['buying'].get('asset_issuer')),
-            amount='0', price=Price(record['price_r']['n'], record['price_r']['d']), offer_id=int(record['id']),
-            source=public_key)
-
-    if transaction.operations:
-        transaction = transaction.build()
-        xdr = transaction.to_xdr()
-
-    return xdr
+# stellar_remove_orders moved to other/stellar/exchange_utils.py
 
 
 def isfloat(value):
@@ -1678,63 +1649,9 @@ async def resolve_account(account_id: str):
     return result
 
 
-async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
-    async with ServerAsync(
-            horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
-        source_account = await server.load_account(MTLAddresses.public_issuer)
-        sg = source_account.load_ed25519_public_key_signers()
+# stellar_add_mtl_holders_info moved to other/stellar/voting_utils.py
 
-    # Создаем словарь для быстрого доступа к весу по account_id
-    signer_weights = {s.account_id: s.weight for s in sg}
-
-    # Обновляем голоса аккаунтов в соответствии с весом подписчиков
-    for account in accounts:
-        if account.account_id in signer_weights:
-            account.votes = signer_weights[account.account_id]
-
-
-async def stellar_get_trade_cost(asset: Asset) -> float:
-    """
-    Calculate average trade price between given asset and EURMTL based on last 100 trades.
-
-    Args:
-        asset: Stellar SDK Asset object to check trades against EURMTL
-
-    Returns:
-        float: Average trade price or 0 if no trades found
-    """
-    try:
-        async with ServerAsync(
-                horizon_url=config.horizon_url, client=AiohttpClient()
-        ) as server:
-            # Get last 100 trades for the asset pair
-            trades = await server.trades().for_asset_pair(
-                asset, MTLAssets.eurmtl_asset
-            ).limit(100).order(desc=True).call()
-
-            if not trades['_embedded']['records']:
-                return 0
-
-            total_price = 0
-            trade_count = 0
-
-            # Calculate average price from trades
-            for trade in trades['_embedded']['records']:
-                # Check which asset is base/counter to calculate correct price
-                if trade['base_asset_code'] == asset.code:
-                    price = float(trade['price']['n']) / float(trade['price']['d'])
-                else:
-                    price = float(trade['price']['d']) / float(trade['price']['n'])
-
-                total_price += price
-                trade_count += 1
-
-            return total_price / trade_count if trade_count > 0 else 0
-
-    except Exception as ex:
-        logger.error(f"Error getting trade cost for {asset.code}: {ex}")
-        return 0
+# stellar_get_trade_cost moved to other/stellar/exchange_utils.py
 
 
 def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list:
@@ -1853,13 +1770,7 @@ def find_stellar_federation_address(text):
     return match.group(0) if match else None
 
 
-async def check_mtlap(key):
-    balances = await get_balances(address=key)
-
-    if 'MTLAP' in balances:
-        return f'Баланс MTLAP: {balances["MTLAP"]}'
-
-    return 'MTLAP не найден'
+# check_mtlap moved to other/stellar/balance_utils.py
 
 
 def determine_working_range():

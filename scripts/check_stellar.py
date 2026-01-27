@@ -17,8 +17,8 @@ from other.loguru_tools import safe_catch_async
 from other.stellar import (
     MTLAddresses, MTLAssets, get_balances, stellar_get_orders_sum,
     cmd_check_last_operation, cmd_check_new_transaction, cmd_check_new_asset_transaction,
+    EXCHANGE_BOTS,
 )
-from other.stellar_tools import exchange_bots
 
 
 def db_cmd_add_message(session, chat_id, text, topic_id=0):
@@ -85,7 +85,7 @@ async def cmd_check_bot(session_pool):
 
         # bot1
         now = datetime.now()
-        for bot_address in exchange_bots:
+        for bot_address in EXCHANGE_BOTS:
             if bot_address == MTLAddresses.public_fire:
                 dt = cmd_check_last_operation(bot_address)
                 delta = now - dt

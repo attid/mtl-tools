@@ -28,7 +28,7 @@ from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mt
 from other.mtl_tools import check_consul_mtla_chats
 from other.pyro_tools import get_group_members, pyro_test, MessageInfo
 from other.miniapps_tools import miniapps
-from other.stellar_tools import send_by_list
+from other.stellar import send_by_list
 
 router = Router()
 

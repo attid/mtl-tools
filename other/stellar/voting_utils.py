@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import requests
 from loguru import logger
 from stellar_sdk import Account, Network, Server, TransactionBuilder
+from stellar_sdk.client.aiohttp_client import AiohttpClient
 from stellar_sdk.server_async import ServerAsync
 
 from other.config_reader import config
@@ -530,3 +531,28 @@ async def get_mtlap_votes() -> dict:
     del result['GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA']
 
     return result
+
+
+async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
+    """
+    Enrich account list with signer weight information from MTL issuer.
+
+    Updates the votes attribute of each account in the list based on
+    their signer weight on the MTL issuer account.
+
+    Args:
+        accounts: List of MyShareHolder objects to update
+    """
+    async with ServerAsync(
+        horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        source_account = await server.load_account(MTLAddresses.public_issuer)
+        sg = source_account.load_ed25519_public_key_signers()
+
+    # Create dictionary for quick weight lookup by account_id
+    signer_weights = {s.account_id: s.weight for s in sg}
+
+    # Update votes for accounts based on signer weights
+    for account in accounts:
+        if account.account_id in signer_weights:
+            account.votes = signer_weights[account.account_id]

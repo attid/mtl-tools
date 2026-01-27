@@ -163,3 +163,94 @@ async def stellar_get_all_mtl_holders() -> list:
             if account not in accounts:
                 accounts.append(account)
     return accounts
+
+
+async def get_pool_info(pool_id: str, session) -> dict:
+    """
+    Get liquidity pool information from Horizon.
+
+    Args:
+        pool_id: Liquidity pool ID
+        session: aiohttp ClientSession
+
+    Returns:
+        Pool information dict
+    """
+    async with session.get(f'{config.horizon_url}/liquidity_pools/{pool_id}') as resp:
+        return await resp.json()
+
+
+async def get_pool_balances(address: str) -> list:
+    """
+    Get liquidity pool balances for an address.
+
+    Args:
+        address: Stellar address
+
+    Returns:
+        List of pool information dicts with user's share details:
+        {
+            'pool_id': str,
+            'name': 'TOKEN1-TOKEN2',
+            'shares': float,
+            'token1_amount': float,
+            'token2_amount': float
+        }
+    """
+    account = await stellar_get_account(address)
+    pools = []
+
+    async with aiohttp.ClientSession() as session:
+        for balance in account['balances']:
+            if balance['asset_type'] == 'liquidity_pool_shares':
+                pool_id = balance['liquidity_pool_id']
+                user_shares = float(balance['balance'])
+
+                # Get pool details
+                pool_info = await get_pool_info(pool_id, session)
+                total_shares = float(pool_info['total_shares'])
+
+                # Calculate user's share percentage
+                user_share_percentage = user_shares / total_shares
+
+                # Extract reserve information
+                reserves = pool_info['reserves']
+                token1 = reserves[0]
+                token2 = reserves[1]
+
+                # Calculate user's token amounts
+                user_token1_amount = float(token1['amount']) * user_share_percentage
+                user_token2_amount = float(token2['amount']) * user_share_percentage
+
+                # Build pool name
+                token1_code = token1['asset'].split(':')[0]
+                token2_code = token2['asset'].split(':')[0]
+                pool_name = f"{token1_code}-{token2_code}"
+
+                pools.append({
+                    'pool_id': pool_id,
+                    'name': pool_name,
+                    'shares': user_shares,
+                    'token1_amount': user_token1_amount,
+                    'token2_amount': user_token2_amount
+                })
+
+    return pools
+
+
+async def check_mtlap(key: str) -> str:
+    """
+    Check MTLAP balance for an address.
+
+    Args:
+        key: Stellar public key
+
+    Returns:
+        String with MTLAP balance or 'not found' message
+    """
+    balances = await get_balances(address=key)
+
+    if 'MTLAP' in balances:
+        return f'Баланс MTLAP: {balances["MTLAP"]}'
+
+    return 'MTLAP не найден'
