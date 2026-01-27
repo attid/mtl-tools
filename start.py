@@ -182,6 +182,7 @@ async def main():
     dp.message.middleware(EmojiReactionMiddleware())
 
     dp['dbsession_pool'] = db_pool
+    dp['app_context'] = app_context_middleware.app_context
 
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)

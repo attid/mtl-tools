@@ -73,6 +73,6 @@ class BotStateService:
         with self._lock:
             self._last_pong_response = datetime.now()
 
-    def set_last_pong(self, dt: datetime) -> None:
+    def set_last_pong(self, dt: Optional[datetime]) -> None:
         with self._lock:
             self._last_pong_response = dt

@@ -23,6 +23,7 @@ from other.aiogram_tools import is_admin
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
 from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
+from services.app_context import AppContext
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
 from other.pyro_tools import get_group_members, pyro_test, MessageInfo
@@ -34,7 +35,7 @@ router = Router()
 
 @router.message(Command(commands=["exit"]))
 @router.message(Command(commands=["restart"]))
-async def cmd_exit(message: Message, state: FSMContext):
+async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext = None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
@@ -45,7 +46,10 @@ async def cmd_exit(message: Message, state: FSMContext):
     if my_state == 'StateExit':
         await state.update_data(MyState=None)
         await message.reply(":[[[ ушла в закат =(")
-        global_data.reboot = True
+        if app_context and app_context.bot_state_service:
+            app_context.bot_state_service.request_reboot()
+        else:
+            global_data.reboot = True
         exit()
     else:
         await state.update_data(MyState='StateExit')
@@ -140,12 +144,19 @@ async def cmd_send_file(message: Message, filename):
 
 
 @router.message(Command(commands=["summary"]))
-async def cmd_get_summary(message: Message, session: Session):
+async def cmd_get_summary(message: Message, session: Session, app_context: AppContext = None):
     if not is_skynet_admin(message):
         await message.reply('You are not my admin.')
         return False
 
-    if message.chat.id not in global_data.listen:
+    # Check if listening is enabled for this chat
+    is_listening = False
+    if app_context and app_context.feature_flags:
+        is_listening = app_context.feature_flags.is_listening(message.chat.id)
+    else:
+        is_listening = message.chat.id in global_data.listen
+
+    if not is_listening:
         await message.reply('No messages 1')
         return
 
@@ -238,7 +249,7 @@ async def cmd_sha256(message: Message):
 
 @update_command_info("/sync", "Синхронизирует сообщение в чате с постом в канале")
 @router.message(Command(commands=["sync"]))
-async def cmd_sync_post(message: Message, bot: Bot):
+async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext = None):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -270,18 +281,30 @@ async def cmd_sync_post(message: Message, bot: Bot):
         new_msg = await message.answer(msg_text, disable_web_page_preview=True,
                                        reply_markup=reply_markup)
 
-        if chat.id not in global_data.sync:
-            global_data.sync[chat.id] = {}
+        # Get sync state for this channel
+        sync_key = str(chat.id)
+        if app_context and app_context.bot_state_service:
+            channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
+        else:
+            if chat.id not in global_data.sync:
+                global_data.sync[chat.id] = {}
+            channel_sync = global_data.sync[chat.id]
 
-        if str(post_id) not in global_data.sync[chat.id]:
-            global_data.sync[chat.id][str(post_id)] = []
+        if str(post_id) not in channel_sync:
+            channel_sync[str(post_id)] = []
 
-        global_data.sync[chat.id][str(post_id)].append({'chat_id': message.chat.id,
-                                                        'message_id': new_msg.message_id,
-                                                        'url': url})
+        channel_sync[str(post_id)].append({'chat_id': message.chat.id,
+                                           'message_id': new_msg.message_id,
+                                           'url': url})
+
+        # Save sync state
+        if app_context and app_context.bot_state_service:
+            app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
+        else:
+            global_data.sync[chat.id] = channel_sync
 
         await global_data.mongo_config.save_bot_value(chat.id, BotValueTypes.Sync,
-                                                      json.dumps(global_data.sync[chat.id]))
+                                                      json.dumps(channel_sync))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -295,7 +318,7 @@ async def cmd_sync_post(message: Message, bot: Bot):
 
 @update_command_info("/resync", "Восстанавливает синхронизацию сообщения с постом в канале")
 @router.message(Command(commands=["resync"]))
-async def cmd_resync_post(message: Message, session: Session, bot: Bot):
+async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_context: AppContext = None):
     if not await is_admin(message):
         await message.reply('You are not admin.')
         return
@@ -328,15 +351,20 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot):
         chat_id, post_id = match.groups()
         chat_id = int(f"-100{chat_id}")
 
-        # Проверяем, есть ли запись в БД
-        if chat_id not in global_data.sync:
-            global_data.sync[chat_id] = {}
+        # Get sync state for this channel
+        sync_key = str(chat_id)
+        if app_context and app_context.bot_state_service:
+            channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
+        else:
+            if chat_id not in global_data.sync:
+                global_data.sync[chat_id] = {}
+            channel_sync = global_data.sync[chat_id]
 
-        if post_id not in global_data.sync[chat_id]:
-            global_data.sync[chat_id][post_id] = []
+        if post_id not in channel_sync:
+            channel_sync[post_id] = []
 
         # Проверяем, существует ли уже запись для данного чата и сообщения
-        existing_record = next((record for record in global_data.sync[chat_id][post_id]
+        existing_record = next((record for record in channel_sync[post_id]
                                 if record['chat_id'] == message.chat.id and
                                 record['message_id'] == message.reply_to_message.message_id), None)
 
@@ -344,15 +372,21 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot):
             await message.reply('Синхронизация для этого сообщения уже существует')
         else:
             # Добавляем новую запись, не затрагивая существующие
-            global_data.sync[chat_id][post_id].append({
+            channel_sync[post_id].append({
                 'chat_id': message.chat.id,
                 'message_id': message.reply_to_message.message_id,
                 'url': url
             })
 
+            # Save sync state
+            if app_context and app_context.bot_state_service:
+                app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
+            else:
+                global_data.sync[chat_id] = channel_sync
+
             # Сохраняем обновленные данные в БД
             await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Sync,
-                                                          json.dumps(global_data.sync[chat_id]))
+                                                          json.dumps(channel_sync))
 
             await message.reply('Синхронизация восстановлена')
 
@@ -366,21 +400,27 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot):
 
 
 @router.edited_channel_post(F.text)
-async def cmd_edited_channel_post(message: Message, bot: Bot):
-    if message.chat.id in global_data.sync:
-        if str(message.message_id) in global_data.sync[message.chat.id]:
-            for data in global_data.sync[message.chat.id][str(message.message_id)]:
-                with suppress(TelegramBadRequest):
-                    msg_text = message.html_text
-                    reply_markup = InlineKeyboardMarkup(
-                        inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
-                                          InlineKeyboardButton(text='Edit', url=data['url'])]])
-                    if msg_text[-1] == '*':
-                        msg_text = msg_text[:-1]
-                        reply_markup = None
-                    await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
-                                                message_id=data['message_id'], disable_web_page_preview=True,
-                                                reply_markup=reply_markup)
+async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppContext = None):
+    # Get sync state for this channel
+    sync_key = str(message.chat.id)
+    if app_context and app_context.bot_state_service:
+        channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
+    else:
+        channel_sync = global_data.sync.get(message.chat.id, {})
+
+    if str(message.message_id) in channel_sync:
+        for data in channel_sync[str(message.message_id)]:
+            with suppress(TelegramBadRequest):
+                msg_text = message.html_text
+                reply_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
+                                      InlineKeyboardButton(text='Edit', url=data['url'])]])
+                if msg_text[-1] == '*':
+                    msg_text = msg_text[:-1]
+                    reply_markup = None
+                await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
+                                            message_id=data['message_id'], disable_web_page_preview=True,
+                                            reply_markup=reply_markup)
 
 
 @router.message(Command(commands=["eurmtl"]))

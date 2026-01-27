@@ -6,7 +6,8 @@ import asyncio
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import global_data, MTLChats
+from other.global_data import MTLChats
+from services.app_context import AppContext
 
 router = Router()
 router.message.filter(F.chat.id == MTLChats.BotsChanel)
@@ -15,17 +16,17 @@ PING_INTERVAL = 60  # seconds
 PING_TIMEOUT = 100  # seconds
 
 @router.channel_post(F.text.regexp(r'^\s*#skynet'))
-async def handle_skynet_message(message: types.Message):
+async def handle_skynet_message(message: types.Message, app_context: AppContext):
     text = message.text or message.caption
     if not text:
         return
-        
+
     # Check for #skynet #mmwb command=pong pattern
     if re.search(r'#skynet\s+#mmwb\s+command=pong', text, re.IGNORECASE):
-        global_data.last_pong_response = datetime.now()
-        logger.debug(f"Updated last pong response time: {global_data.last_pong_response}")
+        app_context.bot_state_service.update_last_pong()
+        logger.debug(f"Updated last pong response time: {app_context.bot_state_service.get_last_pong()}")
 
-async def check_ping_responses(bot: Bot):
+async def check_ping_responses(bot: Bot, app_context: AppContext):
     while True:
         # Отправляем ping в канал
         try:
@@ -41,8 +42,9 @@ async def check_ping_responses(bot: Bot):
         await asyncio.sleep(PING_INTERVAL)
 
         # Проверяем ответ
-        if global_data.last_pong_response:
-            time_since_last = (datetime.now() - global_data.last_pong_response).total_seconds()
+        last_pong = app_context.bot_state_service.get_last_pong()
+        if last_pong:
+            time_since_last = (datetime.now() - last_pong).total_seconds()
             if time_since_last > PING_TIMEOUT:
                 try:
                     await bot.send_message(chat_id=MTLChats.ITolstov,
@@ -54,5 +56,9 @@ def register_handlers(dp, bot):
     if config.test_mode:
         return
     dp.include_router(router)
-    asyncio.create_task(check_ping_responses(bot))
+    app_context = dp.get('app_context')
+    if app_context:
+        asyncio.create_task(check_ping_responses(bot, app_context))
+    else:
+        logger.warning('app_context not available for monitoring router')
     logger.info('router monitoring was loaded')

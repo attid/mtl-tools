@@ -3,6 +3,7 @@ from contextlib import suppress
 
 from other.aiogram_tools import add_text, answer_text_file, is_admin, multi_answer, multi_reply
 from other.global_data import global_data, is_skynet_admin
+from services.bot_state_service import BotStateService
 
 
 class FakeAsyncMethod:
@@ -421,6 +422,121 @@ class FakeAirdropConfigItem:
         self.__dict__.update(kwargs)
 
 
+class FakeFeatureFlagsService:
+    """Fake implementation of FeatureFlagsService for testing."""
+
+    FEATURE_KEYS = [
+        "captcha", "moderate", "no_first_link", "reply_only",
+        "listen", "auto_all", "save_last_message_date",
+        "join_request_captcha", "full_data",
+    ]
+
+    def __init__(self):
+        self._features = {}  # chat_id -> {feature -> bool}
+
+    def is_enabled(self, chat_id, feature):
+        if feature not in self.FEATURE_KEYS:
+            return False
+        return self._features.get(chat_id, {}).get(feature, False)
+
+    def enable(self, chat_id, feature):
+        return self.set_feature(chat_id, feature, True)
+
+    def disable(self, chat_id, feature):
+        return self.set_feature(chat_id, feature, False)
+
+    def set_feature(self, chat_id, feature, enabled):
+        if feature not in self.FEATURE_KEYS:
+            return False
+        if chat_id not in self._features:
+            self._features[chat_id] = {}
+        self._features[chat_id][feature] = enabled
+        return True
+
+    def toggle(self, chat_id, feature):
+        current = self.is_enabled(chat_id, feature)
+        self.set_feature(chat_id, feature, not current)
+        return not current
+
+    def is_listening(self, chat_id):
+        return self.is_enabled(chat_id, "listen")
+
+    def is_captcha_enabled(self, chat_id):
+        return self.is_enabled(chat_id, "captcha")
+
+    def is_moderation_enabled(self, chat_id):
+        return self.is_enabled(chat_id, "moderate")
+
+    def is_no_first_link(self, chat_id):
+        return self.is_enabled(chat_id, "no_first_link")
+
+    def is_reply_only(self, chat_id):
+        return self.is_enabled(chat_id, "reply_only")
+
+    def is_full_data(self, chat_id):
+        return self.is_enabled(chat_id, "full_data")
+
+
+class FakeVotingService:
+    """Fake implementation of VotingService for testing."""
+
+    def __init__(self):
+        self._vote_weights = {}  # address -> {user: weight, "NEED": {...}}
+        self._first_vote = []
+        self._first_vote_data = {}
+        self._poll_votes = {}
+
+    # Vote weights methods (for weighted polls)
+    def get_vote_weights(self, address):
+        data = self._vote_weights.get(address)
+        return data.copy() if data else None
+
+    def get_all_vote_weights(self):
+        return {k: v.copy() for k, v in self._vote_weights.items()}
+
+    def set_vote_weights(self, address, weights):
+        self._vote_weights[address] = weights.copy()
+
+    def set_all_vote_weights(self, vote_weights):
+        self._vote_weights = {k: v.copy() if isinstance(v, dict) else v for k, v in vote_weights.items()}
+
+    def get_user_vote_weight(self, address, user):
+        weights = self._vote_weights.get(address, {})
+        return weights.get(user) or weights.get(str(user))
+
+    # First vote methods
+    def is_first_vote_enabled(self, chat_id):
+        return chat_id in self._first_vote
+
+    def enable_first_vote(self, chat_id):
+        if chat_id not in self._first_vote:
+            self._first_vote.append(chat_id)
+
+    def disable_first_vote(self, chat_id):
+        if chat_id in self._first_vote:
+            self._first_vote.remove(chat_id)
+
+    def get_first_vote_chats(self):
+        return self._first_vote.copy()
+
+    def get_first_vote_data(self, chat_id):
+        return self._first_vote_data.get(chat_id, {}).copy()
+
+    def set_first_vote_data(self, chat_id, data):
+        self._first_vote_data[chat_id] = data.copy()
+
+    def record_first_vote(self, chat_id, user_id, choice):
+        if chat_id not in self._first_vote_data:
+            self._first_vote_data[chat_id] = {}
+        self._first_vote_data[chat_id][user_id] = choice
+
+    def has_user_voted(self, chat_id, user_id):
+        return user_id in self._first_vote_data.get(chat_id, {})
+
+    def clear_first_vote_data(self, chat_id):
+        self._first_vote_data.pop(chat_id, None)
+
+
 class TestAppContext:
     def __init__(self, bot, dispatcher):
         self.bot = bot
@@ -441,6 +557,9 @@ class TestAppContext:
         self.report_service = FakeReportService()
         self.moderation_service = FakeModerationService()
         self.group_service = FakeGroupService()
+        self.bot_state_service = BotStateService()
+        self.feature_flags = FakeFeatureFlagsService()
+        self.voting_service = FakeVotingService()
         self.admin_id = 123456
 
 
