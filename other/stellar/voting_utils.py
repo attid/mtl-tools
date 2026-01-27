@@ -7,11 +7,9 @@ from datetime import datetime, timedelta
 
 import requests
 from loguru import logger
-from stellar_sdk import Account, Network, Server, TransactionBuilder
-from stellar_sdk.client.aiohttp_client import AiohttpClient
-from stellar_sdk.server_async import ServerAsync
+from stellar_sdk import Account, Server, TransactionBuilder
 
-from other.config_reader import config
+from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_server_async
 from other.grist_tools import MTLGrist, grist_manager
 from other.mytypes import MyShareHolder
 
@@ -94,9 +92,10 @@ async def cmd_get_new_vote_all_mtl(public_key: str, remove_master: bool = False)
         )
 
         result = []
+        source_account = await load_account_async(MTLAddresses.public_issuer)
         transaction = TransactionBuilder(
-            source_account=Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer),
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=BASE_FEE)
+            source_account=source_account,
+            network_passphrase=get_network_passphrase(), base_fee=BASE_FEE)
         sequence = transaction.source_account.sequence
         transaction.set_timeout(60 * 60 * 24 * 7)
         xdr = None
@@ -132,8 +131,7 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
     shareholder_list = []
 
     # Get current signers from issuer account
-    server = Server(horizon_url=config.horizon_url)
-    source_account = server.load_account(MTLAddresses.public_issuer)
+    source_account = await load_account_async(MTLAddresses.public_issuer)
     sg = source_account.load_ed25519_public_key_signers()
 
     # Create dictionary for quick signer lookup
@@ -305,7 +303,7 @@ async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin) -> li
 
     donor_dict = {}
 
-    async with ServerAsync(horizon_url=config.horizon_url) as server:
+    async with get_server_async() as server:
         payments_call_builder = server.payments().for_account(account_id).order(desc=True)
         page_records = await payments_call_builder.call()
 
@@ -389,7 +387,7 @@ def gen_vote_xdr(
         XDR transaction string
     """
     # Find out who is in signers
-    server = Server(horizon_url=config.horizon_url)
+    server = get_server()
     source_account = server.load_account(public_key)
 
     sg = source_account.load_ed25519_public_key_signers()
@@ -425,12 +423,12 @@ def gen_vote_xdr(
 
     vote_list = tmp_list
 
-    server = Server(horizon_url=config.horizon_url)
+    server = get_server()
     source_account = server.load_account(public_key)
     root_account = Account(public_key, sequence=source_account.sequence)
     if transaction is None:
         transaction = TransactionBuilder(source_account=root_account,
-                                         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=BASE_FEE)
+                                         network_passphrase=get_network_passphrase(), base_fee=BASE_FEE)
         transaction.set_timeout(60 * 60 * 24 * 7)
     threshold = 0
 
@@ -543,9 +541,7 @@ async def stellar_add_mtl_holders_info(accounts: list[MyShareHolder]):
     Args:
         accounts: List of MyShareHolder objects to update
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with get_server_async() as server:
         source_account = await server.load_account(MTLAddresses.public_issuer)
         sg = source_account.load_ed25519_public_key_signers()
 

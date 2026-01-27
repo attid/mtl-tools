@@ -3,11 +3,9 @@
 
 from datetime import datetime, timedelta
 
-from stellar_sdk import Network, Server, TransactionBuilder
-from stellar_sdk.client.aiohttp_client import AiohttpClient
-from stellar_sdk.server_async import ServerAsync
+from stellar_sdk import TransactionBuilder
 
-from other.config_reader import config
+from .sdk_utils import load_account_async, get_network_passphrase, get_server_async
 from other.gspread_tools import gs_get_chicago_premium
 from .constants import MTLAddresses, MTLAssets, BASE_FEE
 from .balance_utils import stellar_get_holders
@@ -46,7 +44,7 @@ async def _stellar_get_transactions(address, start_range, end_range):
         list: Transaction records within the range
     """
     transactions = []
-    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
+    async with get_server_async() as server:
         payments_call_builder = server.payments().for_account(account_id=address).limit(200).order()
         page_records = await payments_call_builder.call()
         while page_records["_embedded"]["records"]:
@@ -94,8 +92,8 @@ async def get_damircoin_xdr(div_sum: int):
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_damir)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+    root_account = await load_account_async(MTLAddresses.public_damir)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=get_network_passphrase(),
                                      base_fee=BASE_FEE)
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.add_text_memo('damircoin divs')
@@ -139,8 +137,8 @@ async def get_agora_xdr():
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAssets.agora_asset.issuer)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+    root_account = await load_account_async(MTLAssets.agora_asset.issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=get_network_passphrase(),
                                      base_fee=BASE_FEE)
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.add_text_memo('AGORA divs')
@@ -189,8 +187,8 @@ async def get_toc_xdr(div_sum: int):
     for account in accounts_list:
         account[2] = account[1] * persent
 
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAssets.toc_asset.issuer)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+    root_account = await load_account_async(MTLAssets.toc_asset.issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=get_network_passphrase(),
                                      base_fee=BASE_FEE)
     transaction.set_timeout(60 * 60 * 24 * 7)
     for account in accounts_list:
@@ -218,8 +216,8 @@ async def get_btcmtl_xdr(btc_sum, address: str, memo=None):
     Returns:
         str: Unsigned XDR envelope
     """
-    root_account = Server(horizon_url=config.horizon_url).load_account(MTLAddresses.public_issuer)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+    root_account = await load_account_async(MTLAddresses.public_issuer)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=get_network_passphrase(),
                                      base_fee=BASE_FEE)
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.append_payment_op(destination=MTLAddresses.public_btc_guards, asset=MTLAssets.btcdebt_asset,
@@ -265,8 +263,8 @@ async def get_chicago_xdr():
                 accounts_dict[transaction['from']] = (float(transaction['amount']) +
                                                       accounts_dict.get(transaction['from'], 0))
 
-    root_account = Server(horizon_url=config.horizon_url).load_account(stellar_address)
-    transaction = TransactionBuilder(source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+    root_account = await load_account_async(stellar_address)
+    transaction = TransactionBuilder(source_account=root_account, network_passphrase=get_network_passphrase(),
                                      base_fee=BASE_FEE)
     transaction.set_timeout(60 * 60 * 24 * 7)
     transaction.add_text_memo('cashback')

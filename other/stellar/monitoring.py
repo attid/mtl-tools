@@ -11,10 +11,8 @@ from typing import List, Optional
 from loguru import logger
 from sqlalchemy.orm import Session
 from stellar_sdk import Server
-from stellar_sdk.client.aiohttp_client import AiohttpClient
-from stellar_sdk.server_async import ServerAsync
 
-from other.config_reader import config
+from .sdk_utils import get_server_async, get_horizon_url
 from other.global_data import float2str, global_data
 from other.stellar.address_utils import address_id_to_username
 from other.stellar.constants import MTLAddresses
@@ -47,8 +45,8 @@ async def cmd_check_new_transaction(ignore_operation: List,
             tr = cash[account_id]
         else:
             # Fetch from Horizon if not cached
-            server = Server(horizon_url=config.horizon_url)
-            tr = server.transactions().for_account(account_id).order(desc=True).call()
+            async with get_server_async() as server:
+                tr = await server.transactions().for_account(account_id).order(desc=True).call()
             # Store in cache
             if cash is not None:
                 cash[account_id] = tr
@@ -190,7 +188,7 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
     Returns:
         datetime of the last operation
     """
-    operations = Server(horizon_url=config.horizon_url).operations().for_account(address).order().limit(
+    operations = Server(horizon_url=get_horizon_url()).operations().for_account(address).order().limit(
         1).call()
     op = operations['_embedded']['records'][0]
     dt = datetime.strptime(op["created_at"], '%Y-%m-%dT%H:%M:%SZ')
@@ -207,8 +205,8 @@ def get_memo_by_op(op: str):
     Returns:
         Memo text or 'None' if no memo
     """
-    operation = Server(horizon_url=config.horizon_url).operations().operation(op).call()
-    transaction = Server(horizon_url=config.horizon_url).transactions().transaction(
+    operation = Server(horizon_url=get_horizon_url()).operations().operation(op).call()
+    transaction = Server(horizon_url=get_horizon_url()).transactions().transaction(
         operation['transaction_hash']).call()
     return transaction.get('memo', 'None')
 
@@ -226,7 +224,7 @@ async def stellar_get_transactions(address, start_range, end_range):
         List of transaction records within the specified date range
     """
     transactions = []
-    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
+    async with get_server_async() as server:
         # Start fetching transaction pages
         payments_call_builder = server.payments().for_account(account_id=address).limit(200).order()
         page_records = await payments_call_builder.call()

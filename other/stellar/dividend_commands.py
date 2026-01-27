@@ -18,6 +18,7 @@ from stellar_sdk.server_async import ServerAsync
 
 from db.repositories import FinanceRepository
 from other.config_reader import config
+from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_server_async, get_horizon_url
 from other.loguru_tools import safe_catch_async
 from shared.infrastructure.database.models import TDivList, TPayments, TTransaction
 
@@ -57,11 +58,11 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr: str = None) -> str:
     if xdr:
         transaction = stellar_get_transaction_builder(xdr)
     else:
-        server = Server(horizon_url=config.horizon_url)
+        server = get_server()
         root_account = server.load_account(account_id)
         transaction = TransactionBuilder(
             source_account=root_account,
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+            network_passphrase=get_network_passphrase(),
             base_fee=BASE_FEE
         )
         transaction.set_timeout(60 * 60 * 24 * 7)
@@ -113,10 +114,8 @@ async def get_liquidity_pools_for_asset(asset: Asset) -> list:
     Returns:
         List of pool dicts with reserves_dict added
     """
-    client = AiohttpClient(request_timeout=3 * 60)
-
     async with ServerAsync(
-            horizon_url=config.horizon_url, client=client
+            horizon_url=get_horizon_url(), client=AiohttpClient(request_timeout=3 * 60)
     ) as server:
         pools = []
         pools_call_builder = server.liquidity_pools().for_reserves([asset]).limit(200)
@@ -647,7 +646,7 @@ def cmd_gen_xdr(session: Session, list_id: int) -> int:
     div_list = FinanceRepository(session).get_div_list(list_id)
     memo = div_list.memo
     pay_type = div_list.pay_type
-    server = Server(horizon_url=config.horizon_url)
+    server = get_server()
     div_account, asset = None, None
 
     if pay_type == 0:
@@ -672,7 +671,7 @@ def cmd_gen_xdr(session: Session, list_id: int) -> int:
 
     transaction = TransactionBuilder(
         source_account=div_account,
-        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
+        network_passphrase=get_network_passphrase(),
         base_fee=BASE_FEE
     )
     transaction.set_timeout(60 * 60 * 24 * 7)
@@ -711,10 +710,9 @@ async def cmd_send_by_list_id(session: Session, list_id: int) -> int:
     for db_transaction in FinanceRepository(session).load_transactions(list_id):
         transaction = TransactionEnvelope.from_xdr(
             db_transaction.xdr,
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE
+            network_passphrase=get_network_passphrase()
         )
-        server = Server(horizon_url=config.horizon_url)
-        div_account = server.load_account(transaction.transaction.source.account_id)
+        div_account = await load_account_async(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence
         transaction.sign(config.private_sign.get_secret_value())

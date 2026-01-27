@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     sentry_dsn: str
     sentry_report_dsn: str
     horizon_url: str
+    stellar_testnet: bool = False
     coinmarketcap: SecretStr
     #mongodb_url: str
     pyro_api_id: int = 0
