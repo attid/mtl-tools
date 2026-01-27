@@ -127,6 +127,21 @@ wheels = [
 ]
 
 [[package]]
+name = "aiohttp-sse-client"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "attrs" },
+    { name = "multidict" },
+    { name = "yarl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/c3/4825c5f37909a70c8018924b3d521847dd7acf1fce7e1054574bafed2271/aiohttp-sse-client-0.2.1.tar.gz", hash = "sha256:5004e29271624af586158dc7166cb0687a7a5997aab5b808f4b53400e1b72e3b", size = 13698, upload-time = "2021-02-27T10:00:40.329Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/c9/ad514e70a549db22e118f0366c0bb38c5a90cb407978cb6c3d1482760889/aiohttp_sse_client-0.2.1-py2.py3-none-any.whl", hash = "sha256:42c81ee9213e9fc8bc412b063bac3a813e02e75250c4c8049222234d41c9b024", size = 6957, upload-time = "2021-02-27T10:00:39.188Z" },
+]
+
+[[package]]
 name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1923,7 +1938,7 @@ dependencies = [
     { name = "requests" },
     { name = "sentry-sdk" },
     { name = "sqlalchemy" },
-    { name = "stellar-sdk" },
+    { name = "stellar-sdk", extra = ["aiohttp"] },
     { name = "tiktoken" },
     { name = "uvloop" },
 ]
@@ -1961,7 +1976,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.0" },
     { name = "sentry-sdk", specifier = ">=1.45.0" },
     { name = "sqlalchemy", specifier = ">=2.0.28" },
-    { name = "stellar-sdk", specifier = ">=11.1.0" },
+    { name = "stellar-sdk", extras = ["aiohttp"], specifier = ">=11.1.0" },
     { name = "tiktoken", specifier = ">=0.12.0" },
     { name = "uvloop", specifier = ">=0.21.0" },
 ]
@@ -2041,6 +2056,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/6c/25f1cb4c0c62618ccac2ce64f64ca4f720e0fa32c7eb7591a8ee7829036e/stellar_sdk-13.2.1.tar.gz", hash = "sha256:e0fcc97b24f246381943fd1722068d85341854e60c43425d06468ec3c6f47472", size = 321579, upload-time = "2026-01-21T00:20:01.05Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/ff/f9409220ef749c39f8413b4fb1711894ccad336dbd6909eba972066ea506/stellar_sdk-13.2.1-py3-none-any.whl", hash = "sha256:66936d463a0e6467d64370f8fa3b2bcc2bebcc17ba6d5000d647d7c35caa4660", size = 770952, upload-time = "2026-01-21T00:19:59.04Z" },
+]
+
+[package.optional-dependencies]
+aiohttp = [
+    { name = "aiohttp" },
+    { name = "aiohttp-sse-client" },
 ]
 
 [[package]]
