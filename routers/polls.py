@@ -253,7 +253,7 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
                                           '75': math.ceil(total * 0.75),
                                           '100': total}
 
-    await app_context.config_service.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
+    await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
     app_context.voting_service.set_all_vote_weights(vote_list)
     return vote_list
 

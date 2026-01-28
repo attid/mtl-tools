@@ -127,7 +127,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
         else:
             await message.reply('Ссылка не найдена')
     else:
-        pinned_url = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+        pinned_url = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
         msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         msg = '\n'.join(msg)
         await app_context.utils_service.multi_reply(message, msg[:4000])

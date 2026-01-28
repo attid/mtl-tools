@@ -352,7 +352,7 @@ async def handle_command(message: Message, command_info, app_context=None):
         else:
             global_data_field.remove(chat_id)
 
-        await app_context.config_service.save_bot_value(chat_id, db_value_type, None)
+        await app_context.legacy_config_service.save_bot_value(chat_id, db_value_type, None)
 
         # Sync removal to DI services
         _sync_toggle_removal(app_context, db_value_type, chat_id)
@@ -365,7 +365,7 @@ async def handle_command(message: Message, command_info, app_context=None):
         else:
             global_data_field.append(chat_id)
 
-        await app_context.config_service.save_bot_value(chat_id, db_value_type, value_to_set)
+        await app_context.legacy_config_service.save_bot_value(chat_id, db_value_type, value_to_set)
 
         # Sync addition to DI services
         _sync_toggle_addition(app_context, db_value_type, chat_id, value_to_set)
@@ -486,7 +486,7 @@ async def list_command_handler(message: Message, command_info, app_context=None)
             await message.reply("Необходимо указать аргументы.")
         else:
             global_data_field.extend(command_args)
-            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added: {" ".join(command_args)}')
@@ -498,7 +498,7 @@ async def list_command_handler(message: Message, command_info, app_context=None)
             for arg in command_args:
                 if arg in global_data_field:
                     global_data_field.remove(arg)
-            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Removed: {" ".join(command_args)}')
@@ -536,7 +536,7 @@ async def list_command_handler_topic(message: Message, command_info, app_context
             if chat_thread_key not in global_data_field:
                 global_data_field[chat_thread_key] = []
             global_data_field[chat_thread_key].extend(command_args)
-            await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_topic_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
@@ -549,7 +549,7 @@ async def list_command_handler_topic(message: Message, command_info, app_context
                 for arg in command_args:
                     if arg in global_data_field[chat_thread_key]:
                         global_data_field[chat_thread_key].remove(arg)
-                await app_context.config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+                await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
                 # Sync to DI services
                 _sync_topic_list_update(app_context, db_value_type, global_data_field)
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
