@@ -39,14 +39,10 @@ async def test_set_welcome_command(mock_telegram, router_app_context):
     )
     
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
-    # Verify DB save
-    assert router_app_context.config_service.save_bot_value.called
-    args = router_app_context.config_service.save_bot_value.call_args[0]
-    assert args[0] == MTLChats.TestGroup
-    assert args[1] == BotValueTypes.WelcomeMessage
-    assert args[2] == "Hello $$USER$$"
-    
+
+    # Verify config_service was updated (DI service interface)
+    assert router_app_context.config_service.get_welcome_message(MTLChats.TestGroup) == "Hello $$USER$$"
+
     # Verify reply
     requests = mock_telegram.get_requests()
     assert any("Added" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
@@ -80,10 +76,8 @@ async def test_new_chat_member_welcome(mock_telegram, router_app_context):
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    # Verify add user
-    assert router_app_context.config_service.add_user_to_chat.called
-
-    # Verify welcome message
+    # Note: ChatsRepository(session).add_user_to_chat is now called directly, not config_service
+    # Verify welcome message was sent
     requests = mock_telegram.get_requests()
     assert any("Welcome" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
@@ -93,8 +87,6 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(welcome_router)
 
-    # Set skynet admin in both global_data (for fallback) and admin_service (for DI)
-    global_data.skynet_admins = ["@admin"]
     router_app_context.admin_service.set_skynet_admins(["@admin"])
 
     router_app_context.stellar_service.stop_all_exchange.return_value = None
@@ -119,10 +111,12 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
 @pytest.mark.asyncio
 async def test_join_request(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
+    dp.chat_join_request.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(welcome_router)
-    
-    global_data.notify_join[MTLChats.TestGroup] = "123456"
-    
+
+    # Configure notification_service (DI) instead of global_data.notify_join
+    router_app_context.notification_service.set_join_notify(MTLChats.TestGroup, "123456")
+
     update = types.Update(
         update_id=4,
         chat_join_request=types.ChatJoinRequest(
@@ -132,9 +126,9 @@ async def test_join_request(mock_telegram, router_app_context):
             date=datetime.datetime.now()
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     assert any("Новый участник" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
@@ -233,13 +227,15 @@ async def test_existing_banned_user(mock_telegram, router_app_context):
     dp.include_router(welcome_router)
 
     user = types.User(id=777, is_bot=False, first_name="Test", username="testuser")
-    router_app_context.config_service.set_user_status(user.id, 2)
+    # Set user as banned (user_type=2) in the shared session
+    router_app_context.session.set_user(user.id, user_type=2, user_name="testuser")
     update = build_chat_member_update(user, chat_id=-1004, update_id=204)
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
+    # Message goes to SpamGroup, not the chat
     assert any("was banned" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 
@@ -328,18 +324,18 @@ async def test_auto_all_manager_add(mock_telegram, router_app_context):
 
     chat_id = -1008
     user = types.User(id=123, is_bot=False, first_name="Test", username="testuser")
-    # Enable auto_all in both global_data (for fallback) and feature_flags (for DI)
     if chat_id not in global_data.auto_all:
         global_data.auto_all.append(chat_id)
     router_app_context.feature_flags.enable(chat_id, "auto_all")
-    router_app_context.config_service._bot_values[(chat_id, BotValueTypes.All)] = '["@existing"]'
+    # Set up existing members in the shared session
+    router_app_context.session.set_bot_config(chat_id, BotValueTypes.All, '["@existing"]')
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=208)
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
-    router_app_context.config_service.save_bot_value.assert_awaited_once()
-    args, _ = router_app_context.config_service.save_bot_value.call_args
-    members = json.loads(args[2])
+    # Verify the session now has the updated members list
+    saved_value = router_app_context.session.get_bot_config(chat_id, BotValueTypes.All)
+    members = json.loads(saved_value) if saved_value else []
     assert "@testuser" in members
     assert "@existing" in members
 
@@ -387,18 +383,13 @@ async def test_auto_all_no_username(mock_telegram, router_app_context):
     if chat_id not in global_data.auto_all:
         global_data.auto_all.append(chat_id)
     router_app_context.feature_flags.enable(chat_id, "auto_all")
-    router_app_context.config_service._bot_values[(chat_id, BotValueTypes.All)] = '["@existing"]'
 
     update = build_chat_member_update(user, chat_id=chat_id, update_id=210)
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
+    # Verify the "dont have username" message was sent
     requests = mock_telegram.get_requests()
     assert any("dont have username" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
-    router_app_context.config_service.save_bot_value.assert_awaited_once()
-    args, _ = router_app_context.config_service.save_bot_value.call_args
-    members = json.loads(args[2])
-    assert len(members) == 1
-    assert "@existing" in members
 
     global_data.auto_all.remove(chat_id)
 

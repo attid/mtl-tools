@@ -17,4 +17,6 @@ class DbSessionMiddleware(BaseMiddleware):
     ) -> Any:
         with self.session_pool() as session:
             data["session"] = session
-            return await handler(event, data)
+            result = await handler(event, data)
+            session.commit()
+            return result

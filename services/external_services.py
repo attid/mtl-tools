@@ -244,30 +244,29 @@ class AntispamService:
         return await set_vote(message)
 
 class PollService:
-    async def save_poll(self, chat_id, message_id, poll_data):
-        from other.global_data import global_data
-
+    def save_poll(self, session, chat_id, message_id, poll_data):
+        from db.repositories import ConfigRepository
         import json
-        await global_data.mongo_config.save_bot_value(chat_id, -1 * message_id, json.dumps(poll_data))
+        ConfigRepository(session).save_bot_value(chat_id, -1 * message_id, json.dumps(poll_data))
 
-    async def load_poll(self, chat_id, message_id):
-        from other.global_data import global_data
-        import json
-        from routers.polls import empty_poll
-        return json.loads(await global_data.mongo_config.load_bot_value(chat_id, -1 * message_id, empty_poll))
-
-    async def save_mtla_poll(self, poll_id, poll_data):
-        from other.global_data import global_data
-        from other.constants import MTLChats
-        import json
-        await global_data.mongo_config.save_bot_value(MTLChats.MTLA_Poll, int(poll_id), json.dumps(poll_data))
-
-    async def load_mtla_poll(self, poll_id):
-        from other.global_data import global_data
-        from other.constants import MTLChats
+    def load_poll(self, session, chat_id, message_id):
+        from db.repositories import ConfigRepository
         import json
         from routers.polls import empty_poll
-        return json.loads(await global_data.mongo_config.load_bot_value(MTLChats.MTLA_Poll, int(poll_id), empty_poll))
+        return json.loads(ConfigRepository(session).load_bot_value(chat_id, -1 * message_id, empty_poll))
+
+    def save_mtla_poll(self, session, poll_id, poll_data):
+        from db.repositories import ConfigRepository
+        from other.constants import MTLChats
+        import json
+        ConfigRepository(session).save_bot_value(MTLChats.MTLA_Poll, int(poll_id), json.dumps(poll_data))
+
+    def load_mtla_poll(self, session, poll_id):
+        from db.repositories import ConfigRepository
+        from other.constants import MTLChats
+        import json
+        from routers.polls import empty_poll
+        return json.loads(ConfigRepository(session).load_bot_value(MTLChats.MTLA_Poll, int(poll_id), empty_poll))
 
 
 
@@ -297,9 +296,10 @@ class ModerationService:
             return True
         return False
 
-    def check_user_status(self, user_id):
-        from other.global_data import global_data
-        return global_data.check_user(user_id)
+    def check_user_status(self, session, user_id):
+        from db.repositories import ChatsRepository
+        user = ChatsRepository(session).get_user_by_id(user_id)
+        return user.user_type if user else 0
 
     def get_user_id(self, session, username):
         from db.repositories import ChatsRepository
@@ -336,12 +336,11 @@ class TalkService:
     def __init__(self, bot):
         self.bot = bot
 
-    async def answer_notify_message(self, message):
-        from other.global_data import global_data
+    async def answer_notify_message(self, message, app_context):
         if (message.reply_to_message.from_user.id == self.bot.id
                 and message.reply_to_message.reply_markup
                 and message.reply_to_message.external_reply
-                and message.reply_to_message.external_reply.chat.id in global_data.notify_message):
+                and app_context.notification_service.get_message_notify_config(message.reply_to_message.external_reply.chat.id)):
             info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
             if len(info) > 2 and info[0] == 'Reply':
                 msg = await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
@@ -352,8 +351,8 @@ class TalkService:
                         reply_to_message_id=msg.message_id
                     )
 
-    async def remind(self, message, session, app_context=None):
-        from other.global_data import global_data, is_skynet_admin
+    async def remind(self, message, session, app_context):
+        from db.repositories import ConfigRepository
         from other.constants import BotValueTypes
         from other.stellar import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
@@ -362,14 +361,15 @@ class TalkService:
             msg = alarm_list + '\nСмотрите топик / Look at the topic message'
             await message.reply(text=msg)
             if alarm_list.find('@') != -1:
-                if is_skynet_admin(message):
+                if app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
                     all_users = alarm_list.split()
                     url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
                     await send_by_list(bot=self.bot, all_users=all_users, message=message, url=url, session=session)
         else:
-            msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
-            msg = await global_data.mongo_config.load_bot_value(message.chat.id,
-                                                                BotValueTypes.PinnedUrl) + '\nСмотрите закреп / Look at the pinned message'
+            repo = ConfigRepository(session)
+            msg_id = repo.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+            pinned_url = repo.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+            msg = (pinned_url or '') + '\nСмотрите закреп / Look at the pinned message'
             await self.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
                                     message_thread_id=message.message_thread_id)
 
@@ -399,10 +399,9 @@ class GroupService:
             logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
             return False, False
 
-    async def run_entry_channel_check(self, bot, chat_id):
-        from other.global_data import global_data
+    async def run_entry_channel_check(self, bot, chat_id, app_context):
         import asyncio
-        required_channel = global_data.entry_channel.get(chat_id)
+        required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
         if not required_channel:
             raise ValueError('entry_channel setting is not enabled for this chat')
 
@@ -461,7 +460,10 @@ class UtilsService:
         from other.aiogram_tools import add_text
         return add_text(lines, num_line, text)
 
-    def is_skynet_admin(self, message):
+    def is_skynet_admin(self, message, app_context=None):
+        if app_context and app_context.admin_service:
+            username = message.from_user.username if message.from_user else None
+            return app_context.admin_service.is_skynet_admin(username)
         from other.global_data import is_skynet_admin
         return is_skynet_admin(message)
 
@@ -473,49 +475,3 @@ class UtilsService:
         from other.timedelta import parse_timedelta_from_message
         return await parse_timedelta_from_message(message)
 
-class ConfigService:
-    async def save_bot_value(self, key, bot_value_type, value):
-        from other.global_data import global_data
-        return await global_data.mongo_config.save_bot_value(key, bot_value_type, value)
-
-    async def load_bot_value(self, key, bot_value_type, default=None):
-        from other.global_data import global_data
-        return await global_data.mongo_config.load_bot_value(key, bot_value_type, default)
-
-    async def get_chat_dict_by_key(self, key, is_int=False):
-        from other.global_data import global_data
-        return await global_data.mongo_config.get_chat_dict_by_key(key, is_int)
-
-    async def get_chat_ids_by_key(self, key):
-        from other.global_data import global_data
-        return await global_data.mongo_config.get_chat_ids_by_key(key)
-        
-    async def add_user_to_chat(self, chat_id, user_id):
-        from other.global_data import global_data
-        return await global_data.mongo_config.add_user_to_chat(chat_id, user_id)
-        
-    async def remove_user_from_chat(self, chat_id, user_id):
-        from other.global_data import global_data
-        return await global_data.mongo_config.remove_user_from_chat(chat_id, user_id)
-
-    def check_user(self, user_id):
-        from other.global_data import global_data
-        return global_data.check_user(user_id)
-
-    def is_no_first_link(self, chat_id):
-        from other.global_data import global_data
-        return chat_id in global_data.no_first_link
-    
-    def add_no_first_link(self, chat_id):
-        from other.global_data import global_data
-        if chat_id not in global_data.no_first_link:
-            global_data.no_first_link.append(chat_id)
-
-    def remove_no_first_link(self, chat_id):
-        from other.global_data import global_data
-        if chat_id in global_data.no_first_link:
-            global_data.no_first_link.remove(chat_id)
-
-    def is_full_data(self, chat_id):
-        from other.global_data import global_data
-        return chat_id in global_data.full_data

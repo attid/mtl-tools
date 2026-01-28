@@ -22,7 +22,7 @@ from db.repositories import MessageRepository
 from other.aiogram_tools import is_admin
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
-from other.global_data import MTLChats, is_skynet_admin, global_data, BotValueTypes, update_command_info
+from other.global_data import MTLChats, global_data, BotValueTypes, update_command_info
 from services.app_context import AppContext
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
@@ -36,7 +36,7 @@ router = Router()
 @router.message(Command(commands=["exit"]))
 @router.message(Command(commands=["restart"]))
 async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
 
@@ -57,15 +57,15 @@ async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext)
 
 @router.message(Command(commands=["err"]))
 async def cmd_log_err(message: Message):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
     await cmd_send_file(message, 'skynet.err')
 
 
 @router.message(Command(commands=["log"]))
-async def cmd_log(message: Message):
-    if not is_skynet_admin(message):
+async def cmd_log(message: Message, app_context: AppContext):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
     await cmd_send_file(message, 'skynet.log')
@@ -73,7 +73,7 @@ async def cmd_log(message: Message):
 
 @router.message(Command(commands=["ping_piro"]))
 async def cmd_ping_piro(message: Message, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
     if not app_context or not app_context.group_service:
@@ -82,8 +82,8 @@ async def cmd_ping_piro(message: Message, app_context: AppContext):
 
 
 @router.message(Command(commands=["test"]))
-async def cmd_test_miniapps(message: Message):
-    if not is_skynet_admin(message):
+async def cmd_test_miniapps(message: Message, app_context: AppContext):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
          await message.reply("Only for admins")
          return
 
@@ -107,7 +107,7 @@ async def cmd_test_miniapps(message: Message):
 
 @router.message(Command(commands=["check_gs"]))
 async def cmd_check_gs(message: Message, app_context=None):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
     if not app_context or not app_context.gspread_service:
@@ -143,7 +143,7 @@ async def cmd_send_file(message: Message, filename):
 
 @router.message(Command(commands=["summary"]))
 async def cmd_get_summary(message: Message, session: Session, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
 
@@ -462,7 +462,7 @@ async def cmd_grist(message: Message, app_context: AppContext):
 
 @router.message(Command(commands=["update_mtlap"]))
 async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return
 
@@ -510,7 +510,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext):
 
 @router.message(Command(commands=["update_chats_info"]))
 async def cmd_chats_info(message: Message, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return
     if not app_context or not app_context.group_service:
@@ -535,7 +535,7 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User)
 @update_command_info("/push", "Отправить сообщение в личку. Только для админов скайнета")
 @router.message(Command(commands=["push"]))
 async def cmd_push(message: Message, bot: Bot):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return
 
@@ -554,7 +554,7 @@ async def cmd_push(message: Message, bot: Bot):
 @router.message(Command(commands=["get_info"]))
 @router.message(Command(re.compile(r"get_info_(\d+)")))
 async def cmd_get_info(message: Message, bot: Bot, app_context: AppContext = None):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         if message.chat.id != MTLChats.HelperChat:
             await message.reply('You are not my admin.')
             return

@@ -21,8 +21,9 @@ from db.repositories import MessageRepository
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_link, get_chat_link
-from other.global_data import global_data, BotValueTypes, is_skynet_admin, update_command_info, MTLChats
+from other.global_data import global_data, BotValueTypes, update_command_info, MTLChats
 from other.pyro_tools import GroupMember
+from db.repositories import ConfigRepository, ChatsRepository
 # from other.spam_cheker import combo_check_spammer, lols_check_spammer
 
 router = Router()
@@ -104,51 +105,28 @@ def create_emoji_captcha_keyboard(user_id, required_num):
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
 async def cmd_delete_welcome(message: Message, session: Session, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(message)
-    else:
-        admin = await is_admin(message)
+    admin = await app_context.utils_service.is_admin(message)
 
     if not admin:
         await message.reply('You are not admin.')
         return False
 
-    # Check if welcome message exists using DI service or global_data fallback
-    has_welcome = False
-    if app_context and app_context.config_service:
-        has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
-    else:
-        has_welcome = message.chat.id in global_data.welcome_messages
+    has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
 
     if has_welcome:
-        # Update both DI service and global_data for consistency
-        if app_context and app_context.config_service:
-            app_context.config_service.remove_welcome_message(message.chat.id)
-        global_data.welcome_messages[message.chat.id] = None
-
-        # Persist to database
-        if app_context and app_context.legacy_config_service:
-            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
-        else:
-            await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
+        app_context.config_service.remove_welcome_message(message.chat.id)
+        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
 
     msg = await message.reply('Removed')
-    if app_context:
-        await app_context.utils_service.sleep_and_delete(msg, 60)
-        await app_context.utils_service.sleep_and_delete(message, 60)
-    else:
-        await cmd_sleep_and_delete(msg, 60)
-        await cmd_sleep_and_delete(message, 60)
+    await app_context.utils_service.sleep_and_delete(msg, 60)
+    await app_context.utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
                      "welcome_messages")
 @router.message(Command(commands=["set_welcome"]))
 async def cmd_set_welcome(message: Message, session: Session, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(message)
-    else:
-        admin = await is_admin(message)
+    admin = await app_context.utils_service.is_admin(message)
 
     if not admin:
         await message.reply('You are not admin.')
@@ -157,39 +135,20 @@ async def cmd_set_welcome(message: Message, session: Session, app_context=None):
     if len(message.text.split()) > 1:
         welcome_text = message.html_text[13:]
 
-        # Update both DI service and global_data for consistency
-        if app_context and app_context.config_service:
-            app_context.config_service.set_welcome_message(message.chat.id, welcome_text)
-        global_data.welcome_messages[message.chat.id] = welcome_text
-
-        # Persist to database
-        if app_context and app_context.legacy_config_service:
-            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
-                                                          welcome_text)
-        else:
-            await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage,
-                                                          welcome_text)
+        app_context.config_service.set_welcome_message(message.chat.id, welcome_text)
+        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, welcome_text)
         msg = await message.reply('Added')
-        if app_context:
-            await app_context.utils_service.sleep_and_delete(msg, 60)
-        else:
-            await cmd_sleep_and_delete(msg, 60)
+        await app_context.utils_service.sleep_and_delete(msg, 60)
     else:
         await cmd_delete_welcome(message, session, app_context=app_context)
 
-    if app_context:
-        await app_context.utils_service.sleep_and_delete(message, 60)
-    else:
-        await cmd_sleep_and_delete(message, 60)
+    await app_context.utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome_button", "Установить текст на кнопке капчи", 2, "welcome_button")
 @router.message(Command(commands=["set_welcome_button"]))
 async def cmd_set_welcome_button(message: Message, session: Session, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(message)
-    else:
-        admin = await is_admin(message)
+    admin = await app_context.utils_service.is_admin(message)
 
     if not admin:
         await message.reply('You are not admin.')
@@ -198,56 +157,28 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
     if len(message.text.split()) > 1:
         text = message.text[19:].strip()
 
-        # Update both DI service and global_data for consistency
-        if app_context and app_context.config_service:
-            app_context.config_service.set_welcome_button(message.chat.id, text)
-        global_data.welcome_button[message.chat.id] = text
-
-        # Persist to database
-        if app_context and app_context.legacy_config_service:
-            await app_context.legacy_config_service.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
-        else:
-            await global_data.mongo_config.save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
+        app_context.config_service.set_welcome_button(message.chat.id, text)
+        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
         msg = await message.reply('Added')
-        if app_context:
-            await app_context.utils_service.sleep_and_delete(msg, 60)
-        else:
-            await cmd_sleep_and_delete(msg, 60)
+        await app_context.utils_service.sleep_and_delete(msg, 60)
     else:
         msg = await message.reply('need more words')
-        if app_context:
-            await app_context.utils_service.sleep_and_delete(msg, 60)
-        else:
-            await cmd_sleep_and_delete(msg, 60)
+        await app_context.utils_service.sleep_and_delete(msg, 60)
 
-    if app_context:
-        await app_context.utils_service.sleep_and_delete(message, 60)
-    else:
-        await cmd_sleep_and_delete(message, 60)
+    await app_context.utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
 async def cmd_stop_exchange(message: Message, session: Session, app_context=None):
-    # Check skynet admin using DI service or global_data fallback
-    is_admin_user = False
-    if app_context and app_context.admin_service:
-        is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
-    else:
-        is_admin_user = is_skynet_admin(message)
+    is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
 
     if not is_admin_user:
         await message.reply('You are not my admin.')
         return False
 
-    # Persist to database
-    if app_context and app_context.legacy_config_service:
-        await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.StopExchange, 1)
-        app_context.stellar_service.stop_all_exchange()  # Sync
-    else:
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, 1)
-        from other.stellar import stellar_stop_all_exchange
-        stellar_stop_all_exchange()
+    ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, 1)
+    app_context.stellar_service.stop_all_exchange()
 
     await message.reply('Was stop')
 
@@ -255,23 +186,13 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context=None
 @update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
 async def cmd_start_exchange(message: Message, session: Session, app_context=None):
-    # Check skynet admin using DI service or global_data fallback
-    is_admin_user = False
-    if app_context and app_context.admin_service:
-        is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
-    else:
-        is_admin_user = is_skynet_admin(message)
+    is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
 
     if not is_admin_user:
         await message.reply('You are not my admin.')
         return False
 
-    # Persist to database
-    if app_context and app_context.legacy_config_service:
-        await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.StopExchange, None)
-    else:
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.StopExchange, None)
-
+    ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, None)
     await message.reply('Was start')
 
 
@@ -282,14 +203,8 @@ bad_names = ['ЧВК ВАГНЕР', 'ЧВК ВАГНЕР']
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
     new_user_id = event.new_chat_member.user.id
     chat_id = event.chat.id
-    is_spam1 = False
-    is_spam2 = False
 
-    if app_context:
-        is_spam1 = await app_context.antispam_service.combo_check_spammer(new_user_id)
-    else:
-        from other.spam_cheker import combo_check_spammer
-        is_spam1 = await combo_check_spammer(new_user_id)
+    is_spam1 = await app_context.antispam_service.combo_check_spammer(new_user_id)
 
     if is_spam1:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
@@ -300,11 +215,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                disable_web_page_preview=True)
         return
 
-    if app_context:
-        is_spam2 = await app_context.antispam_service.lols_check_spammer(new_user_id)
-    else:
-        from other.spam_cheker import lols_check_spammer
-        is_spam2 = await lols_check_spammer(new_user_id)
+    is_spam2 = await app_context.antispam_service.lols_check_spammer(new_user_id)
 
     if is_spam2:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
@@ -323,19 +234,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                f' за использование запрещенного никнейма')
         return
 
-    # Check entry channel requirement using DI service or global_data fallback
-    if app_context and app_context.config_service:
-        required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
-    else:
-        required_channel = global_data.entry_channel.get(chat_id)
+    required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
 
     if required_channel:
-        if app_context:
-            membership_ok, _ = await app_context.group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
-        else:
-            from other.group_tools import enforce_entry_channel
-            membership_ok, _ = await enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
-
+        membership_ok, _ = await app_context.group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
         if not membership_ok:
             return
 
@@ -344,13 +246,9 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                          full_name=event.new_chat_member.user.full_name,
                          is_admin=False)
 
-    # Add user to chat and check user type using DI service or global_data fallback
-    if app_context and app_context.legacy_config_service:
-        _ = asyncio.create_task(app_context.legacy_config_service.add_user_to_chat(chat_id, member))
-        user_type_now = app_context.legacy_config_service.check_user(event.new_chat_member.user.id)
-    else:
-        _ = asyncio.create_task(global_data.mongo_config.add_user_to_chat(chat_id, member))
-        user_type_now = global_data.check_user(event.new_chat_member.user.id)
+    ChatsRepository(session).add_user_to_chat(chat_id, member)
+    user = ChatsRepository(session).get_user_by_id(event.new_chat_member.user.id)
+    user_type_now = user.user_type if user else 0
 
     username = get_username_link(event.new_chat_member.user)
     if user_type_now == 2:
@@ -365,11 +263,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
         await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
                                reply_markup=kb_unban)
 
-    # Check for welcome message using DI service or global_data fallback
-    if app_context and app_context.config_service:
-        welcome_msg = app_context.config_service.get_welcome_message(chat_id)
-    else:
-        welcome_msg = global_data.welcome_messages.get(chat_id) if chat_id in global_data.welcome_messages else None
+    welcome_msg = app_context.config_service.get_welcome_message(chat_id)
 
     if welcome_msg:
         if event.new_chat_member.user:
@@ -377,19 +271,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
-            # Check captcha enabled using DI service or global_data fallback
-            captcha_enabled = False
-            if app_context and app_context.feature_flags:
-                captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'captcha')
-            else:
-                captcha_enabled = chat_id in global_data.captcha
+            captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'captcha')
 
             if captcha_enabled:
-                # Get welcome button text using DI service or global_data fallback
-                if app_context and app_context.config_service:
-                    btn_msg = app_context.config_service.get_welcome_button(chat_id) or "I'm not bot"
-                else:
-                    btn_msg = global_data.welcome_button.get(chat_id, "I'm not bot")
+                btn_msg = app_context.config_service.get_welcome_button(chat_id) or "I'm not bot"
 
                 kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text=btn_msg,
@@ -411,24 +296,13 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             answer = await bot.send_message(chat_id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
                                             reply_markup=kb_captcha)
-            if app_context:
-                await app_context.utils_service.sleep_and_delete(answer)
-            else:
-                await cmd_sleep_and_delete(answer)
+            await app_context.utils_service.sleep_and_delete(answer)
 
-    # Check auto_all enabled using DI service or global_data fallback
-    auto_all_enabled = False
-    if app_context and app_context.feature_flags:
-        auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
-    else:
-        auto_all_enabled = chat_id in global_data.auto_all
+    auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
 
     if auto_all_enabled:
-        if app_context and app_context.legacy_config_service:
-            json_str = await app_context.legacy_config_service.load_bot_value(chat_id, BotValueTypes.All)
-        else:
-            json_str = await global_data.mongo_config.load_bot_value(chat_id, BotValueTypes.All, '[]')
-
+        config_repo = ConfigRepository(session)
+        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, '[]')
         members = json.loads(json_str) if json_str else []
 
         if event.new_chat_member.user.username:
@@ -437,72 +311,39 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             await bot.send_message(chat_id,
                                    f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
 
-        if app_context and app_context.legacy_config_service:
-            await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
-        else:
-            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
+        config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
 async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
     chat_id = event.chat.id
 
-    # Remove user from chat using DI service or global_data fallback
-    if app_context and app_context.legacy_config_service:
-        _ = asyncio.create_task(app_context.legacy_config_service.remove_user_from_chat(chat_id,
-                                                                               event.new_chat_member.user.id))
-    else:
-        _ = asyncio.create_task(global_data.mongo_config.remove_user_from_chat(chat_id,
-                                                                               event.new_chat_member.user.id))
+    ChatsRepository(session).remove_user_from_chat(chat_id, event.new_chat_member.user.id)
 
-    # Check auto_all enabled using DI service or global_data fallback
-    auto_all_enabled = False
-    if app_context and app_context.feature_flags:
-        auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
-    else:
-        auto_all_enabled = chat_id in global_data.auto_all
+    auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
 
     if auto_all_enabled:
-        if app_context and app_context.legacy_config_service:
-            json_str = await app_context.legacy_config_service.load_bot_value(chat_id, BotValueTypes.All)
-        else:
-            json_str = await global_data.mongo_config.load_bot_value(chat_id, BotValueTypes.All, '[]')
-
+        config_repo = ConfigRepository(session)
+        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, '[]')
         members = json.loads(json_str) if json_str else []
 
         if event.from_user.username:
             username = '@' + event.from_user.username
             if username in members:
                 members.remove(username)
-            if app_context and app_context.legacy_config_service:
-                await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
-            else:
-                await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
+            config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
-        # Check skynet admin using DI service or global_data fallback
-        is_admin_user = False
-        if app_context and app_context.admin_service:
-            is_admin_user = app_context.admin_service.is_skynet_admin(event.from_user.username)
-        else:
-            is_admin_user = is_skynet_admin(event)
+        is_admin_user = app_context.admin_service.is_skynet_admin(event.from_user.username)
 
         if is_admin_user:
             logger.info(
                 f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
 
-            in_other_chats = False
-            if app_context:
-                c1, _ = await app_context.group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
-                c2, _ = await app_context.group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
-                c3, _ = await app_context.group_service.check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
-                in_other_chats = c1 or c2 or c3
-            else:
-                from other.group_tools import check_membership
-                c1, _ = await check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
-                c2, _ = await check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
-                c3, _ = await check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
-                in_other_chats = c1 or c2 or c3
+            c1, _ = await app_context.group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
+            c2, _ = await app_context.group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
+            c3, _ = await app_context.group_service.check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
+            in_other_chats = c1 or c2 or c3
 
             if in_other_chats:
                 return
@@ -585,21 +426,15 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
 
 @router.message(Command(commands=["recaptcha"]))
 async def cmd_recaptcha(message: Message, session: Session, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(message)
-    else:
-        admin = await is_admin(message)
-        
+    admin = await app_context.utils_service.is_admin(message)
+
     if not admin:
         await message.reply('You are not admin.')
         return None
 
     if len(message.text.split()) < 2:
         msg = await message.reply('need more words')
-        if app_context:
-            await app_context.utils_service.sleep_and_delete(msg)
-        else:
-            await cmd_sleep_and_delete(msg)
+        await app_context.utils_service.sleep_and_delete(msg)
         return None
 
     await message.answer(' '.join(message.text.split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
@@ -628,16 +463,8 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot,
     members = await event.chat.get_administrators()
     new_admins = [member.user.id for member in members]
 
-    # Update both DI service and global_data for consistency
-    if app_context and app_context.admin_service:
-        app_context.admin_service.set_chat_admins(chat_id, new_admins)
-    global_data.admins[chat_id] = new_admins
-
-    # Persist to database
-    if app_context and app_context.legacy_config_service:
-        await app_context.legacy_config_service.save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
-    else:
-        await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
+    app_context.admin_service.set_chat_admins(chat_id, new_admins)
+    ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
 
 
 @router.chat_join_request()
@@ -645,12 +472,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
     chat_id = chat_join_request.chat.id
     user_id = chat_join_request.from_user.id
 
-    # Get notify_join config using DI service or global_data fallback
-    info_chat_id = None
-    if app_context and app_context.notification_service:
-        info_chat_id = app_context.notification_service.get_join_notify_config(chat_id)
-    else:
-        info_chat_id = global_data.notify_join.get(chat_id)
+    info_chat_id = app_context.notification_service.get_join_notify_config(chat_id)
 
     if info_chat_id:
         username = get_username_link(chat_join_request.from_user)
@@ -678,12 +500,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
                 reply_markup=kb_join
             )
 
-        # Check join_request_captcha enabled using DI service or global_data fallback
-        join_request_captcha_enabled = False
-        if app_context and app_context.feature_flags:
-            join_request_captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'join_request_captcha')
-        else:
-            join_request_captcha_enabled = chat_id in global_data.join_request_captcha
+        join_request_captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'join_request_captcha')
 
         if join_request_captcha_enabled:
             with suppress(TelegramBadRequest, TelegramForbiddenError):
@@ -707,11 +524,8 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
 
 @router.callback_query(JoinCallbackData.filter())
 async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(query, callback_data.chat_id)
-    else:
-        admin = await is_admin(query, callback_data.chat_id)
-        
+    admin = await app_context.utils_service.is_admin(query, callback_data.chat_id)
+
     if not admin:
         await query.answer('You are not admin.', show_alert=True)
         return False

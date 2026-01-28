@@ -11,10 +11,11 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
     ReactionTypeEmoji
 from sqlalchemy.orm import Session
 
-from other.global_data import MTLChats, BotValueTypes, is_skynet_admin, global_data, update_command_info
+from other.global_data import MTLChats, BotValueTypes, global_data, update_command_info
 from services.app_context import AppContext
 from other.grist_tools import MTLGrist
 from other.stellar import MTLAddresses
+from db.repositories import ConfigRepository
 
 router = Router()
 
@@ -54,7 +55,7 @@ async def channel_post(message: Message, session: Session, app_context: AppConte
             my_poll['message_id'] = msg.message_id
             my_poll['buttons'] = my_buttons
 
-            await app_context.poll_service.save_poll(message.chat.id, msg.message_id, my_poll)
+            app_context.poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
 
 
 @update_command_info("/poll", "Создать голование с учетом веса голосов, "
@@ -78,7 +79,7 @@ async def cmd_poll(message: Message, session: Session, app_context: AppContext):
         my_poll['message_id'] = msg.message_id
         my_poll['buttons'] = my_buttons
 
-        await app_context.poll_service.save_poll(message.chat.id, msg.message_id, my_poll)
+        app_context.poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -91,14 +92,14 @@ async def cmd_poll_rt(message: Message, session: Session, app_context: AppContex
     if not app_context or not app_context.poll_service:
         raise ValueError("app_context with poll_service required")
     if message.reply_to_message:
-        my_poll = await app_context.poll_service.load_poll(message.chat.id, message.reply_to_message.message_id)
+        my_poll = app_context.poll_service.load_poll(session,message.chat.id, message.reply_to_message.message_id)
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["question"] = message.text[len('/poll_replace_text '):]
 
-            await app_context.poll_service.save_poll(message.chat.id, message.reply_to_message.message_id, my_poll)
+            app_context.poll_service.save_poll(session,message.chat.id, message.reply_to_message.message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -121,14 +122,14 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_conte
         else:
             message_id = message.reply_to_message.message_id
 
-        my_poll = await app_context.poll_service.load_poll(message.chat.id, message_id)
+        my_poll = app_context.poll_service.load_poll(session,message.chat.id, message_id)
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["closed"] = True
 
-            await app_context.poll_service.save_poll(message.chat.id, message_id, my_poll)
+            app_context.poll_service.save_poll(session,message.chat.id, message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -155,7 +156,7 @@ async def cmd_poll_check(message: Message, session: Session, app_context: AppCon
             actual_chat_id = chat_id
             actual_msg_id = message.reply_to_message.message_id
 
-        my_poll = await app_context.poll_service.load_poll(actual_chat_id, actual_msg_id)
+        my_poll = app_context.poll_service.load_poll(session,actual_chat_id, actual_msg_id)
 
         address_key = chat_to_address.get(actual_chat_id)
         votes_detail = app_context.voting_service.get_vote_weights(address_key)
@@ -186,7 +187,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
     answer = callback_data.answer
     user = '@' + query.from_user.username.lower() if query.from_user.username else query.from_user.id
 
-    my_poll = await app_context.poll_service.load_poll(query.message.chat.id, query.message.message_id)
+    my_poll = app_context.poll_service.load_poll(session,query.message.chat.id, query.message.message_id)
 
     if my_poll["closed"]:
         await query.answer("This poll is closed!", show_alert=True)
@@ -221,7 +222,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
             if need_close:
                 my_poll["closed"] = True
 
-            await app_context.poll_service.save_poll(query.message.chat.id, query.message.message_id, my_poll)
+            app_context.poll_service.save_poll(session,query.message.chat.id, query.message.message_id, my_poll)
         else:
             await query.answer("You are't in list!", show_alert=True)
     return True
@@ -253,7 +254,7 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
                                           '75': math.ceil(total * 0.75),
                                           '100': total}
 
-    await app_context.legacy_config_service.save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
+    ConfigRepository(session).save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
     app_context.voting_service.set_all_vote_weights(vote_list)
     return vote_list
 
@@ -261,7 +262,7 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
 @update_command_info("/poll_reload_vote", "Перечитать голоса из блокчейна")
 @router.message(Command(commands=["poll_reload_vote"]))
 async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_context: AppContext):
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
 
@@ -308,7 +309,7 @@ async def cmd_apoll(message: Message, session: Session, app_context: AppContext)
         my_poll["google_id"] = google_id
         my_poll["google_url"] = google_url
 
-        await app_context.poll_service.save_mtla_poll(msg.poll.id, my_poll)
+        app_context.poll_service.save_mtla_poll(session,msg.poll.id, my_poll)
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -321,7 +322,7 @@ async def cmd_apoll(message: Message, session: Session, app_context: AppContext)
 async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.poll_service or not app_context.grist_service or not app_context.gspread_service:
         raise ValueError("app_context with poll_service, grist_service, and gspread_service required")
-    my_poll = await app_context.poll_service.load_mtla_poll(poll.poll_id)
+    my_poll = app_context.poll_service.load_mtla_poll(session,poll.poll_id)
     user_address_data = await app_context.grist_service.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"TGID": [poll.user.id]})
 
     if not user_address_data:
@@ -351,7 +352,7 @@ async def cmd_apoll_check_handler(message: Message, session: Session, app_contex
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
 
-        my_poll = await app_context.poll_service.load_mtla_poll(message.reply_to_message.poll.id)
+        my_poll = app_context.poll_service.load_mtla_poll(session,message.reply_to_message.poll.id)
         result, delegates = await app_context.gspread_service.check_vote_table(my_poll.get("google_id"))
 
         msg_text = ' '.join(result)

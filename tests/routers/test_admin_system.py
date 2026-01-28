@@ -14,7 +14,7 @@ async def cleanup_router():
          admin_router._parent_router = None
     
     # Cleanup state
-    global_data.skynet_admins.clear()
+    pass
     if "skynet.log" in os.listdir("."):
         # We might have created it. But avoid deleting real logs if running on real env.
         # Check if size is small (dummy)
@@ -50,7 +50,7 @@ async def test_sha256_command(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_log_command(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -78,7 +78,7 @@ async def test_log_command(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_ping_piro(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -103,7 +103,7 @@ async def test_ping_piro(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_check_gs_command(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -162,7 +162,7 @@ async def test_grist_command(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_update_mtlap(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -235,7 +235,7 @@ async def test_sha1_command(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_exit_command(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)

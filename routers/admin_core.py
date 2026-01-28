@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, get_username_link
 from other.config_reader import config
-from other.global_data import global_data, BotValueTypes, update_command_info, is_topic_admin, MTLChats
+from other.global_data import global_data, BotValueTypes, update_command_info, MTLChats
 from other.pyro_tools import get_group_members, remove_deleted_users
 from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message

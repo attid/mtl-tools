@@ -243,9 +243,10 @@ async def test_poll_replace_text(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Check if save_poll was called with updated question
+    # save_poll signature: (session, chat_id, message_id, poll_data)
     args = router_app_context.poll_service.save_poll.call_args
     assert args is not None
-    assert args[0][2]["question"] == "New Question"
+    assert args[0][3]["question"] == "New Question"
 
 @pytest.mark.asyncio
 async def test_poll_close(mock_telegram, router_app_context):
@@ -280,9 +281,10 @@ async def test_poll_close(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     # Check if save_poll was called with closed=True
+    # save_poll signature: (session, chat_id, message_id, poll_data)
     args = router_app_context.poll_service.save_poll.call_args
     assert args is not None
-    assert args[0][2]["closed"] is True
+    assert args[0][3]["closed"] is True
 
 @pytest.mark.asyncio
 async def test_poll_check_remaining_voters(mock_telegram, router_app_context):
@@ -341,7 +343,7 @@ async def test_poll_reload_vote_admin(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(polls_router)
     
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     # Mock stellar service
     router_app_context.stellar_service.get_balances.return_value = ({}, [{"key": "G1", "weight": 1}])
     router_app_context.stellar_service.address_id_to_username.return_value = "@user"
@@ -362,9 +364,11 @@ async def test_poll_reload_vote_admin(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     # Should reply "reload complete"
     assert any("reload complete" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
-    
-    # Verify save called
-    assert router_app_context.config_service.save_bot_value.called
+
+    # Verify voting_service was updated (save is done via ConfigRepository directly)
+    # The cmd_save_votes function updates voting_service.set_all_vote_weights
+    all_weights = router_app_context.voting_service.get_all_vote_weights()
+    assert len(all_weights) > 0
 
 @pytest.mark.asyncio
 async def test_apoll_check_reply(mock_telegram, router_app_context):

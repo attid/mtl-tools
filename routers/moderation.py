@@ -10,7 +10,7 @@ from loguru import logger
 
 from db.repositories import ChatsRepository
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete
-from other.global_data import global_data, is_skynet_admin, update_command_info, MTLChats
+from other.global_data import global_data, update_command_info, MTLChats
 from services.app_context import AppContext
 
 router = Router()
@@ -25,7 +25,7 @@ class UnbanCallbackData(CallbackData, prefix="unban"):
 async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.utils_service or not app_context.feature_flags or not app_context.moderation_service:
         raise ValueError("app_context with utils_service, feature_flags, and moderation_service required")
-    skynet_admin = is_skynet_admin(message)
+    skynet_admin = app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None)
 
     admin = await app_context.utils_service.is_admin(message)
 
@@ -75,7 +75,7 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
 async def cmd_unban(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
-    if not is_skynet_admin(message):
+    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply("You are not my admin.")
         return False
 
@@ -115,7 +115,7 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
     else:
         user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    user_type = app_context.moderation_service.check_user_status(user_id)
+    user_type = app_context.moderation_service.check_user_status(session, user_id)
 
     if user_type == 0:
         message_text = "New User"
@@ -133,7 +133,7 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
 async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_data: UnbanCallbackData, app_context: AppContext):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
-    if not is_skynet_admin(call):
+    if not app_context.admin_service.is_skynet_admin(call.from_user.username if call.from_user else None):
         await call.answer("You are not my admin.", show_alert=True)
         return False
 

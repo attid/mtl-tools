@@ -12,7 +12,7 @@ async def cleanup_router():
     yield
     if stellar_router.parent_router:
          stellar_router._parent_router = None
-    global_data.skynet_admins = []
+    pass
 
 @pytest.mark.asyncio
 async def test_fee_command(mock_telegram, router_app_context):
@@ -92,7 +92,7 @@ async def test_show_bim_command(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_do_council(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
@@ -128,7 +128,7 @@ async def test_do_council(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_update_airdrops(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
@@ -181,7 +181,7 @@ async def test_check_bim(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_check_mtlap(mock_telegram, router_app_context):
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)

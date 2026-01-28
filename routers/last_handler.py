@@ -29,6 +29,7 @@ from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_
 from other.stellar import check_url_xdr
 from other.miniapps_tools import miniapps
 from shared.domain.user import UserType
+from db.repositories import ConfigRepository
 
 router = Router()
 
@@ -150,10 +151,11 @@ def _get_sender_name(message: Message) -> str:
     return ""
 
 
-async def save_url(chat_id, msg_id, msg):
+def save_url(chat_id, msg_id, msg, session):
     url = extract_url(msg)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+    repo = ConfigRepository(session)
+    repo.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
+    repo.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
 
 
 async def set_vote(message, app_context=None):
@@ -359,29 +361,19 @@ async def cmd_tools(message: Message, bot: Bot, session: Session, app_context=No
                     break
 
     if url_found or url_text.find('eurmtl.me/sign_tools') > -1:
-        if app_context:
-            msg_id = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
-        else:
-            msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+        msg_id = ConfigRepository(session).load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         with suppress(TelegramBadRequest):
             await bot.unpin_chat_message(message.chat.id, msg_id)
 
-        await save_url(message.chat.id, message.message_id, url_text)
+        await save_url(message.chat.id, message.message_id, url_text, session)
         with suppress(TelegramBadRequest):
             await message.pin()
-        
-        if app_context:
-            pinned_url = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
-            msg = await app_context.stellar_service.check_url_xdr(pinned_url)
-        else:
-            msg = await check_url_xdr(
-                await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl))
+
+        pinned_url = ConfigRepository(session).load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+        msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         msg = '\n'.join(msg)
-        
-        if app_context:
-            await app_context.utils_service.multi_reply(message, msg)
-        else:
-            await multi_reply(message, msg)
+
+        await app_context.utils_service.multi_reply(message, msg)
 
 
 async def check_mute(message, session, app_context=None):

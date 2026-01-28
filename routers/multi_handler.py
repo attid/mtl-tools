@@ -12,6 +12,7 @@ from loguru import logger
 from other.config_reader import config
 from other.global_data import global_data, update_command_info
 from other.constants import MTLChats, BotValueTypes
+from db.repositories import ConfigRepository
 
 router = Router()
 
@@ -142,45 +143,48 @@ commands_info = {
 }
 
 
-async def command_config_loads(app_context=None):
+def command_config_loads(app_context):
     """
-    Load configuration from database into global_data and sync with DI services.
+    Load configuration from database directly into DI services.
 
     Args:
-        app_context: Optional app context for DI services sync
+        app_context: AppContext with DI services
     """
-    for command in commands_info:
-        global_data_field = commands_info[command][0]
-        global_data_key = commands_info[command][1]
-        load_type = commands_info[command][4]  # 0 none 1 - dict\list  3 - json
+    from db.session import create_session
 
-        if load_type == 1:
-            if isinstance(global_data_field, dict):
-                global_data_field.update(await global_data.mongo_config.get_chat_dict_by_key(global_data_key))
-            else:
-                global_data_field.extend(await global_data.mongo_config.get_chat_ids_by_key(global_data_key))
+    with create_session() as session:
+        repo = ConfigRepository(session)
 
-        if load_type == 3:
-            if isinstance(global_data_field, dict):
-                global_data_field.update(
-                    json.loads(await global_data.mongo_config.load_bot_value(0, global_data_key, '{}')))
-            else:
-                global_data_field.extend(
-                    json.loads(await global_data.mongo_config.load_bot_value(0, global_data_key, '[]')))
+        for command in commands_info:
+            global_data_field = commands_info[command][0]
+            global_data_key = commands_info[command][1]
+            load_type = commands_info[command][4]  # 0 none 1 - dict\list  3 - json
 
-    global_data.votes = json.loads(await global_data.mongo_config.load_bot_value(0, BotValueTypes.Votes, '{}'))
-    global_data.topic_mute = json.loads(
-        await global_data.mongo_config.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
+            if load_type == 1:
+                if isinstance(global_data_field, dict):
+                    global_data_field.update(repo.get_chat_dict_by_key(global_data_key))
+                else:
+                    global_data_field.extend(repo.get_chat_ids_by_key(global_data_key))
 
-    global_data.welcome_messages = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
-    global_data.welcome_button = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
-    global_data.admins = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Admins, True)
-    global_data.alert_me = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
-    global_data.sync = await global_data.mongo_config.get_chat_dict_by_key(BotValueTypes.Sync, True)
+            if load_type == 3:
+                if isinstance(global_data_field, dict):
+                    global_data_field.update(
+                        json.loads(repo.load_bot_value(0, global_data_key, '{}')))
+                else:
+                    global_data_field.extend(
+                        json.loads(repo.load_bot_value(0, global_data_key, '[]')))
 
-    # Sync loaded data to DI services if available
-    if app_context:
-        _sync_to_di_services(app_context)
+        global_data.votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, '{}'))
+        global_data.topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
+
+        global_data.welcome_messages = repo.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
+        global_data.welcome_button = repo.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
+        global_data.admins = repo.get_chat_dict_by_key(BotValueTypes.Admins, True)
+        global_data.alert_me = repo.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
+        global_data.sync = repo.get_chat_dict_by_key(BotValueTypes.Sync, True)
+
+    # Sync loaded data to DI services
+    _sync_to_di_services(app_context)
 
     # Log loaded feature flags statistics
     _log_feature_flags_stats()
@@ -290,7 +294,7 @@ def _sync_to_di_services(ctx):
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
 @update_command_info("/set_moderate", "Включает\Выключает режим модерации по топикам/topic", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, bot: Bot, app_context=None):
+async def universal_command_handler(message: Message, bot: Bot, session, app_context=None):
     command = message.text.lower().split()[0][1:]
     command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
@@ -319,27 +323,27 @@ async def universal_command_handler(message: Message, bot: Bot, app_context=None
                                    reaction=[ReactionTypeEmoji(emoji='👀')])
 
     if action_type in ["add_list", "del_list", "show_list"]:
-        await list_command_handler(message, command_info, app_context=app_context)
+        await list_command_handler(message, command_info, session, app_context=app_context)
 
     if action_type in ["add_list_topic", "del_list_topic", "show_list_topic"]:
         if not message.message_thread_id:
             await message.reply("Run this command in thread.")
             return
-        await list_command_handler_topic(message, command_info, app_context=app_context)
+        await list_command_handler_topic(message, command_info, session, app_context=app_context)
 
     if action_type == "toggle_chat":
-        await handle_command(message, command_info, app_context=app_context)
+        await handle_command(message, command_info, session, app_context=app_context)
         return
 
     if action_type == "toggle_entry_channel":
-        await handle_entry_channel_toggle(message, command_info, app_context=app_context)
+        await handle_entry_channel_toggle(message, command_info, session, app_context=app_context)
         return
 
     if action_type == "toggle":
-        await handle_command(message, command_info, app_context=app_context)
+        await handle_command(message, command_info, session, app_context=app_context)
 
 
-async def handle_command(message: Message, command_info, app_context=None):
+async def handle_command(message: Message, command_info, session, app_context=None):
     chat_id = message.chat.id
     global_data_field = command_info[0]
     db_value_type = command_info[1]
@@ -352,7 +356,7 @@ async def handle_command(message: Message, command_info, app_context=None):
         else:
             global_data_field.remove(chat_id)
 
-        await app_context.legacy_config_service.save_bot_value(chat_id, db_value_type, None)
+        ConfigRepository(session).save_bot_value(chat_id, db_value_type, None)
 
         # Sync removal to DI services
         _sync_toggle_removal(app_context, db_value_type, chat_id)
@@ -365,7 +369,7 @@ async def handle_command(message: Message, command_info, app_context=None):
         else:
             global_data_field.append(chat_id)
 
-        await app_context.legacy_config_service.save_bot_value(chat_id, db_value_type, value_to_set)
+        ConfigRepository(session).save_bot_value(chat_id, db_value_type, value_to_set)
 
         # Sync addition to DI services
         _sync_toggle_addition(app_context, db_value_type, chat_id, value_to_set)
@@ -413,7 +417,7 @@ def _sync_toggle_addition(ctx, db_value_type: BotValueTypes, chat_id: int, value
         ctx.config_service.set_delete_income(chat_id, value)
 
 
-async def handle_entry_channel_toggle(message: Message, command_info, app_context=None):
+async def handle_entry_channel_toggle(message: Message, command_info, session, app_context=None):
     chat_id = message.chat.id
     global_data_field = command_info[0]
 
@@ -427,7 +431,7 @@ async def handle_entry_channel_toggle(message: Message, command_info, app_contex
                 await message.delete()
             return
 
-    await handle_command(message, command_info, app_context=app_context)
+    await handle_command(message, command_info, session, app_context=app_context)
 
 
 async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None) -> tuple[bool, bool]:
@@ -474,7 +478,7 @@ async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> t
     return checked_count, action_count
 
 
-async def list_command_handler(message: Message, command_info, app_context=None):
+async def list_command_handler(message: Message, command_info, session, app_context=None):
     global_data_field = command_info[0]
     db_value_type = command_info[1]
     action_type = command_info[2]
@@ -486,7 +490,7 @@ async def list_command_handler(message: Message, command_info, app_context=None)
             await message.reply("Необходимо указать аргументы.")
         else:
             global_data_field.extend(command_args)
-            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added: {" ".join(command_args)}')
@@ -498,7 +502,7 @@ async def list_command_handler(message: Message, command_info, app_context=None)
             for arg in command_args:
                 if arg in global_data_field:
                     global_data_field.remove(arg)
-            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Removed: {" ".join(command_args)}')
@@ -521,7 +525,7 @@ def _sync_list_update(ctx, db_value_type: BotValueTypes, data: list):
         ctx.admin_service.set_skynet_img_users(data)
 
 
-async def list_command_handler_topic(message: Message, command_info, app_context=None):
+async def list_command_handler_topic(message: Message, command_info, session, app_context=None):
     global_data_field = command_info[0]  # will be dict
     db_value_type = command_info[1]
     action_type = command_info[2]
@@ -536,7 +540,7 @@ async def list_command_handler_topic(message: Message, command_info, app_context
             if chat_thread_key not in global_data_field:
                 global_data_field[chat_thread_key] = []
             global_data_field[chat_thread_key].extend(command_args)
-            await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
             # Sync to DI services
             _sync_topic_list_update(app_context, db_value_type, global_data_field)
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
@@ -549,7 +553,7 @@ async def list_command_handler_topic(message: Message, command_info, app_context
                 for arg in command_args:
                     if arg in global_data_field[chat_thread_key]:
                         global_data_field[chat_thread_key].remove(arg)
-                await app_context.legacy_config_service.save_bot_value(0, db_value_type, json.dumps(global_data_field))
+                ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
                 # Sync to DI services
                 _sync_topic_list_update(app_context, db_value_type, global_data_field)
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
@@ -575,7 +579,8 @@ def _sync_topic_list_update(ctx, db_value_type: BotValueTypes, data: dict):
 @router.startup()
 async def on_startup(dispatcher):
     app_context = dispatcher.get('app_context') if hasattr(dispatcher, 'get') else None
-    asyncio.create_task(command_config_loads(app_context))
+    if app_context:
+        command_config_loads(app_context)
 
 
 def register_handlers(dp, bot):

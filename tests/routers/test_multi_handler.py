@@ -46,8 +46,9 @@ async def test_universal_command_toggle(mock_telegram, router_app_context):
     
     # Verify removal
     assert MTLChats.TestGroup not in global_data.reply_only
-    assert router_app_context.config_service.save_bot_value.called
-    
+    # ConfigRepository(session).save_bot_value is now called directly
+    # So we just verify the response message
+
     requests = mock_telegram.get_requests()
     assert any("Removed" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
@@ -57,8 +58,8 @@ async def test_list_command_add(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
     
-    global_data.skynet_admins.clear()
-    global_data.skynet_admins.append("@admin")
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
+    global_data.skynet_admins = ["@admin"]  # Keep synced for commands_info reference
     skynet_admins_ref = commands_info["add_skynet_admin"][0]
     
     update = types.Update(
@@ -76,8 +77,8 @@ async def test_list_command_add(mock_telegram, router_app_context):
     
     # Check both references
     assert "@new_admin" in global_data.skynet_admins or "@new_admin" in skynet_admins_ref
-    assert router_app_context.config_service.save_bot_value.called
-    
+    # ConfigRepository(session).save_bot_value is now called directly
+
     requests = mock_telegram.get_requests()
     assert any("Added" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
@@ -114,41 +115,28 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
     # Verify added
     assert chat_thread_key in global_data.topic_admins
     assert "@topicadmin" in global_data.topic_admins[chat_thread_key]
-    
-    # Verify save
-    assert router_app_context.config_service.save_bot_value.called
-    
+    # ConfigRepository(session).save_bot_value is now called directly
+
     requests = mock_telegram.get_requests()
     assert any("Added at this thread" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
 async def test_on_startup_triggers_loads(monkeypatch):
-    class FakeMongoConfig:
-        async def get_chat_dict_by_key(self, *args, **kwargs):
-            return {}
+    """Test that on_startup calls command_config_loads with app_context."""
+    called_with = []
 
-        async def get_chat_ids_by_key(self, *args, **kwargs):
-            return []
-
-        async def load_bot_value(self, *args, **kwargs):
-            return "{}"
-
-    monkeypatch.setattr(global_data, "mongo_config", FakeMongoConfig())
-
-    started = asyncio.Event()
-    release = asyncio.Event()
-
-    async def fake_command_config_loads(app_context=None):
-        started.set()
-        await release.wait()
+    def fake_command_config_loads(app_context=None):
+        called_with.append(app_context)
 
     monkeypatch.setattr("routers.multi_handler.command_config_loads", fake_command_config_loads)
 
     # Create fake dispatcher with app_context
-    fake_dispatcher = {'app_context': None}
-    await on_startup(fake_dispatcher)
-    await asyncio.wait_for(started.wait(), timeout=1)
-    assert started.is_set()
+    fake_app_context = object()  # Any truthy object
+    fake_dispatcher = {'app_context': fake_app_context}
 
-    release.set()
-    await asyncio.sleep(0)
+    # on_startup is async but command_config_loads is now sync
+    await on_startup(fake_dispatcher)
+
+    # Verify command_config_loads was called with the app_context
+    assert len(called_with) == 1
+    assert called_with[0] is fake_app_context

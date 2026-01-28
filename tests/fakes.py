@@ -94,43 +94,290 @@ class FakeSyncMethod:
         assert self.call_count == 0, f"Expected 0 calls, got {self.call_count}"
 
 
-class FakeSession:
-    def __init__(self):
-        self.committed = False
-        self.rolled_back = False
-        self.flushed = False
+class FakeBotConfig:
+    """Fake BotConfig model for testing."""
+    def __init__(self, chat_id, chat_key, chat_value, chat_key_name=None):
+        self.chat_id = chat_id
+        self.chat_key = chat_key
+        self.chat_value = chat_value
+        self.chat_key_name = chat_key_name
 
-    def commit(self):
-        self.committed = True
 
-    def rollback(self):
-        self.rolled_back = True
+class FakeBotUsers:
+    """Fake BotUsers model for testing."""
+    def __init__(self, user_id, user_name=None, user_type=0):
+        self.user_id = user_id
+        self.user_name = user_name
+        self.user_type = user_type
 
-    def flush(self):
-        self.flushed = True
 
-    def close(self):
-        pass
+class FakeChat:
+    """Fake Chat model for testing."""
+    def __init__(self, chat_id, admins=None, metadata_=None):
+        self.chat_id = chat_id
+        self.admins = admins or []
+        self.metadata_ = metadata_ or {}
+        self.last_updated = None
+        self.created_at = None
 
-    def add(self, obj):
-        return None
 
-    def execute(self, *args, **kwargs):
-        return FakeResult()
-
-    def query(self, *args, **kwargs):
-        return FakeQuery()
+class FakeChatMember:
+    """Fake ChatMember model for testing."""
+    def __init__(self, chat_id, user_id, metadata_=None):
+        self.chat_id = chat_id
+        self.user_id = user_id
+        self.metadata_ = metadata_ or {}
+        self.left_at = None
+        self.created_at = None
 
 
 class FakeResult:
+    """Smart fake result that can return configured data."""
+    def __init__(self, data=None):
+        self._data = data
+
     def scalar_one_or_none(self):
-        return None
+        if self._data is None:
+            return None
+        if isinstance(self._data, list):
+            return self._data[0] if self._data else None
+        return self._data
 
     def scalars(self):
         return self
 
     def all(self):
-        return []
+        if self._data is None:
+            return []
+        if isinstance(self._data, list):
+            return self._data
+        return [self._data]
+
+    def fetchall(self):
+        if self._data is None:
+            return []
+        if isinstance(self._data, list):
+            return [(item,) if not isinstance(item, tuple) else item for item in self._data]
+        return [(self._data,)]
+
+
+class FakeSession:
+    """
+    Smart fake session that stores data in memory and supports
+    ConfigRepository and ChatsRepository operations.
+    """
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.flushed = False
+        # Storage for different models
+        self._bot_configs = {}  # (chat_id, chat_key) -> FakeBotConfig
+        self._bot_users = {}  # user_id -> FakeBotUsers
+        self._chats = {}  # chat_id -> FakeChat
+        self._chat_members = {}  # (chat_id, user_id) -> FakeChatMember
+        self._pending_adds = []
+
+    def commit(self):
+        self.committed = True
+        # Process pending adds
+        for obj in self._pending_adds:
+            self._store_object(obj)
+        self._pending_adds.clear()
+
+    def rollback(self):
+        self.rolled_back = True
+        self._pending_adds.clear()
+
+    def flush(self):
+        self.flushed = True
+        # Process pending adds on flush too
+        for obj in self._pending_adds:
+            self._store_object(obj)
+        self._pending_adds.clear()
+
+    def close(self):
+        pass
+
+    def add(self, obj):
+        # Store immediately for simplicity (auto-flush behavior)
+        self._store_object(obj)
+
+    def delete(self, obj):
+        # Remove object from storage
+        if isinstance(obj, FakeBotConfig):
+            key = (obj.chat_id, obj.chat_key)
+            self._bot_configs.pop(key, None)
+        elif isinstance(obj, FakeBotUsers):
+            self._bot_users.pop(obj.user_id, None)
+
+    def _store_object(self, obj):
+        """Store object in appropriate internal storage."""
+        if isinstance(obj, FakeBotConfig):
+            key = (obj.chat_id, obj.chat_key)
+            self._bot_configs[key] = obj
+        elif isinstance(obj, FakeBotUsers):
+            self._bot_users[obj.user_id] = obj
+        elif isinstance(obj, FakeChat):
+            self._chats[obj.chat_id] = obj
+        elif isinstance(obj, FakeChatMember):
+            key = (obj.chat_id, obj.user_id)
+            self._chat_members[key] = obj
+        # Handle real SQLAlchemy models by duck-typing
+        elif hasattr(obj, '__tablename__'):
+            table = obj.__tablename__
+            if table == 'bot_config':
+                fake = FakeBotConfig(obj.chat_id, obj.chat_key, obj.chat_value, getattr(obj, 'chat_key_name', None))
+                self._bot_configs[(obj.chat_id, obj.chat_key)] = fake
+            elif table == 'bot_users':
+                fake = FakeBotUsers(obj.user_id, obj.user_name, obj.user_type)
+                self._bot_users[obj.user_id] = fake
+            elif table == 'chats':
+                fake = FakeChat(obj.chat_id, getattr(obj, 'admins', []), getattr(obj, 'metadata_', {}))
+                self._chats[obj.chat_id] = fake
+            elif table == 'chat_members':
+                fake = FakeChatMember(obj.chat_id, obj.user_id, getattr(obj, 'metadata_', {}))
+                self._chat_members[(obj.chat_id, obj.user_id)] = fake
+
+    def execute(self, statement, *args, **kwargs):
+        """Parse statement and return appropriate data."""
+        # Convert statement to string for analysis
+        stmt_str = str(statement)
+
+        # Handle DELETE statements
+        if 'DELETE' in stmt_str.upper():
+            return FakeResult(None)
+
+        # Handle SELECT on BotConfig
+        if 'bot_config' in stmt_str.lower():
+            return self._handle_bot_config_query(statement, stmt_str)
+
+        # Handle SELECT on BotUsers
+        if 'bot_users' in stmt_str.lower():
+            return self._handle_bot_users_query(statement, stmt_str)
+
+        # Handle SELECT on chats
+        if 'chats' in stmt_str.lower() and 'chat_members' not in stmt_str.lower():
+            return self._handle_chats_query(statement, stmt_str)
+
+        # Handle SELECT on chat_members
+        if 'chat_members' in stmt_str.lower():
+            return self._handle_chat_members_query(statement, stmt_str)
+
+        return FakeResult(None)
+
+    def _handle_bot_config_query(self, statement, stmt_str):
+        """Handle queries to bot_config table."""
+        # Try to extract chat_id and chat_key from whereclause
+        chat_id = None
+        chat_key = None
+
+        if hasattr(statement, 'whereclause') and statement.whereclause is not None:
+            # Parse the where clause to find conditions
+            where_str = str(statement.whereclause)
+            chat_id, chat_key = self._extract_config_params(where_str)
+
+        if chat_id is not None and chat_key is not None:
+            # Specific lookup
+            key = (chat_id, chat_key)
+            config = self._bot_configs.get(key)
+            return FakeResult(config)
+        elif chat_key is not None:
+            # Get all configs with this key
+            configs = [c for (cid, ck), c in self._bot_configs.items() if ck == chat_key]
+            return FakeResult(configs)
+
+        return FakeResult(None)
+
+    def _handle_bot_users_query(self, statement, stmt_str):
+        """Handle queries to bot_users table."""
+        user_id = self._extract_user_id(str(getattr(statement, 'whereclause', '')))
+        if user_id is not None:
+            user = self._bot_users.get(user_id)
+            return FakeResult(user)
+        return FakeResult(list(self._bot_users.values()))
+
+    def _handle_chats_query(self, statement, stmt_str):
+        """Handle queries to chats table."""
+        chat_id = self._extract_chat_id(str(getattr(statement, 'whereclause', '')))
+        if chat_id is not None:
+            chat = self._chats.get(chat_id)
+            return FakeResult(chat)
+        return FakeResult(list(self._chats.values()))
+
+    def _handle_chat_members_query(self, statement, stmt_str):
+        """Handle queries to chat_members table."""
+        where_str = str(getattr(statement, 'whereclause', ''))
+        chat_id = self._extract_chat_id(where_str)
+        user_id = self._extract_user_id(where_str)
+
+        if chat_id is not None and user_id is not None:
+            member = self._chat_members.get((chat_id, user_id))
+            return FakeResult(member)
+        elif chat_id is not None:
+            members = [m for (cid, uid), m in self._chat_members.items() if cid == chat_id]
+            return FakeResult(members)
+        return FakeResult(None)
+
+    def _extract_config_params(self, where_str):
+        """Extract chat_id and chat_key from where clause string."""
+        import re
+        chat_id = None
+        chat_key = None
+
+        # Look for chat_id = X pattern
+        chat_id_match = re.search(r'chat_id\s*=\s*:chat_id_\d+|chat_id\s*=\s*(\d+)', where_str)
+        if chat_id_match:
+            if chat_id_match.group(1):
+                chat_id = int(chat_id_match.group(1))
+
+        # Look for chat_key = X pattern
+        chat_key_match = re.search(r'chat_key\s*=\s*:chat_key_\d+|chat_key\s*=\s*(\d+)', where_str)
+        if chat_key_match:
+            if chat_key_match.group(1):
+                chat_key = int(chat_key_match.group(1))
+
+        # If we couldn't parse, try to get from bound parameters
+        # This is a simplified approach - in real code we'd need to inspect compiled params
+        return chat_id, chat_key
+
+    def _extract_user_id(self, where_str):
+        """Extract user_id from where clause string."""
+        import re
+        match = re.search(r'user_id\s*=\s*(\d+)', where_str)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def _extract_chat_id(self, where_str):
+        """Extract chat_id from where clause string."""
+        import re
+        match = re.search(r'chat_id\s*=\s*(-?\d+)', where_str)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def query(self, *args, **kwargs):
+        return FakeQuery()
+
+    # Helper methods for tests to set up data
+    def set_bot_config(self, chat_id, chat_key, chat_value):
+        """Helper for tests to set config values."""
+        from enum import Enum
+        if isinstance(chat_key, Enum):
+            chat_key = chat_key.value
+        self._bot_configs[(chat_id, chat_key)] = FakeBotConfig(chat_id, chat_key, chat_value)
+
+    def set_user(self, user_id, user_type=0, user_name=None):
+        """Helper for tests to set user data."""
+        self._bot_users[user_id] = FakeBotUsers(user_id, user_name, user_type)
+
+    def get_bot_config(self, chat_id, chat_key):
+        """Helper for tests to verify config values."""
+        from enum import Enum
+        if isinstance(chat_key, Enum):
+            chat_key = chat_key.value
+        config = self._bot_configs.get((chat_id, chat_key))
+        return config.chat_value if config else None
 
 
 class FakeQuery:
@@ -181,6 +428,11 @@ class TestUtilsService:
         self.multi_reply_calls = []
         self.multi_answer_calls = []
         self.answer_text_file_calls = []
+        self._admin_service = None  # Will be set by TestAppContext
+
+    def set_admin_service(self, admin_service):
+        """Set the admin service reference for is_skynet_admin checks."""
+        self._admin_service = admin_service
 
     async def sleep_and_delete(self, message, seconds=None):
         self.sleep_and_delete_calls.append((message, seconds))
@@ -202,7 +454,11 @@ class TestUtilsService:
     async def is_admin(self, message, chat_id=None):
         return await is_admin(message, chat_id=chat_id)
 
-    def is_skynet_admin(self, message):
+    def is_skynet_admin(self, message, app_context=None):
+        # Use admin_service if available
+        if self._admin_service:
+            username = message.from_user.username if message.from_user else None
+            return self._admin_service.is_skynet_admin(username)
         return is_skynet_admin(message)
 
     def add_text(self, lines, num_line, text):
@@ -332,27 +588,64 @@ class FakeAntispamService:
         self.set_vote = FakeAsyncMethod(return_value=True)
 
 
+class FakePollServiceMethod:
+    """Wrapper to track method calls with .called property and optional return_value override."""
+    def __init__(self, impl):
+        self._impl = impl
+        self._calls = []
+        self._return_value = None
+        self._has_return_value = False
+
+    def __call__(self, *args, **kwargs):
+        self._calls.append((args, kwargs))
+        if self._has_return_value:
+            return self._return_value
+        return self._impl(*args, **kwargs)
+
+    @property
+    def called(self):
+        return len(self._calls) > 0
+
+    @property
+    def call_count(self):
+        return len(self._calls)
+
+    @property
+    def call_args(self):
+        return self._calls[-1] if self._calls else None
+
+    @property
+    def return_value(self):
+        return self._return_value
+
+    @return_value.setter
+    def return_value(self, value):
+        self._return_value = value
+        self._has_return_value = True
+
+
 class FakePollService:
     def __init__(self):
         self._polls = {}
         self._mtla_polls = {}
-        self.save_poll = FakeAsyncMethod(side_effect=self._save_poll)
-        self.load_poll = FakeAsyncMethod(side_effect=self._load_poll)
-        self.save_mtla_poll = FakeAsyncMethod(side_effect=self._save_mtla_poll)
-        self.load_mtla_poll = FakeAsyncMethod(side_effect=self._load_mtla_poll)
+        # Wrap methods with call tracking
+        self.save_poll = FakePollServiceMethod(self._save_poll)
+        self.load_poll = FakePollServiceMethod(self._load_poll)
+        self.save_mtla_poll = FakePollServiceMethod(self._save_mtla_poll)
+        self.load_mtla_poll = FakePollServiceMethod(self._load_mtla_poll)
 
-    async def _save_poll(self, chat_id, message_id, poll_data):
+    def _save_poll(self, session, chat_id, message_id, poll_data):
         self._polls[(chat_id, message_id)] = poll_data
         return True
 
-    async def _load_poll(self, chat_id, message_id):
+    def _load_poll(self, session, chat_id, message_id):
         return self._polls.get((chat_id, message_id), {})
 
-    async def _save_mtla_poll(self, poll_id, poll_data):
+    def _save_mtla_poll(self, session, poll_id, poll_data):
         self._mtla_polls[poll_id] = poll_data
         return True
 
-    async def _load_mtla_poll(self, poll_id):
+    def _load_mtla_poll(self, session, poll_id):
         return self._mtla_polls.get(poll_id, {})
 
 
@@ -430,7 +723,7 @@ class FakeModerationService:
         self._user_status[user_id] = 0
         return True
 
-    def check_user_status(self, user_id):
+    def check_user_status(self, session, user_id):
         return self._user_status.get(user_id, 0)
 
     def get_user_id(self, session, username):
@@ -1015,11 +1308,10 @@ class TestAppContext:
     def __init__(self, bot, dispatcher):
         self.bot = bot
         self.dispatcher = dispatcher
+        self.session = FakeSession()  # Shared session for repository operations
         self.localization_service = FakeLocalizationService()
         self.utils_service = TestUtilsService()
-        # FakeConfigService serves as both the new config_service and legacy_config_service
         self.config_service = FakeConfigService()
-        self.legacy_config_service = self.config_service  # Same instance for backward compatibility
         self.ai_service = FakeAIService()
         self.talk_service = FakeTalkService()
         self.antispam_service = FakeAntispamService()
@@ -1041,6 +1333,8 @@ class TestAppContext:
         self.user_service = FakeUserService()
         self.command_registry = FakeCommandRegistryService()
         self.admin_id = 123456
+        # Wire admin_service to utils_service
+        self.utils_service.set_admin_service(self.admin_service)
 
 
 # ============================================================================

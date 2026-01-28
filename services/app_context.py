@@ -1,7 +1,7 @@
 from services.external_services import (GristService, GSpreadService, WebService, MtlService,
                                        StellarService, AirdropService, ReportService, AntispamService,
                                        PollService, ModerationService, AIService, TalkService,
-                                       GroupService, UtilsService, ConfigService as LegacyConfigService)
+                                       GroupService, UtilsService)
 from services.user_service import UserService
 from services.config_service import ConfigService
 from services.feature_flags import FeatureFlagsService
@@ -28,8 +28,7 @@ class AppContext:
         self.talk_service = None
         self.group_service = None
         self.utils_service = None
-        self.legacy_config_service = None
-        # New DI-based services
+        # DI-based services
         self.user_service = None
         self.config_service = None
         self.feature_flags = None
@@ -57,7 +56,6 @@ class AppContext:
         ctx.talk_service = TalkService(bot)
         ctx.group_service = GroupService()
         ctx.utils_service = UtilsService()
-        ctx.legacy_config_service = LegacyConfigService()
 
         # Services with in-memory state (no DB access needed)
         ctx.config_service = ConfigService()

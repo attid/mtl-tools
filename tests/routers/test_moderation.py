@@ -18,7 +18,7 @@ async def test_ban_command(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(moderation_router)
     
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     update = types.Update(
         update_id=1,
         message=types.Message(
@@ -42,7 +42,7 @@ async def test_unban_command(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(moderation_router)
     
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     update = types.Update(
         update_id=2,
         message=types.Message(
@@ -66,7 +66,7 @@ async def test_unban_callback(mock_telegram, router_app_context):
     dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(moderation_router)
     
-    global_data.skynet_admins = ["@admin"]
+    router_app_context.admin_service.set_skynet_admins(["@admin"])
     cb_data = UnbanCallbackData(user_id=123, chat_id=MTLChats.TestGroup).pack()
     update = types.Update(
         update_id=3,

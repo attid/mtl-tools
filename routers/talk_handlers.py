@@ -13,6 +13,7 @@ from other.global_data import MTLChats, BotValueTypes, update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
 from other.miniapps_tools import miniapps
 from services.app_context import AppContext
+from db.repositories import ConfigRepository
 
 router = Router()
 
@@ -90,7 +91,7 @@ async def cmd_last_check_reply_to_bot(message: Message, app_context: AppContext)
             msg = await message.reply(msg_text)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
-    await app_context.talk_service.answer_notify_message(message)
+    await app_context.talk_service.answer_notify_message(message, app_context)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -127,7 +128,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
         else:
             await message.reply('Ссылка не найдена')
     else:
-        pinned_url = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+        pinned_url = ConfigRepository(session).load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
         msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         msg = '\n'.join(msg)
         await app_context.utils_service.multi_reply(message, msg[:4000])
@@ -139,7 +140,7 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
 async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.talk_service:
         raise ValueError("app_context with talk_service required")
-    await app_context.talk_service.remind(message, session)
+    await app_context.talk_service.remind(message, session, app_context)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
