@@ -40,7 +40,8 @@ class AppContext:
         self.command_registry = None
 
     @classmethod
-    def from_bot_session(cls, bot, session=None):
+    def from_bot(cls, bot):
+        """Create AppContext with all services. Created once at startup."""
         ctx = cls()
         ctx.grist_service = GristService()
         ctx.gspread_service = GSpreadService()
@@ -58,18 +59,9 @@ class AppContext:
         ctx.utils_service = UtilsService()
         ctx.legacy_config_service = LegacyConfigService()
 
-        # Initialize new DI-based services if session provided
-        if session:
-            from db.repositories import ConfigRepository, ChatsRepository
-
-            config_repo = ConfigRepository(session)
-            chats_repo = ChatsRepository(session)
-
-            ctx.config_service = ConfigService(config_repo)
-            ctx.user_service = UserService(chats_repo)
-            ctx.feature_flags = FeatureFlagsService(ctx.config_service)
-
-        # Services that don't depend on session
+        # Services with in-memory state (no DB access needed)
+        ctx.config_service = ConfigService()
+        ctx.feature_flags = FeatureFlagsService(ctx.config_service)
         ctx.bot_state_service = BotStateService()
         ctx.voting_service = VotingService()
         ctx.admin_service = AdminManagementService()

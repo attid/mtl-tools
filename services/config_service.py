@@ -33,7 +33,7 @@ class ConfigService:
     Replaces direct global_data.mongo_config access.
     """
 
-    def __init__(self, config_repo: IConfigRepository):
+    def __init__(self, config_repo: Optional[IConfigRepository] = None):
         self._repo = config_repo
         self._cache: dict[int, BotConfig] = {}
         self._lock = Lock()
@@ -55,10 +55,11 @@ class ConfigService:
 
         # Load all settings for chat
         settings = {}
-        for key in self._get_common_keys():
-            value = self._repo.load_bot_value(chat_id, _resolve_key(key))
-            if value is not None:
-                settings[key] = value
+        if self._repo:
+            for key in self._get_common_keys():
+                value = self._repo.load_bot_value(chat_id, _resolve_key(key))
+                if value is not None:
+                    settings[key] = value
 
         config = BotConfig(chat_id=chat_id, settings=settings)
 
@@ -69,6 +70,8 @@ class ConfigService:
 
     def save_value(self, chat_id: int, key: Union[str, Enum, int], value: Any) -> bool:
         """Save configuration value."""
+        if not self._repo:
+            return False
         result = self._repo.save_bot_value(chat_id, _resolve_key(key), value)
 
         # Update cache
@@ -80,10 +83,14 @@ class ConfigService:
 
     def load_value(self, chat_id: int, key: Union[str, Enum, int], default: Any = None) -> Any:
         """Load configuration value."""
+        if not self._repo:
+            return default
         return self._repo.load_bot_value(chat_id, _resolve_key(key), default)
 
     def remove_value(self, chat_id: int, key: str) -> bool:
         """Remove configuration value."""
+        if not self._repo:
+            return False
         # Save None to effectively remove
         result = self._repo.save_bot_value(chat_id, _resolve_key(key), None)
 
@@ -96,6 +103,8 @@ class ConfigService:
 
     def get_chats_with_feature(self, feature_key: Union[str, Enum, int]) -> list[int]:
         """Get all chat IDs with specific feature enabled."""
+        if not self._repo:
+            return []
         chat_ids = self._repo.get_chat_ids_by_key(_resolve_key(feature_key))
         # Filter to only those with truthy values
         return [
