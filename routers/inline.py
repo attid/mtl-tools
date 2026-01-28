@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from services.app_context import AppContext
 
 router = Router()
+
+# Cache for username -> chat_id resolution
+_username_cache: dict[str, int] = {}
 
 
 def _get_commands_dict(app_context):
@@ -50,8 +53,39 @@ def _get_attr_list(app_context, attr_name: str):
     return {}
 
 
+async def _resolve_chat_id(bot: Bot, identifier: str) -> int:
+    """Resolve username or numeric ID to chat_id."""
+    identifier = identifier.strip()
+
+    # Try numeric ID first
+    try:
+        if identifier.startswith('-100'):
+            return int(identifier)
+        elif identifier.lstrip('-').isdigit():
+            return int(f'-100{identifier}')
+    except ValueError:
+        pass
+
+    # Try username (with or without @)
+    username = identifier.lstrip('@').lower()
+    if not username:
+        return 0
+
+    # Check cache
+    if username in _username_cache:
+        return _username_cache[username]
+
+    # Resolve via API
+    try:
+        chat = await bot.get_chat(f"@{username}")
+        _username_cache[username] = chat.id
+        return chat.id
+    except Exception:
+        return 0
+
+
 @router.inline_query()
-async def inline_handler(inline_query: InlineQuery, session: Session, app_context: AppContext = None):
+async def inline_handler(inline_query: InlineQuery, session: Session, bot: Bot, app_context: AppContext = None):
     try:
         if not app_context:
             logger.error("app_context is None in inline_handler!")
@@ -64,14 +98,10 @@ async def inline_handler(inline_query: InlineQuery, session: Session, app_contex
         user_id = inline_query.from_user.id
         chat_id = 0
         if query_arr:
-            try:
-                if query_arr[0].startswith('-100'):
-                    chat_id = int(query_arr[0])
-                else:
-                    chat_id = int(f'-100{query_arr[0]}')
-                query_text = ' '.join(query_arr[1:])
-            except ValueError:
-                chat_id = 0
+            # Try to resolve first word as chat identifier (number or @username)
+            chat_id = await _resolve_chat_id(bot, query_arr[0])
+            if chat_id != 0:
+                query_text = ' '.join(query_arr[1:]).upper()
 
         # Empty query means show all commands
         show_all = len(query_text.strip()) == 0

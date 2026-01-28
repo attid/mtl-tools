@@ -253,36 +253,36 @@ def _sync_to_di_services(ctx):
         for channel_id, sync_data in global_data.sync.items():
             ctx.bot_state_service.set_sync_state(str(channel_id), sync_data)
 
-    # Sync feature flags
+    # Sync feature flags (persist=False to avoid redundant DB writes)
     if ctx.feature_flags:
         # List-based features
         for chat_id in global_data.captcha:
-            ctx.feature_flags.enable(chat_id, "captcha")
+            ctx.feature_flags.set_feature(chat_id, "captcha", True, persist=False)
         for chat_id in global_data.moderate:
-            ctx.feature_flags.enable(chat_id, "moderate")
+            ctx.feature_flags.set_feature(chat_id, "moderate", True, persist=False)
         for chat_id in global_data.listen:
-            ctx.feature_flags.enable(chat_id, "listen")
+            ctx.feature_flags.set_feature(chat_id, "listen", True, persist=False)
         for chat_id in global_data.no_first_link:
-            ctx.feature_flags.enable(chat_id, "no_first_link")
+            ctx.feature_flags.set_feature(chat_id, "no_first_link", True, persist=False)
         for chat_id in global_data.reply_only:
-            ctx.feature_flags.enable(chat_id, "reply_only")
+            ctx.feature_flags.set_feature(chat_id, "reply_only", True, persist=False)
         for chat_id in global_data.auto_all:
-            ctx.feature_flags.enable(chat_id, "auto_all")
+            ctx.feature_flags.set_feature(chat_id, "auto_all", True, persist=False)
         for chat_id in global_data.save_last_message_date:
-            ctx.feature_flags.enable(chat_id, "save_last_message_date")
+            ctx.feature_flags.set_feature(chat_id, "save_last_message_date", True, persist=False)
         for chat_id in global_data.join_request_captcha:
-            ctx.feature_flags.enable(chat_id, "join_request_captcha")
+            ctx.feature_flags.set_feature(chat_id, "join_request_captcha", True, persist=False)
         for chat_id in global_data.full_data:
-            ctx.feature_flags.enable(chat_id, "full_data")
+            ctx.feature_flags.set_feature(chat_id, "full_data", True, persist=False)
         for chat_id in global_data.first_vote:
-            ctx.feature_flags.enable(chat_id, "first_vote")
+            ctx.feature_flags.set_feature(chat_id, "first_vote", True, persist=False)
         for chat_id in global_data.need_decode:
-            ctx.feature_flags.enable(chat_id, "need_decode")
+            ctx.feature_flags.set_feature(chat_id, "need_decode", True, persist=False)
         # Dict-based features (entry_channel, delete_income)
         for chat_id in global_data.delete_income:
-            ctx.feature_flags.enable(chat_id, "delete_income")
+            ctx.feature_flags.set_feature(chat_id, "delete_income", True, persist=False)
         for chat_id in global_data.entry_channel:
-            ctx.feature_flags.enable(chat_id, "entry_channel")
+            ctx.feature_flags.set_feature(chat_id, "entry_channel", True, persist=False)
 
 
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.", 1, "reply_only")

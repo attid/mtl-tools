@@ -22,6 +22,10 @@ class ChatFeatures:
     save_last_message_date: bool = False
     join_request_captcha: bool = False
     full_data: bool = False
+    first_vote: bool = False
+    need_decode: bool = False
+    delete_income: bool = False
+    entry_channel: bool = False
 
 
 # Mapping from feature name to BotValueTypes enum
@@ -35,6 +39,10 @@ FEATURE_TO_ENUM = {
     "save_last_message_date": BotValueTypes.SaveLastMessageDate,
     "join_request_captcha": BotValueTypes.JoinRequestCaptcha,
     "full_data": BotValueTypes.FullData,
+    "first_vote": BotValueTypes.FirstVote,
+    "need_decode": BotValueTypes.NeedDecode,
+    "delete_income": BotValueTypes.DeleteIncome,
+    "entry_channel": BotValueTypes.EntryChannel,
 }
 
 
@@ -86,18 +94,20 @@ class FeatureFlagsService:
         """Disable feature for chat."""
         return self.set_feature(chat_id, feature, False)
 
-    def set_feature(self, chat_id: int, feature: str, enabled: bool) -> bool:
+    def set_feature(self, chat_id: int, feature: str, enabled: bool, persist: bool = True) -> bool:
         """Enable or disable feature for chat."""
         if feature not in FEATURE_TO_ENUM:
             return False
 
-        enum_key = FEATURE_TO_ENUM[feature]
-        self._config.save_value(chat_id, enum_key, enabled)
+        if persist:
+            enum_key = FEATURE_TO_ENUM[feature]
+            self._config.save_value(chat_id, enum_key, enabled)
 
-        # Update cache
+        # Update cache (create entry if not exists)
         with self._lock:
-            if chat_id in self._cache:
-                setattr(self._cache[chat_id], feature, enabled)
+            if chat_id not in self._cache:
+                self._cache[chat_id] = ChatFeatures(chat_id=chat_id)
+            setattr(self._cache[chat_id], feature, enabled)
 
         return True
 
@@ -108,11 +118,14 @@ class FeatureFlagsService:
         return not current
 
     def get_chats_with_feature(self, feature: str) -> list[int]:
-        """Get all chat IDs with feature enabled."""
+        """Get all chat IDs with feature enabled from cache."""
         if feature not in FEATURE_TO_ENUM:
             return []
-        enum_key = FEATURE_TO_ENUM[feature]
-        return self._config.get_chats_with_feature(enum_key)
+        with self._lock:
+            return [
+                chat_id for chat_id, features in self._cache.items()
+                if getattr(features, feature, False)
+            ]
 
     def get_feature_list(self, feature: str) -> list[int]:
         """Get list of chat IDs with feature enabled.
