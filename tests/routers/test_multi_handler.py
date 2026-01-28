@@ -138,13 +138,15 @@ async def test_on_startup_triggers_loads(monkeypatch):
     started = asyncio.Event()
     release = asyncio.Event()
 
-    async def fake_command_config_loads():
+    async def fake_command_config_loads(app_context=None):
         started.set()
         await release.wait()
 
     monkeypatch.setattr("routers.multi_handler.command_config_loads", fake_command_config_loads)
 
-    await on_startup()
+    # Create fake dispatcher with app_context
+    fake_dispatcher = {'app_context': None}
+    await on_startup(fake_dispatcher)
     await asyncio.wait_for(started.wait(), timeout=1)
     assert started.is_set()
 

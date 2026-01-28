@@ -573,8 +573,9 @@ def _sync_topic_list_update(ctx, db_value_type: BotValueTypes, data: dict):
 
 
 @router.startup()
-async def on_startup():
-    asyncio.create_task(command_config_loads())
+async def on_startup(dispatcher):
+    app_context = dispatcher.get('app_context') if hasattr(dispatcher, 'get') else None
+    asyncio.create_task(command_config_loads(app_context))
 
 
 def register_handlers(dp, bot):
