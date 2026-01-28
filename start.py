@@ -1,6 +1,7 @@
 # Standard library imports
 import asyncio
 import importlib
+import os
 from contextlib import suppress
 
 # Third-party imports
@@ -34,7 +35,8 @@ from other.global_data import MTLChats, global_data, global_tasks
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
 
-logger.info('start')
+GIT_COMMIT = os.environ.get('GIT_COMMIT', 'unknown')
+logger.info(f'start (commit: {GIT_COMMIT})')
 
 
 async def set_commands(bot):
@@ -74,7 +76,7 @@ async def set_commands(bot):
 async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot started')
+        await bot.send_message(chat_id=MTLChats.ITolstov, text=f'Bot started (commit: {GIT_COMMIT})')
 
     if config.test_mode:
         logger.info('test mode')

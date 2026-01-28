@@ -35,6 +35,9 @@ RUN useradd --create-home --shell /bin/bash bot
 RUN mkdir -p /app/logs /app/data \
     && chown -R bot:bot /app
 
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 # Copy source code
 COPY --chown=bot:bot . .
 
