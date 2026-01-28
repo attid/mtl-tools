@@ -444,13 +444,15 @@ async def router_app_context(mock_telegram, router_bot, horizon_server_config, m
 class RouterTestMiddleware(BaseMiddleware):
     """
     Middleware for router tests to inject dependencies.
+    Uses shared FakeSession from app_context so tests can set up data.
     """
     def __init__(self, app_context):
         self.app_context = app_context
 
     async def __call__(self, handler, event, data):
         data["app_context"] = self.app_context
-        data["session"] = FakeSession()
+        # Use shared session from app_context so tests can set up data
+        data["session"] = self.app_context.session
         if hasattr(self.app_context, 'localization_service'):
             data["l10n"] = self.app_context.localization_service
         return await handler(event, data)

@@ -247,34 +247,78 @@ class FakeSession:
         if 'DELETE' in stmt_str.upper():
             return FakeResult(None)
 
+        # Extract bound parameters from SQLAlchemy statement
+        params = self._extract_bound_params(statement)
+
         # Handle SELECT on BotConfig
         if 'bot_config' in stmt_str.lower():
-            return self._handle_bot_config_query(statement, stmt_str)
+            return self._handle_bot_config_query(statement, stmt_str, params)
 
         # Handle SELECT on BotUsers
         if 'bot_users' in stmt_str.lower():
-            return self._handle_bot_users_query(statement, stmt_str)
+            return self._handle_bot_users_query(statement, stmt_str, params)
 
         # Handle SELECT on chats
         if 'chats' in stmt_str.lower() and 'chat_members' not in stmt_str.lower():
-            return self._handle_chats_query(statement, stmt_str)
+            return self._handle_chats_query(statement, stmt_str, params)
 
         # Handle SELECT on chat_members
         if 'chat_members' in stmt_str.lower():
-            return self._handle_chat_members_query(statement, stmt_str)
+            return self._handle_chat_members_query(statement, stmt_str, params)
 
         return FakeResult(None)
 
-    def _handle_bot_config_query(self, statement, stmt_str):
-        """Handle queries to bot_config table."""
-        # Try to extract chat_id and chat_key from whereclause
-        chat_id = None
-        chat_key = None
+    def _extract_bound_params(self, statement):
+        """Extract bound parameters from SQLAlchemy statement."""
+        params = {}
+        try:
+            # Try to compile the statement and get parameters
+            if hasattr(statement, 'compile'):
+                compiled = statement.compile()
+                if hasattr(compiled, 'params'):
+                    params = dict(compiled.params)
+        except Exception:
+            pass
 
+        # Also try to extract from whereclause directly
         if hasattr(statement, 'whereclause') and statement.whereclause is not None:
-            # Parse the where clause to find conditions
-            where_str = str(statement.whereclause)
-            chat_id, chat_key = self._extract_config_params(where_str)
+            self._extract_params_from_clause(statement.whereclause, params)
+
+        return params
+
+    def _extract_params_from_clause(self, clause, params):
+        """Recursively extract parameters from SQLAlchemy clause."""
+        try:
+            # Handle BinaryExpression (e.g., column == value)
+            if hasattr(clause, 'left') and hasattr(clause, 'right'):
+                left = clause.left
+                right = clause.right
+
+                # Get column name
+                col_name = None
+                if hasattr(left, 'key'):
+                    col_name = left.key
+                elif hasattr(left, 'name'):
+                    col_name = left.name
+
+                # Get value
+                if col_name:
+                    if hasattr(right, 'value'):
+                        params[col_name] = right.value
+                    elif hasattr(right, 'effective_value'):
+                        params[col_name] = right.effective_value
+
+            # Handle AND clauses
+            if hasattr(clause, 'clauses'):
+                for sub_clause in clause.clauses:
+                    self._extract_params_from_clause(sub_clause, params)
+        except Exception:
+            pass
+
+    def _handle_bot_config_query(self, statement, stmt_str, params):
+        """Handle queries to bot_config table."""
+        chat_id = params.get('chat_id')
+        chat_key = params.get('chat_key')
 
         if chat_id is not None and chat_key is not None:
             # Specific lookup
@@ -288,27 +332,26 @@ class FakeSession:
 
         return FakeResult(None)
 
-    def _handle_bot_users_query(self, statement, stmt_str):
+    def _handle_bot_users_query(self, statement, stmt_str, params):
         """Handle queries to bot_users table."""
-        user_id = self._extract_user_id(str(getattr(statement, 'whereclause', '')))
+        user_id = params.get('user_id')
         if user_id is not None:
             user = self._bot_users.get(user_id)
             return FakeResult(user)
         return FakeResult(list(self._bot_users.values()))
 
-    def _handle_chats_query(self, statement, stmt_str):
+    def _handle_chats_query(self, statement, stmt_str, params):
         """Handle queries to chats table."""
-        chat_id = self._extract_chat_id(str(getattr(statement, 'whereclause', '')))
+        chat_id = params.get('chat_id')
         if chat_id is not None:
             chat = self._chats.get(chat_id)
             return FakeResult(chat)
         return FakeResult(list(self._chats.values()))
 
-    def _handle_chat_members_query(self, statement, stmt_str):
+    def _handle_chat_members_query(self, statement, stmt_str, params):
         """Handle queries to chat_members table."""
-        where_str = str(getattr(statement, 'whereclause', ''))
-        chat_id = self._extract_chat_id(where_str)
-        user_id = self._extract_user_id(where_str)
+        chat_id = params.get('chat_id')
+        user_id = params.get('user_id')
 
         if chat_id is not None and user_id is not None:
             member = self._chat_members.get((chat_id, user_id))
@@ -317,44 +360,6 @@ class FakeSession:
             members = [m for (cid, uid), m in self._chat_members.items() if cid == chat_id]
             return FakeResult(members)
         return FakeResult(None)
-
-    def _extract_config_params(self, where_str):
-        """Extract chat_id and chat_key from where clause string."""
-        import re
-        chat_id = None
-        chat_key = None
-
-        # Look for chat_id = X pattern
-        chat_id_match = re.search(r'chat_id\s*=\s*:chat_id_\d+|chat_id\s*=\s*(\d+)', where_str)
-        if chat_id_match:
-            if chat_id_match.group(1):
-                chat_id = int(chat_id_match.group(1))
-
-        # Look for chat_key = X pattern
-        chat_key_match = re.search(r'chat_key\s*=\s*:chat_key_\d+|chat_key\s*=\s*(\d+)', where_str)
-        if chat_key_match:
-            if chat_key_match.group(1):
-                chat_key = int(chat_key_match.group(1))
-
-        # If we couldn't parse, try to get from bound parameters
-        # This is a simplified approach - in real code we'd need to inspect compiled params
-        return chat_id, chat_key
-
-    def _extract_user_id(self, where_str):
-        """Extract user_id from where clause string."""
-        import re
-        match = re.search(r'user_id\s*=\s*(\d+)', where_str)
-        if match:
-            return int(match.group(1))
-        return None
-
-    def _extract_chat_id(self, where_str):
-        """Extract chat_id from where clause string."""
-        import re
-        match = re.search(r'chat_id\s*=\s*(-?\d+)', where_str)
-        if match:
-            return int(match.group(1))
-        return None
 
     def query(self, *args, **kwargs):
         return FakeQuery()

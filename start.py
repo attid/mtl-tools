@@ -189,6 +189,12 @@ async def main():
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)
 
+    # Reload commands into command_registry after routers are loaded
+    # (decorators @update_command_info populate global_data.info_cmd at import time)
+    if global_data.info_cmd:
+        app_context_middleware.app_context.command_registry.load_commands(global_data.info_cmd)
+        logger.info(f"Loaded {len(global_data.info_cmd)} commands into command_registry")
+
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     dp.errors.register(sentry_error_handler)

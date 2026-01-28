@@ -334,8 +334,13 @@ async def test_auto_all_manager_add(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     # Verify the session now has the updated members list
+    # ConfigRepository._prepare_chat_value parses JSON strings to Python objects
     saved_value = router_app_context.session.get_bot_config(chat_id, BotValueTypes.All)
-    members = json.loads(saved_value) if saved_value else []
+    # saved_value can be a list (after _prepare_chat_value) or a string
+    if isinstance(saved_value, str):
+        members = json.loads(saved_value)
+    else:
+        members = saved_value if saved_value else []
     assert "@testuser" in members
     assert "@existing" in members
 
