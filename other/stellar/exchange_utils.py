@@ -5,6 +5,7 @@ from typing import Optional
 
 from loguru import logger
 from stellar_sdk import Asset, Network, Server, TransactionBuilder, Price
+from stellar_sdk.exceptions import NotFoundError
 from stellar_sdk.client.aiohttp_client import AiohttpClient
 from stellar_sdk.server_async import ServerAsync
 
@@ -380,6 +381,8 @@ async def stellar_get_trade_cost(asset: Asset) -> float:
 
             return total_price / trade_count if trade_count > 0 else 0
 
+    except NotFoundError:
+        return 0
     except Exception as ex:
         logger.error(f"Error getting trade cost for {asset.code}: {ex}")
         return 0
