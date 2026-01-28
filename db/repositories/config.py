@@ -10,8 +10,13 @@ from shared.infrastructure.database.models import BotConfig, KVStore, BotTable
 
 
 class ConfigRepository(BaseRepository):
-    def save_bot_value(self, chat_id: int, chat_key: Union[int, Enum], chat_value: Any) -> None:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def save_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], chat_value: Any) -> None:
+        if isinstance(chat_key, int):
+            chat_key_value = chat_key
+        elif isinstance(chat_key, Enum):
+            chat_key_value = chat_key.value
+        else:
+            chat_key_value = chat_key
         chat_key_name = chat_key.name if isinstance(chat_key, Enum) else None
 
         if chat_value is None:
@@ -40,8 +45,13 @@ class ConfigRepository(BaseRepository):
                 )
                 self.session.add(new_record)
 
-    def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum], default_value: Any = '') -> Any:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = '') -> Any:
+        if isinstance(chat_key, int):
+            chat_key_value = chat_key
+        elif isinstance(chat_key, Enum):
+            chat_key_value = chat_key.value
+        else:
+            chat_key_value = chat_key
         
         record = self.session.execute(
             select(BotConfig).where(
@@ -76,16 +86,16 @@ class ConfigRepository(BaseRepository):
             
         return default_value
 
-    def get_chat_ids_by_key(self, chat_key: Union[int, Enum]) -> List[int]:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def get_chat_ids_by_key(self, chat_key: Union[int, Enum, str]) -> List[int]:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         
         result = self.session.execute(
             select(BotConfig.chat_id).where(BotConfig.chat_key == chat_key_value)
         )
         return [row[0] for row in result.fetchall()]
 
-    def get_chat_dict_by_key(self, chat_key: Union[int, Enum], return_json: bool = False) -> Dict[int, Any]:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def get_chat_dict_by_key(self, chat_key: Union[int, Enum, str], return_json: bool = False) -> Dict[int, Any]:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         
         records = self.session.execute(
             select(BotConfig).where(BotConfig.chat_key == chat_key_value)
@@ -106,8 +116,8 @@ class ConfigRepository(BaseRepository):
                          result_dict[record.chat_id] = record.chat_value
         return result_dict
 
-    def update_dict_value(self, chat_id: int, chat_key: Union[int, Enum], dict_key: str, dict_value: Any) -> None:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def update_dict_value(self, chat_id: int, chat_key: Union[int, Enum, str], dict_key: str, dict_value: Any) -> None:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         
         record = self.session.execute(
             select(BotConfig).where(
@@ -148,8 +158,8 @@ class ConfigRepository(BaseRepository):
             )
             self.session.add(new_record)
 
-    def get_dict_value(self, chat_id: int, chat_key: Union[int, Enum], dict_key: str, default_value: Any = None) -> Any:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def get_dict_value(self, chat_id: int, chat_key: Union[int, Enum, str], dict_key: str, default_value: Any = None) -> Any:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
 
         record = self.session.execute(
             select(BotConfig).where(
@@ -191,8 +201,8 @@ class ConfigRepository(BaseRepository):
         return record.kv_value if record else default_value
 
     # Legacy BotTable support
-    def save_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum], chat_value: Any) -> None:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def save_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], chat_value: Any) -> None:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         record = self.session.execute(
             select(BotTable).where(and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key_value))
         ).scalar_one_or_none()
@@ -207,8 +217,8 @@ class ConfigRepository(BaseRepository):
             else:
                 record.chat_value = str(chat_value)
 
-    def load_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum], default_value: Any = '') -> Any:
-        chat_key_value = chat_key if isinstance(chat_key, int) else chat_key.value
+    def load_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = '') -> Any:
+        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         record = self.session.execute(
             select(BotTable.chat_value).where(
                 and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key_value)

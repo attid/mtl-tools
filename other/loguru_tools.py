@@ -1,3 +1,4 @@
+import asyncio
 from typing import TypeVar, Callable
 from functools import wraps
 from loguru import logger
@@ -16,8 +17,14 @@ def safe_catch(func: Callable[..., T]) -> Callable[..., T]:
 
 def safe_catch_async(func: Callable[..., T]) -> Callable[..., T]:
     @wraps(func)
-    @logger.catch()
     async def wrapper(*args, **kwargs) -> T:
-        return await func(*args, **kwargs)
+        try:
+            return await func(*args, **kwargs)
+        except asyncio.CancelledError:
+            # Normal during shutdown, don't log as error
+            raise
+        except Exception:
+            logger.exception(f"Error in {func.__name__}")
+            raise
 
     return wrapper

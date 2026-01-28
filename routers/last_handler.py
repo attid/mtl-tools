@@ -501,7 +501,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
 
 
 @router.message(ChatInOption('no_first_link'))  # точно не текс, выше остановились
-async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app_context=None):
+async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app_context):
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
     # Check user type using DI service or global_data fallback
@@ -509,11 +509,7 @@ async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app
     if _get_user_type(app_context, user_id) == UserType.TRUSTED.value:
         return False
 
-    if app_context:
-        await app_context.antispam_service.delete_and_log_spam(message)
-    else:
-        from other.spam_tools import delete_and_log_spam
-        await delete_and_log_spam(message, session, 'not text')
+    await app_context.antispam_service.delete_and_log_spam(message, session)
 
 
 ########################################################################################################################

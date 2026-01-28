@@ -143,8 +143,8 @@ class TestConfigService:
         repo = FakeConfigRepositoryProtocol()
         service = ConfigService(repo)
 
-        repo.save_bot_value(100, "captcha", True)
-        repo.save_bot_value(100, "moderate", False)
+        service.save_value(100, "captcha", True)
+        service.save_value(100, "moderate", False)
 
         config1 = service.get_config(100)
         config2 = service.get_config(100)
@@ -166,8 +166,8 @@ class TestConfigService:
         repo = FakeConfigRepositoryProtocol()
         service = ConfigService(repo)
 
-        repo.save_bot_value(100, "captcha", True)
-        repo.save_bot_value(100, "moderate", False)
+        service.save_value(100, "captcha", True)
+        service.save_value(100, "moderate", False)
 
         assert service.is_feature_enabled(100, "captcha") is True
         assert service.is_feature_enabled(100, "moderate") is False
@@ -176,9 +176,9 @@ class TestConfigService:
         repo = FakeConfigRepositoryProtocol()
         service = ConfigService(repo)
 
-        repo.save_bot_value(100, "captcha", True)
-        repo.save_bot_value(200, "captcha", True)
-        repo.save_bot_value(300, "captcha", False)
+        service.save_value(100, "captcha", True)
+        service.save_value(200, "captcha", True)
+        service.save_value(300, "captcha", False)
 
         result = service.get_chats_with_feature("captcha")
 

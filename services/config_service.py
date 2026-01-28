@@ -5,8 +5,25 @@ from enum import Enum
 from typing import Any, Optional, Union
 from threading import Lock
 
+from other.constants import BotValueTypes
 from services.interfaces.repositories import IConfigRepository
 from shared.domain.config import BotConfig
+
+# Build reverse mapping: snake_case string -> BotValueTypes enum
+# e.g. "entry_channel" -> BotValueTypes.EntryChannel
+_STR_TO_ENUM: dict[str, BotValueTypes] = {}
+for _member in BotValueTypes:
+    # Convert CamelCase to snake_case
+    _name = _member.name
+    _snake = ''.join(f'_{c.lower()}' if c.isupper() else c for c in _name).lstrip('_')
+    _STR_TO_ENUM[_snake] = _member
+
+
+def _resolve_key(key: Union[str, Enum, int]) -> Union[Enum, int, str]:
+    """Convert string key to BotValueTypes enum if possible."""
+    if isinstance(key, str):
+        return _STR_TO_ENUM.get(key, key)
+    return key
 
 
 class ConfigService:
@@ -39,7 +56,7 @@ class ConfigService:
         # Load all settings for chat
         settings = {}
         for key in self._get_common_keys():
-            value = self._repo.load_bot_value(chat_id, key)
+            value = self._repo.load_bot_value(chat_id, _resolve_key(key))
             if value is not None:
                 settings[key] = value
 
@@ -52,7 +69,7 @@ class ConfigService:
 
     def save_value(self, chat_id: int, key: Union[str, Enum, int], value: Any) -> bool:
         """Save configuration value."""
-        result = self._repo.save_bot_value(chat_id, key, value)
+        result = self._repo.save_bot_value(chat_id, _resolve_key(key), value)
 
         # Update cache
         with self._lock:
@@ -63,12 +80,12 @@ class ConfigService:
 
     def load_value(self, chat_id: int, key: Union[str, Enum, int], default: Any = None) -> Any:
         """Load configuration value."""
-        return self._repo.load_bot_value(chat_id, key, default)
+        return self._repo.load_bot_value(chat_id, _resolve_key(key), default)
 
     def remove_value(self, chat_id: int, key: str) -> bool:
         """Remove configuration value."""
         # Save None to effectively remove
-        result = self._repo.save_bot_value(chat_id, key, None)
+        result = self._repo.save_bot_value(chat_id, _resolve_key(key), None)
 
         # Update cache
         with self._lock:
@@ -79,7 +96,7 @@ class ConfigService:
 
     def get_chats_with_feature(self, feature_key: Union[str, Enum, int]) -> list[int]:
         """Get all chat IDs with specific feature enabled."""
-        chat_ids = self._repo.get_chat_ids_by_key(feature_key)
+        chat_ids = self._repo.get_chat_ids_by_key(_resolve_key(feature_key))
         # Filter to only those with truthy values
         return [
             cid for cid in chat_ids
