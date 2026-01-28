@@ -65,12 +65,9 @@ def _is_feature_enabled(app_context, chat_id: int, feature: str, global_list: li
     return app_context.feature_flags.is_enabled(chat_id, feature)
 
 
-def _get_user_type(app_context, user_id: int) -> int:
-    """Get user type using DI service. Returns int for backward compatibility. Raises error if app_context not available."""
-    if not app_context or not app_context.user_service:
-        raise ValueError("app_context with user_service required")
-    user_type = app_context.user_service.get_user_type(user_id)
-    return user_type.value
+def _get_user_type(user_id: int) -> int:
+    """Get user type from global_data. Returns int for backward compatibility."""
+    return global_data.check_user(user_id)
 
 
 def _is_first_vote_enabled(app_context, chat_id: int) -> bool:
@@ -363,7 +360,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session, app_context=No
 
     if url_found or url_text.find('eurmtl.me/sign_tools') > -1:
         if app_context:
-            msg_id = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
+            msg_id = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         else:
             msg_id = await global_data.mongo_config.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
         with suppress(TelegramBadRequest):
@@ -374,7 +371,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session, app_context=No
             await message.pin()
         
         if app_context:
-            pinned_url = await app_context.config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
+            pinned_url = await app_context.legacy_config_service.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
             msg = await app_context.stellar_service.check_url_xdr(pinned_url)
         else:
             msg = await check_url_xdr(
@@ -488,7 +485,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
     # Check user type using DI service or global_data fallback
     # UserType.REGULAR.value == 0 means new user, triggers first vote
-    if _get_user_type(app_context, user_id) == UserType.REGULAR.value:
+    if _get_user_type(user_id) == UserType.REGULAR.value:
         await set_vote(message, app_context=app_context)
 
     add_bot_users(session, user_id, message.from_user.username, 1)
@@ -506,7 +503,7 @@ async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app
 
     # Check user type using DI service or global_data fallback
     # UserType.TRUSTED.value == 1 means trusted user, skip spam check
-    if _get_user_type(app_context, user_id) == UserType.TRUSTED.value:
+    if _get_user_type(user_id) == UserType.TRUSTED.value:
         return False
 
     await app_context.antispam_service.delete_and_log_spam(message, session)

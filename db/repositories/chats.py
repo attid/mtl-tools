@@ -370,7 +370,7 @@ class ChatsRepository(BaseRepository):
         if user_name.startswith('@'):
             username = user_name[1:]
             result = self.session.execute(
-                select(BotUsers.user_id).where(BotUsers.user_name == username)
+                select(BotUsers.user_id).where(BotUsers.user_name == username).limit(1)
             ).scalar_one_or_none()
             if not result:
                 raise ValueError(f"User @{username} not found in the database.")
