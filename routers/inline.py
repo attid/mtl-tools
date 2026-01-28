@@ -51,51 +51,58 @@ def _get_attr_list(app_context, attr_name: str):
 
 
 @router.inline_query()
-async def inline_handler(inline_query: InlineQuery, session: Session, app_context: AppContext):
-    switch_text = "По Вашему запросу найдено :"
-    answers = []
-    query_text = inline_query.query.upper()
-    query_arr = query_text.split(" ") if 0 < len(query_text) else []
-    user_id = inline_query.from_user.id
-    chat_id = 0
-    if query_arr:
-        try:
-            if query_arr[0].startswith('-100'):
-                chat_id = int(query_arr[0])
-            else:
-                chat_id = int(f'-100{query_arr[0]}')
-            query_text = ' '.join(query_arr[1:])
-        except ValueError:
-            chat_id = 0
+async def inline_handler(inline_query: InlineQuery, session: Session, app_context: AppContext = None):
+    try:
+        if not app_context:
+            logger.error("app_context is None in inline_handler!")
+            return await inline_query.answer([], cache_time=60)
 
-    if len(query_text) == 0:
-        query_text = ' '
+        switch_text = "По Вашему запросу найдено :"
+        answers = []
+        query_text = inline_query.query.upper()
+        query_arr = query_text.split(" ") if 0 < len(query_text) else []
+        user_id = inline_query.from_user.id
+        chat_id = 0
+        if query_arr:
+            try:
+                if query_arr[0].startswith('-100'):
+                    chat_id = int(query_arr[0])
+                else:
+                    chat_id = int(f'-100{query_arr[0]}')
+                query_text = ' '.join(query_arr[1:])
+            except ValueError:
+                chat_id = 0
 
-    # Use DI services when available, fallback to global_data for backward compatibility
-    commands_dict = _get_commands_dict(app_context)
+        # Empty query means show all commands
+        show_all = len(query_text.strip()) == 0
 
-    for key, value in commands_dict.items():
-        if (key.upper().find(query_text) > -1) or (value['info'].upper().find(query_text) > -1):
-            ico = ""
-            if (value["cmd_type"] > 0) and (chat_id < 0):
-                attr_list = _get_attr_list(app_context, value["cmd_list"])
-                if value["cmd_type"] in (1, 2):
-                    ico = "🟢 " if chat_id in attr_list else "🔴 "
-                if value["cmd_type"] in (3,):
-                    # For cmd_type 3, check nested structure: {chat_id: [user_ids]}
-                    in_list = False
-                    if chat_id in attr_list:
-                        if isinstance(attr_list[chat_id], list):
-                            in_list = user_id in attr_list[chat_id]
-                    ico = "🟢 " if in_list else "🔴 "
+        commands_dict = _get_commands_dict(app_context)
 
-            answers.append(InlineQueryResultArticle(
-                id=str(len(answers)),
-                title=ico + value['info'],
-                description=key,
-                input_message_content=InputTextMessageContent(message_text=key)
-            ))
-    return await inline_query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+        for key, value in commands_dict.items():
+            if show_all or (query_text in key.upper()) or (query_text in value['info'].upper()):
+                ico = ""
+                if (value["cmd_type"] > 0) and (chat_id < 0):
+                    attr_list = _get_attr_list(app_context, value["cmd_list"])
+                    if value["cmd_type"] in (1, 2):
+                        ico = "🟢 " if chat_id in attr_list else "🔴 "
+                    if value["cmd_type"] in (3,):
+                        # For cmd_type 3, check nested structure: {chat_id: [user_ids]}
+                        in_list = False
+                        if chat_id in attr_list:
+                            if isinstance(attr_list[chat_id], list):
+                                in_list = user_id in attr_list[chat_id]
+                        ico = "🟢 " if in_list else "🔴 "
+
+                answers.append(InlineQueryResultArticle(
+                    id=str(len(answers)),
+                    title=ico + value['info'],
+                    description=key,
+                    input_message_content=InputTextMessageContent(message_text=key)
+                ))
+        return await inline_query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+    except Exception as e:
+        logger.exception(f"Error in inline_handler: {e}")
+        return await inline_query.answer([], cache_time=60)
 
 
 def register_handlers(dp, bot):

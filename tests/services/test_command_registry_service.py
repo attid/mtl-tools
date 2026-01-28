@@ -44,7 +44,7 @@ class TestCommandRegistryServiceBasicOperations:
         assert result is not None
         assert result.name == "simple"
         assert result.description == ""
-        assert result.cmd_type == ""
+        assert result.cmd_type == 0
         assert result.cmd_list == []
         assert result.hidden is False
 

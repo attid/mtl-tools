@@ -10,7 +10,7 @@ class CommandInfo:
     """Command metadata for help system."""
     name: str
     description: str = ""
-    cmd_type: str = ""  # admin, user, etc
+    cmd_type: int = 0  # 0=none, 1=in list, 2=in dict, 3=dict with users
     cmd_list: list[str] = field(default_factory=list)
     hidden: bool = False
 
@@ -30,7 +30,7 @@ class CommandRegistryService:
         self,
         name: str,
         description: str = "",
-        cmd_type: str = "",
+        cmd_type: int = 0,
         cmd_list: Optional[list[str]] = None,
         hidden: bool = False,
     ) -> None:
@@ -54,7 +54,7 @@ class CommandRegistryService:
         with self._lock:
             return self._commands.copy()
 
-    def get_commands_by_type(self, cmd_type: str) -> list[CommandInfo]:
+    def get_commands_by_type(self, cmd_type: int) -> list[CommandInfo]:
         """Get commands filtered by type."""
         with self._lock:
             return [
