@@ -19,6 +19,8 @@ def _text_to_html(text: str) -> str:
     Double newlines become paragraph breaks.
     Single newlines become <br> within paragraphs.
     """
+    if not text:
+        return ''
     paragraphs = text.split('\n\n')
     html_paragraphs = []
     for p in paragraphs:
