@@ -209,6 +209,7 @@ def _log_feature_flags_stats():
         f"admins: {len(global_data.admins)} chats",
         f"skynet_admins: {len(global_data.skynet_admins)} users",
         f"users_list: {len(global_data.users_list)} users",
+        f"sync: {len(global_data.sync)} channels",
     ]
     logger.info("Feature flags loaded:\n  " + "\n  ".join(stats))
 
@@ -244,6 +245,9 @@ def _sync_to_di_services(ctx):
     if ctx.bot_state_service:
         for chat_id in global_data.need_decode:
             ctx.bot_state_service.mark_needs_decode(chat_id)
+        # Sync channel sync states
+        for channel_id, sync_data in global_data.sync.items():
+            ctx.bot_state_service.set_sync_state(str(channel_id), sync_data)
 
 
 
