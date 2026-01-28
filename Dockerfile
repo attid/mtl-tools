@@ -40,4 +40,4 @@ COPY --chown=bot:bot . .
 
 USER bot
 
-CMD ["uv", "run", "python", "start.py"]
+CMD ["uv", "run", "--no-sync", "python", "start.py"]

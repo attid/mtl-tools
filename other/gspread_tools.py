@@ -109,7 +109,7 @@ async def gs_save_new_task(task_name, customer, manager, executor, contract_url)
     ss = await agc.open("MTL_TASKS_register")
     ws = await ss.worksheet("Term")
     # N	task	date_in	plan	fact	customer	manager	executor	program	contract
-    await ws.update(f'A{last_col + 1}', [[last_task_number + 1, task_name, datetime.now().strftime('%d.%m'), None, None,
+    await ws.update(range_name=f'A{last_col + 1}', values=[[last_task_number + 1, task_name, datetime.now().strftime('%d.%m'), None, None,
                                           customer, manager, executor, None, contract_url]])
     return json.dumps({'task_number': last_task_number + 1,
                        'task_name': task_name
@@ -131,7 +131,7 @@ async def gs_save_new_support(user_id, username, agent_username, url):
     ss = await agc.open("MTL_support_register")
     ws = await ss.worksheet("ALL")
     # n	date_in	username	ID	ticket	request	status	1	2	3	4	5	6	notes	agent
-    await ws.update(f'A{last_col + 1}', [[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
+    await ws.update(range_name=f'A{last_col + 1}', values=[[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
                                           None, None, None, None, None, None, None, None, None, agent_username]],
                     value_input_option='USER_ENTERED')
     # await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
@@ -421,7 +421,7 @@ async def gs_copy_a_table(new_name):
         cells = (await sheet.batch_get(['A1:D20'], value_render_option='FORMULA'))[0]
 
         # Заполняем лист данными
-        await new_sheet.update('A1', cells, value_input_option='USER_ENTERED')
+        await new_sheet.update(range_name='A1', values=cells, value_input_option='USER_ENTERED')
 
     await new_ss.del_worksheet((await new_ss.worksheets())[0])
 
@@ -444,17 +444,17 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
                    [len(votes)],
                    [math.floor(len(votes) / 2) + 1]
                    ]
-    await wks.update('B1', update_data)
+    await wks.update(range_name='B1', values=update_data)
     update_data = []
     for option in options:
         update_data.append([option])
-    await wks.update('A7', update_data)
+    await wks.update(range_name='A7', values=update_data)
     update_data = [['']] * 10
-    await wks.update(f'B{7 + len(options)}', update_data)
+    await wks.update(range_name=f'B{7 + len(options)}', values=update_data)
     # 2
     wks = await ss.worksheet("Log")
     await wks.delete_row(2)
-    await wks.update('C1', [options])
+    await wks.update(range_name='C1', values=[options])
     # 3
     # {'GA5Q2PZWIHSCOHNIGJN4BX5P42B4EMGTYAS3XCMAHEHCFFKCQQ3ZX34A': {'delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 'vote': 1, 'was_delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7'}
     update_data = []
@@ -462,7 +462,7 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
         update_data.append([vote, votes[vote].get('was_delegate')])
 
     wks = await ss.worksheet("Members")
-    await wks.update('A2', update_data)
+    await wks.update(range_name='A2', values=update_data)
 
 
 # async def gs_find_user_a(username):
@@ -509,7 +509,7 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         update_data.extend(votes_list)  # Начинаем добавление данных с третьей колонки, пропускаем первые два элемента
 
         # Записываем данные в таблицу, начиная с новой строки
-        await wks.update(f'A{len(record) + 1}', [update_data])
+        await wks.update(range_name=f'A{len(record) + 1}', values=[update_data])
 
         if delegated:
             return
@@ -756,7 +756,7 @@ async def gs_get_update_mtlap_skynet_row(data):
     # Обновляем значения в 14-м столбце (SkyNet) за один запрос
     cell_range = "O2"
     values = [[value] for value in data]
-    await ws.update(cell_range, values)
+    await ws.update(range_name=cell_range, values=values)
 
 
 async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=False):

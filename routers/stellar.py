@@ -518,7 +518,7 @@ async def cmd_update_bim1(message: Message, bot: Bot, app_context=None):
                 new_data = False
         update_list.append([new_data])
 
-    await wks.update('S3', update_list)
+    await wks.update(range_name='S3', values=update_list)
     await message.reply('Done')
 
 

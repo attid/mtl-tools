@@ -42,14 +42,14 @@ async def update_main_report(session: Session):
     # update data
     # usd
     rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
-    await wks.update('D3', float(rq.json()['quotes']['USDEUR']))
+    await wks.update(range_name='D3', values=[[float(rq.json()['quotes']['USDEUR'])]])
 
     # BTC,XLM,ETH,XRP
     rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH,XRP')
-    await wks.update('D4', float(rq.json()['rates']['BTC']))
-    await wks.update('D5', float(rq.json()['rates']['XLM']))
-    await wks.update('D20', float(rq.json()['rates']['ETH']))
-    await wks.update('D21', float(rq.json()['rates']['XRP']))
+    await wks.update(range_name='D4', values=[[float(rq.json()['rates']['BTC'])]])
+    await wks.update(range_name='D5', values=[[float(rq.json()['rates']['XLM'])]])
+    await wks.update(range_name='D20', values=[[float(rq.json()['rates']['ETH'])]])
+    await wks.update(range_name='D21', values=[[float(rq.json()['rates']['XRP'])]])
 
     # aum
     s = requests.get(
@@ -58,14 +58,14 @@ async def update_main_report(session: Session):
     # print(s)
     s = s[s.find('"price": "') + 10:]
     s = s[:s.find('"')]
-    await wks.update('D6', float(s))
+    await wks.update(range_name='D6', values=[[float(s)]])
 
     # defi
     defi_balance = await get_debank_balance('0x0358d265874b5cf002d1801949f1cee3b08fa2e9')
-    await wks.update('D8', int(defi_balance))
+    await wks.update(range_name='D8', values=[[int(defi_balance)]])
     # sentry_sdk.capture_message(f'debank error - {debank}')
     defi_balance = await get_debank_balance('0xDb36745AA3601E2f12b07db58fF8d91946850a36')
-    await wks.update('D11', int(defi_balance))
+    await wks.update(range_name='D11', values=[[int(defi_balance)]])
 
     addresses = await wks.get_values('A2:A')
     for address in addresses:
@@ -86,19 +86,19 @@ async def update_main_report(session: Session):
                 except ValueError:
                     pass
                 update_data.append([key, decoded_value])
-            await address_sheet.update('C1', update_data)
+            await address_sheet.update(range_name='C1', values=update_data)
 
             update_data = [['ASSETS']]
             for key in assets:
                 update_data.append([key, float(assets.get(key, 0))])
-            await address_sheet.update('A1', update_data)
+            await address_sheet.update(range_name='A1', values=update_data)
 
             assets = await stellar_get_issuer_assets(address[0])
             update_data = [['ISSUER', 'AMOUNT', 'COST']]
             for key in assets:
                 update_data.append([key, float(assets.get(key, 0)),
                                     await stellar_get_trade_cost(Asset(code=key, issuer=address[0]))])
-            await address_sheet.update('E1', update_data)
+            await address_sheet.update(range_name='E1', values=update_data)
 
             pools = await get_pool_balances(address[0])
             update_data = [['POOLS', 'SHARES', 'AMOUNT1', 'AMOUNT2']]
@@ -106,9 +106,9 @@ async def update_main_report(session: Session):
                 # [{'pool_id': '1b492b669959d3f082b5fb7dcc847d43371fd1f586209899603b93ac1a39b7f8', 'name': 'MTL-EURMTL', 'shares': 761437.8395765, 'token1_amount': 348606.2247324, 'token2_amount': 1685938.1857397}]
                 update_data.append(
                     [pool['name'], float(pool['shares']), float(pool['token1_amount']), float(pool['token2_amount'])])
-            await address_sheet.update('H1', update_data)
+            await address_sheet.update(range_name='H1', values=update_data)
 
-    await wks.update('D15', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='D15', values=[[datetime.now().strftime('%d.%m.%Y %H:%M:%S')]])
 
     await asyncio.sleep(5)
     await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
@@ -137,14 +137,14 @@ async def update_main_report_additional(session: Session):
 
     # add data
     statistic = calculate_statistics()
-    await wks_all.update('D19:D21', [[statistic['EURMTL']],
+    await wks_all.update(range_name='D19:D21', values=[[statistic['EURMTL']],
                                      [statistic['SATSMTL']],
                                      [statistic['USDM']]])
 
-    await wks_all.update('D24', [[statistic['Median']]])
-    await wks_all.update('D25', [[statistic['EURMTL_NONE_ZERO']]])
-    await wks_all.update('D28', [[statistic['MTL_MTLRECT']]])
-    await wks_all.update('D41', [[statistic['MTLAP']]])
+    await wks_all.update(range_name='D24', values=[[statistic['Median']]])
+    await wks_all.update(range_name='D25', values=[[statistic['EURMTL_NONE_ZERO']]])
+    await wks_all.update(range_name='D28', values=[[statistic['MTL_MTLRECT']]])
+    await wks_all.update(range_name='D41', values=[[statistic['MTLAP']]])
 
     # Получение данных из столбца D
     column_d_values = await wks_all.col_values(4)
@@ -161,7 +161,7 @@ async def update_main_report_additional(session: Session):
     row_update = [current_date] + column_d_values[1:]
 
     # Обновление данных за один запрос
-    await wks_monitoring.update(f'A{last_row}', [row_update], value_input_option='USER_ENTERED')
+    await wks_monitoring.update(range_name=f'A{last_row}', values=[row_update], value_input_option='USER_ENTERED')
 
 
 def calculate_statistics():
@@ -275,7 +275,7 @@ async def update_guarantors_report():
         update_list = []
         for account in address_list:
             update_list.append([account])
-        await wks.update('B3', update_list)
+        await wks.update(range_name='B3', values=update_list)
 
     date_list = await wks.col_values(4)
     date_list.pop(0)
@@ -303,7 +303,7 @@ async def update_guarantors_report():
         # datetime.strptime(dt, '%d.%m.%Y') - datetime(1899, 12, 30)).days
         update_list.append([dt_google, eur_sum, debt_sum])
 
-    await wks.update('E3', update_list)
+    await wks.update(range_name='E3', values=update_list)
 
     # rects
     address_list = await wks.col_values(3)
@@ -317,9 +317,9 @@ async def update_guarantors_report():
         else:
             update_list.append(['=['])
 
-    await wks.update('H3', update_list)
+    await wks.update(range_name='H3', values=update_list)
 
-    await wks.update('B2', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='B2', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
 
     logger.info(f'report Guarantors all done {now}')
 
@@ -349,7 +349,7 @@ async def update_top_holders_report(session: Session):
                             account.calculated_votes
                             ])
 
-    await wks.update('B2', update_data)
+    await wks.update(range_name='B2', values=update_data)
 
     update_data = []
     for key in delegate_list:
@@ -358,9 +358,9 @@ async def update_top_holders_report(session: Session):
     for _ in range(1, 5):
         update_data.append(["", ""])
 
-    await wks_d.update('A2', update_data)
+    await wks_d.update(range_name='A2', values=update_data)
 
-    await wks.update('I1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='I1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
 
     records = await wks.get_values('I2:I21')
     gd_link = 'https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156'
@@ -390,8 +390,8 @@ async def update_bdm_report():
         if len(bdm[2]) == 56:
             bdm.append(await resolve_account(bdm[2]))
 
-    await wks.update('A2', bdm_list)
-    await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='A2', values=bdm_list)
+    await wks.update(range_name='G1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
 
     logger.info(f'update bdm_report all done {now}')
 
@@ -463,7 +463,7 @@ async def update_mmwb_report(session: Session):
     update_data.append([balances.get('EURMTL', 0), None, None,
                         None, balances.get('MTL', 0)])
 
-    await wks.update('E2', update_data)
+    await wks.update(range_name='E2', values=update_data)
 
     records = await wks.get_values('O2:O6')
     for record in records:
@@ -471,7 +471,7 @@ async def update_mmwb_report(session: Session):
         if value < 0.2 or value > 0.8:
             MessageRepository(session).send_admin_message(f'update_mmwb_report balance error {value}')
 
-    await wks.update('Q1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='Q1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
     logger.info(f'update mmwb_report all done {now}')
 
 
@@ -512,7 +512,7 @@ async def update_airdrop():
                     # print(address_list[idx], fed_address_list[idx])
                     address = await resolve_stellar_address_async(fed_address_list[idx], client=client)
                     # print(address.account_id)
-                    await wks.update(f'D{idx + 1}', address.account_id)
+                    await wks.update(range_name=f'D{idx + 1}', values=[[address.account_id]])
                 except:
                     logger.info('Resolving error', address_list[idx], fed_address_list[idx])
         else:  # if federal more that address
@@ -520,7 +520,7 @@ async def update_airdrop():
                 # print(fed_address_list[idx], '***')
                 address = await resolve_stellar_address_async(fed_address_list[idx], client=client)
                 # print(address.account_id)
-                await wks.update(f'D{idx + 1}', address.account_id)
+                await wks.update(range_name=f'D{idx + 1}', values=[[address.account_id]])
 
     address_list = await wks.col_values(4)
     address_list.pop(0)
@@ -548,8 +548,8 @@ async def update_airdrop():
         update_list.append([xlm_sum, eurmtl_sum, mtl_sum, sats_sum])
 
     # print(update_list)
-    await wks.update(f'K{start_pos + 3}', update_list)
-    await wks.update('O2', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name=f'K{start_pos + 3}', values=update_list)
+    await wks.update(range_name='O2', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
     await client.close()
 
     logger.info(f'report 3 all done {now}')
@@ -631,8 +631,8 @@ async def update_donates_new():
 
     update_list = await cmd_show_donates(return_table=True)
 
-    await wks.update('A2', update_list)
-    await wks.update('E1', now.strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='A2', values=update_list)
+    await wks.update(range_name='E1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
     update_list.append(['', '', ''])
     update_list.append(['', '', ''])
     update_list.append(['', '', ''])
@@ -666,7 +666,7 @@ async def update_export(session: Session):
              record.from_account, record.for_account, None, None, record.ledger])
 
     update_list.append(['LAST', ])
-    await wks.update(f'A{last_row}', update_list, value_input_option='USER_ENTERED')
+    await wks.update(range_name=f'A{last_row}', values=update_list, value_input_option='USER_ENTERED')
     # await wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
     logger.info(f'export all done {now}')
@@ -711,10 +711,10 @@ async def update_fest(session: Session):
             update_list.append([0])
 
     # Обновление таблицы
-    await wks.update('E2', update_list, value_input_option='USER_ENTERED')
+    await wks.update(range_name='E2', values=update_list, value_input_option='USER_ENTERED')
 
     wks = await ss.worksheet("config")
-    await wks.update('B4', datetime.now().strftime('%d.%m.%Y %H:%M:%S'))
+    await wks.update(range_name='B4', values=[[datetime.now().strftime('%d.%m.%Y %H:%M:%S')]])
     logger.info('update_fest completed successfully')
 
 
