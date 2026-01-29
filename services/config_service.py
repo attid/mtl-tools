@@ -208,3 +208,4 @@ class ConfigService:
             "join_request_captcha",
             "full_data",
         ]
+

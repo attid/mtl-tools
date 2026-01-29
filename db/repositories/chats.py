@@ -435,8 +435,6 @@ class ChatsRepository(BaseRepository):
                 title=title,
                 username=username,
                 created_at=now,
-                last_updated=now,
-                admins=[],
-                metadata_={}
+                last_updated=now
             )
             self.session.add(chat)

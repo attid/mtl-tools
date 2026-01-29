@@ -1453,6 +1453,10 @@ class TestAppContext:
         # Wire admin_service to utils_service
         self.utils_service.set_admin_service(self.admin_service)
 
+    def check_user(self, user_id: int) -> int:
+        """Check user status for antispam."""
+        return self.config_service.check_user(user_id)
+
 
 # ============================================================================
 # Protocol-compatible fake implementations for clean architecture

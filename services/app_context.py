@@ -40,6 +40,11 @@ class AppContext:
         self.command_registry = None
         self.db_service = None
 
+    def check_user(self, user_id: int) -> int:
+        """Check user status for antispam. Uses global cache from start.py."""
+        from start import _check_user
+        return _check_user(user_id)
+
     @classmethod
     def from_bot(cls, bot):
         """Create AppContext with all services. Created once at startup."""
