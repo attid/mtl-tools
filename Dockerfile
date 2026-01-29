@@ -38,6 +38,11 @@ RUN mkdir -p /app/logs /app/data \
 ARG GIT_COMMIT=unknown
 ENV GIT_COMMIT=${GIT_COMMIT}
 
+# Cache buster for source code only
+# Use: docker build --build-arg CACHEBUST=$(date +%s) -t skynet_bot .
+# Or:  docker build --build-arg CACHEBUST=$(git rev-parse HEAD) -t skynet_bot .
+ARG CACHEBUST=1
+
 # Copy source code
 COPY --chown=bot:bot . .
 
