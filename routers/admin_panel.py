@@ -1,6 +1,7 @@
 # routers/admin_panel.py
 """Admin panel for chat management in private messages and admin reload in groups."""
 
+import html
 import json
 from contextlib import suppress
 from typing import Optional
@@ -210,6 +211,10 @@ def chat_menu_kb(chat_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(
             text="Welcome Settings",
             callback_data=AdminCallback(action="welcome", chat_id=chat_id).pack()
+        )],
+        [InlineKeyboardButton(
+            text="Remove Dead Users",
+            callback_data=AdminCallback(action="dead", chat_id=chat_id).pack()
         )],
         [InlineKeyboardButton(
             text="<< Back",
@@ -442,9 +447,7 @@ async def cb_feature_info(query: CallbackQuery, callback_data: AdminCallback, ap
 @router.callback_query(AdminCallback.filter(F.action == "welcome"))
 async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCallback, session: Session, bot: Bot, app_context: AppContext):
     """Show welcome settings for selected chat."""
-    logger.debug(f"cb_show_welcome_settings called, chat_id={callback_data.chat_id}")
     if not app_context or not app_context.config_service:
-        logger.warning("cb_show_welcome_settings: app_context or config_service is None")
         await query.answer("Service unavailable.", show_alert=True)
         return
 
@@ -452,7 +455,6 @@ async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCal
 
     title = await get_chat_title(chat_id, bot, session)
     if not title:
-        logger.warning(f"cb_show_welcome_settings: chat {chat_id} not accessible")
         await query.answer("Chat not accessible.", show_alert=True)
         return
 
@@ -460,13 +462,13 @@ async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCal
     welcome_msg = app_context.config_service.get_welcome_message(chat_id)
     welcome_btn = app_context.config_service.get_welcome_button(chat_id)
 
-    # Format display text
+    # Format display text (escape HTML to prevent parse errors)
     msg_display = welcome_msg[:50] + "..." if welcome_msg and len(welcome_msg) > 50 else welcome_msg
     btn_display = str(welcome_btn)[:30] if welcome_btn else None
 
-    text_parts = [f"Welcome Settings: {title}", ""]
-    text_parts.append(f"Message: {msg_display or 'Not set'}")
-    text_parts.append(f"Button: {btn_display or 'Not set'}")
+    text_parts = [f"Welcome Settings: {html.escape(title)}", ""]
+    text_parts.append(f"Message: {html.escape(msg_display) if msg_display else 'Not set'}")
+    text_parts.append(f"Button: {html.escape(btn_display) if btn_display else 'Not set'}")
 
     with suppress(TelegramBadRequest):
         await query.message.edit_text(
