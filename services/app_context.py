@@ -2,7 +2,7 @@ from services.external_services import (GristService, GSpreadService, WebService
                                        StellarService, AirdropService, ReportService, AntispamService,
                                        PollService, ModerationService, AIService, TalkService,
                                        GroupService, UtilsService)
-from services.user_service import UserService
+from services.spam_status_service import SpamStatusService
 from services.config_service import ConfigService
 from services.feature_flags import FeatureFlagsService
 from services.notification_service import NotificationService
@@ -31,7 +31,7 @@ class AppContext:
         self.group_service = None
         self.utils_service = None
         # DI-based services
-        self.user_service = None
+        self.spam_status_service = None
         self.config_service = None
         self.feature_flags = None
         self.notification_service = None
@@ -41,10 +41,12 @@ class AppContext:
         self.command_registry = None
         self.db_service = None
 
-    def check_user(self, user_id: int) -> int:
-        """Check user status for antispam. Uses global cache from start.py."""
-        from start import _check_user
-        return _check_user(user_id)
+    def check_user(self, user_id: int):
+        """Check user status for antispam. Uses spam_status_service cache."""
+        from shared.domain.user import SpamStatus
+        if not self.spam_status_service:
+            return SpamStatus.NEW
+        return self.spam_status_service.get_status(user_id)
 
     @classmethod
     def from_bot(cls, bot):
@@ -74,7 +76,7 @@ class AppContext:
         ctx.notification_service = NotificationService()
         ctx.command_registry = CommandRegistryService()
         ctx.db_service = DatabaseService()
-        ctx.user_service = UserService(ChatsRepositoryAdapter(ctx.db_service.session_pool))
+        ctx.spam_status_service = SpamStatusService(ChatsRepositoryAdapter(ctx.db_service.session_pool))
 
         return ctx
 

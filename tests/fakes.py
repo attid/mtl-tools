@@ -792,17 +792,20 @@ class FakeModerationService:
         self._user_ids = {}
 
     async def _ban_user(self, session, chat_id, user_id, bot, revoke_messages=True):
+        from shared.domain.user import SpamStatus
         await bot.ban_chat_member(chat_id, user_id, revoke_messages=revoke_messages)
-        self._user_status[user_id] = 2
+        self._user_status[user_id] = SpamStatus.BAD
         return True
 
     async def _unban_user(self, session, chat_id, user_id, bot):
+        from shared.domain.user import SpamStatus
         await bot.unban_chat_member(chat_id, user_id)
-        self._user_status[user_id] = 0
+        self._user_status[user_id] = SpamStatus.NEW
         return True
 
     def check_user_status(self, session, user_id):
-        return self._user_status.get(user_id, 0)
+        from shared.domain.user import SpamStatus
+        return self._user_status.get(user_id, SpamStatus.NEW)
 
     def get_user_id(self, session, username):
         if isinstance(username, str):
@@ -1233,58 +1236,50 @@ class FakeAdminService:
         self._topic_admins = {k: v.copy() for k, v in topic_admins_data.items()}
 
 
-class FakeUserService:
-    """Fake implementation of UserService for testing."""
+class FakeSpamStatusService:
+    """Fake implementation of SpamStatusService for testing."""
 
     def __init__(self):
-        from shared.domain.user import UserType
-        self._cache: dict = {}  # user_id -> UserType
+        from shared.domain.user import SpamStatus
+        self._cache: dict = {}  # user_id -> SpamStatus
         self._name_cache: dict = {}
-        self.UserType = UserType
+        self.SpamStatus = SpamStatus
 
-    def get_user_type(self, user_id: int):
-        from shared.domain.user import UserType
-        return self._cache.get(user_id, UserType.REGULAR)
+    def get_status(self, user_id: int):
+        from shared.domain.user import SpamStatus
+        return self._cache.get(user_id, SpamStatus.NEW)
 
     def get_user(self, user_id: int):
         from shared.domain.user import User
-        user_type = self.get_user_type(user_id)
-        return User(user_id=user_id, user_type=user_type)
+        status = self.get_status(user_id)
+        return User(user_id=user_id, spam_status=status)
 
-    def set_user_type(self, user_id: int, user_type) -> None:
-        self._cache[user_id] = user_type
+    def set_status(self, user_id: int, status) -> None:
+        self._cache[user_id] = status
 
-    def is_admin(self, user_id: int) -> bool:
-        from shared.domain.user import UserType
-        return self.get_user_type(user_id) >= UserType.ADMIN
+    def is_good(self, user_id: int) -> bool:
+        from shared.domain.user import SpamStatus
+        return self.get_status(user_id) == SpamStatus.GOOD
 
-    def is_superadmin(self, user_id: int) -> bool:
-        from shared.domain.user import UserType
-        return self.get_user_type(user_id) == UserType.SUPERADMIN
+    def is_bad(self, user_id: int) -> bool:
+        from shared.domain.user import SpamStatus
+        return self.get_status(user_id) == SpamStatus.BAD
 
-    def is_trusted(self, user_id: int) -> bool:
-        from shared.domain.user import UserType
-        return self.get_user_type(user_id) >= UserType.TRUSTED
+    def is_new(self, user_id: int) -> bool:
+        from shared.domain.user import SpamStatus
+        return self.get_status(user_id) == SpamStatus.NEW
 
-    def is_banned(self, user_id: int) -> bool:
-        from shared.domain.user import UserType
-        return self.get_user_type(user_id) == UserType.BANNED
+    def mark_good(self, user_id: int) -> None:
+        from shared.domain.user import SpamStatus
+        self.set_status(user_id, SpamStatus.GOOD)
 
-    def ban_user(self, user_id: int) -> None:
-        from shared.domain.user import UserType
-        self.set_user_type(user_id, UserType.BANNED)
+    def mark_bad(self, user_id: int) -> None:
+        from shared.domain.user import SpamStatus
+        self.set_status(user_id, SpamStatus.BAD)
 
-    def unban_user(self, user_id: int) -> None:
-        from shared.domain.user import UserType
-        self.set_user_type(user_id, UserType.REGULAR)
-
-    def promote_to_admin(self, user_id: int) -> None:
-        from shared.domain.user import UserType
-        self.set_user_type(user_id, UserType.ADMIN)
-
-    def promote_to_trusted(self, user_id: int) -> None:
-        from shared.domain.user import UserType
-        self.set_user_type(user_id, UserType.TRUSTED)
+    def mark_new(self, user_id: int) -> None:
+        from shared.domain.user import SpamStatus
+        self.set_status(user_id, SpamStatus.NEW)
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -1292,10 +1287,10 @@ class FakeUserService:
     def invalidate_user(self, user_id: int) -> None:
         self._cache.pop(user_id, None)
 
-    def preload_users(self, users: dict) -> None:
-        from shared.domain.user import UserType
-        for user_id, user_type in users.items():
-            self._cache[user_id] = UserType(user_type)
+    def preload_statuses(self, statuses: dict) -> None:
+        from shared.domain.user import SpamStatus
+        for user_id, status in statuses.items():
+            self._cache[user_id] = SpamStatus(status)
 
     def get_cached_count(self) -> int:
         return len(self._cache)
@@ -1449,7 +1444,7 @@ class TestAppContext:
         self.voting_service = FakeVotingService()
         self.admin_service = FakeAdminService()
         self.notification_service = FakeNotificationService()
-        self.user_service = FakeUserService()
+        self.spam_status_service = FakeSpamStatusService()
         self.command_registry = FakeCommandRegistryService()
         self.db_service = FakeDatabaseService()
         self.admin_id = 123456
@@ -1458,7 +1453,7 @@ class TestAppContext:
 
     def check_user(self, user_id: int) -> int:
         """Check user status for antispam."""
-        return self.config_service.check_user(user_id)
+        return self.spam_status_service.get_status(user_id)
 
 
 # ============================================================================

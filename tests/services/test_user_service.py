@@ -1,8 +1,8 @@
 # tests/services/test_user_service.py
-"""Tests for UserService."""
+"""Tests for SpamStatusService."""
 
 import pytest
-from services.user_service import UserService
+from services.spam_status_service import SpamStatusService
 from tests.fakes import FakeChatsRepositoryProtocol
 
 
@@ -11,20 +11,20 @@ class TestNameCache:
 
     def test_cache_name_and_get(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         service.cache_name("123", "Alice")
         assert service.get_cached_name("123") == "Alice"
 
     def test_get_cached_name_returns_none_for_missing(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         assert service.get_cached_name("nonexistent") is None
 
     def test_cache_name_with_stellar_address(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         address = "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
         service.cache_name(address, "StellarUser")
@@ -32,7 +32,7 @@ class TestNameCache:
 
     def test_cache_name_overwrites_existing(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         service.cache_name("123", "OldName")
         service.cache_name("123", "NewName")
@@ -40,7 +40,7 @@ class TestNameCache:
 
     def test_load_name_cache_bulk(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         names = {
             "123": "Alice",
@@ -55,7 +55,7 @@ class TestNameCache:
 
     def test_load_name_cache_replaces_existing(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         service.cache_name("old_key", "OldValue")
         service.load_name_cache({"new_key": "NewValue"})
@@ -65,7 +65,7 @@ class TestNameCache:
 
     def test_load_name_cache_creates_copy(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         names = {"123": "Alice"}
         service.load_name_cache(names)
@@ -80,7 +80,7 @@ class TestNameCache:
 
     def test_get_all_names_returns_copy(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         service.cache_name("123", "Alice")
         service.cache_name("456", "Bob")
@@ -96,6 +96,6 @@ class TestNameCache:
 
     def test_get_all_names_empty(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
         assert service.get_all_names() == {}

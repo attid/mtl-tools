@@ -340,7 +340,7 @@ async def test_reply_only_allowed(mock_telegram, router_app_context):
 
 @pytest.mark.asyncio
 async def test_community_vote_prompt(mock_telegram, router_app_context):
-    from shared.domain.user import UserType
+    from shared.domain.user import SpamStatus
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(last_router)
@@ -348,7 +348,7 @@ async def test_community_vote_prompt(mock_telegram, router_app_context):
     chat_id = -1007
     user_id = 123
     # Set user as REGULAR (type 0) using DI service
-    router_app_context.user_service.set_user_type(user_id, UserType.REGULAR)
+    router_app_context.spam_status_service.set_status(user_id, SpamStatus.NEW)
     router_app_context.voting_service.enable_first_vote(chat_id)
 
     update = build_message_update(chat_id=chat_id, user_id=user_id, text="Hello")

@@ -9,99 +9,72 @@ from tests.fakes import (
     FakeConfigRepositoryProtocol,
     FakeChatsRepositoryProtocol,
 )
-from services.user_service import UserService
+from services.spam_status_service import SpamStatusService
 from services.config_service import ConfigService
 from services.feature_flags import FeatureFlagsService, ChatFeatures
-from shared.domain.user import UserType
+from shared.domain.user import SpamStatus
 
 
-class TestUserService:
-    """Tests for UserService with DI."""
+class TestSpamStatusService:
+    """Tests for SpamStatusService with DI."""
 
-    def test_get_user_type_from_cache(self):
+    def test_get_status_from_cache(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.preload_users({123: UserType.ADMIN.value})
+        service.preload_statuses({123: SpamStatus.GOOD.value})
 
-        assert service.get_user_type(123) == UserType.ADMIN
+        assert service.get_status(123) == SpamStatus.GOOD
 
-    def test_get_user_type_from_repo(self):
+    def test_get_status_from_repo(self):
         repo = FakeChatsRepositoryProtocol()
-        repo.save_user_type(456, UserType.TRUSTED.value)
-        service = UserService(repo)
+        repo.save_user_type(456, SpamStatus.BAD.value)
+        service = SpamStatusService(repo)
 
-        result = service.get_user_type(456)
+        result = service.get_status(456)
 
-        assert result == UserType.TRUSTED
+        assert result == SpamStatus.BAD
 
-    def test_get_user_type_returns_regular_for_unknown(self):
+    def test_get_status_returns_new_for_unknown(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        result = service.get_user_type(999)
+        result = service.get_status(999)
 
-        assert result == UserType.REGULAR
+        assert result == SpamStatus.NEW
 
-    def test_is_admin(self):
+    def test_is_good(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.set_user_type(123, UserType.ADMIN)
+        service.set_status(123, SpamStatus.GOOD)
 
-        assert service.is_admin(123) is True
-        assert service.is_admin(456) is False
+        assert service.is_good(123) is True
+        assert service.is_good(456) is False
 
-    def test_is_superadmin(self):
+    def test_is_bad(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.set_user_type(123, UserType.SUPERADMIN)
+        service.set_status(123, SpamStatus.BAD)
 
-        assert service.is_superadmin(123) is True
-        assert service.is_admin(123) is True  # superadmin is also admin
+        assert service.is_bad(123) is True
+        assert service.is_bad(456) is False
 
-    def test_is_banned(self):
+    def test_is_new(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.set_user_type(123, UserType.BANNED)
+        service.set_status(123, SpamStatus.NEW)
 
-        assert service.is_banned(123) is True
-        assert service.is_banned(456) is False
-
-    def test_is_trusted(self):
-        repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
-
-        service.set_user_type(123, UserType.TRUSTED)
-
-        assert service.is_trusted(123) is True
-        assert service.is_trusted(456) is False
-
-    def test_ban_user(self):
-        repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
-
-        service.ban_user(123)
-
-        assert service.is_banned(123) is True
-
-    def test_unban_user(self):
-        repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
-        service.ban_user(123)
-
-        service.unban_user(123)
-
-        assert service.is_banned(123) is False
-        assert service.get_user_type(123) == UserType.REGULAR
+        assert service.is_new(123) is True
+        assert service.is_new(456) is True
 
     def test_clear_cache(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.preload_users({123: UserType.ADMIN.value})
+        service.preload_statuses({123: SpamStatus.GOOD.value})
         assert service.get_cached_count() == 1
 
         service.clear_cache()
@@ -110,9 +83,9 @@ class TestUserService:
 
     def test_invalidate_user(self):
         repo = FakeChatsRepositoryProtocol()
-        service = UserService(repo)
+        service = SpamStatusService(repo)
 
-        service.preload_users({123: UserType.ADMIN.value, 456: UserType.TRUSTED.value})
+        service.preload_statuses({123: SpamStatus.GOOD.value, 456: SpamStatus.BAD.value})
 
         service.invalidate_user(123)
 
@@ -360,24 +333,24 @@ class TestStellarIntegration:
 class TestServiceInteraction:
     """Tests for interaction between services."""
 
-    def test_user_service_with_config_service(self):
+    def test_spam_status_service_with_config_service(self):
         """Test that services work together through shared patterns."""
         config_repo = FakeConfigRepositoryProtocol()
         chats_repo = FakeChatsRepositoryProtocol()
 
         config_service = ConfigService(config_repo)
-        user_service = UserService(chats_repo)
+        spam_status_service = SpamStatusService(chats_repo)
         flags_service = FeatureFlagsService(config_service)
 
         # Set up a chat with captcha
         flags_service.enable(100, "captcha")
 
-        # Set up an admin user
-        user_service.set_user_type(123, UserType.ADMIN)
+        # Set up a good user
+        spam_status_service.set_status(123, SpamStatus.GOOD)
 
         # Verify services work correctly
         assert flags_service.is_captcha_enabled(100) is True
-        assert user_service.is_admin(123) is True
+        assert spam_status_service.is_good(123) is True
 
     def test_feature_flags_updates_propagate(self):
         """Test that feature flag changes update cache correctly."""

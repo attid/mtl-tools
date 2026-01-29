@@ -1,5 +1,5 @@
 class ChatsRepositoryAdapter:
-    """SessionPool-backed adapter for UserService repository access."""
+    """SessionPool-backed adapter for SpamStatusService repository access."""
 
     def __init__(self, session_pool):
         self._session_pool = session_pool

@@ -13,6 +13,7 @@ from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.constants import MTLChats
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext
+from shared.domain.user import SpamStatus
 
 router = Router()
 
@@ -116,16 +117,16 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
     else:
         user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    user_type = app_context.moderation_service.check_user_status(session, user_id)
+    user_status = app_context.moderation_service.check_user_status(session, user_id)
 
-    if user_type == 0:
+    if user_status == SpamStatus.NEW:
         message_text = "New User"
-    elif user_type == 1:
+    elif user_status == SpamStatus.GOOD:
         message_text = "Good User"
-    elif user_type == 2:
+    elif user_status == SpamStatus.BAD:
         message_text = "Bad User"
     else:
-        message_text = f"unknown status {user_type}"
+        message_text = f"unknown status {user_status}"
 
     await message.reply(f"User ID: {user_id}, Type: {message_text}")
 

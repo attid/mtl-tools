@@ -298,8 +298,14 @@ class ModerationService:
 
     def check_user_status(self, session, user_id):
         from db.repositories import ChatsRepository
+        from shared.domain.user import SpamStatus
         user = ChatsRepository(session).get_user_by_id(user_id)
-        return user.user_type if user else 0
+        if user:
+            try:
+                return SpamStatus(getattr(user, "user_type", SpamStatus.NEW.value))
+            except ValueError:
+                return SpamStatus.NEW
+        return SpamStatus.NEW
 
     def get_user_id(self, session, username):
         from db.repositories import ChatsRepository
@@ -476,4 +482,3 @@ class UtilsService:
     async def parse_timedelta_from_message(self, message):
         from other.timedelta import parse_timedelta_from_message
         return await parse_timedelta_from_message(message)
-

@@ -10,6 +10,7 @@ from other.text_tools import extract_url
 from start import add_bot_users
 from other.constants import MTLChats, BotValueTypes
 from services.app_context import app_context
+from shared.domain.user import SpamStatus
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.open_ai_tools import talk_check_spam
 
@@ -107,7 +108,7 @@ async def check_spam(message, session=None):
 
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    if app_context.check_user(user_id) == 1:
+    if app_context.check_user(user_id) == SpamStatus.GOOD:
         return False
 
     rules_name = 'xz'

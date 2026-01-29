@@ -7,13 +7,18 @@ from typing import Optional
 from datetime import datetime
 
 
-class UserType(IntEnum):
-    """User permission levels."""
-    BANNED = -1
+class SpamStatus(IntEnum):
+    """Spam status values stored in BotUsers.user_type."""
+    NEW = 0
+    GOOD = 1
+    BAD = 2
+
+
+class AdminStatus(IntEnum):
+    """Admin status for domain logic (not tied to DB)."""
     REGULAR = 0
-    TRUSTED = 1
-    ADMIN = 2
-    SUPERADMIN = 3
+    ADMIN = 1
+    SUPERADMIN = 2
 
 
 @dataclass(frozen=True)
@@ -25,35 +30,52 @@ class User:
     """
     user_id: int
     username: Optional[str] = None
-    user_type: UserType = UserType.REGULAR
+    spam_status: SpamStatus = SpamStatus.NEW
+    admin_status: AdminStatus = AdminStatus.REGULAR
     created_at: Optional[datetime] = None
 
     @property
     def is_admin(self) -> bool:
         """Check if user has admin privileges."""
-        return self.user_type >= UserType.ADMIN
-
-    @property
-    def is_trusted(self) -> bool:
-        """Check if user is trusted or higher."""
-        return self.user_type >= UserType.TRUSTED
-
-    @property
-    def is_banned(self) -> bool:
-        """Check if user is banned."""
-        return self.user_type == UserType.BANNED
+        return self.admin_status >= AdminStatus.ADMIN
 
     @property
     def is_superadmin(self) -> bool:
         """Check if user is superadmin."""
-        return self.user_type == UserType.SUPERADMIN
+        return self.admin_status == AdminStatus.SUPERADMIN
 
-    def with_type(self, new_type: UserType) -> "User":
-        """Return new User with updated type."""
+    @property
+    def is_good(self) -> bool:
+        """Check if user is good."""
+        return self.spam_status == SpamStatus.GOOD
+
+    @property
+    def is_bad(self) -> bool:
+        """Check if user is bad."""
+        return self.spam_status == SpamStatus.BAD
+
+    @property
+    def is_new(self) -> bool:
+        """Check if user is new."""
+        return self.spam_status == SpamStatus.NEW
+
+    def with_spam_status(self, new_status: SpamStatus) -> "User":
+        """Return new User with updated spam status."""
         return User(
             user_id=self.user_id,
             username=self.username,
-            user_type=new_type,
+            spam_status=new_status,
+            admin_status=self.admin_status,
+            created_at=self.created_at,
+        )
+
+    def with_admin_status(self, new_status: AdminStatus) -> "User":
+        """Return new User with updated admin status."""
+        return User(
+            user_id=self.user_id,
+            username=self.username,
+            spam_status=self.spam_status,
+            admin_status=new_status,
             created_at=self.created_at,
         )
 
@@ -62,6 +84,7 @@ class User:
         return User(
             user_id=self.user_id,
             username=new_username,
-            user_type=self.user_type,
+            spam_status=self.spam_status,
+            admin_status=self.admin_status,
             created_at=self.created_at,
         )

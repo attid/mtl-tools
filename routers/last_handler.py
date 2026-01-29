@@ -28,7 +28,7 @@ from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.stellar import check_url_xdr
 from other.miniapps_tools import miniapps
-from shared.domain.user import UserType
+from shared.domain.user import SpamStatus
 from db.repositories import ConfigRepository
 
 router = Router()
@@ -66,11 +66,11 @@ def _is_feature_enabled(app_context, chat_id: int, feature: str) -> bool:
     return app_context.feature_flags.is_enabled(chat_id, feature)
 
 
-def _get_user_type(app_context, user_id: int) -> UserType:
-    """Get user type from app_context.user_service. Returns UserType for domain logic."""
-    if not app_context or not app_context.user_service:
-        raise ValueError("app_context with user_service required")
-    return app_context.user_service.get_user_type(user_id)
+def _get_spam_status(app_context, user_id: int) -> SpamStatus:
+    """Get spam status from app_context.spam_status_service."""
+    if not app_context or not app_context.spam_status_service:
+        raise ValueError("app_context with spam_status_service required")
+    return app_context.spam_status_service.get_status(user_id)
 
 
 def _is_first_vote_enabled(app_context, chat_id: int) -> bool:
@@ -475,8 +475,8 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
 
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
     # Check user type using DI service
-    # UserType.REGULAR.value == 0 means new user, triggers first vote
-    if _get_user_type(app_context, user_id) == UserType.REGULAR:
+    # SpamStatus.NEW == 0 means new user, triggers first vote
+    if _get_spam_status(app_context, user_id) == SpamStatus.NEW:
         await set_vote(message, app_context=app_context)
 
     add_bot_users(session, user_id, message.from_user.username, 1)
@@ -493,8 +493,8 @@ async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
     # Check user type using DI service
-    # UserType.TRUSTED means trusted user, skip spam check
-    if _get_user_type(app_context, user_id) == UserType.TRUSTED:
+    # SpamStatus.GOOD means good user, skip spam check
+    if _get_spam_status(app_context, user_id) == SpamStatus.GOOD:
         return False
 
     await app_context.antispam_service.delete_and_log_spam(message, session)

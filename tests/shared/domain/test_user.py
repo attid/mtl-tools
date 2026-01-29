@@ -1,40 +1,45 @@
-# tests/shared/domain/test_user.py
 import pytest
-from shared.domain.user import User, UserType
+from shared.domain.user import User, AdminStatus, SpamStatus
 
 
 def test_user_is_admin():
-    admin = User(user_id=1, user_type=UserType.ADMIN)
-    regular = User(user_id=2, user_type=UserType.REGULAR)
+    admin = User(user_id=1, admin_status=AdminStatus.ADMIN)
+    regular = User(user_id=2, admin_status=AdminStatus.REGULAR)
 
     assert admin.is_admin is True
     assert regular.is_admin is False
 
 
-def test_user_is_trusted():
-    trusted = User(user_id=1, user_type=UserType.TRUSTED)
-    regular = User(user_id=2, user_type=UserType.REGULAR)
-    admin = User(user_id=3, user_type=UserType.ADMIN)
-
-    assert trusted.is_trusted is True
-    assert regular.is_trusted is False
-    assert admin.is_trusted is True  # Admin is also trusted
-
-
-def test_user_is_banned():
-    banned = User(user_id=1, user_type=UserType.BANNED)
-    regular = User(user_id=2, user_type=UserType.REGULAR)
-
-    assert banned.is_banned is True
-    assert regular.is_banned is False
-
-
 def test_user_is_superadmin():
-    superadmin = User(user_id=1, user_type=UserType.SUPERADMIN)
-    admin = User(user_id=2, user_type=UserType.ADMIN)
+    superadmin = User(user_id=1, admin_status=AdminStatus.SUPERADMIN)
+    admin = User(user_id=2, admin_status=AdminStatus.ADMIN)
 
     assert superadmin.is_superadmin is True
     assert admin.is_superadmin is False
+
+
+def test_user_is_good():
+    good = User(user_id=1, spam_status=SpamStatus.GOOD)
+    new = User(user_id=2, spam_status=SpamStatus.NEW)
+
+    assert good.is_good is True
+    assert new.is_good is False
+
+
+def test_user_is_bad():
+    bad = User(user_id=1, spam_status=SpamStatus.BAD)
+    good = User(user_id=2, spam_status=SpamStatus.GOOD)
+
+    assert bad.is_bad is True
+    assert good.is_bad is False
+
+
+def test_user_is_new():
+    new = User(user_id=1, spam_status=SpamStatus.NEW)
+    good = User(user_id=2, spam_status=SpamStatus.GOOD)
+
+    assert new.is_new is True
+    assert good.is_new is False
 
 
 def test_user_is_immutable():
@@ -44,12 +49,21 @@ def test_user_is_immutable():
         user.username = "changed"
 
 
-def test_user_with_type():
-    user = User(user_id=1, user_type=UserType.REGULAR)
-    admin = user.with_type(UserType.ADMIN)
+def test_user_with_spam_status():
+    user = User(user_id=1, spam_status=SpamStatus.NEW)
+    good = user.with_spam_status(SpamStatus.GOOD)
 
-    assert user.user_type == UserType.REGULAR  # original unchanged
-    assert admin.user_type == UserType.ADMIN
+    assert user.spam_status == SpamStatus.NEW  # original unchanged
+    assert good.spam_status == SpamStatus.GOOD
+    assert good.user_id == user.user_id
+
+
+def test_user_with_admin_status():
+    user = User(user_id=1, admin_status=AdminStatus.REGULAR)
+    admin = user.with_admin_status(AdminStatus.ADMIN)
+
+    assert user.admin_status == AdminStatus.REGULAR  # original unchanged
+    assert admin.admin_status == AdminStatus.ADMIN
     assert admin.user_id == user.user_id
 
 
@@ -62,9 +76,8 @@ def test_user_with_username():
     assert updated.user_id == user.user_id
 
 
-def test_user_type_ordering():
-    """Test that UserType values are ordered correctly."""
-    assert UserType.BANNED < UserType.REGULAR
-    assert UserType.REGULAR < UserType.TRUSTED
-    assert UserType.TRUSTED < UserType.ADMIN
-    assert UserType.ADMIN < UserType.SUPERADMIN
+def test_status_ordering():
+    assert SpamStatus.NEW < SpamStatus.GOOD
+    assert SpamStatus.GOOD < SpamStatus.BAD
+    assert AdminStatus.REGULAR < AdminStatus.ADMIN
+    assert AdminStatus.ADMIN < AdminStatus.SUPERADMIN

@@ -42,24 +42,7 @@ global_tasks = []
 # Reboot flag - was previously in global_data
 _reboot_flag = False
 
-# User cache - was previously in global_data
-# Thread-safe user type cache (kept for backwards compatibility)
-from threading import Lock
-_users_lock = Lock()
-_users_list: dict[int, int] = {}
-
-
-def _add_user(user_id: int, user_type: int) -> int:
-    """Add or update user in the cache."""
-    with _users_lock:
-        _users_list[user_id] = user_type
-    return user_type
-
-
-def _check_user(user_id: int) -> int:
-    """Check user type from cache. Returns -1 if not found."""
-    with _users_lock:
-        return _users_list.get(user_id, -1)
+# User cache is handled by spam_status_service inside app_context
 
 GIT_COMMIT = os.environ.get('GIT_COMMIT', 'unknown')
 logger.info(f'start (commit: {GIT_COMMIT})')
@@ -186,8 +169,6 @@ async def main():
     storage = RedisStorage(redis=redis)
     dp = Dispatcher(storage=storage)
 
-    global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot)))
-
     # Настройка middleware
     app_context_middleware = AppContextMiddleware(bot)
     dp.message.middleware(DbSessionMiddleware(db_pool))
@@ -218,6 +199,8 @@ async def main():
     import services.app_context as app_context_module
     app_context_module.app_context = app_context_middleware.app_context
 
+    global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot, app_context_middleware.app_context)))
+
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)
 
@@ -239,18 +222,25 @@ async def main():
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
-async def load_globals(session: Session, bot: Bot):
-    for user in ChatsRepository(session).load_bot_users():
-        _users_list[user.user_id] = user.user_type
+async def load_globals(session: Session, bot: Bot, app_context):
+    users = ChatsRepository(session).load_bot_users()
+    if app_context and app_context.spam_status_service:
+        try:
+            app_context.spam_status_service.preload_statuses({user.user_id: user.user_type for user in users})
+        except ValueError as e:
+            logger.warning(f"spam_status_service preload failed: {e}")
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='globals loaded')
 
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
     """Добавляет или обновляет пользователя в списке с логированием"""
-    _add_user(user_id, new_user_type)
-    # user_type = 1 if good else 2
-    # -1 one mistake -2 two mistake
+    try:
+        from services import app_context as app_context_module
+        if app_context_module.app_context and app_context_module.app_context.spam_status_service:
+            app_context_module.app_context.spam_status_service.preload_statuses({user_id: new_user_type})
+    except Exception as e:
+        logger.warning(f"spam_status_service cache update failed: {e}")
     ChatsRepository(session).save_bot_user(user_id, username, new_user_type)
 
 

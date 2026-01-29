@@ -24,6 +24,7 @@ from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_lin
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from other.pyro_tools import GroupMember
+from shared.domain.user import SpamStatus
 from db.repositories import ConfigRepository, ChatsRepository
 # from other.spam_cheker import combo_check_spammer, lols_check_spammer
 
@@ -249,7 +250,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
     user_type_now = user.user_type if user else 0
 
     username = get_username_link(event.new_chat_member.user)
-    if user_type_now == 2:
+    if user_type_now == SpamStatus.BAD:
         with suppress(TelegramBadRequest):
             await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         kb_unban = InlineKeyboardMarkup(inline_keyboard=[[

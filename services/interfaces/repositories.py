@@ -54,7 +54,7 @@ class IChatsRepository(Protocol):
         ...
 
     def save_user_type(self, user_id: int, user_type: int) -> bool:
-        """Save user type/permission level."""
+        """Save spam status (stored in user_type)."""
         ...
 
 
