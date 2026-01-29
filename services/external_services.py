@@ -437,6 +437,8 @@ class GroupService:
 class UtilsService:
     async def sleep_and_delete(self, message, seconds=None):
         from other.aiogram_tools import cmd_sleep_and_delete
+        if seconds is None:
+            seconds = 3 * 60
         return await cmd_sleep_and_delete(message, sleep_time=seconds)
         
     async def multi_reply(self, message, text):
