@@ -23,7 +23,6 @@ from start import add_bot_users
 from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
 from other.open_ai_tools import talk_check_spam
-from other.global_data import global_data
 from other.constants import MTLChats, BotValueTypes
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
@@ -60,16 +59,18 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
 ##########################################  DI Helpers  ################################################################
 ########################################################################################################################
 
-def _is_feature_enabled(app_context, chat_id: int, feature: str, global_list: list) -> bool:
+def _is_feature_enabled(app_context, chat_id: int, feature: str) -> bool:
     """Check if feature is enabled using DI service. Raises error if app_context not available."""
     if not app_context or not app_context.feature_flags:
         raise ValueError("app_context with feature_flags required")
     return app_context.feature_flags.is_enabled(chat_id, feature)
 
 
-def _get_user_type(user_id: int) -> int:
-    """Get user type from global_data. Returns int for backward compatibility."""
-    return global_data.check_user(user_id)
+def _get_user_type(app_context, user_id: int) -> UserType:
+    """Get user type from app_context.user_service. Returns UserType for domain logic."""
+    if not app_context or not app_context.user_service:
+        raise ValueError("app_context with user_service required")
+    return app_context.user_service.get_user_type(user_id)
 
 
 def _is_first_vote_enabled(app_context, chat_id: int) -> bool:
@@ -128,11 +129,12 @@ def _remove_topic_mute(app_context, chat_id: int, thread_id: int, user_id: int) 
     app_context.admin_service.remove_user_mute(chat_id, thread_id, user_id)
 
 
-async def _save_topic_mutes_to_db(app_context) -> None:
-    """Save topic mutes to database using global_data (persistence layer)."""
-    # Always save to global_data.db_service for persistence
-    await global_data.db_service.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                json.dumps(global_data.topic_mute))
+async def _save_topic_mutes_to_db(session: Session, app_context) -> None:
+    """Save topic mutes to database using session + ConfigRepository."""
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    all_mutes = app_context.admin_service.get_all_topic_mutes()
+    ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
 
 ########################################################################################################################
@@ -189,10 +191,10 @@ async def check_alert(bot, message, session, app_context=None):
                 user_from=_get_sender_name(message.reply_to_message),
                 message_id=message.reply_to_message.message_id,
                 message_text=message.reply_to_message.html_text or "")
-        
+
         # Получаем инфу о топике через Pyro один раз для сообщения
         await pyro_update_msg_info(msg_info)
-        
+
         # Формируем topic_info один раз
         topic_info = ""
         if getattr(msg_info, "thread_id", None):
@@ -237,7 +239,7 @@ async def check_alert(bot, message, session, app_context=None):
 
 
 async def save_last(message, session, app_context=None):
-    if _is_feature_enabled(app_context, message.chat.id, 'save_last_message_date', global_data.save_last_message_date):
+    if _is_feature_enabled(app_context, message.chat.id, 'save_last_message_date'):
         ChatsRepository(session).update_user_chat_date(message.from_user.id, message.chat.id)
 
 
@@ -291,7 +293,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot, sta
     has_temp_permission = False
     fsm_data = await state.get_data()
     expiration_str = fsm_data.get('reply_only_expiration')
-    
+
     if expiration_str:
         try:
             expiration_time = datetime.fromisoformat(expiration_str)
@@ -341,7 +343,7 @@ async def cmd_check_reply_only(message: Message, session: Session, bot: Bot, sta
         with suppress(TelegramBadRequest):
             await message.delete()
             await msg.delete()
-            
+
         if app_context:
             await app_context.utils_service.sleep_and_delete(msg_d, 120)
         else:
@@ -378,9 +380,7 @@ async def cmd_tools(message: Message, bot: Bot, session: Session, app_context=No
 
 
 async def check_mute(message, session, app_context=None):
-    #     global_data.topic_mute[chat_thread_key][user_id] = {"end_time": end_time, "user": user}
-    #     await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(global_data.topic_mute))
-    if not _is_feature_enabled(app_context, message.chat.id, 'moderate', global_data.moderate):
+    if not _is_feature_enabled(app_context, message.chat.id, 'moderate'):
         return False
 
     chat_id = message.chat.id
@@ -412,7 +412,7 @@ async def check_mute(message, session, app_context=None):
         logger.error(f"Invalid date format for user {user_id} in chat {chat_thread_key}: {e}")
         # Remove the invalid entry
         _remove_topic_mute(app_context, chat_id, thread_id, user_id)
-        await _save_topic_mutes_to_db(app_context)
+        await _save_topic_mutes_to_db(session, app_context)
         return False
 
     if current_time < end_time:
@@ -420,7 +420,7 @@ async def check_mute(message, session, app_context=None):
         return True
     else:
         _remove_topic_mute(app_context, chat_id, thread_id, user_id)
-        await _save_topic_mutes_to_db(app_context)
+        await _save_topic_mutes_to_db(session, app_context)
         return False
 
 
@@ -436,8 +436,8 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
     # Using app_context if available (and antispam service)
     chat_id = message.chat.id
 
-    # Check no_first_link feature using DI service or global_data fallback
-    if _is_feature_enabled(app_context, chat_id, 'no_first_link', global_data.no_first_link):
+    # Check no_first_link feature using DI service
+    if _is_feature_enabled(app_context, chat_id, 'no_first_link'):
         if app_context:
             deleted = await app_context.antispam_service.check_spam(message, session)
         else:
@@ -447,44 +447,42 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
             # If the message was deleted during spam check, we stop processing
             return
 
-    # Check need_decode using DI service or global_data fallback
+    # Check need_decode using DI service
     needs_decode = False
     if app_context and app_context.bot_state_service:
         needs_decode = app_context.bot_state_service.needs_decode(chat_id)
-    else:
-        needs_decode = chat_id in global_data.need_decode
 
     if needs_decode:
         await cmd_tools(message, bot, session, app_context=app_context)
 
-    # Check save_last_message_date using DI service or global_data fallback
-    if _is_feature_enabled(app_context, chat_id, 'save_last_message_date', global_data.save_last_message_date):
+    # Check save_last_message_date using DI service
+    if _is_feature_enabled(app_context, chat_id, 'save_last_message_date'):
         await save_last(message, session, app_context=app_context)
 
-    # Check moderate using DI service or global_data fallback
-    if _is_feature_enabled(app_context, chat_id, 'moderate', global_data.moderate):
+    # Check moderate using DI service
+    if _is_feature_enabled(app_context, chat_id, 'moderate'):
         await check_mute(message, session, app_context=app_context)
 
-    # Check notify_message using DI service or global_data fallback
+    # Check notify_message using DI service
     if _get_message_notify_config(app_context, chat_id):
         await notify_message(message, app_context=app_context)
 
-    # Check reply_only using DI service or global_data fallback
-    if _is_feature_enabled(app_context, chat_id, 'reply_only', global_data.reply_only):
+    # Check reply_only using DI service
+    if _is_feature_enabled(app_context, chat_id, 'reply_only'):
         await cmd_check_reply_only(message, session, bot, state, app_context=app_context)
 
     await check_alert(bot, message, session, app_context=app_context)
 
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    # Check user type using DI service or global_data fallback
+    # Check user type using DI service
     # UserType.REGULAR.value == 0 means new user, triggers first vote
-    if _get_user_type(user_id) == UserType.REGULAR.value:
+    if _get_user_type(app_context, user_id) == UserType.REGULAR:
         await set_vote(message, app_context=app_context)
 
     add_bot_users(session, user_id, message.from_user.username, 1)
 
-    # Check listen using DI service or global_data fallback
-    if _is_feature_enabled(app_context, chat_id, 'listen', global_data.listen):
+    # Check listen using DI service
+    if _is_feature_enabled(app_context, chat_id, 'listen'):
         MessageRepository(session).save_message(user_id=user_id, username=message.from_user.username,
                         thread_id=message.message_thread_id if message.is_topic_message else None,
                         text=message.text, chat_id=message.chat.id)
@@ -494,9 +492,9 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
 async def cmd_last_check_other(message: Message, session: Session, bot: Bot, app_context):
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    # Check user type using DI service or global_data fallback
-    # UserType.TRUSTED.value == 1 means trusted user, skip spam check
-    if _get_user_type(user_id) == UserType.TRUSTED.value:
+    # Check user type using DI service
+    # UserType.TRUSTED means trusted user, skip spam check
+    if _get_user_type(app_context, user_id) == UserType.TRUSTED:
         return False
 
     await app_context.antispam_service.delete_and_log_spam(message, session)
@@ -520,7 +518,7 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         admin = await app_context.utils_service.is_admin(query)
     else:
         admin = await is_admin(query)
-        
+
     if not admin:
         await query.answer('You are not admin.', show_alert=True)
         return False
@@ -547,7 +545,7 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
 async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, app_context=None):
     if app_context:
         admin = await app_context.utils_service.is_admin(query) #, callback_data.chat_id
-        # Wrapper: is_admin(message, chat_id=None). 
+        # Wrapper: is_admin(message, chat_id=None).
         # Check external_services.py wrapping.
         # it just calls `is_admin(message)`.
         # `other.aiogram_tools.is_admin` signature: (message, chat_id=None).
@@ -555,7 +553,7 @@ async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, a
         pass
     else:
         admin = await is_admin(query, callback_data.chat_id)
-        
+
     if not admin:
         await query.answer("Вы не являетесь администратором в том чате.", show_alert=True)
         return

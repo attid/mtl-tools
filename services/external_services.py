@@ -464,9 +464,8 @@ class UtilsService:
         if app_context and app_context.admin_service:
             username = message.from_user.username if message.from_user else None
             return app_context.admin_service.is_skynet_admin(username)
-        # TODO: Remove this fallback once all callers pass app_context
-        from other.global_data import is_skynet_admin
-        return is_skynet_admin(message)
+        # Fallback for cases without app_context - require admin_service
+        raise ValueError("app_context with admin_service required for is_skynet_admin")
 
     def get_username_link(self, user):
         from other.aiogram_tools import get_username_link

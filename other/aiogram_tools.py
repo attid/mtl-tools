@@ -227,12 +227,15 @@ class ReplyToBot(Filter):
 
 
 class ChatInOption(Filter):
-    def __init__(self, name: str) -> None:
-        from other.global_data import global_data
-        self.attr_name = getattr(global_data, name)
+    """Filter that checks if chat has a feature flag enabled."""
+    def __init__(self, feature_name: str) -> None:
+        self.feature_name = feature_name
 
     async def __call__(self, message: Message) -> bool:
-        return message.chat.id in self.attr_name
+        # Use app_context singleton to check feature flags
+        if app_context and app_context.feature_flags:
+            return app_context.feature_flags.is_enabled(message.chat.id, self.feature_name)
+        return False
 
 
 def get_username_link(user: User):

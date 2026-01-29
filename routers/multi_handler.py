@@ -10,7 +10,6 @@ from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import global_data
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from db.repositories import ConfigRepository
@@ -20,7 +19,7 @@ router = Router()
 
 
 # =============================================================================
-# DI Service Access Helpers with global_data fallback
+# DI Service Access Helpers
 # =============================================================================
 
 def _get_feature_flag_list(ctx, feature_name: str) -> list:
@@ -28,13 +27,6 @@ def _get_feature_flag_list(ctx, feature_name: str) -> list:
     if not ctx or not ctx.feature_flags:
         raise ValueError("app_context with feature_flags required")
     return ctx.feature_flags.get_feature_list(feature_name)
-
-
-def _get_feature_flag_dict(ctx, feature_name: str) -> dict:
-    """Get feature flag dict from DI service. Raises error if ctx not available."""
-    if not ctx or not ctx.feature_flags:
-        raise ValueError("app_context with feature_flags required")
-    return ctx.feature_flags.get_feature_dict(feature_name)
 
 
 def _is_feature_enabled(ctx, chat_id: int, feature: str) -> bool:
@@ -109,39 +101,38 @@ def _get_entry_channel(ctx, chat_id: int) -> Optional[str]:
 
 # =============================================================================
 # Commands Configuration
-# Note: commands_info uses global_data references for backward compatibility
-# with existing toggle logic. The helpers above provide DI access for reads.
+# Format: (db_value_type, action_type, admin_check, load_type, feature_flag_name)
+# load_type: 0 = none, 1 = list/dict from DB by chat_id, 3 = json blob
 # =============================================================================
 
 commands_info = {
-    "set_reply_only": (global_data.reply_only, BotValueTypes.ReplyOnly, "toggle", "admin", 1),
-    "delete_income": (global_data.delete_income, BotValueTypes.DeleteIncome, "toggle", "admin", 1),
-    "set_no_first_link": (global_data.no_first_link, BotValueTypes.NoFirstLink, "toggle", "admin", 1),
+    "set_reply_only": (BotValueTypes.ReplyOnly, "toggle", "admin", 1, "reply_only"),
+    "delete_income": (BotValueTypes.DeleteIncome, "toggle", "admin", 1, "delete_income"),
+    "set_no_first_link": (BotValueTypes.NoFirstLink, "toggle", "admin", 1, "no_first_link"),
     # full_data - chats with full address decoding
-    "full_data": (global_data.full_data, BotValueTypes.FullData, "toggle", "skynet_admin", 1),
-    "need_decode": (global_data.need_decode, BotValueTypes.NeedDecode, "toggle", "admin", 1),
-    "save_last_message_date": (global_data.save_last_message_date, BotValueTypes.SaveLastMessageDate,
-                               "toggle", "admin", 1),
-    "set_first_vote": (global_data.first_vote, BotValueTypes.FirstVote, "toggle", "admin", 1),
-    "notify_join_request": (global_data.notify_join, BotValueTypes.NotifyJoin, "toggle_chat", "admin", 1),
-    "notify_message": (global_data.notify_message, BotValueTypes.NotifyMessage, "toggle_chat", "admin", 1),
-    "join_request_captcha": (global_data.join_request_captcha, BotValueTypes.JoinRequestCaptcha, "toggle", "admin", 1),
-    "auto_all": (global_data.auto_all, BotValueTypes.AutoAll, "toggle", "admin", 1),
-    "set_listen": (global_data.listen, BotValueTypes.Listen, "toggle", "skynet_admin", 1),
+    "full_data": (BotValueTypes.FullData, "toggle", "skynet_admin", 1, "full_data"),
+    "need_decode": (BotValueTypes.NeedDecode, "toggle", "admin", 1, "need_decode"),
+    "save_last_message_date": (BotValueTypes.SaveLastMessageDate, "toggle", "admin", 1, "save_last_message_date"),
+    "set_first_vote": (BotValueTypes.FirstVote, "toggle", "admin", 1, "first_vote"),
+    "notify_join_request": (BotValueTypes.NotifyJoin, "toggle_chat", "admin", 1, "notify_join"),
+    "notify_message": (BotValueTypes.NotifyMessage, "toggle_chat", "admin", 1, "notify_message"),
+    "join_request_captcha": (BotValueTypes.JoinRequestCaptcha, "toggle", "admin", 1, "join_request_captcha"),
+    "auto_all": (BotValueTypes.AutoAll, "toggle", "admin", 1, "auto_all"),
+    "set_listen": (BotValueTypes.Listen, "toggle", "skynet_admin", 1, "listen"),
     # ToDo need show to skyadmin in helpers
-    "set_captcha": (global_data.captcha, BotValueTypes.Captcha, "toggle", "admin", 1),
-    "set_moderate": (global_data.moderate, BotValueTypes.Moderate, "toggle", "admin", 1),
-    "set_entry_channel": (global_data.entry_channel, BotValueTypes.EntryChannel, "toggle_entry_channel", "admin", 1),
+    "set_captcha": (BotValueTypes.Captcha, "toggle", "admin", 1, "captcha"),
+    "set_moderate": (BotValueTypes.Moderate, "toggle", "admin", 1, "moderate"),
+    "set_entry_channel": (BotValueTypes.EntryChannel, "toggle_entry_channel", "admin", 1, "entry_channel"),
 
-    "add_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3),
-    "del_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0),
-    "show_skynet_img": (global_data.skynet_img, BotValueTypes.SkynetImg, "show_list", "skynet_admin", 0),
-    "add_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "add_list", "skynet_admin", 3),
-    "del_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "del_list", "skynet_admin", 0),
-    "show_skynet_admin": (global_data.skynet_admins, BotValueTypes.SkynetAdmins, "show_list", "skynet_admin", 0),
-    "add_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "add_list_topic", "admin", 3),
-    "del_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "del_list_topic", "admin", 0),
-    "show_topic_admin": (global_data.topic_admins, BotValueTypes.TopicAdmins, "show_list_topic", "admin", 0),
+    "add_skynet_img": (BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3, "skynet_img"),
+    "del_skynet_img": (BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0, "skynet_img"),
+    "show_skynet_img": (BotValueTypes.SkynetImg, "show_list", "skynet_admin", 0, "skynet_img"),
+    "add_skynet_admin": (BotValueTypes.SkynetAdmins, "add_list", "skynet_admin", 3, "skynet_admins"),
+    "del_skynet_admin": (BotValueTypes.SkynetAdmins, "del_list", "skynet_admin", 0, "skynet_admins"),
+    "show_skynet_admin": (BotValueTypes.SkynetAdmins, "show_list", "skynet_admin", 0, "skynet_admins"),
+    "add_topic_admin": (BotValueTypes.TopicAdmins, "add_list_topic", "admin", 3, "topic_admins"),
+    "del_topic_admin": (BotValueTypes.TopicAdmins, "del_list_topic", "admin", 0, "topic_admins"),
+    "show_topic_admin": (BotValueTypes.TopicAdmins, "show_list_topic", "admin", 0, "topic_admins"),
 }
 
 
@@ -157,138 +148,125 @@ def command_config_loads(app_context):
     with create_session() as session:
         repo = ConfigRepository(session)
 
-        for command in commands_info:
-            global_data_field = commands_info[command][0]
-            global_data_key = commands_info[command][1]
-            load_type = commands_info[command][4]  # 0 none 1 - dict\list  3 - json
+        # Load feature flags (list-based) directly into feature_flags service
+        feature_flag_mappings = [
+            (BotValueTypes.ReplyOnly, "reply_only"),
+            (BotValueTypes.NoFirstLink, "no_first_link"),
+            (BotValueTypes.FullData, "full_data"),
+            (BotValueTypes.NeedDecode, "need_decode"),
+            (BotValueTypes.SaveLastMessageDate, "save_last_message_date"),
+            (BotValueTypes.FirstVote, "first_vote"),
+            (BotValueTypes.JoinRequestCaptcha, "join_request_captcha"),
+            (BotValueTypes.AutoAll, "auto_all"),
+            (BotValueTypes.Listen, "listen"),
+            (BotValueTypes.Captcha, "captcha"),
+            (BotValueTypes.Moderate, "moderate"),
+        ]
 
-            if load_type == 1:
-                if isinstance(global_data_field, dict):
-                    global_data_field.update(repo.get_chat_dict_by_key(global_data_key))
-                else:
-                    global_data_field.extend(repo.get_chat_ids_by_key(global_data_key))
+        for db_key, feature_name in feature_flag_mappings:
+            for chat_id in repo.get_chat_ids_by_key(db_key):
+                app_context.feature_flags.set_feature(chat_id, feature_name, True, persist=False)
 
-            if load_type == 3:
-                if isinstance(global_data_field, dict):
-                    global_data_field.update(
-                        json.loads(repo.load_bot_value(0, global_data_key, '{}')))
-                else:
-                    global_data_field.extend(
-                        json.loads(repo.load_bot_value(0, global_data_key, '[]')))
+        # Load dict-based features (notify_join, notify_message, delete_income, entry_channel)
+        notify_join_data = repo.get_chat_dict_by_key(BotValueTypes.NotifyJoin)
+        app_context.notification_service.load_notify_join(notify_join_data)
+        for chat_id in notify_join_data:
+            app_context.feature_flags.set_feature(chat_id, "notify_join", True, persist=False)
 
-        global_data.votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, '{}'))
-        global_data.topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
-        global_data.inaccessible_chats = json.loads(repo.load_bot_value(0, BotValueTypes.Inaccessible, '[]'))
+        notify_message_data = repo.get_chat_dict_by_key(BotValueTypes.NotifyMessage)
+        app_context.notification_service.load_notify_message(notify_message_data)
+        for chat_id in notify_message_data:
+            app_context.feature_flags.set_feature(chat_id, "notify_message", True, persist=False)
 
-        global_data.welcome_messages = repo.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
-        global_data.welcome_button = repo.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
-        global_data.admins = repo.get_chat_dict_by_key(BotValueTypes.Admins, True)
-        global_data.alert_me = repo.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
-        global_data.sync = repo.get_chat_dict_by_key(BotValueTypes.Sync, True)
+        delete_income_data = repo.get_chat_dict_by_key(BotValueTypes.DeleteIncome)
+        app_context.config_service.load_delete_income(delete_income_data)
+        for chat_id in delete_income_data:
+            app_context.feature_flags.set_feature(chat_id, "delete_income", True, persist=False)
 
-    # Sync loaded data to DI services
-    _sync_to_di_services(app_context)
+        entry_channel_data = repo.get_chat_dict_by_key(BotValueTypes.EntryChannel)
+        for chat_id in entry_channel_data:
+            app_context.feature_flags.set_feature(chat_id, "entry_channel", True, persist=False)
+
+        # Load JSON-based global lists (skynet_admins, skynet_img)
+        skynet_admins = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
+        app_context.admin_service.set_skynet_admins(skynet_admins)
+
+        skynet_img = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
+        app_context.admin_service.set_skynet_img_users(skynet_img)
+
+        # Load topic admins (JSON dict)
+        topic_admins = json.loads(repo.load_bot_value(0, BotValueTypes.TopicAdmins, '{}'))
+        app_context.admin_service.load_topic_admins(topic_admins)
+
+        # Load votes data
+        votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, '{}'))
+        app_context.voting_service.load_votes(votes)
+
+        # Load first_vote into voting service
+        first_vote_chat_ids = repo.get_chat_ids_by_key(BotValueTypes.FirstVote)
+        app_context.voting_service.load_first_vote(first_vote_chat_ids)
+
+        # Load topic mutes
+        topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
+        app_context.admin_service.load_topic_mutes(topic_mute)
+
+        # Load inaccessible chats for admin panel
+        inaccessible_chats = json.loads(repo.load_bot_value(0, BotValueTypes.Inaccessible, '[]'))
+        load_inaccessible_chats(inaccessible_chats)
+
+        # Load welcome messages and buttons
+        welcome_messages = repo.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
+        app_context.config_service.load_welcome_messages(welcome_messages)
+
+        welcome_buttons = repo.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
+        app_context.config_service.load_welcome_buttons(welcome_buttons)
+
+        # Load admins
+        admins = repo.get_chat_dict_by_key(BotValueTypes.Admins, True)
+        app_context.admin_service.load_admins(admins)
+
+        # Load alert_me
+        alert_me = repo.get_chat_dict_by_key(BotValueTypes.AlertMe, True)
+        app_context.notification_service.load_alert_me(alert_me)
+
+        # Load sync states
+        sync_data = repo.get_chat_dict_by_key(BotValueTypes.Sync, True)
+        for channel_id, sync_state in sync_data.items():
+            app_context.bot_state_service.set_sync_state(str(channel_id), sync_state)
+
+        # Mark need_decode in bot_state_service
+        for chat_id in repo.get_chat_ids_by_key(BotValueTypes.NeedDecode):
+            app_context.bot_state_service.mark_needs_decode(chat_id)
 
     # Log loaded feature flags statistics
-    _log_feature_flags_stats()
+    _log_feature_flags_stats(app_context)
 
     logger.info('finished command_config_loads task')
 
 
-def _log_feature_flags_stats():
+def _log_feature_flags_stats(app_context):
     """Log statistics of loaded feature flags for startup validation."""
     stats = [
-        f"no_first_link: {len(global_data.no_first_link)} chats",
-        f"moderate: {len(global_data.moderate)} chats",
-        f"captcha: {len(global_data.captcha)} chats",
-        f"reply_only: {len(global_data.reply_only)} chats",
-        f"listen: {len(global_data.listen)} chats",
-        f"auto_all: {len(global_data.auto_all)} chats",
-        f"save_last_message_date: {len(global_data.save_last_message_date)} chats",
-        f"join_request_captcha: {len(global_data.join_request_captcha)} chats",
-        f"full_data: {len(global_data.full_data)} chats",
-        f"first_vote: {len(global_data.first_vote)} chats",
-        f"need_decode: {len(global_data.need_decode)} chats",
-        f"notify_join: {len(global_data.notify_join)} chats",
-        f"notify_message: {len(global_data.notify_message)} chats",
-        f"entry_channel: {len(global_data.entry_channel)} chats",
-        f"welcome_messages: {len(global_data.welcome_messages)} chats",
-        f"admins: {len(global_data.admins)} chats",
-        f"skynet_admins: {len(global_data.skynet_admins)} users",
-        f"users_list: {len(global_data.users_list)} users",
-        f"sync: {len(global_data.sync)} channels",
+        f"no_first_link: {len(app_context.feature_flags.get_feature_list('no_first_link'))} chats",
+        f"moderate: {len(app_context.feature_flags.get_feature_list('moderate'))} chats",
+        f"captcha: {len(app_context.feature_flags.get_feature_list('captcha'))} chats",
+        f"reply_only: {len(app_context.feature_flags.get_feature_list('reply_only'))} chats",
+        f"listen: {len(app_context.feature_flags.get_feature_list('listen'))} chats",
+        f"auto_all: {len(app_context.feature_flags.get_feature_list('auto_all'))} chats",
+        f"save_last_message_date: {len(app_context.feature_flags.get_feature_list('save_last_message_date'))} chats",
+        f"join_request_captcha: {len(app_context.feature_flags.get_feature_list('join_request_captcha'))} chats",
+        f"full_data: {len(app_context.feature_flags.get_feature_list('full_data'))} chats",
+        f"first_vote: {len(app_context.feature_flags.get_feature_list('first_vote'))} chats",
+        f"need_decode: {len(app_context.feature_flags.get_feature_list('need_decode'))} chats",
+        f"notify_join: {len(app_context.notification_service.get_all_join_notify())} chats",
+        f"notify_message: {len(app_context.notification_service.get_all_message_notify())} chats",
+        f"entry_channel: {len(app_context.feature_flags.get_feature_list('entry_channel'))} chats",
+        f"welcome_messages: {len(app_context.config_service._welcome_messages)} chats",
+        f"admins: {len(app_context.admin_service._admins)} chats",
+        f"skynet_admins: {len(app_context.admin_service.get_skynet_admins())} users",
+        f"sync: {len(app_context.bot_state_service._sync)} channels",
     ]
     logger.info("Feature flags loaded:\n  " + "\n  ".join(stats))
-
-
-def _sync_to_di_services(ctx):
-    """Sync loaded global_data to DI services for consistent state."""
-    # Sync voting service
-    if ctx.voting_service:
-        ctx.voting_service.load_votes(global_data.votes)
-        ctx.voting_service.load_first_vote(global_data.first_vote)
-
-    # Sync admin service
-    if ctx.admin_service:
-        ctx.admin_service.load_topic_admins(global_data.topic_admins)
-        ctx.admin_service.load_topic_mutes(global_data.topic_mute)
-        ctx.admin_service.set_skynet_admins(global_data.skynet_admins)
-        ctx.admin_service.set_skynet_img_users(global_data.skynet_img)
-        ctx.admin_service.load_admins(global_data.admins)
-
-    # Sync notification service
-    if ctx.notification_service:
-        ctx.notification_service.load_notify_join(global_data.notify_join)
-        ctx.notification_service.load_notify_message(global_data.notify_message)
-        ctx.notification_service.load_alert_me(global_data.alert_me)
-
-    # Sync config service
-    if ctx.config_service:
-        ctx.config_service.load_welcome_messages(global_data.welcome_messages)
-        ctx.config_service.load_welcome_buttons(global_data.welcome_button)
-        ctx.config_service.load_delete_income(global_data.delete_income)
-
-    # Sync bot state service
-    if ctx.bot_state_service:
-        for chat_id in global_data.need_decode:
-            ctx.bot_state_service.mark_needs_decode(chat_id)
-        # Sync channel sync states
-        for channel_id, sync_data in global_data.sync.items():
-            ctx.bot_state_service.set_sync_state(str(channel_id), sync_data)
-
-    # Sync feature flags (persist=False to avoid redundant DB writes)
-    if ctx.feature_flags:
-        # List-based features
-        for chat_id in global_data.captcha:
-            ctx.feature_flags.set_feature(chat_id, "captcha", True, persist=False)
-        for chat_id in global_data.moderate:
-            ctx.feature_flags.set_feature(chat_id, "moderate", True, persist=False)
-        for chat_id in global_data.listen:
-            ctx.feature_flags.set_feature(chat_id, "listen", True, persist=False)
-        for chat_id in global_data.no_first_link:
-            ctx.feature_flags.set_feature(chat_id, "no_first_link", True, persist=False)
-        for chat_id in global_data.reply_only:
-            ctx.feature_flags.set_feature(chat_id, "reply_only", True, persist=False)
-        for chat_id in global_data.auto_all:
-            ctx.feature_flags.set_feature(chat_id, "auto_all", True, persist=False)
-        for chat_id in global_data.save_last_message_date:
-            ctx.feature_flags.set_feature(chat_id, "save_last_message_date", True, persist=False)
-        for chat_id in global_data.join_request_captcha:
-            ctx.feature_flags.set_feature(chat_id, "join_request_captcha", True, persist=False)
-        for chat_id in global_data.full_data:
-            ctx.feature_flags.set_feature(chat_id, "full_data", True, persist=False)
-        for chat_id in global_data.first_vote:
-            ctx.feature_flags.set_feature(chat_id, "first_vote", True, persist=False)
-        for chat_id in global_data.need_decode:
-            ctx.feature_flags.set_feature(chat_id, "need_decode", True, persist=False)
-        # Dict-based features (entry_channel, delete_income)
-        for chat_id in global_data.delete_income:
-            ctx.feature_flags.set_feature(chat_id, "delete_income", True, persist=False)
-        for chat_id in global_data.entry_channel:
-            ctx.feature_flags.set_feature(chat_id, "entry_channel", True, persist=False)
-
-    # Load inaccessible chats for admin panel
-    load_inaccessible_chats(global_data.inaccessible_chats)
 
 
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.", 1, "reply_only")
@@ -334,8 +312,8 @@ async def universal_command_handler(message: Message, bot: Bot, session, app_con
     command = message.text.lower().split()[0][1:]
     command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
-    action_type = command_info[2]
-    admin_check = command_info[3]
+    action_type = command_info[1]
+    admin_check = command_info[2]
 
     if action_type == "ignore":
         await message.reply("Technical command. Ignore it.")
@@ -380,34 +358,32 @@ async def universal_command_handler(message: Message, bot: Bot, session, app_con
 
 
 async def handle_command(message: Message, command_info, session, app_context=None):
+    """Handle toggle commands using feature_flags service."""
     chat_id = message.chat.id
-    global_data_field = command_info[0]
-    db_value_type = command_info[1]
+    db_value_type = command_info[0]
+    feature_name = command_info[4]
 
-    command_args = message.text.split()[1:]  # Список аргументов после команды
+    command_args = message.text.split()[1:]  # List of arguments after command
 
-    if chat_id in global_data_field:
-        if isinstance(global_data_field, dict):
-            global_data_field.pop(chat_id)
-        else:
-            global_data_field.remove(chat_id)
+    # Check current state using feature_flags service
+    is_enabled = app_context.feature_flags.is_enabled(chat_id, feature_name)
 
+    if is_enabled:
+        # Disable the feature
+        app_context.feature_flags.set_feature(chat_id, feature_name, False, persist=False)
         ConfigRepository(session).save_bot_value(chat_id, db_value_type, None)
 
-        # Sync removal to DI services
+        # Sync removal to specialized DI services
         _sync_toggle_removal(app_context, db_value_type, chat_id)
 
         info_message = await message.reply('Removed')
     else:
+        # Enable the feature
         value_to_set = command_args[0] if command_args else '1'
-        if isinstance(global_data_field, dict):
-            global_data_field[chat_id] = value_to_set
-        else:
-            global_data_field.append(chat_id)
-
+        app_context.feature_flags.set_feature(chat_id, feature_name, True, persist=False)
         ConfigRepository(session).save_bot_value(chat_id, db_value_type, value_to_set)
 
-        # Sync addition to DI services
+        # Sync addition to specialized DI services
         _sync_toggle_addition(app_context, db_value_type, chat_id, value_to_set)
 
         info_message = await message.reply('Added')
@@ -455,9 +431,11 @@ def _sync_toggle_addition(ctx, db_value_type: BotValueTypes, chat_id: int, value
 
 async def handle_entry_channel_toggle(message: Message, command_info, session, app_context=None):
     chat_id = message.chat.id
-    global_data_field = command_info[0]
+    feature_name = command_info[4]
 
-    if chat_id not in global_data_field:
+    is_enabled = app_context.feature_flags.is_enabled(chat_id, feature_name)
+
+    if not is_enabled:
         command_args = message.text.split()[1:]
         if not command_args:
             info_message = await message.reply('Необходимо указать канал или чат в формате -100123456 или @channel.')
@@ -472,7 +450,7 @@ async def handle_entry_channel_toggle(message: Message, command_info, session, a
 
 async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None) -> tuple[bool, bool]:
     is_member, _ = await app_context.group_service.check_membership(bot, required_channel, user_id)
-        
+
     if is_member:
         return True, False
 
@@ -515,101 +493,103 @@ async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> t
 
 
 async def list_command_handler(message: Message, command_info, session, app_context=None):
-    global_data_field = command_info[0]
-    db_value_type = command_info[1]
-    action_type = command_info[2]
+    """Handle list commands (add/del/show) for skynet_admins and skynet_img using admin_service."""
+    db_value_type = command_info[0]
+    action_type = command_info[1]
 
-    command_args = message.text.lower().split()[1:]  # аргументы после команды
+    command_args = message.text.lower().split()[1:]  # arguments after command
+
+    # Get current list from admin_service
+    if db_value_type == BotValueTypes.SkynetAdmins:
+        current_list = app_context.admin_service.get_skynet_admins()
+    elif db_value_type == BotValueTypes.SkynetImg:
+        current_list = app_context.admin_service.get_skynet_img_users()
+    else:
+        await message.reply("Unknown list type.")
+        return
 
     if action_type == "add_list":
         if not command_args:
             await message.reply("Необходимо указать аргументы.")
         else:
-            global_data_field.extend(command_args)
-            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
-            # Sync to DI services
-            _sync_list_update(app_context, db_value_type, global_data_field)
+            # Add to list
+            for arg in command_args:
+                if arg not in current_list:
+                    current_list.append(arg)
+            # Update service and persist
+            if db_value_type == BotValueTypes.SkynetAdmins:
+                app_context.admin_service.set_skynet_admins(current_list)
+            else:
+                app_context.admin_service.set_skynet_img_users(current_list)
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
             await message.reply(f'Added: {" ".join(command_args)}')
 
     elif action_type == "del_list":
         if not command_args:
             await message.reply("Необходимо указать аргументы.")
         else:
+            # Remove from list
             for arg in command_args:
-                if arg in global_data_field:
-                    global_data_field.remove(arg)
-            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
-            # Sync to DI services
-            _sync_list_update(app_context, db_value_type, global_data_field)
+                if arg in current_list:
+                    current_list.remove(arg)
+            # Update service and persist
+            if db_value_type == BotValueTypes.SkynetAdmins:
+                app_context.admin_service.set_skynet_admins(current_list)
+            else:
+                app_context.admin_service.set_skynet_img_users(current_list)
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
             await message.reply(f'Removed: {" ".join(command_args)}')
 
     elif action_type == "show_list":
-        if global_data_field:
-            await message.reply(' '.join(global_data_field))
+        if current_list:
+            await message.reply(' '.join(current_list))
         else:
             await message.reply('The list is empty.')
 
 
-def _sync_list_update(ctx, db_value_type: BotValueTypes, data: list):
-    """Sync list updates to DI services."""
-    if not ctx:
-        return
-
-    if db_value_type == BotValueTypes.SkynetAdmins and ctx.admin_service:
-        ctx.admin_service.set_skynet_admins(data)
-    elif db_value_type == BotValueTypes.SkynetImg and ctx.admin_service:
-        ctx.admin_service.set_skynet_img_users(data)
-
-
 async def list_command_handler_topic(message: Message, command_info, session, app_context=None):
-    global_data_field = command_info[0]  # will be dict
-    db_value_type = command_info[1]
-    action_type = command_info[2]
+    """Handle topic-specific list commands using admin_service."""
+    db_value_type = command_info[0]
+    action_type = command_info[1]
 
-    command_args = message.text.lower().split()[1:]  # аргументы после команды
+    command_args = message.text.lower().split()[1:]  # arguments after command
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+
+    # Get all topic admins from admin_service
+    all_topic_admins = app_context.admin_service.get_all_topic_admins()
 
     if action_type == "add_list_topic":
         if not command_args:
             await message.reply("Необходимо указать аргументы.")
         else:
-            if chat_thread_key not in global_data_field:
-                global_data_field[chat_thread_key] = []
-            global_data_field[chat_thread_key].extend(command_args)
-            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
-            # Sync to DI services
-            _sync_topic_list_update(app_context, db_value_type, global_data_field)
+            if chat_thread_key not in all_topic_admins:
+                all_topic_admins[chat_thread_key] = []
+            all_topic_admins[chat_thread_key].extend(command_args)
+            # Update service and persist
+            app_context.admin_service.load_topic_admins(all_topic_admins)
+            ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
 
     elif action_type == "del_list_topic":
         if not command_args:
             await message.reply("Необходимо указать аргументы.")
         else:
-            if chat_thread_key in global_data_field:
+            if chat_thread_key in all_topic_admins:
                 for arg in command_args:
-                    if arg in global_data_field[chat_thread_key]:
-                        global_data_field[chat_thread_key].remove(arg)
-                ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(global_data_field))
-                # Sync to DI services
-                _sync_topic_list_update(app_context, db_value_type, global_data_field)
+                    if arg in all_topic_admins[chat_thread_key]:
+                        all_topic_admins[chat_thread_key].remove(arg)
+                # Update service and persist
+                app_context.admin_service.load_topic_admins(all_topic_admins)
+                ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
             else:
                 await message.reply('This thread has no items in the list.')
 
     elif action_type == "show_list_topic":
-        if chat_thread_key in global_data_field and global_data_field[chat_thread_key]:
-            await message.reply(f'Items in this thread: {" ".join(global_data_field[chat_thread_key])}')
+        if chat_thread_key in all_topic_admins and all_topic_admins[chat_thread_key]:
+            await message.reply(f'Items in this thread: {" ".join(all_topic_admins[chat_thread_key])}')
         else:
             await message.reply('The list for this thread is empty.')
-
-
-def _sync_topic_list_update(ctx, db_value_type: BotValueTypes, data: dict):
-    """Sync topic list updates to DI services."""
-    if not ctx:
-        return
-
-    if db_value_type == BotValueTypes.TopicAdmins and ctx.admin_service:
-        ctx.admin_service.load_topic_admins(data)
 
 
 @router.startup()

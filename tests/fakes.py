@@ -2,7 +2,6 @@ import inspect
 from contextlib import suppress
 
 from other.aiogram_tools import add_text, answer_text_file, is_admin, multi_answer, multi_reply
-from other.global_data import global_data, is_skynet_admin
 from services.bot_state_service import BotStateService
 
 
@@ -460,11 +459,11 @@ class TestUtilsService:
         return await is_admin(message, chat_id=chat_id)
 
     def is_skynet_admin(self, message, app_context=None):
-        # Use admin_service if available
+        # Use admin_service for is_skynet_admin checks
         if self._admin_service:
             username = message.from_user.username if message.from_user else None
             return self._admin_service.is_skynet_admin(username)
-        return is_skynet_admin(message)
+        return False
 
     def add_text(self, lines, num_line, text):
         return add_text(lines, num_line, text)
@@ -779,7 +778,7 @@ class FakeFeatureFlagsService:
     def disable(self, chat_id, feature):
         return self.set_feature(chat_id, feature, False)
 
-    def set_feature(self, chat_id, feature, enabled):
+    def set_feature(self, chat_id, feature, enabled, persist=True):
         if feature not in self.FEATURE_KEYS:
             return False
         if chat_id not in self._features:
@@ -1481,4 +1480,3 @@ class FakeChatsRepositoryProtocol:
         else:
             self.users[user_id].user_type = user_type
         return True
-

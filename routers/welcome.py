@@ -21,7 +21,6 @@ from db.repositories import MessageRepository
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_link, get_chat_link
-from other.global_data import global_data
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from other.pyro_tools import GroupMember
@@ -381,12 +380,10 @@ async def msg_delete_income(message: Message, app_context=None):
     """
     chat_id = message.chat.id
 
-    # Get delete_income config using DI service or global_data fallback
+    # Get delete_income config using DI service (app_context required)
     delete_income_config = None
     if app_context and app_context.config_service:
         delete_income_config = app_context.config_service.get_delete_income(chat_id)
-    else:
-        delete_income_config = global_data.delete_income.get(chat_id) if chat_id in global_data.delete_income else None
 
     if delete_income_config is not None:
         with suppress(TelegramBadRequest):

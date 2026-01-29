@@ -8,30 +8,27 @@ from routers.multi_handler import router as multi_router, on_startup, commands_i
 from tests.conftest import RouterTestMiddleware
 from tests.fakes import FakeMongoConfig
 from other.constants import MTLChats, BotValueTypes
-from other.global_data import global_data
 
 @pytest.fixture(autouse=True)
-async def cleanup_router():
+async def cleanup_router(router_app_context):
     yield
     if multi_router.parent_router:
          multi_router._parent_router = None
-    # Use clear() to preserve references held by commands_info
-    global_data.reply_only.clear()
-    global_data.no_first_link.clear()
-    global_data.skynet_admins.clear()
-    global_data.topic_admins.clear()
+    # Clean up DI services
+    router_app_context.feature_flags._features.clear()
+    router_app_context.admin_service._skynet_admins.clear()
+    router_app_context.admin_service._topic_admins.clear()
 
 @pytest.mark.asyncio
 async def test_universal_command_toggle(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
-    
+
     # default mock_telegram admin is user_id=123456
-    # Pre-add to list to test removal
-    if MTLChats.TestGroup not in global_data.reply_only:
-        global_data.reply_only.append(MTLChats.TestGroup)
-    
+    # Pre-add to list to test removal using DI service
+    router_app_context.feature_flags.enable(MTLChats.TestGroup, 'reply_only')
+
     update = types.Update(
         update_id=1,
         message=types.Message(
@@ -42,11 +39,11 @@ async def test_universal_command_toggle(mock_telegram, router_app_context):
             text="/set_reply_only"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
-    # Verify removal
-    assert MTLChats.TestGroup not in global_data.reply_only
+
+    # Verify removal using DI service
+    assert not router_app_context.feature_flags.is_enabled(MTLChats.TestGroup, 'reply_only')
     # ConfigRepository(session).save_bot_value is now called directly
     # So we just verify the response message
 
@@ -58,11 +55,9 @@ async def test_list_command_add(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
-    
+
     router_app_context.admin_service.set_skynet_admins(["@admin"])
-    global_data.skynet_admins = ["@admin"]  # Keep synced for commands_info reference
-    skynet_admins_ref = commands_info["add_skynet_admin"][0]
-    
+
     update = types.Update(
         update_id=2,
         message=types.Message(
@@ -73,11 +68,11 @@ async def test_list_command_add(mock_telegram, router_app_context):
             text="/add_skynet_admin @new_admin"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
-    # Check both references
-    assert "@new_admin" in global_data.skynet_admins or "@new_admin" in skynet_admins_ref
+
+    # Check admin_service for the new admin
+    assert "@new_admin" in router_app_context.admin_service.get_skynet_admins()
     # ConfigRepository(session).save_bot_value is now called directly
 
     requests = mock_telegram.get_requests()
@@ -88,17 +83,19 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(multi_router)
-    
+
     # default mock_telegram admin is user_id=123456
-    
+
     chat_id = MTLChats.TestGroup
     thread_id = 5
     chat_thread_key = f"{chat_id}-{thread_id}"
-    
-    # Clean up before test
-    if chat_thread_key in global_data.topic_admins:
-        del global_data.topic_admins[chat_thread_key]
-        
+
+    # Clean up before test using DI service
+    all_topic_admins = router_app_context.admin_service.get_all_topic_admins()
+    if chat_thread_key in all_topic_admins:
+        del all_topic_admins[chat_thread_key]
+        router_app_context.admin_service.load_topic_admins(all_topic_admins)
+
     update = types.Update(
         update_id=3,
         message=types.Message(
@@ -110,12 +107,13 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
             text="/add_topic_admin @topicadmin"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
-    # Verify added
-    assert chat_thread_key in global_data.topic_admins
-    assert "@topicadmin" in global_data.topic_admins[chat_thread_key]
+
+    # Verify added using DI service
+    all_topic_admins = router_app_context.admin_service.get_all_topic_admins()
+    assert chat_thread_key in all_topic_admins
+    assert "@topicadmin" in all_topic_admins[chat_thread_key]
     # ConfigRepository(session).save_bot_value is now called directly
 
     requests = mock_telegram.get_requests()

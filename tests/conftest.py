@@ -15,7 +15,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 sys.path.append(os.getcwd())
 
 from tests.fakes import FakeMongoConfig, FakeSession, TestAppContext
-from other.global_data import global_data
+from services import app_context as app_context_module
+from other import aiogram_tools as aiogram_tools_module
 
 # Import interfaces and classes for type hinting and mocking specific to your project
 # Adjust imports based on your actual project structure
@@ -40,13 +41,6 @@ def random_address():
     """Generates a random Stellar-like address for testing."""
     return "G" + "".join(random.choices(string.ascii_uppercase + string.digits, k=55))
 
-
-@pytest.fixture(autouse=True)
-def fake_db_service():
-    original = global_data.db_service
-    global_data.db_service = FakeMongoConfig()
-    yield
-    global_data.db_service = original
 
 # --- Fixtures: Config ---
 
@@ -98,7 +92,7 @@ async def mock_telegram(telegram_server_config):
     async def handle_request(request):
         token = request.match_info['token']
         method = request.match_info['method']
-        
+
         if request.content_type == 'application/json':
             try:
                 data = await request.json()
@@ -114,7 +108,7 @@ async def mock_telegram(telegram_server_config):
                     data = await request.post()
                 except Exception:
                     data = {}
-            
+
         data = dict(data)
         state.received_requests.append({"method": method, "token": token, "data": data})
 
@@ -250,7 +244,7 @@ async def mock_telegram(telegram_server_config):
                     "file_path": f"files/{file_id}.bin"
                 }
             })
-        
+
         return web.json_response({"ok": True, "result": True})
 
     @routes.get("/file/bot{token}/{file_path:.*}")
@@ -276,7 +270,7 @@ async def mock_telegram(telegram_server_config):
 @pytest.fixture
 async def mock_horizon(horizon_server_config):
     """Starts a local mock Stellar Horizon server."""
-    
+
     class HorizonMockState:
         def __init__(self):
             self.requests = []
@@ -303,15 +297,15 @@ async def mock_horizon(horizon_server_config):
             return self.requests
 
     state = HorizonMockState()
-    
+
     # Route definitions
     routes = web.RouteTableDef()
-    
+
     @routes.get("/accounts/{account_id}")
     async def get_account(request):
         account_id = request.match_info['account_id']
         state.requests.append({"endpoint": "accounts", "method": "GET", "account_id": account_id})
-        
+
         if account_id in state.accounts:
             return web.json_response(state.accounts[account_id])
         return web.json_response({"status": 404, "title": "Not Found"}, status=404)
@@ -373,7 +367,7 @@ async def mock_grist(grist_server_config):
         state.requests.append({"table": table_id, "method": "GET"})
         records = state.records.get(table_id, [])
         return web.json_response({"records": records})
-        
+
     @routes.post("/api/docs/{doc_id}/tables/{table_id}/records")
     async def add_records(request):
         table_id = request.match_info['table_id']
@@ -383,16 +377,16 @@ async def mock_grist(grist_server_config):
             new_records = []
             if table_id not in state.records:
                 state.records[table_id] = []
-            
+
             for record_data in records_to_add:
                 # Generate a simple incremental ID based on current list length
-                new_id = len(state.records[table_id]) + 1 + random.randint(100, 999) 
+                new_id = len(state.records[table_id]) + 1 + random.randint(100, 999)
                 fields = record_data.get("fields", {})
-                
+
                 # Apply defaults for specific tables
                 if table_id == "Deals" and "Checked" not in fields:
                     fields["Checked"] = False
-                    
+
                 new_record = {
                     "id": new_id,
                     "fields": fields
@@ -412,9 +406,9 @@ async def mock_grist(grist_server_config):
     await runner.setup()
     site = web.TCPSite(runner, grist_server_config["host"], grist_server_config["port"])
     await site.start()
-    
+
     yield state
-    
+
     await runner.cleanup()
 
 
@@ -438,8 +432,23 @@ async def router_app_context(mock_telegram, router_bot, horizon_server_config, m
     """
     Standard app_context for router tests.
     Uses fake services and real Bot connected to mock_telegram.
+    Also patches the global app_context singleton so filters can use test services.
     """
-    return TestAppContext(bot=router_bot, dispatcher=Dispatcher(storage=MemoryStorage()))
+    test_ctx = TestAppContext(bot=router_bot, dispatcher=Dispatcher(storage=MemoryStorage()))
+
+    # Patch the global app_context singleton so filters (like ChatInOption) use test services
+    # Need to patch both the source module AND the importing module
+    original_singleton = app_context_module.app_context
+    original_aiogram_tools = aiogram_tools_module.app_context
+
+    app_context_module.app_context = test_ctx
+    aiogram_tools_module.app_context = test_ctx
+
+    yield test_ctx
+
+    # Restore the original singletons
+    app_context_module.app_context = original_singleton
+    aiogram_tools_module.app_context = original_aiogram_tools
 
 class RouterTestMiddleware(BaseMiddleware):
     """

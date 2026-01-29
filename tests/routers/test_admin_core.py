@@ -3,7 +3,6 @@ from aiogram import types
 from routers.admin_core import router as admin_router, message_reaction as message_reaction_handler
 from tests.conftest import RouterTestMiddleware
 from other.constants import MTLChats
-from other.global_data import global_data
 from other.pyro_tools import GroupMember
 import datetime
 
@@ -13,11 +12,6 @@ async def cleanup_router():
     yield
     if admin_router.parent_router:
          admin_router._parent_router = None
-    
-    # Clean up global data
-    global_data.topic_admins.clear()
-    global_data.topic_mute.clear()
-    global_data.alert_me.clear()
 
 def setup_is_admin(mock_server, user_id, is_admin=True):
     if is_admin:
@@ -29,7 +23,7 @@ def setup_is_admin(mock_server, user_id, is_admin=True):
         result = [result_obj]
     else:
         result = []
-        
+
     mock_server.add_response("getChatAdministrators", {
         "ok": True,
         "result": result
@@ -40,10 +34,10 @@ async def test_ro_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
-    
+
     # Configure is_admin
     setup_is_admin(mock_telegram, 999, True)
-        
+
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
@@ -51,7 +45,7 @@ async def test_ro_command(mock_telegram, router_app_context):
         from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
         text="Spam"
     )
-    
+
     update = types.Update(
         update_id=1,
         message=types.Message(
@@ -63,9 +57,9 @@ async def test_ro_command(mock_telegram, router_app_context):
             reply_to_message=reply_msg
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     # Verify restrict called
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
@@ -77,9 +71,9 @@ async def test_topic_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
-    
+
     setup_is_admin(mock_telegram, 999, True)
-    
+
     # Mock createForumTopic response
     mock_telegram.add_response("createForumTopic", {
         "ok": True,
@@ -90,7 +84,7 @@ async def test_topic_command(mock_telegram, router_app_context):
             "icon_custom_emoji_id": "🔵"
         }
     })
-    
+
     update = types.Update(
         update_id=2,
         message=types.Message(
@@ -101,9 +95,9 @@ async def test_topic_command(mock_telegram, router_app_context):
             text="/topic 🔵 NewTopic"
         )
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     # Verify createForumTopic called
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "createForumTopic"), None)
@@ -117,17 +111,13 @@ async def test_mute_command(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    # Mock global data for is_topic_admin
     chat_id = 123
     thread_id = 5
     chat_thread_key = f"{chat_id}-{thread_id}"
 
     # Set up topic admins using the admin_service (DI pattern)
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    # Also set in global_data for fallback path
-    global_data.topic_admins[chat_thread_key] = {"@admin"}
-    if chat_id not in global_data.moderate:
-        global_data.moderate.append(chat_id)
+    router_app_context.feature_flags.enable(chat_id, 'moderate')
 
     # Fake mongo config is provided in conftest
 
@@ -158,9 +148,6 @@ async def test_mute_command(mock_telegram, router_app_context):
     # Verify mute logic: Check admin_service.topic_mute updated (DI pattern)
     mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
     assert 789 in mutes
-
-    # Verify save_bot_value called
-    global_data.db_service.save_bot_value.assert_called()
 
 @pytest.mark.asyncio
 async def test_all_command(mock_telegram, router_app_context):
@@ -249,9 +236,9 @@ async def test_show_mutes_no_admins(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
-    
-    if 123 not in global_data.moderate:
-        global_data.moderate.append(123)
+
+    # Enable moderation via feature flags
+    router_app_context.feature_flags.enable(123, 'moderate')
 
     update = types.Update(
         update_id=8,
@@ -278,6 +265,7 @@ async def test_message_reaction_no_action(router_app_context):
     # The original test called it manually.
 
     bot = router_app_context.bot
+    session = router_app_context.session
     # router_app_context IS the app_context (a TestAppContext instance)
     app_context = router_app_context
 
@@ -294,7 +282,7 @@ async def test_message_reaction_no_action(router_app_context):
 
     reaction_update = ReactionEvent()
 
-    await message_reaction_handler(reaction_update, bot, app_context)
+    await message_reaction_handler(reaction_update, bot, session, app_context)
     # Assert nothing bad happened
 
 @pytest.mark.asyncio
@@ -378,7 +366,6 @@ async def test_alert_me_add(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    global_data.alert_me = {}
     # Fake mongo config is provided in conftest
 
     update = types.Update(
@@ -397,7 +384,7 @@ async def test_alert_me_add(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage" and "Added" in r["data"]["text"]), None)
     assert req is not None
-    
+
     # Verify sleep_and_delete called
     assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
 
