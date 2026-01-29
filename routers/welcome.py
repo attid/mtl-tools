@@ -115,8 +115,7 @@ async def cmd_delete_welcome(message: Message, session: Session, app_context=Non
     has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
 
     if has_welcome:
-        app_context.config_service.remove_welcome_message(message.chat.id)
-        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, None)
+        app_context.config_service.remove_welcome_message(message.chat.id, session)
 
     msg = await message.reply('Removed')
     await app_context.utils_service.sleep_and_delete(msg, 60)
@@ -136,8 +135,7 @@ async def cmd_set_welcome(message: Message, session: Session, app_context=None):
     if len(message.text.split()) > 1:
         welcome_text = message.html_text[13:]
 
-        app_context.config_service.set_welcome_message(message.chat.id, welcome_text)
-        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeMessage, welcome_text)
+        app_context.config_service.set_welcome_message(message.chat.id, welcome_text, session)
         msg = await message.reply('Added')
         await app_context.utils_service.sleep_and_delete(msg, 60)
     else:
@@ -158,8 +156,7 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
     if len(message.text.split()) > 1:
         text = message.text[19:].strip()
 
-        app_context.config_service.set_welcome_button(message.chat.id, text)
-        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.WelcomeButton, text)
+        app_context.config_service.set_welcome_button(message.chat.id, text, session)
         msg = await message.reply('Added')
         await app_context.utils_service.sleep_and_delete(msg, 60)
     else:

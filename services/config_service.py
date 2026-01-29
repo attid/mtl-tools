@@ -5,6 +5,9 @@ from enum import Enum
 from typing import Any, Optional, Union
 from threading import Lock
 
+from sqlalchemy.orm import Session
+
+from db.repositories import ConfigRepository
 from other.constants import BotValueTypes
 from services.interfaces.repositories import IConfigRepository
 from shared.domain.config import BotConfig
@@ -136,15 +139,25 @@ class ConfigService:
         with self._lock:
             return self._welcome_messages.get(chat_id)
 
-    def set_welcome_message(self, chat_id: int, message: str) -> None:
-        """Set welcome message for chat."""
+    def set_welcome_message(self, chat_id: int, message: str, session: Session = None) -> None:
+        """Set welcome message for chat. Saves to DB if session provided."""
         with self._lock:
             self._welcome_messages[chat_id] = message
 
-    def remove_welcome_message(self, chat_id: int) -> None:
-        """Remove welcome message for chat."""
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.WelcomeMessage, message
+            )
+
+    def remove_welcome_message(self, chat_id: int, session: Session = None) -> None:
+        """Remove welcome message for chat. Removes from DB if session provided."""
         with self._lock:
             self._welcome_messages.pop(chat_id, None)
+
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.WelcomeMessage, None
+            )
 
     def load_welcome_messages(self, data: dict[int, Any]) -> None:
         """Bulk load welcome messages from global_data."""
@@ -157,15 +170,25 @@ class ConfigService:
         with self._lock:
             return self._welcome_buttons.get(chat_id)
 
-    def set_welcome_button(self, chat_id: int, button: dict) -> None:
-        """Set welcome button config for chat."""
+    def set_welcome_button(self, chat_id: int, button: dict, session: Session = None) -> None:
+        """Set welcome button config for chat. Saves to DB if session provided."""
         with self._lock:
             self._welcome_buttons[chat_id] = button
 
-    def remove_welcome_button(self, chat_id: int) -> None:
-        """Remove welcome button config for chat."""
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.WelcomeButton, button
+            )
+
+    def remove_welcome_button(self, chat_id: int, session: Session = None) -> None:
+        """Remove welcome button config for chat. Removes from DB if session provided."""
         with self._lock:
             self._welcome_buttons.pop(chat_id, None)
+
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.WelcomeButton, None
+            )
 
     def load_welcome_buttons(self, data: dict[int, Any]) -> None:
         """Bulk load welcome buttons from global_data."""
@@ -178,15 +201,25 @@ class ConfigService:
         with self._lock:
             return self._delete_income.get(chat_id)
 
-    def set_delete_income(self, chat_id: int, config: Any) -> None:
-        """Set delete income config for chat."""
+    def set_delete_income(self, chat_id: int, config: Any, session: Session = None) -> None:
+        """Set delete income config for chat. Saves to DB if session provided."""
         with self._lock:
             self._delete_income[chat_id] = config
 
-    def remove_delete_income(self, chat_id: int) -> None:
-        """Remove delete income config for chat."""
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.DeleteIncome, config
+            )
+
+    def remove_delete_income(self, chat_id: int, session: Session = None) -> None:
+        """Remove delete income config for chat. Removes from DB if session provided."""
         with self._lock:
             self._delete_income.pop(chat_id, None)
+
+        if session:
+            ConfigRepository(session).save_bot_value(
+                chat_id, BotValueTypes.DeleteIncome, None
+            )
 
     def load_delete_income(self, data: dict[int, Any]) -> None:
         """Bulk load delete income configs from global_data."""

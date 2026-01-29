@@ -717,10 +717,8 @@ async def cb_delete_welcome(query: CallbackQuery, callback_data: AdminCallback, 
     chat_id = callback_data.chat_id
 
     # Delete welcome settings from cache and DB
-    app_context.config_service.remove_welcome_message(chat_id)
-    app_context.config_service.remove_welcome_button(chat_id)
-    ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeMessage, None)
-    ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeButton, None)
+    app_context.config_service.remove_welcome_message(chat_id, session)
+    app_context.config_service.remove_welcome_button(chat_id, session)
 
     await query.answer("Welcome settings deleted.")
 
@@ -773,8 +771,7 @@ async def process_welcome_message(message: Message, state: FSMContext, session: 
 
     # Save welcome message to cache and DB
     new_message = message.text or message.caption or ""
-    app_context.config_service.set_welcome_message(chat_id, new_message)
-    ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeMessage, new_message)
+    app_context.config_service.set_welcome_message(chat_id, new_message, session)
 
     await state.clear()
 
@@ -815,8 +812,7 @@ async def process_welcome_button(message: Message, state: FSMContext, session: S
         return
 
     # Save welcome button to cache and DB (stored as plain text)
-    app_context.config_service.set_welcome_button(chat_id, button_text)
-    ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeButton, button_text)
+    app_context.config_service.set_welcome_button(chat_id, button_text, session)
 
     await state.clear()
 

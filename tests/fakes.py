@@ -544,26 +544,29 @@ class FakeConfigService:
     def get_welcome_message(self, chat_id):
         return self._welcome_messages.get(chat_id)
 
-    def set_welcome_message(self, chat_id, message):
+    def set_welcome_message(self, chat_id, message, session=None):
         self._welcome_messages[chat_id] = message
 
-    def remove_welcome_message(self, chat_id):
+    def remove_welcome_message(self, chat_id, session=None):
         self._welcome_messages.pop(chat_id, None)
 
     def get_welcome_button(self, chat_id):
         return self._welcome_buttons.get(chat_id)
 
-    def set_welcome_button(self, chat_id, button):
+    def set_welcome_button(self, chat_id, button, session=None):
         self._welcome_buttons[chat_id] = button
 
-    def remove_welcome_button(self, chat_id):
+    def remove_welcome_button(self, chat_id, session=None):
         self._welcome_buttons.pop(chat_id, None)
 
     def get_delete_income(self, chat_id):
         return self._delete_income.get(chat_id)
 
-    def set_delete_income(self, chat_id, config):
+    def set_delete_income(self, chat_id, config, session=None):
         self._delete_income[chat_id] = config
+
+    def remove_delete_income(self, chat_id, session=None):
+        self._delete_income.pop(chat_id, None)
 
     def load_value(self, chat_id, key, default=None):
         """Synchronous load_value for DI service interface."""
