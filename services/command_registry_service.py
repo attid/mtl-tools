@@ -1,8 +1,36 @@
 """Command registry service with DI."""
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from threading import Lock
 from dataclasses import dataclass, field
+
+
+# Module-level storage for decorator registrations
+_pending_commands: dict[str, dict] = {}
+
+
+def update_command_info(command_name: str, info: str, cmd_type: int = 0, cmd_list: str = ''):
+    """Decorator to register command info at module load time.
+
+    Args:
+        command_name: The command name (e.g., 'help', 'start')
+        info: Description of what the command does
+        cmd_type: Command type (0=none, 1=in list, 2=in dict, 3=dict with users)
+        cmd_list: Command list identifier
+    """
+    def decorator(func: Callable) -> Callable:
+        _pending_commands[command_name] = {
+            'info': info,
+            'cmd_type': cmd_type,
+            'cmd_list': cmd_list
+        }
+        return func
+    return decorator
+
+
+def get_pending_commands() -> dict[str, dict]:
+    """Get all commands registered via decorators."""
+    return _pending_commands.copy()
 
 
 @dataclass

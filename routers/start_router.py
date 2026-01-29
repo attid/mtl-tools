@@ -8,7 +8,8 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.repositories import ChatsRepository
-from other.global_data import MTLChats, update_command_info
+from other.constants import MTLChats
+from services.command_registry_service import update_command_info
 from other.stellar import MTLAddresses
 
 router = Router()

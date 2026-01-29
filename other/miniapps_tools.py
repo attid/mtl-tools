@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import adv_text
+from other.constants import adv_text
 from other.pyro_tools import MessageInfo
 
 

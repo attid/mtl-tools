@@ -11,7 +11,8 @@ from stellar_sdk import Server
 from db.repositories import MessageRepository
 from db.session import SessionPool
 from other.config_reader import config
-from other.global_data import MTLChats, global_data
+from other.constants import MTLChats
+from services.app_context import app_context
 from other.grist_tools import grist_manager, MTLGrist
 from other.loguru_tools import safe_catch_async
 from other.stellar import (
@@ -177,9 +178,9 @@ async def grist_upload_users(table, data):
 
 
 async def cmd_check_grist():
-    data = await global_data.mongo_config.get_users_joined_last_day(-1001009485608)
+    data = await app_context.db_service.get_users_joined_last_day(-1001009485608)
     await grist_upload_users(MTLGrist.MAIN_CHAT_INCOME, data)
-    data = await global_data.mongo_config.get_users_left_last_day(-1001009485608)
+    data = await app_context.db_service.get_users_left_last_day(-1001009485608)
     await grist_upload_users(MTLGrist.MAIN_CHAT_OUTCOME, data)
 
 

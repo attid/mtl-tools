@@ -7,7 +7,8 @@ from aiogram import types
 from routers.multi_handler import router as multi_router, on_startup, commands_info
 from tests.conftest import RouterTestMiddleware
 from tests.fakes import FakeMongoConfig
-from other.global_data import global_data, MTLChats, BotValueTypes
+from other.constants import MTLChats, BotValueTypes
+from other.global_data import global_data
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():

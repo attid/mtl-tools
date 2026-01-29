@@ -5,7 +5,8 @@ import requests
 from sqlalchemy.orm import Session
 
 from other.config_reader import config
-from other.global_data import float2str, MTLChats
+from other.constants import MTLChats
+from other.utils import float2str
 from other.grist_tools import MTLGrist, grist_manager
 from other.gspread_tools import agcm
 from db.repositories import FinanceRepository

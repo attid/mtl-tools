@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from stellar_sdk import Server
 
 from .sdk_utils import get_server_async, get_horizon_url
-from other.global_data import float2str, global_data
+from other.utils import float2str
 from other.stellar.address_utils import address_id_to_username
 from other.stellar.constants import MTLAddresses
 from db.repositories import FinanceRepository
@@ -36,6 +36,7 @@ async def cmd_check_new_transaction(ignore_operation: List,
     """
     # Import here to avoid circular dependency
     from other.stellar.xdr_utils import decode_xdr
+    from services.app_context import app_context
 
     result = []
 
@@ -52,13 +53,13 @@ async def cmd_check_new_transaction(ignore_operation: List,
                 cash[account_id] = tr
 
         # Get last processed transaction ID from database
-        last_id = await global_data.mongo_config.load_kv_value(account_id + chat_id)
+        last_id = await app_context.db_service.load_kv_value(account_id + chat_id)
 
         # If no last_id, save current one and exit
         if last_id is None:
             if tr["_embedded"]["records"]:
                 last_id = tr["_embedded"]["records"][0]["paging_token"]
-                await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+                await app_context.db_service.save_kv_value(account_id + chat_id, last_id)
             return result
 
         new_transactions = []
@@ -87,7 +88,7 @@ async def cmd_check_new_transaction(ignore_operation: List,
                 logger.error(f"Error processing transaction {transaction['paging_token']}: {ex}")
                 continue
 
-        await global_data.mongo_config.save_kv_value(account_id + chat_id, last_id)
+        await app_context.db_service.save_kv_value(account_id + chat_id, last_id)
 
     except Exception as ex:
         logger.error(f"Error in cmd_check_new_transaction for account {account_id}: {ex}")
@@ -112,13 +113,15 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         List of decoded effect details
     """
     try:
+        from services.app_context import app_context
+
         if filter_operation is None:
             filter_operation = []
         result = []
         asset_name = asset.split('-')[0]
 
         # Get last processed effect ID from database
-        last_id = await global_data.mongo_config.load_kv_value(asset + chat_id)
+        last_id = await app_context.db_service.load_kv_value(asset + chat_id)
 
         # If no last_id, save current one and exit
         if last_id is None:
@@ -126,7 +129,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
             data = FinanceRepository(session).get_new_effects_for_token(asset_name, '-1', filter_sum)
             if data:
                 # Save last effect ID as initial last_id
-                await global_data.mongo_config.save_kv_value(asset + chat_id, data[-1].id)
+                await app_context.db_service.save_kv_value(asset + chat_id, data[-1].id)
             return result
 
         max_id = last_id
@@ -145,7 +148,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
 
         # Save new max_id if it's greater than last_id
         if max_id > last_id:
-            await global_data.mongo_config.save_kv_value(asset + chat_id, max_id)
+            await app_context.db_service.save_kv_value(asset + chat_id, max_id)
 
         return result
 

@@ -5,7 +5,7 @@ from aiogram import types
 from routers.stellar import router as stellar_router
 from tests.conftest import RouterTestMiddleware
 from tests.fakes import FakeWebResponse
-from other.global_data import global_data, MTLChats
+from other.constants import MTLChats
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():

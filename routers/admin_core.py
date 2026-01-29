@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, get_username_link
 from other.config_reader import config
-from other.global_data import global_data, BotValueTypes, update_command_info, MTLChats
+from other.constants import MTLChats, BotValueTypes
+from other.global_data import global_data
+from services.command_registry_service import update_command_info
 from other.pyro_tools import get_group_members, remove_deleted_users
 from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
@@ -225,7 +227,7 @@ async def cmd_mute(message: Message, app_context: AppContext):
     # Use DI service
     app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
     all_mutes = app_context.admin_service.get_all_topic_mutes()
-    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+    await global_data.db_service.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
@@ -274,7 +276,7 @@ async def cmd_show_mutes(message: Message, app_context: AppContext):
         for user_id in users_to_remove:
             app_context.admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
         all_mutes = app_context.admin_service.get_all_topic_mutes()
-        await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+        await global_data.db_service.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     if muted_users:
         mute_list = "\n".join(muted_users)
@@ -317,7 +319,7 @@ async def message_reaction(message: MessageReactionUpdated, bot: Bot, app_contex
             # Use DI service
             app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
             all_mutes = app_context.admin_service.get_all_topic_mutes()
-            await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+            await global_data.db_service.save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
             await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
@@ -418,7 +420,7 @@ async def cmd_set_alert_me(message: Message, session: Session, app_context: AppC
     # Use DI service
     is_subscribed = app_context.notification_service.toggle_alert_user(chat_id, user_id)
     alert_users = app_context.notification_service.get_alert_users(chat_id)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
+    await global_data.db_service.save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
     msg = await message.reply('Added' if is_subscribed else 'Removed')
 
     await app_context.utils_service.sleep_and_delete(message, 60)

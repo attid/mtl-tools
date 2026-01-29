@@ -6,7 +6,7 @@ import asyncio
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from services.app_context import AppContext
 
 router = Router()

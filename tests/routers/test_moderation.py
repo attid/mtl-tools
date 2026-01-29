@@ -4,7 +4,7 @@ from aiogram import types
 
 from routers.moderation import router as moderation_router, UnbanCallbackData
 from tests.conftest import RouterTestMiddleware
-from other.global_data import MTLChats, global_data
+from other.constants import MTLChats
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():

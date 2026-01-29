@@ -31,9 +31,35 @@ from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.app_context import AppContextMiddleware
 from other.config_reader import config
-from other.global_data import MTLChats, global_data, global_tasks
+from other.constants import MTLChats
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
+from services.command_registry_service import get_pending_commands
+
+# Task list for background asyncio tasks - was previously in global_data
+global_tasks = []
+
+# Reboot flag - was previously in global_data
+_reboot_flag = False
+
+# User cache - was previously in global_data
+# Thread-safe user type cache (kept for backwards compatibility)
+from threading import Lock
+_users_lock = Lock()
+_users_list: dict[int, int] = {}
+
+
+def _add_user(user_id: int, user_type: int) -> int:
+    """Add or update user in the cache."""
+    with _users_lock:
+        _users_list[user_id] = user_type
+    return user_type
+
+
+def _check_user(user_id: int) -> int:
+    """Check user type from cache. Returns -1 if not found."""
+    with _users_lock:
+        return _users_list.get(user_id, -1)
 
 GIT_COMMIT = os.environ.get('GIT_COMMIT', 'unknown')
 logger.info(f'start (commit: {GIT_COMMIT})')
@@ -190,10 +216,11 @@ async def main():
     await load_routers(dp, bot)
 
     # Reload commands into command_registry after routers are loaded
-    # (decorators @update_command_info populate global_data.info_cmd at import time)
-    if global_data.info_cmd:
-        app_context_middleware.app_context.command_registry.load_commands(global_data.info_cmd)
-        logger.info(f"Loaded {len(global_data.info_cmd)} commands into command_registry")
+    # (decorators @update_command_info populate _pending_commands at import time)
+    pending_commands = get_pending_commands()
+    if pending_commands:
+        app_context_middleware.app_context.command_registry.load_commands(pending_commands)
+        logger.info(f"Loaded {len(pending_commands)} commands into command_registry")
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
@@ -208,19 +235,16 @@ async def main():
 
 async def load_globals(session: Session, bot: Bot):
     for user in ChatsRepository(session).load_bot_users():
-        global_data.users_list[user.user_id] = user.user_type
+        _users_list[user.user_id] = user.user_type
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='globals loaded')
 
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
     """Добавляет или обновляет пользователя в списке с логированием"""
-    global_data.add_user(user_id, new_user_type)
+    _add_user(user_id, new_user_type)
     # user_type = 1 if good else 2
     # -1 one mistake -2 two mistake
-    ### user_type_now = global_data.users_list.get(user_id)
-    ### # Проверяем, существует ли пользователь, его текущий тип не равен 2, и новый тип больше текущего
-    ### if not user_type_now or (new_user_type > user_type_now):
     ChatsRepository(session).save_bot_user(user_id, username, new_user_type)
 
 
@@ -241,6 +265,6 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         logger.error("Exit")
     except Exception as e:
-        if not global_data.reboot:
+        if not _reboot_flag:
             logger.exception(e)
             raise e

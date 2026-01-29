@@ -5,7 +5,8 @@ from aiogram import types
 
 from routers.polls import router as polls_router, PollCallbackData, chat_to_address
 from tests.conftest import RouterTestMiddleware
-from other.global_data import global_data, MTLChats
+from other.constants import MTLChats
+from other.global_data import global_data
 from other.stellar import MTLAddresses
 
 @pytest.fixture(autouse=True)

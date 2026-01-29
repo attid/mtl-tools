@@ -5,7 +5,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 
 from start import on_startup
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from tests.conftest import TEST_BOT_TOKEN
 from other.config_reader import config
 

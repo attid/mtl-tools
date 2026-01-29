@@ -6,7 +6,8 @@ import routers.last_handler as last_handler
 from routers.last_handler import router as last_router, SpamCheckCallbackData, ReplyCallbackData, FirstMessageCallbackData
 from tests.conftest import RouterTestMiddleware
 from tests.fakes import FakeAsyncMethod, FakeSession
-from other.global_data import global_data, MTLChats
+from other.constants import MTLChats
+from other.global_data import global_data
 
 
 def build_message_update(chat_id, user_id=123, text="Hello", **kwargs):

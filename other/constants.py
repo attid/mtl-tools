@@ -1,5 +1,9 @@
 from enum import Enum
 
+# Text constants
+adv_text = ""  # Placeholder for advertisement text, used in miniapps_tools.py
+
+
 class MTLChats:
     System = 0  # системный "чат" хранение всего подряд
     Poll = 1  # под опросы
@@ -80,3 +84,4 @@ class BotValueTypes(Enum):
     TopicAdmins = 42
     TopicMutes = 43
     EntryChannel = 44
+    Inaccessible = 45

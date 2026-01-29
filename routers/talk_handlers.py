@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from other.text_tools import extract_url
 from middlewares.throttling import rate_limit
 from other.aiogram_tools import (multi_reply, HasText, has_words, StartText, ReplyToBot)
-from other.global_data import MTLChats, BotValueTypes, update_command_info
+from other.constants import MTLChats, BotValueTypes
+from services.command_registry_service import update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
 from other.miniapps_tools import miniapps
 from services.app_context import AppContext

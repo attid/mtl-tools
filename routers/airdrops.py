@@ -12,7 +12,7 @@ from loguru import logger
 from stellar_sdk import Asset
 
 from other.aiogram_tools import HasRegex
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from other.grist_tools import (AirdropConfigItem, grist_check_airdrop_records,
                                grist_load_airdrop_configs, grist_log_airdrop_payment)
 from other.stellar import get_balances, send_payment_async

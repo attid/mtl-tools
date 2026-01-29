@@ -13,7 +13,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from loguru import logger
 
 from other.config_reader import start_path
-from other.global_data import float2str
+from other.utils import float2str
 from other.grist_tools import grist_manager, MTLGrist
 
 

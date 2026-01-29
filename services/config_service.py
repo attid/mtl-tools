@@ -30,7 +30,7 @@ class ConfigService:
     """
     Service for bot configuration management.
 
-    Replaces direct global_data.mongo_config access.
+    Replaces direct global_data.db_service access.
     """
 
     def __init__(self, config_repo: Optional[IConfigRepository] = None):

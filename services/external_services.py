@@ -464,6 +464,7 @@ class UtilsService:
         if app_context and app_context.admin_service:
             username = message.from_user.username if message.from_user else None
             return app_context.admin_service.is_skynet_admin(username)
+        # TODO: Remove this fallback once all callers pass app_context
         from other.global_data import is_skynet_admin
         return is_skynet_admin(message)
 

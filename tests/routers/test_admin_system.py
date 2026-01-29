@@ -4,7 +4,7 @@ import hashlib
 from aiogram import types
 from routers.admin_system import router as admin_router
 from tests.conftest import RouterTestMiddleware
-from other.global_data import MTLChats, global_data
+from other.constants import MTLChats
 import datetime
 
 @pytest.fixture(autouse=True)

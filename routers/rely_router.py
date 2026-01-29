@@ -23,7 +23,7 @@ from loguru import logger
 
 from other.grist_tools import GristTableConfig, grist_manager
 from other.loguru_tools import safe_catch_async
-from other.global_data import update_command_info
+from services.command_registry_service import update_command_info
 
 router = Router()
 

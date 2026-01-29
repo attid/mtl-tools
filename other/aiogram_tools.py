@@ -12,7 +12,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from middlewares.retry import logger
 from other.config_reader import config
-from other.global_data import MTLChats, global_data
+from other.constants import MTLChats
+from services.app_context import app_context
 
 scheduler: AsyncIOScheduler
 
@@ -227,6 +228,7 @@ class ReplyToBot(Filter):
 
 class ChatInOption(Filter):
     def __init__(self, name: str) -> None:
+        from other.global_data import global_data
         self.attr_name = getattr(global_data, name)
 
     async def __call__(self, message: Message) -> bool:
@@ -278,13 +280,13 @@ async def main0(chat_id: str = '@Montelibero_ru', message_id: int = 9544,
 
 
 async def update_mongo_chats_names():
-    chats = await global_data.mongo_config.get_all_chats()
+    chats = await app_context.db_service.get_all_chats()
 
     async with Bot(token=config.bot_token.get_secret_value()) as bot:
         for chat in chats:
             try:
                 info = await bot.get_chat(chat_id=chat.chat_id)
-                count = await global_data.mongo_config.update_chat_with_dict(chat.chat_id, {
+                count = await app_context.db_service.update_chat_with_dict(chat.chat_id, {
                     "username": info.username,
                     "title": info.title,
                     "name": None

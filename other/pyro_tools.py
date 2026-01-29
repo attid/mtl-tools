@@ -257,8 +257,8 @@ async def main():
         print(f"{member.user_id}\t{member.full_name}\t{member.username or ''}")
 
 
-    # from other.global_data import global_data
-    # await global_data.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
+    # from app_context import app_context
+    # await app_context.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
     # url = "https://t.me/c/1798357244/90095/95343"
     # msg_info = extract_telegram_info(url)
     # await pyro_update_msg_info(msg_info)

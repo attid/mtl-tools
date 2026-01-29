@@ -22,7 +22,9 @@ from db.repositories import MessageRepository
 from other.aiogram_tools import is_admin
 from other.grist_tools import grist_manager, MTLGrist
 from other.open_ai_tools import talk_get_summary
-from other.global_data import MTLChats, global_data, BotValueTypes, update_command_info
+from other.constants import MTLChats, BotValueTypes
+from services.command_registry_service import update_command_info
+# TODO: global_data.db_service is still used - needs migration to app_context or a dedicated service
 from services.app_context import AppContext
 from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
@@ -294,7 +296,7 @@ async def cmd_sync_post(message: Message, bot: Bot, app_context: AppContext):
         # Save sync state
         app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
-        await global_data.mongo_config.save_bot_value(chat.id, BotValueTypes.Sync,
+        await global_data.db_service.save_bot_value(chat.id, BotValueTypes.Sync,
                                                       json.dumps(channel_sync))
 
         with suppress(TelegramBadRequest):
@@ -371,7 +373,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
             # Сохраняем обновленные данные в БД
-            await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.Sync,
+            await global_data.db_service.save_bot_value(chat_id, BotValueTypes.Sync,
                                                           json.dumps(channel_sync))
 
             await message.reply('Синхронизация восстановлена')
@@ -518,7 +520,7 @@ async def cmd_chats_info(message: Message, app_context: AppContext):
     await message.answer(text="Обновление информации о чатах...")
     for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
         members = await app_context.group_service.get_members(chat_id)
-        await global_data.mongo_config.update_chat_info(chat_id, members)
+        await global_data.db_service.update_chat_info(chat_id, members)
     await message.answer(text="Обновление информации о чатах... Done.")
 
 

@@ -21,7 +21,9 @@ from db.repositories import MessageRepository
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
 from other.aiogram_tools import is_admin, cmd_sleep_and_delete, get_username_link, get_chat_link
-from other.global_data import global_data, BotValueTypes, update_command_info, MTLChats
+from other.global_data import global_data
+from other.constants import MTLChats, BotValueTypes
+from services.command_registry_service import update_command_info
 from other.pyro_tools import GroupMember
 from db.repositories import ConfigRepository, ChatsRepository
 # from other.spam_cheker import combo_check_spammer, lols_check_spammer
@@ -460,6 +462,11 @@ async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_con
 @router.chat_member(ChatMemberUpdatedFilter(ADMINISTRATOR >> MEMBER))
 async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
     chat_id = event.chat.id
+
+    # Chat is accessible if we received this update - remove from inaccessible list
+    from routers.admin_panel import unmark_chat_accessible
+    unmark_chat_accessible(chat_id, session)
+
     members = await event.chat.get_administrators()
     new_admins = [member.user.id for member in members]
 

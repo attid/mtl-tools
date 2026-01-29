@@ -8,7 +8,9 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from other.config_reader import start_path
-from other.global_data import MTLChats, update_command_info, global_data
+from other.constants import MTLChats
+from other.utils import float2str
+from services.command_registry_service import update_command_info
 from other.stellar import MTLAddresses
 
 router = Router()
@@ -392,7 +394,6 @@ async def cmd_get_btcmtl_xdr(message: Message, app_context=None):
     arg = message.text.split()
     if len(arg) > 1:
         memo = None if len(arg) < 3 else ' '.join(arg[3:])
-        from other.global_data import float2str
         xdr = await app_context.stellar_service.get_btcmtl_xdr(float2str(arg[1]), arg[2], memo)
         decoded = await app_context.stellar_service.decode_xdr(xdr=xdr)
             

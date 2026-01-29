@@ -10,9 +10,11 @@ from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
 
 from other.config_reader import config
-from other.global_data import global_data, update_command_info
+from other.global_data import global_data
 from other.constants import MTLChats, BotValueTypes
+from services.command_registry_service import update_command_info
 from db.repositories import ConfigRepository
+from routers.admin_panel import load_inaccessible_chats
 
 router = Router()
 
@@ -176,6 +178,7 @@ def command_config_loads(app_context):
 
         global_data.votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, '{}'))
         global_data.topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
+        global_data.inaccessible_chats = json.loads(repo.load_bot_value(0, BotValueTypes.Inaccessible, '[]'))
 
         global_data.welcome_messages = repo.get_chat_dict_by_key(BotValueTypes.WelcomeMessage)
         global_data.welcome_button = repo.get_chat_dict_by_key(BotValueTypes.WelcomeButton)
@@ -283,6 +286,9 @@ def _sync_to_di_services(ctx):
             ctx.feature_flags.set_feature(chat_id, "delete_income", True, persist=False)
         for chat_id in global_data.entry_channel:
             ctx.feature_flags.set_feature(chat_id, "entry_channel", True, persist=False)
+
+    # Load inaccessible chats for admin panel
+    load_inaccessible_chats(global_data.inaccessible_chats)
 
 
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.", 1, "reply_only")

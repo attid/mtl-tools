@@ -11,7 +11,8 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
     ReactionTypeEmoji
 from sqlalchemy.orm import Session
 
-from other.global_data import MTLChats, BotValueTypes, global_data, update_command_info
+from other.constants import MTLChats, BotValueTypes
+from services.command_registry_service import update_command_info
 from services.app_context import AppContext
 from other.grist_tools import MTLGrist
 from other.stellar import MTLAddresses

@@ -2,7 +2,8 @@ import pytest
 from aiogram import types
 from routers.admin_core import router as admin_router, message_reaction as message_reaction_handler
 from tests.conftest import RouterTestMiddleware
-from other.global_data import global_data, MTLChats
+from other.constants import MTLChats
+from other.global_data import global_data
 from other.pyro_tools import GroupMember
 import datetime
 
@@ -159,7 +160,7 @@ async def test_mute_command(mock_telegram, router_app_context):
     assert 789 in mutes
 
     # Verify save_bot_value called
-    global_data.mongo_config.save_bot_value.assert_called()
+    global_data.db_service.save_bot_value.assert_called()
 
 @pytest.mark.asyncio
 async def test_all_command(mock_telegram, router_app_context):

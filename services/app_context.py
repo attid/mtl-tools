@@ -9,7 +9,8 @@ from services.notification_service import NotificationService
 from services.bot_state_service import BotStateService
 from services.voting_service import VotingService
 from services.admin_service import AdminManagementService
-from services.command_registry_service import CommandRegistryService
+from services.command_registry_service import CommandRegistryService, get_pending_commands
+from services.database_service import DatabaseService
 
 
 class AppContext:
@@ -37,6 +38,7 @@ class AppContext:
         self.voting_service = None
         self.admin_service = None
         self.command_registry = None
+        self.db_service = None
 
     @classmethod
     def from_bot(cls, bot):
@@ -65,10 +67,12 @@ class AppContext:
         ctx.admin_service = AdminManagementService()
         ctx.notification_service = NotificationService()
         ctx.command_registry = CommandRegistryService()
-
-        # Load commands from global_data.info_cmd (filled by @update_command_info decorators)
-        from other.global_data import global_data
-        if global_data.info_cmd:
-            ctx.command_registry.load_commands(global_data.info_cmd)
+        ctx.db_service = DatabaseService()
 
         return ctx
+
+
+# Singleton instance for backwards compatibility
+# Used by modules that need app_context at import time
+# New code should receive app_context through dependency injection
+app_context: AppContext = AppContext()

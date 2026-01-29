@@ -23,7 +23,8 @@ from start import add_bot_users
 from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
 from other.open_ai_tools import talk_check_spam
-from other.global_data import MTLChats, BotValueTypes, global_data
+from other.global_data import global_data
+from other.constants import MTLChats, BotValueTypes
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.stellar import check_url_xdr
@@ -129,9 +130,9 @@ def _remove_topic_mute(app_context, chat_id: int, thread_id: int, user_id: int) 
 
 async def _save_topic_mutes_to_db(app_context) -> None:
     """Save topic mutes to database using global_data (persistence layer)."""
-    # Always save to global_data.mongo_config for persistence
-    await global_data.mongo_config.save_bot_value(0, BotValueTypes.TopicMutes,
-                                                  json.dumps(global_data.topic_mute))
+    # Always save to global_data.db_service for persistence
+    await global_data.db_service.save_bot_value(0, BotValueTypes.TopicMutes,
+                                                json.dumps(global_data.topic_mute))
 
 
 ########################################################################################################################

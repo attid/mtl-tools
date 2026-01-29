@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from other.config_reader import config
-from other.global_data import float2str
+from other.utils import float2str
 from other.web_tools import HTTPSessionManager
 
 

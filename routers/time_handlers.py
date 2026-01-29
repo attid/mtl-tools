@@ -22,7 +22,7 @@ from other.stellar import (
 )
 from other.stellar import get_balances, MTLAddresses
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from scripts.update_report import lite_report
 
 

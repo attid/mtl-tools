@@ -42,11 +42,11 @@ def random_address():
 
 
 @pytest.fixture(autouse=True)
-def fake_mongo_config():
-    original = global_data.mongo_config
-    global_data.mongo_config = FakeMongoConfig()
+def fake_db_service():
+    original = global_data.db_service
+    global_data.db_service = FakeMongoConfig()
     yield
-    global_data.mongo_config = original
+    global_data.db_service = original
 
 # --- Fixtures: Config ---
 

@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from other.text_tools import extract_url
 from start import add_bot_users
-from other.global_data import MTLChats, BotValueTypes, global_data
+from other.constants import MTLChats, BotValueTypes
+from services.app_context import app_context
 from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
 from other.open_ai_tools import talk_check_spam
 
@@ -27,8 +28,8 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
 
 async def save_url(chat_id, msg_id, msg):
     url = extract_url(msg)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
-    await global_data.mongo_config.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
+    await app_context.db_service.save_bot_value(chat_id, BotValueTypes.PinnedUrl, url)
+    await app_context.db_service.save_bot_value(chat_id, BotValueTypes.PinnedId, msg_id)
 
 async def delete_and_log_spam(message, session, rules_name):
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
@@ -81,7 +82,7 @@ async def delete_and_log_spam(message, session, rules_name):
 
 async def set_vote(message):
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    if message.chat.id in global_data.first_vote:
+    if message.chat.id in app_context.first_vote:
         kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="Spam",
                                  callback_data=FirstMessageCallbackData(spam=True,
@@ -106,7 +107,7 @@ async def check_spam(message, session=None):
 
     user_id = message.sender_chat.id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
 
-    if global_data.check_user(user_id) == 1:
+    if app_context.check_user(user_id) == 1:
         return False
 
     rules_name = 'xz'

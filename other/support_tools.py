@@ -4,7 +4,7 @@ from datetime import datetime
 from redis.asyncio import Redis
 
 from other.config_reader import config
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from other.gspread_tools import gs_save_new_support
 
 redis = Redis.from_url(config.redis_url[:-1] + '7')

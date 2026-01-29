@@ -12,7 +12,7 @@ from stellar_sdk.sep.federation import resolve_stellar_address_async
 
 from db.repositories import MessageRepository, FinanceRepository
 from other.config_reader import start_path, config
-from other.global_data import MTLChats
+from other.constants import MTLChats
 from other.gspread_tools import gs_copy_sheets_with_style, agcm
 from other.stellar import (
     stellar_get_issuer_assets, get_balances, stellar_get_offers,

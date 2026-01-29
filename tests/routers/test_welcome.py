@@ -5,7 +5,8 @@ from aiogram import types
 
 from routers.welcome import router as welcome_router, CaptchaCallbackData, JoinCallbackData
 from tests.conftest import RouterTestMiddleware
-from other.global_data import global_data, MTLChats, BotValueTypes
+from other.constants import MTLChats, BotValueTypes
+from other.global_data import global_data
 
 # --- Existing Tests (Router Integration) ---
 
