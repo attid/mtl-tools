@@ -11,6 +11,7 @@ from services.voting_service import VotingService
 from services.admin_service import AdminManagementService
 from services.command_registry_service import CommandRegistryService, get_pending_commands
 from services.database_service import DatabaseService
+from services.repositories.chats_repo_adapter import ChatsRepositoryAdapter
 
 
 class AppContext:
@@ -73,6 +74,7 @@ class AppContext:
         ctx.notification_service = NotificationService()
         ctx.command_registry = CommandRegistryService()
         ctx.db_service = DatabaseService()
+        ctx.user_service = UserService(ChatsRepositoryAdapter(ctx.db_service.session_pool))
 
         return ctx
 
