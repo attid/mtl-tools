@@ -197,6 +197,7 @@ async def main():
     dp.channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
+    dp.message_reaction.middleware(DbSessionMiddleware(db_pool))
     
     dp.message.middleware(app_context_middleware)
     dp.callback_query.middleware(app_context_middleware)
@@ -205,6 +206,7 @@ async def main():
     dp.channel_post.middleware(app_context_middleware)
     dp.edited_channel_post.middleware(app_context_middleware)
     dp.poll_answer.middleware(app_context_middleware)
+    dp.message_reaction.middleware(app_context_middleware)
 
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
     dp.message.middleware(EmojiReactionMiddleware())
