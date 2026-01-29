@@ -176,8 +176,8 @@ class TestFeatureFlagsKb:
         kb = feature_flags_kb(chat_id, router_app_context.feature_flags)
         # Find captcha row
         captcha_row = next(row for row in kb.inline_keyboard if "Captcha" in row[0].text)
-        assert "+ Captcha" == captcha_row[0].text
-        assert "ON" == captcha_row[1].text
+        assert "🟢 Captcha" == captcha_row[0].text
+        assert "🟢" == captcha_row[1].text
 
 
 class TestWelcomeKb:

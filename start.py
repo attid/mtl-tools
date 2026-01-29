@@ -212,6 +212,10 @@ async def main():
     dp['dbsession_pool'] = db_pool
     dp['app_context'] = app_context_middleware.app_context
 
+    # Update global singleton for modules that import app_context directly
+    import services.app_context as app_context_module
+    app_context_module.app_context = app_context_middleware.app_context
+
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)
 

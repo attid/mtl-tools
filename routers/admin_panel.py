@@ -8,7 +8,7 @@ from typing import Optional
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatType, ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
@@ -138,7 +138,7 @@ async def get_chat_title(chat_id: int, bot: Bot, session: Session = None) -> str
         title = chat.title or str(chat_id)
         _chat_titles[chat_id] = title
         return title
-    except TelegramBadRequest:
+    except (TelegramBadRequest, TelegramForbiddenError):
         mark_chat_inaccessible(chat_id, session)
         return None
 
@@ -164,8 +164,9 @@ async def _get_chat_owner_id(bot: Bot, chat_id: int) -> int | None:
         owner_id = owner.user.id if owner else None
         _chat_owners[chat_id] = owner_id
         return owner_id
-    except TelegramBadRequest:
+    except (TelegramBadRequest, TelegramForbiddenError):
         _chat_owners[chat_id] = None
+        mark_chat_inaccessible(chat_id)
         return None
 
 
@@ -238,7 +239,9 @@ async def get_user_admin_chats(user_id: int, app_context: AppContext, bot: Bot, 
         return (chat_id, title) if title else None
 
     results = await asyncio.gather(*[get_chat_info(cid) for cid in user_chats])
-    return [r for r in results if r is not None]
+    chats = [r for r in results if r is not None]
+    # Sort by title alphabetically (case-insensitive)
+    return sorted(chats, key=lambda x: x[1].lower())
 
 
 async def verify_admin_via_api(user_id: int, chat_id: int, bot: Bot) -> bool:
@@ -328,12 +331,11 @@ def feature_flags_kb(chat_id: int, feature_flags: FeatureFlagsService) -> Inline
 
     for feature_key, label in FEATURE_LABELS.items():
         is_enabled = feature_flags.is_enabled(chat_id, feature_key)
-        status_icon = "ON" if is_enabled else "OFF"
-        status_emoji = "+" if is_enabled else "-"
+        status_icon = "🟢" if is_enabled else "🔴"
 
         buttons.append([
             InlineKeyboardButton(
-                text=f"{status_emoji} {label}",
+                text=f"{status_icon} {label}",
                 callback_data=AdminCallback(action="info", chat_id=chat_id, param=feature_key).pack()
             ),
             InlineKeyboardButton(
@@ -381,12 +383,55 @@ def welcome_kb(chat_id: int) -> InlineKeyboardMarkup:
 @update_command_info("/admin", "Admin panel for chat management (use in private chat)")
 @router.message(Command(commands=["admin"]), F.chat.type == ChatType.PRIVATE)
 async def cmd_admin(message: Message, session: Session, bot: Bot, app_context: AppContext):
-    """Entry point for admin panel - shows list of chats where user is admin."""
+    """Entry point for admin panel - shows list of chats where user is admin.
+
+    Usage:
+        /admin - show list of all chats
+        /admin @username - go directly to chat settings
+        /admin -100123456 - go directly to chat settings by ID
+    """
     if not app_context or not app_context.admin_service:
         await message.answer("Service unavailable.")
         return
 
     user_id = message.from_user.id
+
+    # Check for direct chat argument
+    args = message.text.split(maxsplit=1)
+    if len(args) > 1:
+        chat_arg = args[1].strip()
+        target_chat_id = None
+
+        try:
+            if chat_arg.startswith("@"):
+                # Username - resolve via API
+                chat_info = await bot.get_chat(chat_arg)
+                target_chat_id = chat_info.id
+            elif chat_arg.lstrip("-").isdigit():
+                # Numeric chat ID
+                target_chat_id = int(chat_arg)
+        except (TelegramBadRequest, TelegramForbiddenError, ValueError):
+            await message.answer(f"Chat not found: {chat_arg}")
+            return
+
+        if target_chat_id:
+            # Verify user is admin
+            if not await verify_admin_via_api(user_id, target_chat_id, bot):
+                await message.answer("You are not an admin of this chat.")
+                return
+
+            title = await get_chat_title(target_chat_id, bot, session)
+            if not title:
+                await message.answer("Chat not accessible.")
+                return
+
+            await message.answer(
+                f"Settings: {title}",
+                reply_markup=chat_menu_kb(target_chat_id)
+            )
+            return
+
+    # No argument - show chat list
     chats = await get_user_admin_chats(user_id, app_context, bot, session)
 
     if not chats:
