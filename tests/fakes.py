@@ -1389,6 +1389,37 @@ class FakeCommandRegistryService:
             )
 
 
+class FakeDatabaseService:
+    """Fake DatabaseService for testing."""
+
+    def __init__(self):
+        self._chats = {}  # chat_id -> ChatDTO
+
+    async def get_chat_by_id(self, chat_id: int):
+        """Get chat from database by ID, returns ChatDTO or None."""
+        return self._chats.get(chat_id)
+
+    async def upsert_chat_info(self, chat_id: int, title, username) -> None:
+        """Create or update chat with title and username."""
+        from db.repositories import ChatDTO
+        self._chats[chat_id] = ChatDTO(
+            chat_id=chat_id,
+            title=title,
+            username=username,
+            admins=[]
+        )
+
+    def set_chat(self, chat_id: int, title: str, username: str = None):
+        """Test helper to set up chat data."""
+        from db.repositories import ChatDTO
+        self._chats[chat_id] = ChatDTO(
+            chat_id=chat_id,
+            title=title,
+            username=username,
+            admins=[]
+        )
+
+
 class TestAppContext:
     def __init__(self, bot, dispatcher):
         self.bot = bot
@@ -1417,6 +1448,7 @@ class TestAppContext:
         self.notification_service = FakeNotificationService()
         self.user_service = FakeUserService()
         self.command_registry = FakeCommandRegistryService()
+        self.db_service = FakeDatabaseService()
         self.admin_id = 123456
         # Wire admin_service to utils_service
         self.utils_service.set_admin_service(self.admin_service)

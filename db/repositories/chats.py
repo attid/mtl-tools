@@ -413,3 +413,30 @@ class ChatsRepository(BaseRepository):
         else:
             new_user = BotUsers(user_id=user_id, user_name=None, user_type=user_type)
             self.session.add(new_user)
+
+    def get_chat_by_id(self, chat_id: int) -> Optional[Chat]:
+        """Get chat record from database."""
+        result = self.session.execute(
+            select(Chat).where(Chat.chat_id == chat_id)
+        )
+        return result.scalar_one_or_none()
+
+    def upsert_chat_info(self, chat_id: int, title: Optional[str], username: Optional[str]) -> None:
+        """Create or update chat with title and username."""
+        now = datetime.now(UTC)
+        chat = self.get_chat_by_id(chat_id)
+        if chat:
+            chat.title = title
+            chat.username = username
+            chat.last_updated = now
+        else:
+            chat = Chat(
+                chat_id=chat_id,
+                title=title,
+                username=username,
+                created_at=now,
+                last_updated=now,
+                admins=[],
+                metadata_={}
+            )
+            self.session.add(chat)

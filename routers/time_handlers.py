@@ -24,6 +24,8 @@ from other.stellar import get_balances, MTLAddresses
 from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
 from other.constants import MTLChats
 from scripts.update_report import lite_report
+from services.database_service import DatabaseService
+from services.telegram_utils import get_chat_info
 
 
 @safe_catch_async
@@ -99,20 +101,30 @@ async def time_check_ledger(bot: Bot, session_pool):
 
 
 @safe_catch_async
-async def time_clear(bot: Bot):
+async def time_clear(bot: Bot, db_service: DatabaseService = None):
     chats = await grist_manager.load_table_data(
         MTLGrist.CONFIG_auto_clean,
         filter_dict={"enabled": [True]}
     )
     for chat in chats:
         try:
-            chat_info = await bot.get_chat(chat['chat_id'])
-            count = await remove_deleted_users(chat['chat_id'])
-            if count > 0 :
-                await bot.send_message(MTLChats.SpamGroup,f"Finished removing deleted users from {chat_info.full_name}. \n Total deleted users: {count}")
+            chat_id = chat['chat_id']
+            # Get chat info from database first, fallback to API
+            chat_title = str(chat_id)
+            if db_service:
+                title, _ = await get_chat_info(chat_id, bot, db_service)
+                if title:
+                    chat_title = title
+            else:
+                chat_info = await bot.get_chat(chat_id)
+                chat_title = chat_info.full_name
+
+            count = await remove_deleted_users(chat_id)
+            if count > 0:
+                await bot.send_message(MTLChats.SpamGroup, f"Finished removing deleted users from {chat_title}. \n Total deleted users: {count}")
         except Exception as e:
             logger.error(f"Error in cmd_delete_dead_members: {e}")
-            await bot.send_message(MTLChats.ITolstov,f"An error occurred while removing deleted users: {str(e)}")
+            await bot.send_message(MTLChats.ITolstov, f"An error occurred while removing deleted users: {str(e)}")
         await asyncio.sleep(30)
 
 
@@ -163,7 +175,7 @@ async def time_usdm_daily(session_pool, bot: Bot):
 
 
 @safe_catch
-def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
+def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool, db_service: DatabaseService = None):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
 
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
@@ -192,7 +204,7 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool):
     scheduler.add_job(lite_report, "cron", hour=8, minute=10, args=(session_pool,),
                       misfire_grace_time=360)
 
-    scheduler.add_job(time_clear, "interval", hours=10, args=(bot,),
+    scheduler.add_job(time_clear, "interval", hours=10, args=(bot, db_service),
                       misfire_grace_time=360, jitter=120)
     # 30 */8 * * * /opt/firebird/bin/isql -i /db/archive.sql
 
@@ -215,7 +227,8 @@ def register_handlers(dp, bot):
     aiogram_tools.scheduler = scheduler
     scheduler.start()
     db_pool = dp['dbsession_pool']
-    scheduler_jobs(scheduler, bot, db_pool)
+    db_service = DatabaseService()
+    scheduler_jobs(scheduler, bot, db_pool, db_service)
 
     logger.info('router time_handlers was loaded')
 

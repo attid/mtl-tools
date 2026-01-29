@@ -123,3 +123,8 @@ Thumbs.db
 .ruff_cache/
 *.swp
 local_doc/
+
+# Tests (not needed in production, saves cache invalidation)
+tests/
+conftest.py
+pytest.ini

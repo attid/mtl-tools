@@ -152,3 +152,32 @@ class DatabaseService:
             result = repo.update_chat_with_dict(chat_id, update_data)
             session.commit()
             return result
+
+    async def get_chat_by_id(self, chat_id: int) -> Optional[ChatDTO]:
+        """Get chat from database by ID, returns ChatDTO or None."""
+        return await asyncio.to_thread(self._get_chat_by_id_sync, chat_id)
+
+    def _get_chat_by_id_sync(self, chat_id: int) -> Optional[ChatDTO]:
+        with self.session_pool() as session:
+            repo = ChatsRepository(session)
+            chat = repo.get_chat_by_id(chat_id)
+            if chat:
+                return ChatDTO(
+                    chat_id=chat.chat_id,
+                    username=chat.username,
+                    title=chat.title,
+                    created_at=chat.created_at,
+                    last_updated=chat.last_updated,
+                    admins=chat.admins or []
+                )
+            return None
+
+    async def upsert_chat_info(self, chat_id: int, title: Optional[str], username: Optional[str]) -> None:
+        """Create or update chat with title and username."""
+        await asyncio.to_thread(self._upsert_chat_info_sync, chat_id, title, username)
+
+    def _upsert_chat_info_sync(self, chat_id: int, title: Optional[str], username: Optional[str]) -> None:
+        with self.session_pool() as session:
+            repo = ChatsRepository(session)
+            repo.upsert_chat_info(chat_id, title, username)
+            session.commit()

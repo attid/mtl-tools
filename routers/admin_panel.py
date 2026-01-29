@@ -23,6 +23,7 @@ from other.constants import BotValueTypes
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext
 from services.feature_flags import FeatureFlagsService
+from services.telegram_utils import get_chat_info
 
 router = Router()
 
@@ -124,8 +125,8 @@ def load_inaccessible_chats(chat_ids: list[int]) -> None:
     _inaccessible_chats.update(chat_ids)
 
 
-async def get_chat_title(chat_id: int, bot: Bot, session: Session = None) -> str | None:
-    """Get chat title from cache or API. Returns None if chat inaccessible."""
+async def get_chat_title(chat_id: int, bot: Bot, session: Session = None, app_context: AppContext = None) -> str | None:
+    """Get chat title from cache, database, or API. Returns None if chat inaccessible."""
     # Skip inaccessible chats
     if chat_id in _inaccessible_chats:
         return None
@@ -133,6 +134,17 @@ async def get_chat_title(chat_id: int, bot: Bot, session: Session = None) -> str
     if chat_id in _chat_titles:
         return _chat_titles[chat_id]
 
+    # Try database first, fallback to API
+    if app_context and app_context.db_service:
+        title, _ = await get_chat_info(chat_id, bot, app_context.db_service)
+        if title:
+            _chat_titles[chat_id] = title
+            return title
+        else:
+            mark_chat_inaccessible(chat_id, session)
+            return None
+
+    # Fallback: direct API call if no db_service available
     try:
         chat = await bot.get_chat(chat_id)
         title = chat.title or str(chat_id)
@@ -174,7 +186,8 @@ async def notify_owner_about_settings_change(
     bot: Bot,
     chat_id: int,
     admin_user: User,
-    change_description: str
+    change_description: str,
+    app_context: AppContext = None
 ) -> None:
     """Notify chat owner about settings change by admin.
 
@@ -190,9 +203,18 @@ async def notify_owner_about_settings_change(
         if not owner_id or owner_id == admin_user.id:
             return
 
-        # Get chat info for title
-        chat = await bot.get_chat(chat_id)
-        chat_title = chat.title or str(chat_id)
+        # Get chat info for title - database first, then API
+        chat_title = str(chat_id)
+        if app_context and app_context.db_service:
+            title, _ = await get_chat_info(chat_id, bot, app_context.db_service)
+            if title:
+                chat_title = title
+        else:
+            try:
+                chat = await bot.get_chat(chat_id)
+                chat_title = chat.title or str(chat_id)
+            except (TelegramBadRequest, TelegramForbiddenError):
+                pass
 
         admin_name = _format_admin_name(admin_user)
         msg = (
@@ -233,12 +255,12 @@ async def get_user_admin_chats(user_id: int, app_context: AppContext, bot: Bot, 
     if not user_chats:
         return []
 
-    # Fetch titles (from cache or API in parallel)
-    async def get_chat_info(chat_id: int) -> tuple[int, str] | None:
-        title = await get_chat_title(chat_id, bot, session)
+    # Fetch titles (from cache, database, or API in parallel)
+    async def fetch_chat_info(chat_id: int) -> tuple[int, str] | None:
+        title = await get_chat_title(chat_id, bot, session, app_context)
         return (chat_id, title) if title else None
 
-    results = await asyncio.gather(*[get_chat_info(cid) for cid in user_chats])
+    results = await asyncio.gather(*[fetch_chat_info(cid) for cid in user_chats])
     chats = [r for r in results if r is not None]
     # Sort by title alphabetically (case-insensitive)
     return sorted(chats, key=lambda x: x[1].lower())
@@ -420,7 +442,7 @@ async def cmd_admin(message: Message, session: Session, bot: Bot, app_context: A
                 await message.answer("You are not an admin of this chat.")
                 return
 
-            title = await get_chat_title(target_chat_id, bot, session)
+            title = await get_chat_title(target_chat_id, bot, session, app_context)
             if not title:
                 await message.answer("Chat not accessible.")
                 return
@@ -514,7 +536,7 @@ async def cb_show_chat_menu(query: CallbackQuery, callback_data: AdminCallback, 
         await query.answer("You are not an admin of this chat.", show_alert=True)
         return
 
-    title = await get_chat_title(chat_id, bot, session)
+    title = await get_chat_title(chat_id, bot, session, app_context)
     if not title:
         await query.answer("Chat not accessible.", show_alert=True)
         return
@@ -538,7 +560,7 @@ async def cb_show_feature_flags(query: CallbackQuery, callback_data: AdminCallba
 
     chat_id = callback_data.chat_id
 
-    title = await get_chat_title(chat_id, bot, session)
+    title = await get_chat_title(chat_id, bot, session, app_context)
     if not title:
         await query.answer("Chat not accessible.", show_alert=True)
         return
@@ -564,7 +586,7 @@ async def cb_toggle_feature(query: CallbackQuery, callback_data: AdminCallback, 
     # Toggle the feature
     new_state = app_context.feature_flags.toggle(chat_id, feature)
 
-    title = await get_chat_title(chat_id, bot, session) or str(chat_id)
+    title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
     # Update keyboard
     with suppress(TelegramBadRequest):
@@ -580,7 +602,8 @@ async def cb_toggle_feature(query: CallbackQuery, callback_data: AdminCallback, 
     # Notify owner about settings change
     await notify_owner_about_settings_change(
         bot, chat_id, query.from_user,
-        f"Флаг <code>{html_decoration.quote(feature)}</code>: {'включен' if new_state else 'выключен'}"
+        f"Флаг <code>{html_decoration.quote(feature)}</code>: {'включен' if new_state else 'выключен'}",
+        app_context
     )
 
 
@@ -610,7 +633,7 @@ async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCal
 
     chat_id = callback_data.chat_id
 
-    title = await get_chat_title(chat_id, bot, session)
+    title = await get_chat_title(chat_id, bot, session, app_context)
     if not title:
         await query.answer("Chat not accessible.", show_alert=True)
         return
@@ -655,7 +678,8 @@ async def cb_remove_dead_users(query: CallbackQuery, callback_data: AdminCallbac
         # Notify owner about settings change
         await notify_owner_about_settings_change(
             bot, chat_id, query.from_user,
-            f"Удалены неактивные пользователи: {count}"
+            f"Удалены неактивные пользователи: {count}",
+            app_context
         )
     except Exception as e:
         logger.error(f"Error removing dead users from {chat_id}: {e}")
@@ -703,11 +727,12 @@ async def cb_delete_welcome(query: CallbackQuery, callback_data: AdminCallback, 
     # Notify owner about settings change
     await notify_owner_about_settings_change(
         bot, chat_id, query.from_user,
-        "Удалены настройки приветствия"
+        "Удалены настройки приветствия",
+        app_context
     )
 
     # Return to chat menu
-    title = await get_chat_title(chat_id, bot, session) or str(chat_id)
+    title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
     with suppress(TelegramBadRequest):
         await query.message.edit_text(
@@ -753,7 +778,7 @@ async def process_welcome_message(message: Message, state: FSMContext, session: 
 
     await state.clear()
 
-    title = await get_chat_title(chat_id, bot, session) or str(chat_id)
+    title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
     await message.answer(
         f"Welcome message updated for {title}.\n\nUse /admin to continue.",
@@ -762,7 +787,8 @@ async def process_welcome_message(message: Message, state: FSMContext, session: 
     # Notify owner about settings change
     await notify_owner_about_settings_change(
         bot, chat_id, message.from_user,
-        "Изменено приветственное сообщение"
+        "Изменено приветственное сообщение",
+        app_context
     )
 
 
@@ -794,7 +820,7 @@ async def process_welcome_button(message: Message, state: FSMContext, session: S
 
     await state.clear()
 
-    title = await get_chat_title(chat_id, bot, session) or str(chat_id)
+    title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
     await message.answer(
         f"Welcome button updated for {title}.\n\nUse /admin to continue.",
@@ -803,7 +829,8 @@ async def process_welcome_button(message: Message, state: FSMContext, session: S
     # Notify owner about settings change
     await notify_owner_about_settings_change(
         bot, chat_id, message.from_user,
-        "Изменена кнопка приветствия"
+        "Изменена кнопка приветствия",
+        app_context
     )
 
 
