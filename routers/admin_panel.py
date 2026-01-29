@@ -478,6 +478,27 @@ async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCal
     await query.answer()
 
 
+# ============ Remove Dead Users Callback ============
+
+@router.callback_query(AdminCallback.filter(F.action == "dead"))
+async def cb_remove_dead_users(query: CallbackQuery, callback_data: AdminCallback, bot: Bot, app_context: AppContext):
+    """Remove deleted users from chat."""
+    if not app_context or not app_context.group_service:
+        await query.answer("Service unavailable.", show_alert=True)
+        return
+
+    chat_id = callback_data.chat_id
+
+    await query.answer("Starting to remove deleted users...", show_alert=True)
+
+    try:
+        count = await app_context.group_service.remove_deleted_users(chat_id)
+        await query.message.answer(f"Finished removing deleted users.\nTotal removed: {count}")
+    except Exception as e:
+        logger.error(f"Error removing dead users from {chat_id}: {e}")
+        await query.message.answer(f"Error: {e}")
+
+
 @router.callback_query(AdminCallback.filter(F.action == "edit"))
 async def cb_edit_welcome(query: CallbackQuery, callback_data: AdminCallback, state: FSMContext, app_context: AppContext):
     """Start editing welcome message or button."""
