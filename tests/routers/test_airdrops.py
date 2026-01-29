@@ -154,3 +154,236 @@ async def test_airdrop_request_flow(mock_telegram, router_app_context, airdrop_c
     req_sent = next((r for r in requests if r["method"] == "sendMessage" and "отправлен" in r["data"]["text"]), None)
     assert req_sent is not None
     assert "tx_hash_123" in req_sent["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_airdrop_callback_remove_action(mock_telegram, router_app_context, airdrop_config_item):
+    """
+    Test that clicking "remove" button removes keyboard and clears request data.
+    """
+    from routers.airdrops import airdrop_requests
+
+    # Setup
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(airdrop_router)
+
+    # Setup services
+    router_app_context.stellar_service.get_balances.return_value = {"MTL": "100.0", "USDM": "50.0"}
+    router_app_context.airdrop_service.check_records.return_value = ["Grist check passed"]
+    router_app_context.airdrop_service.load_configs.return_value = [airdrop_config_item]
+
+    # Setup mock for getChatMember
+    mock_telegram.add_response("getChatMember", {
+        "ok": True,
+        "result": {
+            "status": "member",
+            "user": {"id": 111, "is_bot": False, "username": "user", "first_name": "User"}
+        }
+    })
+
+    USER_ID = 111
+    CHAT_ID = -1002294641071
+    STELLAR_ADDR = "GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2"
+    TEXT = f"Some text #ID{USER_ID} {STELLAR_ADDR}"
+
+    # First send a message to create the request
+    update_message = types.Update(
+        update_id=1,
+        message=types.Message(
+            message_id=100,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=CHAT_ID, type='supergroup'),
+            from_user=types.User(id=USER_ID, is_bot=False, first_name="User", username="user"),
+            text=TEXT
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update_message)
+
+    # Verify request was stored
+    assert len(airdrop_requests) == 1
+    stored_msg_id = list(airdrop_requests.keys())[0]
+
+    # Now simulate "remove" callback
+    callback_data = AirdropCallbackData(
+        action="remove",
+        message_id=stored_msg_id,
+        config_id=0
+    ).pack()
+
+    update_callback = types.Update(
+        update_id=2,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            message=types.Message(
+                message_id=stored_msg_id,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=CHAT_ID, type='supergroup'),
+                text="Previous bot message"
+            ),
+            chat_instance="inst1",
+            data=callback_data
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update_callback)
+
+    # Verify request was removed from storage
+    assert stored_msg_id not in airdrop_requests
+
+    # Verify keyboard was removed (editMessageReplyMarkup was called)
+    requests = mock_telegram.get_requests()
+    edit_requests = [r for r in requests if r["method"] == "editMessageReplyMarkup"]
+    assert len(edit_requests) > 0
+
+    # Verify answerCallbackQuery was called
+    answer_requests = [r for r in requests if r["method"] == "answerCallbackQuery"]
+    assert len(answer_requests) > 0
+
+
+@pytest.mark.asyncio
+async def test_airdrop_callback_missing_request_data(mock_telegram, router_app_context):
+    """
+    Test that callback with unknown message_id returns error.
+    """
+    from routers.airdrops import airdrop_requests
+
+    # Clear any leftover data
+    airdrop_requests.clear()
+
+    # Setup
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(airdrop_router)
+
+    CHAT_ID = -1002294641071
+    UNKNOWN_MSG_ID = 99999
+
+    # Simulate callback for non-existent request
+    callback_data = AirdropCallbackData(
+        action="send",
+        message_id=UNKNOWN_MSG_ID,
+        config_id=1
+    ).pack()
+
+    update_callback = types.Update(
+        update_id=1,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            message=types.Message(
+                message_id=UNKNOWN_MSG_ID,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=CHAT_ID, type='supergroup'),
+                text="Some message"
+            ),
+            chat_instance="inst1",
+            data=callback_data
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update_callback)
+
+    # Verify answerCallbackQuery was called with show_alert=True
+    requests = mock_telegram.get_requests()
+    answer_requests = [r for r in requests if r["method"] == "answerCallbackQuery"]
+    assert len(answer_requests) > 0
+    # The callback should answer with an alert (value is string "true" from HTTP form data)
+    answer_req = answer_requests[0]
+    assert answer_req["data"].get("show_alert") in ("True", "true", True)
+
+    # Verify keyboard was removed
+    edit_requests = [r for r in requests if r["method"] == "editMessageReplyMarkup"]
+    assert len(edit_requests) > 0
+
+
+@pytest.mark.asyncio
+async def test_airdrop_callback_missing_config(mock_telegram, router_app_context, airdrop_config_item):
+    """
+    Test that callback with unknown config_id returns error.
+    """
+    from routers.airdrops import airdrop_requests
+
+    # Clear any leftover data
+    airdrop_requests.clear()
+
+    # Setup
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(airdrop_router)
+
+    # Setup services
+    router_app_context.stellar_service.get_balances.return_value = {"MTL": "100.0", "USDM": "50.0"}
+    router_app_context.airdrop_service.check_records.return_value = ["Grist check passed"]
+    router_app_context.airdrop_service.load_configs.return_value = [airdrop_config_item]
+
+    # Setup mock for getChatMember
+    mock_telegram.add_response("getChatMember", {
+        "ok": True,
+        "result": {
+            "status": "member",
+            "user": {"id": 111, "is_bot": False, "username": "user", "first_name": "User"}
+        }
+    })
+
+    USER_ID = 111
+    CHAT_ID = -1002294641071
+    STELLAR_ADDR = "GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2"
+    TEXT = f"Some text #ID{USER_ID} {STELLAR_ADDR}"
+
+    # First send a message to create the request
+    update_message = types.Update(
+        update_id=1,
+        message=types.Message(
+            message_id=100,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=CHAT_ID, type='supergroup'),
+            from_user=types.User(id=USER_ID, is_bot=False, first_name="User", username="user"),
+            text=TEXT
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update_message)
+
+    # Verify request was stored
+    assert len(airdrop_requests) == 1
+    stored_msg_id = list(airdrop_requests.keys())[0]
+
+    # Now simulate "send" callback with wrong config_id
+    WRONG_CONFIG_ID = 9999
+    callback_data = AirdropCallbackData(
+        action="send",
+        message_id=stored_msg_id,
+        config_id=WRONG_CONFIG_ID
+    ).pack()
+
+    update_callback = types.Update(
+        update_id=2,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            message=types.Message(
+                message_id=stored_msg_id,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=CHAT_ID, type='supergroup'),
+                text="Previous bot message"
+            ),
+            chat_instance="inst1",
+            data=callback_data
+        )
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update_callback)
+
+    # Verify payment was NOT executed
+    assert not router_app_context.stellar_service.send_payment_async.called
+
+    # Verify answerCallbackQuery was called with show_alert=True (config not found)
+    requests = mock_telegram.get_requests()
+    answer_requests = [r for r in requests if r["method"] == "answerCallbackQuery"]
+    # First answerCallbackQuery is "ok выполняю", second should be the error
+    assert len(answer_requests) >= 2

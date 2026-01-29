@@ -7,13 +7,14 @@ from contextlib import suppress
 from typing import Optional
 
 from aiogram import Router, Bot, F
-from aiogram.enums import ChatType
+from aiogram.enums import ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, User
+from aiogram.utils.text_decorations import html_decoration
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -33,6 +34,7 @@ class AdminCallback(CallbackData, prefix="adm"):
     action: str           # list, menu, flags, welcome, toggle, edit, del
     chat_id: int = 0
     param: str = ""
+    page: int = 0         # pagination for chat list
 
 
 # ============ FSM States ============
@@ -77,6 +79,7 @@ def get_feature_description(feature_key: str, app_context: AppContext) -> str:
 
 _chat_titles: dict[int, str] = {}
 _inaccessible_chats: set[int] = set()
+_chat_owners: dict[int, int | None] = {}  # chat_id -> owner_user_id (or None if no owner)
 
 
 # ============ Helper Functions ============
@@ -140,6 +143,69 @@ async def get_chat_title(chat_id: int, bot: Bot, session: Session = None) -> str
         return None
 
 
+def _format_admin_name(admin_user: User) -> str:
+    """Format admin name for notification message (HTML-safe)."""
+    if admin_user.username:
+        return f"@{html_decoration.quote(admin_user.username)}"
+    name = admin_user.first_name or ""
+    if admin_user.last_name:
+        name = f"{name} {admin_user.last_name}"
+    return html_decoration.quote(name.strip() or str(admin_user.id))
+
+
+async def _get_chat_owner_id(bot: Bot, chat_id: int) -> int | None:
+    """Get chat owner ID with caching."""
+    if chat_id in _chat_owners:
+        return _chat_owners[chat_id]
+
+    try:
+        admins = await bot.get_chat_administrators(chat_id)
+        owner = next((a for a in admins if a.status == "creator"), None)
+        owner_id = owner.user.id if owner else None
+        _chat_owners[chat_id] = owner_id
+        return owner_id
+    except TelegramBadRequest:
+        _chat_owners[chat_id] = None
+        return None
+
+
+async def notify_owner_about_settings_change(
+    bot: Bot,
+    chat_id: int,
+    admin_user: User,
+    change_description: str
+) -> None:
+    """Notify chat owner about settings change by admin.
+
+    Sends a notification to the chat owner when an admin changes settings.
+    Does nothing if:
+    - Owner cannot be determined
+    - Admin is the owner (no need to notify themselves)
+    - Owner is unreachable (silently fails)
+    """
+    try:
+        # Don't notify if owner is unknown or is the admin making changes
+        owner_id = await _get_chat_owner_id(bot, chat_id)
+        if not owner_id or owner_id == admin_user.id:
+            return
+
+        # Get chat info for title
+        chat = await bot.get_chat(chat_id)
+        chat_title = chat.title or str(chat_id)
+
+        admin_name = _format_admin_name(admin_user)
+        msg = (
+            f"Настройки чата <b>{html_decoration.quote(chat_title)}</b> изменены "
+            f"({admin_name}):\n{change_description}"
+        )
+
+        await bot.send_message(owner_id, msg, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        # Owner unreachable - silently ignore
+        logger.debug(f"Failed to notify owner: {e}")
+        pass
+
+
 async def get_user_admin_chats(user_id: int, app_context: AppContext, bot: Bot, session: Session = None) -> list[tuple[int, str]]:
     """
     Get list of chats where user is an administrator.
@@ -186,10 +252,23 @@ async def verify_admin_via_api(user_id: int, chat_id: int, bot: Bot) -> bool:
 
 # ============ Keyboard Builders ============
 
-def chat_list_kb(chats: list[tuple[int, str]]) -> InlineKeyboardMarkup:
-    """Build keyboard with chat selection buttons."""
+CHATS_PER_PAGE = 10
+
+
+def chat_list_kb(chats: list[tuple[int, str]], page: int = 0) -> InlineKeyboardMarkup:
+    """Build keyboard with chat selection buttons (paginated)."""
+    total = len(chats)
+    total_pages = (total + CHATS_PER_PAGE - 1) // CHATS_PER_PAGE  # ceil division
+
+    # Ensure page is within bounds
+    page = max(0, min(page, total_pages - 1)) if total_pages > 0 else 0
+
+    start = page * CHATS_PER_PAGE
+    end = start + CHATS_PER_PAGE
+    page_chats = chats[start:end]
+
     buttons = []
-    for chat_id, title in chats:
+    for chat_id, title in page_chats:
         # Truncate long titles
         display_title = title[:20] + "..." if len(title) > 20 else title
         buttons.append([
@@ -198,6 +277,26 @@ def chat_list_kb(chats: list[tuple[int, str]]) -> InlineKeyboardMarkup:
                 callback_data=AdminCallback(action="menu", chat_id=chat_id).pack()
             )
         ])
+
+    # Add navigation buttons if needed
+    if total_pages > 1:
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton(
+                text="<< Prev",
+                callback_data=AdminCallback(action="list", page=page - 1).pack()
+            ))
+        nav_row.append(InlineKeyboardButton(
+            text=f"{page + 1}/{total_pages}",
+            callback_data=AdminCallback(action="noop").pack()
+        ))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton(
+                text="Next >>",
+                callback_data=AdminCallback(action="list", page=page + 1).pack()
+            ))
+        buttons.append(nav_row)
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -295,8 +394,8 @@ async def cmd_admin(message: Message, session: Session, bot: Bot, app_context: A
         return
 
     await message.answer(
-        "Select a chat to manage:",
-        reply_markup=chat_list_kb(chats)
+        f"Select a chat to manage ({len(chats)} total):",
+        reply_markup=chat_list_kb(chats, page=0)
     )
 
 
@@ -331,9 +430,15 @@ async def cmd_admin_reload(message: Message, session: Session, bot: Bot, app_con
 
 # ============ Navigation Callbacks ============
 
+@router.callback_query(AdminCallback.filter(F.action == "noop"))
+async def cb_noop(query: CallbackQuery):
+    """No-op callback for static buttons like page counter."""
+    await query.answer()
+
+
 @router.callback_query(AdminCallback.filter(F.action == "list"))
-async def cb_show_chat_list(query: CallbackQuery, session: Session, bot: Bot, app_context: AppContext):
-    """Show list of chats where user is admin."""
+async def cb_show_chat_list(query: CallbackQuery, callback_data: AdminCallback, session: Session, bot: Bot, app_context: AppContext):
+    """Show list of chats where user is admin (paginated)."""
     if not app_context or not app_context.admin_service:
         await query.answer("Service unavailable.", show_alert=True)
         return
@@ -345,10 +450,11 @@ async def cb_show_chat_list(query: CallbackQuery, session: Session, bot: Bot, ap
         await query.answer("You are not an admin in any chats.", show_alert=True)
         return
 
+    page = callback_data.page
     with suppress(TelegramBadRequest):
         await query.message.edit_text(
-            "Select a chat to manage:",
-            reply_markup=chat_list_kb(chats)
+            f"Select a chat to manage ({len(chats)} total):",
+            reply_markup=chat_list_kb(chats, page)
         )
     await query.answer()
 
@@ -426,6 +532,12 @@ async def cb_toggle_feature(query: CallbackQuery, callback_data: AdminCallback, 
     status = "enabled" if new_state else "disabled"
     await query.answer(f"{label} {status}")
 
+    # Notify owner about settings change
+    await notify_owner_about_settings_change(
+        bot, chat_id, query.from_user,
+        f"Флаг <code>{html_decoration.quote(feature)}</code>: {'включен' if new_state else 'выключен'}"
+    )
+
 
 @router.callback_query(AdminCallback.filter(F.action == "info"))
 async def cb_feature_info(query: CallbackQuery, callback_data: AdminCallback, app_context: AppContext):
@@ -494,6 +606,12 @@ async def cb_remove_dead_users(query: CallbackQuery, callback_data: AdminCallbac
     try:
         count = await app_context.group_service.remove_deleted_users(chat_id)
         await query.message.answer(f"Finished removing deleted users.\nTotal removed: {count}")
+
+        # Notify owner about settings change
+        await notify_owner_about_settings_change(
+            bot, chat_id, query.from_user,
+            f"Удалены неактивные пользователи: {count}"
+        )
     except Exception as e:
         logger.error(f"Error removing dead users from {chat_id}: {e}")
         await query.message.answer(f"Error: {e}")
@@ -536,6 +654,12 @@ async def cb_delete_welcome(query: CallbackQuery, callback_data: AdminCallback, 
     ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeButton, None)
 
     await query.answer("Welcome settings deleted.")
+
+    # Notify owner about settings change
+    await notify_owner_about_settings_change(
+        bot, chat_id, query.from_user,
+        "Удалены настройки приветствия"
+    )
 
     # Return to chat menu
     title = await get_chat_title(chat_id, bot, session) or str(chat_id)
@@ -590,6 +714,12 @@ async def process_welcome_message(message: Message, state: FSMContext, session: 
         f"Welcome message updated for {title}.\n\nUse /admin to continue.",
     )
 
+    # Notify owner about settings change
+    await notify_owner_about_settings_change(
+        bot, chat_id, message.from_user,
+        "Изменено приветственное сообщение"
+    )
+
 
 @router.message(AdminPanelStates.waiting_welcome_button, F.chat.type == ChatType.PRIVATE)
 async def process_welcome_button(message: Message, state: FSMContext, session: Session, bot: Bot, app_context: AppContext):
@@ -623,6 +753,12 @@ async def process_welcome_button(message: Message, state: FSMContext, session: S
 
     await message.answer(
         f"Welcome button updated for {title}.\n\nUse /admin to continue.",
+    )
+
+    # Notify owner about settings change
+    await notify_owner_about_settings_change(
+        bot, chat_id, message.from_user,
+        "Изменена кнопка приветствия"
     )
 
 

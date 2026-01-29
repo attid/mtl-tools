@@ -190,3 +190,55 @@ async def test_time_usdm_daily_gives_up_after_many_errors(mock_telegram, router_
     assert mock_sleep.call_count == 20
     requests = mock_telegram.get_requests()
     assert not any(r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.USDMMGroup) for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_cmd_send_message_test(mock_telegram, router_app_context, monkeypatch):
+    """Test that cmd_send_message_test sends a message to TestGroup with time and random number."""
+    bot = router_app_context.bot
+
+    # Mock random.randint to return a predictable value
+    monkeypatch.setattr(time_handlers.random, "randint", lambda a, b: 5)
+
+    await time_handlers.cmd_send_message_test(bot)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert str(req["data"]["chat_id"]) == str(MTLChats.TestGroup)
+    # Message should contain "rand=5" and "job.next_run_time"
+    assert "rand=5" in req["data"]["text"]
+    assert "job.next_run_time" in req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_cmd_send_message_start_month(mock_telegram, router_app_context):
+    """Test that cmd_send_message_start_month sends reminder to SignGroup."""
+    bot = router_app_context.bot
+
+    await time_handlers.cmd_send_message_start_month(bot)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert str(req["data"]["chat_id"]) == str(MTLChats.SignGroup)
+    assert str(req["data"]["message_thread_id"]) == "59558"
+    assert "кучицы" in req["data"]["text"]
+    assert "/all" in req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_time_check_ledger(mock_telegram, router_app_context):
+    """Test that time_check_ledger returns early (currently disabled with TODO comment)."""
+    bot = router_app_context.bot
+
+    mock_session = FakeSession()
+    mock_pool = make_session_pool(mock_session)
+
+    # Should return None immediately due to early return
+    result = await time_handlers.time_check_ledger(bot, mock_pool)
+
+    assert result is None
+    # No messages should be sent since the function returns early
+    requests = mock_telegram.get_requests()
+    assert len(requests) == 0

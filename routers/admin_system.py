@@ -57,7 +57,7 @@ async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext)
 
 
 @router.message(Command(commands=["err"]))
-async def cmd_log_err(message: Message):
+async def cmd_log_err(message: Message, app_context: AppContext):
     if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return False
@@ -535,7 +535,7 @@ async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User)
 
 @update_command_info("/push", "Отправить сообщение в личку. Только для админов скайнета")
 @router.message(Command(commands=["push"]))
-async def cmd_push(message: Message, bot: Bot):
+async def cmd_push(message: Message, bot: Bot, app_context: AppContext):
     if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
         await message.reply('You are not my admin.')
         return

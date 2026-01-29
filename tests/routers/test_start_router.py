@@ -135,7 +135,7 @@ async def test_link_command_reply_with_addresses(mock_telegram, router_app_conte
     # Construct update manually to include reply_to_message
     from aiogram import types
     import datetime
-    
+
     update = types.Update(
         update_id=11,
         message=types.Message(
@@ -159,3 +159,90 @@ async def test_link_command_reply_with_addresses(mock_telegram, router_app_conte
     messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
     assert len(messages) > 0
     assert "viewer.eurmtl.me" in messages[-1]["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_me_command_basic(mock_telegram, router_app_context):
+    """
+    Test /me command sends formatted message with username and text.
+    """
+    from aiogram import types
+    import datetime
+
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(start_router)
+
+    update = types.Update(
+        update_id=12,
+        message=types.Message(
+            message_id=12,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type='supergroup'),
+            from_user=types.User(id=999, is_bot=False, first_name="User", username="testuser"),
+            text="/me is testing the bot",
+            message_thread_id=456
+        )
+    )
+
+    await dp.feed_update(router_app_context.bot, update)
+
+    # Verify sent message contains formatted text with username
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
+    assert len(messages) > 0
+    last_msg = messages[-1]["data"]
+    assert "testuser" in last_msg["text"]
+    assert "is testing the bot" in last_msg["text"]
+    assert last_msg["parse_mode"] == "HTML"
+    # When no reply_to_message, message_thread_id should be used
+    assert int(last_msg.get("message_thread_id", 0)) == 456
+
+    # Verify original message deletion was attempted
+    delete_requests = [r for r in mock_telegram.get_requests() if r["method"] == "deleteMessage"]
+    assert len(delete_requests) > 0
+
+
+@pytest.mark.asyncio
+async def test_me_command_as_reply(mock_telegram, router_app_context):
+    """
+    Test /me command when replying to another message.
+    Should reply to the original message instead of using thread_id.
+    """
+    from aiogram import types
+    import datetime
+
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(start_router)
+
+    update = types.Update(
+        update_id=13,
+        message=types.Message(
+            message_id=13,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type='supergroup'),
+            from_user=types.User(id=999, is_bot=False, first_name="User", username="replyuser"),
+            text="/me agrees with this",
+            message_thread_id=789,
+            reply_to_message=types.Message(
+                message_id=10,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=123, type='supergroup'),
+                from_user=types.User(id=888, is_bot=False, first_name="User2", username="user2"),
+                text="Some original message"
+            )
+        )
+    )
+
+    await dp.feed_update(router_app_context.bot, update)
+
+    # Verify sent message
+    messages = [r for r in mock_telegram.get_requests() if r["method"] == "sendMessage"]
+    assert len(messages) > 0
+    last_msg = messages[-1]["data"]
+    assert "replyuser" in last_msg["text"]
+    assert "agrees with this" in last_msg["text"]
+    # When reply_to_message exists, should reply to that message
+    assert int(last_msg.get("reply_to_message_id", 0)) == 10
+    # message_thread_id should be None when replying
+    assert last_msg.get("message_thread_id") is None

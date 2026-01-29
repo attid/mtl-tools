@@ -576,11 +576,19 @@ class FakeAIService:
         self.generate_image = FakeAsyncMethod(return_value=[])
         self.talk_get_comment = FakeAsyncMethod(return_value="")
         self.add_task_to_google = FakeAsyncMethod(return_value="")
+        self._horoscope = ["*Овен*: Сегодня отличный день!"]
+
+    def get_horoscope(self):
+        return self._horoscope
+
+    def set_horoscope(self, horoscope: list):
+        self._horoscope = horoscope
 
 
 class FakeTalkService:
     def __init__(self):
         self.answer_notify_message = FakeAsyncMethod(return_value=None)
+        self.remind = FakeAsyncMethod(return_value=None)
 
 
 class FakeAntispamService:
@@ -653,6 +661,43 @@ class FakePollService:
         return self._mtla_polls.get(poll_id, {})
 
 
+class FakeGSpreadWorksheet:
+    """Fake worksheet for gspread tests."""
+    def __init__(self, data=None):
+        self._data = data or []
+        self._updated_ranges = []
+
+    async def get_all_values(self):
+        return self._data
+
+    async def update(self, range_name, values):
+        self._updated_ranges.append((range_name, values))
+        return True
+
+
+class FakeGSpreadSpreadsheet:
+    """Fake spreadsheet for gspread tests."""
+    def __init__(self, worksheets=None):
+        self._worksheets = worksheets or {"List": FakeGSpreadWorksheet()}
+
+    async def worksheet(self, name):
+        return self._worksheets.get(name, FakeGSpreadWorksheet())
+
+
+class FakeAgcClient:
+    """Fake async gspread client."""
+    def __init__(self):
+        self._spreadsheets = {}
+
+    async def open(self, name):
+        if name not in self._spreadsheets:
+            self._spreadsheets[name] = FakeGSpreadSpreadsheet()
+        return self._spreadsheets[name]
+
+    def set_spreadsheet(self, name, spreadsheet):
+        self._spreadsheets[name] = spreadsheet
+
+
 class FakeGSpreadService:
     def __init__(self):
         self.get_all_mtlap = FakeAsyncMethod(return_value=[])
@@ -664,6 +709,8 @@ class FakeGSpreadService:
         self.update_a_table_vote = FakeAsyncMethod(return_value=[])
         self.check_vote_table = FakeAsyncMethod(return_value=([], []))
         self.check_credentials = FakeAsyncMethod(return_value=(True, "token refreshed"))
+        self._agc_client = FakeAgcClient()
+        self.authorize = FakeAsyncMethod(return_value=self._agc_client)
 
 
 class FakeGristService:
@@ -696,6 +743,24 @@ class FakeStellarService:
         self.get_mtlap_votes = FakeAsyncMethod(return_value={})
         self.stop_all_exchange = FakeSyncMethod(return_value=None)
         self.address_id_to_username = FakeAsyncMethod(return_value="@user")
+        self.check_url_xdr = FakeAsyncMethod(return_value=["Decoded XDR info"])
+        self.get_cash_balance = FakeAsyncMethod(return_value="Balance: 100 EURMTL")
+        self.create_list = FakeSyncMethod(return_value=1)
+        self.calc_bim_pays = FakeAsyncMethod(return_value=[("addr1", 10), ("addr2", 20)])
+        self.gen_xdr = FakeSyncMethod(return_value=0)
+        self.send_by_list_id = FakeAsyncMethod(return_value=0)
+        self.calc_divs = FakeAsyncMethod(return_value=[("addr1", 10)])
+        self.calc_sats_divs = FakeAsyncMethod(return_value=[("addr1", 10)])
+        self.calc_usdm_divs = FakeAsyncMethod(return_value=[("addr1", 10)])
+        self.calc_usdm_daily = FakeAsyncMethod(return_value=[("addr1", 10)])
+        self.calc_usdm_usdm_divs = FakeAsyncMethod(return_value=[["GCLQ...", 1000.0, 5.97, 5.97, 0]])
+        self.get_new_vote_all_mtl = FakeAsyncMethod(return_value=["vote_xdr_here"])
+        self.get_btcmtl_xdr = FakeAsyncMethod(return_value="btcmtl_xdr")
+        self.get_damircoin_xdr = FakeAsyncMethod(return_value="damircoin_xdr")
+        self.get_agora_xdr = FakeAsyncMethod(return_value="agora_xdr")
+        self.get_chicago_xdr = FakeAsyncMethod(return_value=["Chicago", "info", "chicago_xdr"])
+        self.get_toc_xdr = FakeAsyncMethod(return_value="toc_xdr")
+        self.show_data = FakeAsyncMethod(return_value=["Data 1", "Data 2"])
 
 
 class FakeAirdropService:
@@ -708,6 +773,12 @@ class FakeAirdropService:
 class FakeReportService:
     def __init__(self):
         self.update_airdrop = FakeAsyncMethod(return_value=None)
+        self.update_mmwb_report = FakeAsyncMethod(return_value=None)
+        self.update_bim_data = FakeAsyncMethod(return_value=None)
+        self.update_guarantors_report = FakeAsyncMethod(return_value=None)
+        self.update_main_report = FakeAsyncMethod(return_value=None)
+        self.update_donate_report = FakeAsyncMethod(return_value=None)
+        self.update_fest = FakeAsyncMethod(return_value=None)
 
 
 class FakeModerationService:
@@ -970,6 +1041,14 @@ class FakeNotificationService:
         self._alert_me = data.copy()
 
 
+class FakeLock:
+    """Fake lock for testing (context manager that does nothing)."""
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+
+
 class FakeAdminService:
     """Fake AdminManagementService for testing."""
 
@@ -979,6 +1058,8 @@ class FakeAdminService:
         self._chat_admins: dict[int, list[int]] = {}
         self._topic_admins: dict[str, list[str]] = {}  # "chat_id-thread_id" -> [usernames with @]
         self._topic_mute: dict[str, dict] = {}  # "chat_id-thread_id" -> {user_id: {"end_time": str, "user": str}}
+        self._lock = FakeLock()
+        self._admins = self._chat_admins  # Alias for compatibility with admin_panel.py
 
     def _topic_key(self, chat_id: int, thread_id: int) -> str:
         return f"{chat_id}-{thread_id}"
