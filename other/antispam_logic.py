@@ -82,7 +82,7 @@ async def delete_and_log_spam(message, session, rules_name):
 
 async def set_vote(message):
     user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
-    if message.chat.id in app_context.first_vote:
+    if app_context.voting_service.is_first_vote_enabled(message.chat.id):
         kb_reply = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="Spam",
                                  callback_data=FirstMessageCallbackData(spam=True,
