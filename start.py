@@ -30,6 +30,7 @@ from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.app_context import AppContextMiddleware
+from middlewares.user_resolver import UserResolverMiddleware
 from other.config_reader import config
 from other.constants import MTLChats
 from other.pyro_tools import pyro_start
@@ -188,6 +189,11 @@ async def main():
     dp.edited_channel_post.middleware(app_context_middleware)
     dp.poll_answer.middleware(app_context_middleware)
     dp.message_reaction.middleware(app_context_middleware)
+
+    # UserResolverMiddleware resolves user_id from channel links
+    user_resolver_middleware = UserResolverMiddleware(app_context_middleware.app_context)
+    dp.message.middleware(user_resolver_middleware)
+    dp.callback_query.middleware(user_resolver_middleware)
 
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
     dp.message.middleware(EmojiReactionMiddleware())

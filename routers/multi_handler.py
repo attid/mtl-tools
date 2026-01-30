@@ -9,8 +9,7 @@ from aiogram.filters import Command
 from aiogram.types import (Message, ReactionTypeEmoji)
 from loguru import logger
 
-from other.config_reader import config
-from other.constants import MTLChats, BotValueTypes
+from other.constants import BotValueTypes
 from services.command_registry_service import update_command_info
 from db.repositories import ConfigRepository
 from routers.admin_panel import load_inaccessible_chats
@@ -238,6 +237,10 @@ def command_config_loads(app_context):
         for chat_id in repo.get_chat_ids_by_key(BotValueTypes.NeedDecode):
             app_context.bot_state_service.mark_needs_decode(chat_id)
 
+        # Load channel links
+        channel_links = json.loads(repo.load_bot_value(0, BotValueTypes.ChannelLinks, '{}'))
+        app_context.channel_link_service.load_from_dict(channel_links)
+
     # Log loaded feature flags statistics
     _log_feature_flags_stats(app_context)
 
@@ -265,6 +268,7 @@ def _log_feature_flags_stats(app_context):
         f"admins: {len(app_context.admin_service._admins)} chats",
         f"skynet_admins: {len(app_context.admin_service.get_skynet_admins())} users",
         f"sync: {len(app_context.bot_state_service._sync)} channels",
+        f"channel_links: {len(app_context.channel_link_service.get_all_links())} channels",
     ]
     logger.info("Feature flags loaded:\n  " + "\n  ".join(stats))
 
@@ -590,6 +594,101 @@ async def list_command_handler_topic(message: Message, command_info, session, ap
             await message.reply(f'Items in this thread: {" ".join(all_topic_admins[chat_thread_key])}')
         else:
             await message.reply('The list for this thread is empty.')
+
+
+@update_command_info("/link_channel",
+                     "Привязать канал к пользователю. Отправьте команду от имени канала в чате. "
+                     "Бот должен быть админом канала.")
+@router.message(Command(commands=["link_channel"]))
+async def link_channel_handler(message: Message, bot: Bot, session, app_context=None):
+    """Handle /link_channel command.
+
+    This command must be sent from a channel (sender_chat).
+    The bot checks if it's an admin in the channel and gets the channel owner.
+    Toggle behavior: if channel is linked - unlink, if not linked - link.
+    """
+    # Check if message is sent from a channel
+    if not message.sender_chat:
+        info_message = await message.reply(
+            "Эта команда должна быть отправлена от имени канала. "
+            "Откройте настройки чата и выберите 'Отправлять как канал'."
+        )
+        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        with suppress(TelegramBadRequest):
+            await asyncio.sleep(1)
+            await message.delete()
+        return
+
+    channel_id = message.sender_chat.id
+
+    # Check if channel is already linked - if yes, unlink it (toggle behavior)
+    if app_context.channel_link_service.is_linked(channel_id):
+        app_context.channel_link_service.unlink_channel(channel_id)
+
+        # Persist to database
+        all_links = app_context.channel_link_service.get_all_links()
+        ConfigRepository(session).save_bot_value(
+            0, BotValueTypes.ChannelLinks,
+            json.dumps({str(k): v for k, v in all_links.items()})
+        )
+
+        info_message = await message.reply(f"Канал {message.sender_chat.title} отвязан.")
+        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        with suppress(TelegramBadRequest):
+            await asyncio.sleep(1)
+            await message.delete()
+        return
+
+    # Try to get channel administrators to find the owner
+    try:
+        admins = await bot.get_chat_administrators(channel_id)
+    except (TelegramBadRequest, TelegramForbiddenError) as e:
+        logger.warning(f"Cannot get admins for channel {channel_id}: {e}")
+        info_message = await message.reply(
+            "Не удалось получить информацию о канале. "
+            "Убедитесь, что бот добавлен в канал как администратор."
+        )
+        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        with suppress(TelegramBadRequest):
+            await asyncio.sleep(1)
+            await message.delete()
+        return
+
+    # Find the channel owner (creator)
+    owner_id = None
+    for admin in admins:
+        if admin.status == "creator" and admin.user and not admin.user.is_bot:
+            owner_id = admin.user.id
+            break
+
+    if owner_id is None:
+        info_message = await message.reply(
+            "Не удалось найти владельца канала. "
+            "Убедитесь, что у канала есть владелец-пользователь."
+        )
+        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        with suppress(TelegramBadRequest):
+            await asyncio.sleep(1)
+            await message.delete()
+        return
+
+    # Link the channel to the owner
+    app_context.channel_link_service.link_channel(channel_id, owner_id)
+
+    # Persist to database
+    all_links = app_context.channel_link_service.get_all_links()
+    ConfigRepository(session).save_bot_value(
+        0, BotValueTypes.ChannelLinks,
+        json.dumps({str(k): v for k, v in all_links.items()})
+    )
+
+    info_message = await message.reply(
+        f"Канал {message.sender_chat.title} привязан к владельцу (ID: {owner_id})."
+    )
+    await app_context.utils_service.sleep_and_delete(info_message, 5)
+    with suppress(TelegramBadRequest):
+        await asyncio.sleep(1)
+        await message.delete()
 
 
 @router.startup()

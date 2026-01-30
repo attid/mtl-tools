@@ -9,9 +9,10 @@ from services.notification_service import NotificationService
 from services.bot_state_service import BotStateService
 from services.voting_service import VotingService
 from services.admin_service import AdminManagementService
-from services.command_registry_service import CommandRegistryService, get_pending_commands
+from services.command_registry_service import CommandRegistryService
 from services.database_service import DatabaseService
 from services.repositories.chats_repo_adapter import ChatsRepositoryAdapter
+from services.channel_link_service import ChannelLinkService
 
 
 class AppContext:
@@ -40,6 +41,7 @@ class AppContext:
         self.admin_service = None
         self.command_registry = None
         self.db_service = None
+        self.channel_link_service = None
 
     def check_user(self, user_id: int):
         """Check user status for antispam. Uses spam_status_service cache."""
@@ -77,6 +79,7 @@ class AppContext:
         ctx.command_registry = CommandRegistryService()
         ctx.db_service = DatabaseService()
         ctx.spam_status_service = SpamStatusService(ChatsRepositoryAdapter(ctx.db_service.session_pool))
+        ctx.channel_link_service = ChannelLinkService()
 
         return ctx
 

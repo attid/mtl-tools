@@ -85,3 +85,4 @@ class BotValueTypes(Enum):
     TopicMutes = 43
     EntryChannel = 44
     Inaccessible = 45
+    ChannelLinks = 46
