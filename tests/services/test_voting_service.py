@@ -1,6 +1,5 @@
 """Tests for VotingService."""
 
-import pytest
 from services.voting_service import VotingService
 
 

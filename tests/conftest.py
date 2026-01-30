@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 sys.path.append(os.getcwd())
 
-from tests.fakes import FakeMongoConfig, FakeSession, TestAppContext
+from tests.fakes import FakeSession, TestAppContext
 from services import app_context as app_context_module
 from other import aiogram_tools as aiogram_tools_module
 

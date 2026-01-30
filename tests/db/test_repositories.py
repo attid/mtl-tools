@@ -2,11 +2,11 @@ import json
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from shared.infrastructure.database.models import Base, BotConfig, KVStore, Chat, ChatMember, BotUsers
+from shared.infrastructure.database.models import Base, Chat, ChatMember, BotUsers
 from db.repositories.config import ConfigRepository
 from db.repositories.chats import ChatsRepository
 from other.pyro_tools import GroupMember
-from datetime import datetime, UTC
+from datetime import datetime
 
 # --- Fixtures ---
 

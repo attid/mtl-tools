@@ -12,13 +12,13 @@ from typing import Optional
 
 from loguru import logger
 from sqlalchemy.orm import Session
-from stellar_sdk import Asset, Network, Server, TransactionBuilder, TransactionEnvelope
+from stellar_sdk import Asset, TransactionBuilder, TransactionEnvelope
 from stellar_sdk.client.aiohttp_client import AiohttpClient
 from stellar_sdk.server_async import ServerAsync
 
 from db.repositories import FinanceRepository
 from other.config_reader import config
-from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_server_async, get_horizon_url
+from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_horizon_url
 from other.loguru_tools import safe_catch_async
 from shared.infrastructure.database.models import TDivList, TPayments, TTransaction
 

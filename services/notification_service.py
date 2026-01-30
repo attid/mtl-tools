@@ -1,6 +1,6 @@
 """Notification settings service with DI."""
 
-from typing import Any, Optional
+from typing import Any
 from threading import Lock
 
 

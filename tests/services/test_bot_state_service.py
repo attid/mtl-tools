@@ -1,6 +1,5 @@
 """Tests for BotStateService."""
 
-import pytest
 from datetime import datetime
 from services.bot_state_service import BotStateService
 

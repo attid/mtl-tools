@@ -1,5 +1,4 @@
 # tests/other/stellar/test_address_utils.py
-import pytest
 from other.stellar.address_utils import (
     find_stellar_public_key,
     find_stellar_federation_address,

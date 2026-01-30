@@ -1,7 +1,6 @@
 # tests/services/test_admin_service.py
 """Tests for AdminManagementService."""
 
-import pytest
 from services.admin_service import AdminManagementService
 
 

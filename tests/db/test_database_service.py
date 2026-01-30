@@ -1,4 +1,3 @@
-import pytest
 from services.database_service import DatabaseService
 from tests.fakes import FakeSession
 

@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta, UTC
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select, delete, and_, desc
-from sqlalchemy.orm import Session
+from sqlalchemy import select, delete, and_
 
 from db.repositories.base import BaseRepository
 from other.pyro_tools import GroupMember

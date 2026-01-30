@@ -9,7 +9,6 @@ from routers.admin_panel import (
     router as admin_panel_router,
     AdminCallback,
     AdminPanelStates,
-    CHATS_PER_PAGE,
     chat_list_kb,
     chat_menu_kb,
     feature_flags_kb,

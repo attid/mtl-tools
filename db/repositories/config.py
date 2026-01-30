@@ -1,9 +1,8 @@
 import json
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from sqlalchemy import select, delete, and_
-from sqlalchemy.orm import Session
 
 from db.repositories.base import BaseRepository
 from shared.infrastructure.database.models import BotConfig, KVStore, BotTable

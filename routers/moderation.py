@@ -8,8 +8,6 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery
 from loguru import logger
 
-from db.repositories import ChatsRepository
-from other.aiogram_tools import is_admin, cmd_sleep_and_delete
 from other.constants import MTLChats
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext

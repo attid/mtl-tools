@@ -1,5 +1,4 @@
 import pytest
-from aiogram import Dispatcher
 from routers.start_router import router as start_router
 from tests.conftest import RouterTestMiddleware, create_message_update
 

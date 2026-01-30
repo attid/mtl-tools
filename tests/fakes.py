@@ -1473,7 +1473,6 @@ class FakeStellarSDK:
         balances: dict = None,
         holders: dict = None,
     ):
-        from decimal import Decimal
         self._accounts = accounts or {}
         self._balances = balances or {}
         self._holders = holders or {}

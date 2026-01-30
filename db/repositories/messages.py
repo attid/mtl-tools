@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, cast
+from typing import List, cast
 
 from sqlalchemy import select, and_
-from sqlalchemy.orm import Session
 
 from db.repositories.base import BaseRepository
 from shared.infrastructure.database.models import TMessage, TSavedMessages, TSummary

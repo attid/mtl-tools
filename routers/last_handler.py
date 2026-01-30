@@ -8,7 +8,6 @@ from typing import Optional
 from aiogram import F, Bot, Router
 from aiogram.enums import MessageEntityType
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (Message, ChatPermissions, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
                            ReplyParameters)
@@ -20,13 +19,10 @@ from other.text_tools import extract_url
 from db.repositories import MessageRepository, ChatsRepository
 from middlewares.throttling import rate_limit
 from start import add_bot_users
-from other.aiogram_tools import (multi_reply, is_admin, ChatInOption,
+from other.aiogram_tools import (is_admin, ChatInOption,
                                  get_username_link, cmd_sleep_and_delete)
-from other.open_ai_tools import talk_check_spam
 from other.constants import MTLChats, BotValueTypes
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
-from other.spam_cheker import is_mixed_word, contains_spam_phrases, combo_check_spammer, lols_check_spammer
-from other.stellar import check_url_xdr
 from other.miniapps_tools import miniapps
 from shared.domain.user import SpamStatus
 from db.repositories import ConfigRepository

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import requests
 from loguru import logger
-from stellar_sdk import Account, Server, TransactionBuilder
+from stellar_sdk import Account, TransactionBuilder
 
 from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_server_async
 from other.grist_tools import MTLGrist, grist_manager

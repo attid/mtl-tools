@@ -1728,8 +1728,7 @@ async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
 @pytest.mark.asyncio
 async def test_register_handlers():
     """Test register_handlers function"""
-    from aiogram import Dispatcher, Bot
-    from aiogram.client.session.aiohttp import AiohttpSession
+    from aiogram import Dispatcher
     from routers.stellar import register_handlers
 
     # Create a mock dispatcher

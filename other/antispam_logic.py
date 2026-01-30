@@ -1,10 +1,8 @@
-import asyncio
 from contextlib import suppress
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions
 from aiogram.exceptions import TelegramBadRequest
 from loguru import logger
-from sqlalchemy.orm import Session
 
 from other.text_tools import extract_url
 from start import add_bot_users

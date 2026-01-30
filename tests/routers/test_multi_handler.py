@@ -1,13 +1,10 @@
 import pytest
 import datetime
-import json
-import asyncio
 from aiogram import types
 
-from routers.multi_handler import router as multi_router, on_startup, commands_info
+from routers.multi_handler import router as multi_router, on_startup
 from tests.conftest import RouterTestMiddleware
-from tests.fakes import FakeMongoConfig
-from other.constants import MTLChats, BotValueTypes
+from other.constants import MTLChats
 
 @pytest.fixture(autouse=True)
 async def cleanup_router(router_app_context):

@@ -20,14 +20,12 @@ from sqlalchemy.orm import Session
 
 from db.repositories import MessageRepository, ConfigRepository, ChatsRepository
 from other.aiogram_tools import is_admin
-from other.grist_tools import grist_manager, MTLGrist
+from other.grist_tools import MTLGrist
 from other.open_ai_tools import talk_get_summary
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext
-from other.gspread_tools import gs_find_user, gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
-from other.mtl_tools import check_consul_mtla_chats
-from other.pyro_tools import get_group_members, pyro_test, MessageInfo
+from other.pyro_tools import MessageInfo
 from other.miniapps_tools import miniapps
 from other.stellar import send_by_list
 
@@ -609,7 +607,7 @@ async def cmd_get_info(message: Message, bot: Bot, app_context: AppContext = Non
     # else:
     #      messages.extend(await gs_find_user(user_id))
           
-    messages.append(f"Я больше не умею проверять на айдропы, гуглшит не работает")
+    messages.append("Я больше не умею проверять на айдропы, гуглшит не работает")
 
     await message.reply('\n'.join(messages))
 

@@ -2,7 +2,6 @@
 """Balance queries and account information utilities."""
 
 from typing import Optional
-from decimal import Decimal
 
 import aiohttp
 from stellar_sdk import Asset

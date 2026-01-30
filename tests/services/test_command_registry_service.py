@@ -1,6 +1,5 @@
 """Tests for CommandRegistryService."""
 
-import pytest
 from services.command_registry_service import CommandRegistryService, CommandInfo
 
 

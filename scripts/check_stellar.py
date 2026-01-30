@@ -1,5 +1,4 @@
 import json
-import sys
 from datetime import datetime
 
 import asyncio
@@ -9,7 +8,6 @@ from sqlalchemy.orm import Session
 from stellar_sdk import Server
 
 from db.repositories import MessageRepository
-from db.session import SessionPool
 from other.config_reader import config
 from other.constants import MTLChats
 from services.app_context import app_context

@@ -1,7 +1,6 @@
 import pytest
 from aiogram import types
 from datetime import datetime
-import re
 
 from routers.monitoring import router as monitoring_router
 from other.constants import MTLChats

@@ -1794,7 +1794,6 @@ async def test_on_my_chat_member_added_private_chat(mock_telegram, router_app_co
 @pytest.mark.asyncio
 async def test_topic_command_bad_request_chat_not_modified(mock_telegram, router_app_context):
     """Test /topic command when TelegramBadRequest with CHAT_NOT_MODIFIED."""
-    from aiogram.exceptions import TelegramBadRequest
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -2471,7 +2470,7 @@ async def test_get_users_csv_user_check_bad_request(mock_telegram, router_app_co
 @pytest.mark.asyncio
 async def test_get_users_csv_user_check_generic_error(mock_telegram, router_app_context):
     """Test /get_users_csv when user membership check raises generic exception."""
-    from unittest.mock import patch, AsyncMock
+    from unittest.mock import patch
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)

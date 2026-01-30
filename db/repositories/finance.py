@@ -1,7 +1,6 @@
 from typing import List, Optional, Tuple, cast
 
 from sqlalchemy import select, func, and_, desc, cast as sql_cast, Float, Date
-from sqlalchemy.exc import NoResultFound
 
 from db.repositories.base import BaseRepository
 from shared.infrastructure.database.models import (

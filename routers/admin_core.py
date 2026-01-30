@@ -18,11 +18,10 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.repositories import ConfigRepository
-from other.aiogram_tools import is_admin, cmd_sleep_and_delete, ChatInOption, get_username_link
+from other.aiogram_tools import is_admin, ChatInOption, get_username_link
 from other.config_reader import config
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
-from other.pyro_tools import get_group_members, remove_deleted_users
 from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
 from services.app_context import AppContext
@@ -556,7 +555,7 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext)
             await message.reply("I am not a member of the target chat.")
             return
     except TelegramBadRequest:
-        await message.reply(f"I am not a member of the target chat, or the chat does not exist.")
+        await message.reply("I am not a member of the target chat, or the chat does not exist.")
         return
     except Exception as e:
         await message.reply(f"An error occurred while checking my membership: {e}")
@@ -569,7 +568,7 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext)
             await message.reply("You are not a member of the target chat.")
             return
     except TelegramBadRequest:
-        await message.reply(f"You are not a member of the target chat, or the chat does not exist.")
+        await message.reply("You are not a member of the target chat, or the chat does not exist.")
         return
     except Exception as e:
         await message.reply(f"An error occurred while checking your membership: {e}")

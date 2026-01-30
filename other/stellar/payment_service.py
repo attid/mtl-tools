@@ -15,7 +15,6 @@ from stellar_sdk.server_async import ServerAsync
 
 from other.config_reader import config
 from .sdk_utils import get_private_sign
-from .constants import BASE_FEE
 
 
 async def send_payment_async(

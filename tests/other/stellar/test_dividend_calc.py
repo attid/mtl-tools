@@ -1,5 +1,4 @@
 # tests/other/stellar/test_dividend_calc.py
-import pytest
 from decimal import Decimal
 from stellar_sdk import Asset
 

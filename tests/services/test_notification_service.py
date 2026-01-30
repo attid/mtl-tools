@@ -1,6 +1,5 @@
 """Tests for NotificationService."""
 
-import pytest
 from services.notification_service import NotificationService
 
 

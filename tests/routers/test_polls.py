@@ -1,6 +1,5 @@
 import pytest
 import datetime
-from contextlib import suppress
 from aiogram import types
 
 from routers.polls import router as polls_router, PollCallbackData, chat_to_address

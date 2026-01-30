@@ -1,7 +1,6 @@
 # tests/services/test_user_service.py
 """Tests for SpamStatusService."""
 
-import pytest
 from services.spam_status_service import SpamStatusService
 from tests.fakes import FakeChatsRepositoryProtocol
 

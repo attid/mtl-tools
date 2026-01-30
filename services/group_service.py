@@ -1,4 +1,4 @@
-from typing import List, Protocol, Optional
+from typing import List, Protocol
 from other.pyro_tools import get_group_members, remove_deleted_users, GroupMember
 
 class IGroupService(Protocol):

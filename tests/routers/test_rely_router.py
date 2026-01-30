@@ -1,9 +1,8 @@
 import pytest
-from decimal import Decimal
 from aiogram import types
 import datetime
 
-from routers.rely_router import router as rely_router, GRIST_BASE_URL
+from routers.rely_router import router as rely_router
 from tests.conftest import RouterTestMiddleware
 from other.grist_tools import grist_manager
 

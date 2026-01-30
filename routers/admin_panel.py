@@ -4,7 +4,6 @@
 import html
 import json
 from contextlib import suppress
-from typing import Optional
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatType, ParseMode

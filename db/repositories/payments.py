@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func
 
 from .base import BaseRepository
-from shared.infrastructure.database.models import TPayments, TDivList
+from shared.infrastructure.database.models import TPayments
 from shared.domain.payment import Payment, PaymentStatus
 
 

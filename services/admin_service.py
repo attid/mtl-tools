@@ -1,6 +1,6 @@
 """Admin management service with DI."""
 
-from typing import Any, Optional
+from typing import Optional
 from threading import Lock
 
 

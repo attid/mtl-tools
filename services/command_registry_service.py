@@ -1,6 +1,6 @@
 """Command registry service with DI."""
 
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 from threading import Lock
 from dataclasses import dataclass, field
 

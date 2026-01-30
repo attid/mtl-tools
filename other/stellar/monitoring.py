@@ -6,7 +6,7 @@ detecting asset-specific transactions in the MTL ecosystem.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from loguru import logger
 from sqlalchemy.orm import Session

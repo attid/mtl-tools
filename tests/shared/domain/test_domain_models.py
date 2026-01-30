@@ -2,7 +2,6 @@
 """Tests for Payment, Dividend, and BotConfig domain models."""
 import pytest
 from decimal import Decimal
-from datetime import datetime
 
 from shared.domain.payment import Payment, PaymentStatus
 from shared.domain.dividend import Dividend, DividendList
