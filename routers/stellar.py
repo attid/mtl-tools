@@ -11,7 +11,7 @@ from other.config_reader import start_path
 from other.constants import MTLChats
 from other.utils import float2str
 from services.command_registry_service import update_command_info
-from other.stellar import MTLAddresses
+from other.stellar import MTLAddresses, MTLAssets
 from services.skyuser import SkyUser
 
 router = Router()
@@ -66,11 +66,24 @@ async def cmd_do_council(message: Message, session: Session, app_context=None, s
         return
 
     balance = await app_context.stellar_service.get_balances(MTLAddresses.public_council)
-        
-    if int(balance.get('EURMTL', 0)) < 10:
+    eurmtl_balance = float(balance.get('EURMTL', 0) or 0)
+    if eurmtl_balance > 5:
+        swap_xdr = app_context.stellar_service.build_swap_xdr(
+            source_address=MTLAddresses.public_council,
+            send_asset=MTLAssets.eurmtl_asset,
+            send_amount=float2str(eurmtl_balance),
+            receive_asset=MTLAssets.labr_asset,
+            receive_amount="0",
+        )
+        signed_swap = app_context.stellar_service.sign(swap_xdr)
+        await app_context.stellar_service.async_submit(signed_swap)
+        balance = await app_context.stellar_service.get_balances(MTLAddresses.public_council)
+
+    labr_balance = float(balance.get('LABR', 0) or 0)
+    if labr_balance <= 1:
         await message.reply(f'Low balance at {MTLAddresses.public_council} can`t pay')
         return
-    url = "https://distribute-e62teamaya-lm.a.run.app/distribute?address=" + MTLAddresses.public_council
+    url = "https://labrdistributiontx-e62teamaya-lm.a.run.app/?address=" + MTLAddresses.public_council
 
     response = await app_context.web_service.get(url, return_type='json')
 

@@ -741,6 +741,7 @@ class FakeStellarService:
         self.get_balances = FakeAsyncMethod(return_value={})
         self.send_payment_async = FakeAsyncMethod(return_value={})
         self.sign = FakeSyncMethod(return_value="")
+        self.build_swap_xdr = FakeSyncMethod(return_value="")
         self.async_submit = FakeAsyncMethod(return_value=None)
         self.find_public_key = FakeSyncMethod(return_value=None)
         self.check_mtlap = FakeAsyncMethod(return_value="")

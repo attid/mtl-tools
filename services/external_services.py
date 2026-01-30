@@ -167,6 +167,16 @@ class StellarService:
         from other.stellar import stellar_sign
         return stellar_sign(xdr)
 
+    def build_swap_xdr(self, source_address, send_asset, send_amount, receive_asset, receive_amount):
+        from other.stellar import build_swap_xdr
+        return build_swap_xdr(
+            source_address=source_address,
+            send_asset=send_asset,
+            send_amount=send_amount,
+            receive_asset=receive_asset,
+            receive_amount=receive_amount,
+        )
+
     async def calc_usdm_daily(self, session, list_id):
         from other.stellar import cmd_calc_usdm_daily
         return await cmd_calc_usdm_daily(session, list_id)

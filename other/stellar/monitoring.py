@@ -81,17 +81,23 @@ async def cmd_check_new_transaction(ignore_operation: List,
                             tr_details.insert(0, f'(<a href="{link}">expert link</a>)')
                             result.append(tr_details)
                     except Exception as ex:
-                        logger.error(f"Error decoding XDR details for transaction {transaction['paging_token']}: {ex}")
+                        logger.opt(exception=True).error(
+                            f"Error decoding XDR details for transaction {transaction['paging_token']}: {ex}"
+                        )
                         # Add basic info if detailed decoding fails
                         result.append([f'(<a href="{link}">expert link</a>)', 'Error decoding transaction details'])
             except Exception as ex:
-                logger.error(f"Error processing transaction {transaction['paging_token']}: {ex}")
+                logger.opt(exception=True).error(
+                    f"Error processing transaction {transaction['paging_token']}: {ex}"
+                )
                 continue
 
         await app_context.db_service.save_kv_value(account_id + chat_id, last_id)
 
     except Exception as ex:
-        logger.error(f"Error in cmd_check_new_transaction for account {account_id}: {ex}")
+        logger.opt(exception=True).error(
+            f"Error in cmd_check_new_transaction for account {account_id}: {ex}"
+        )
 
     return result
 
@@ -143,7 +149,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
                     result.append(effect)
                     max_id = row.id
             except Exception as ex:
-                logger.error(f"Error decoding effect for row {row.id}: {ex}")
+                logger.opt(exception=True).error(f"Error decoding effect for row {row.id}: {ex}")
                 continue
 
         # Save new max_id if it's greater than last_id
@@ -153,7 +159,9 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         return result
 
     except Exception as ex:
-        logger.error(f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}")
+        logger.opt(exception=True).error(
+            f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}"
+        )
         return []
 
 
@@ -176,7 +184,7 @@ async def _decode_db_effect(row: TOperations):
             result += f'  {row.operation} for {float2str(row.amount1)} {row.code1} \n'
         return result
     except Exception as ex:
-        logger.error(f"Error in _decode_db_effect for operation {row.id}: {ex}")
+        logger.opt(exception=True).error(f"Error in _decode_db_effect for operation {row.id}: {ex}")
         return None
 
 

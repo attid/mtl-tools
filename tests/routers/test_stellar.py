@@ -97,11 +97,16 @@ async def test_do_council(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
     
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
+    balances = [
+        {'EURMTL': 6, 'LABR': 0.2},
+        {'LABR': 2},
+    ]
+    router_app_context.stellar_service.get_balances.side_effect = lambda *args, **kwargs: balances.pop(0)
     router_app_context.web_service.get.return_value = FakeWebResponse({
         "distribution": {"GABC...": 10},
         "xdr": "AAAA..."
     })
+    router_app_context.stellar_service.build_swap_xdr.return_value = "SWAP_XDR"
     router_app_context.stellar_service.sign.return_value = "SIGNED_XDR"
     router_app_context.stellar_service.async_submit.return_value = None
     
@@ -124,6 +129,7 @@ async def test_do_council(mock_telegram, router_app_context):
     assert any("Distribution" in t for t in texts)
     assert any("Work done" in t for t in texts)
     
+    assert router_app_context.stellar_service.build_swap_xdr.called
     assert router_app_context.stellar_service.async_submit.called
 
 @pytest.mark.asyncio
@@ -332,7 +338,7 @@ async def test_do_council_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 5}  # Low balance
+    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 0, 'LABR': 1}  # Low balance
 
     update = types.Update(
         update_id=12,
