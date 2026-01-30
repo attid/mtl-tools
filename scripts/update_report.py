@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import asyncio
 from typing import cast
@@ -119,6 +119,21 @@ async def update_main_report(session: Session):
                             "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")
 
     await update_main_report_additional(session=session)
+
+    # Проверка B13 на отрицательное значение
+    wks_eurmtl = await ss.worksheet("eurmtl_report")
+    cell_b13 = await wks_eurmtl.acell('B13')
+    if cell_b13.value:
+        try:
+            b13_value = float(str(cell_b13.value).replace(',', '.'))
+            if b13_value < 0:
+                MessageRepository(session).add_message(
+                    MTLChats.SignGroup,
+                    f"⚠️ Сумма отрицательная: {b13_value}",
+                    topic_id=59548
+                )
+        except (ValueError, TypeError):
+            pass
 
     logger.info(f'Main report all done {datetime.now()}')
 
