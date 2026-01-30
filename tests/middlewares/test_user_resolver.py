@@ -9,6 +9,7 @@ from aiogram import types
 
 from middlewares.user_resolver import UserResolverMiddleware
 from services.channel_link_service import ChannelLinkService
+from services.skyuser import SkyUser
 
 
 def _build_message(
@@ -49,14 +50,16 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
-        user = types.User(id=123456, is_bot=False, first_name="Test")
+        user = types.User(id=123456, is_bot=False, first_name="Test", username="testuser")
         message = _build_message(chat_id=-100123, from_user=user)
 
-        resolved = middleware._resolve_user_id(message)
+        resolved = middleware._resolve_user(message)
 
-        assert resolved == 123456
+        assert isinstance(resolved, SkyUser)
+        assert resolved.user_id == 123456
+        assert resolved.username == "testuser"
 
     def test_resolve_user_id_from_sender_chat_linked(self):
         """When sender_chat exists and is linked, return the linked user_id."""
@@ -66,14 +69,14 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         sender_chat = types.Chat(id=-1001234567890, type="channel", title="Test Channel")
         message = _build_message(chat_id=-100123, sender_chat=sender_chat)
 
-        resolved = middleware._resolve_user_id(message)
+        resolved = middleware._resolve_user(message)
 
-        assert resolved == 999888
+        assert resolved.user_id == 999888
 
     def test_resolve_user_id_from_sender_chat_not_linked(self):
         """When sender_chat exists but is not linked, return None."""
@@ -82,14 +85,14 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         sender_chat = types.Chat(id=-1001234567890, type="channel", title="Test Channel")
         message = _build_message(chat_id=-100123, sender_chat=sender_chat)
 
-        resolved = middleware._resolve_user_id(message)
+        resolved = middleware._resolve_user(message)
 
-        assert resolved is None
+        assert resolved.user_id is None
 
     def test_resolve_user_id_no_from_user_no_sender_chat(self):
         """When neither from_user nor sender_chat exists, return None."""
@@ -98,13 +101,13 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         message = _build_message(chat_id=-100123)
 
-        resolved = middleware._resolve_user_id(message)
+        resolved = middleware._resolve_user(message)
 
-        assert resolved is None
+        assert resolved.user_id is None
 
     def test_resolve_user_id_from_callback_query(self):
         """CallbackQuery should resolve from from_user."""
@@ -113,14 +116,14 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         user = types.User(id=555666, is_bot=False, first_name="Test")
         callback_query = _build_callback_query(from_user=user)
 
-        resolved = middleware._resolve_user_id(callback_query)
+        resolved = middleware._resolve_user(callback_query)
 
-        assert resolved == 555666
+        assert resolved.user_id == 555666
 
     def test_resolve_user_id_for_generic_event_with_from_user(self):
         """Generic event with from_user attribute should resolve correctly."""
@@ -129,36 +132,36 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         # Create a mock event with from_user attribute
         mock_event = MagicMock()
         mock_event.from_user = types.User(id=777888, is_bot=False, first_name="Test")
 
-        resolved = middleware._resolve_user_id(mock_event)
+        resolved = middleware._resolve_user(mock_event)
 
-        assert resolved == 777888
+        assert resolved.user_id == 777888
 
     def test_resolve_from_channel_no_service(self):
         """When channel_link_service is None, return None."""
         app_context = MagicMock()
         app_context.channel_link_service = None
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         resolved = middleware._resolve_from_channel(-1001234567890)
 
         assert resolved is None
 
     @pytest.mark.asyncio
-    async def test_middleware_adds_resolved_user_id_to_data(self):
-        """Middleware should add resolved_user_id to data dict."""
+    async def test_middleware_adds_skyuser_to_data(self):
+        """Middleware should add skyuser to data dict."""
         channel_link_service = ChannelLinkService()
 
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         user = types.User(id=123456, is_bot=False, first_name="Test")
         message = _build_message(chat_id=-100123, from_user=user)
@@ -168,7 +171,7 @@ class TestUserResolverMiddleware:
 
         result = await middleware(handler, message, data)
 
-        assert data["resolved_user_id"] == 123456
+        assert isinstance(data["skyuser"], SkyUser)
         assert result == "handler_result"
         handler.assert_awaited_once_with(message, data)
 
@@ -181,7 +184,7 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         sender_chat = types.Chat(id=-1001234567890, type="channel", title="Test Channel")
         message = _build_message(chat_id=-100123, sender_chat=sender_chat)
@@ -191,7 +194,7 @@ class TestUserResolverMiddleware:
 
         await middleware(handler, message, data)
 
-        assert data["resolved_user_id"] == 777888
+        assert isinstance(data["skyuser"], SkyUser)
 
     def test_from_user_takes_priority_over_sender_chat(self):
         """When both from_user and sender_chat exist, from_user should be used."""
@@ -201,13 +204,13 @@ class TestUserResolverMiddleware:
         app_context = MagicMock()
         app_context.channel_link_service = channel_link_service
 
-        middleware = UserResolverMiddleware(app_context)
+        middleware = UserResolverMiddleware(app_context, MagicMock())
 
         user = types.User(id=123456, is_bot=False, first_name="Test")
         sender_chat = types.Chat(id=-1001234567890, type="channel", title="Test Channel")
         message = _build_message(chat_id=-100123, from_user=user, sender_chat=sender_chat)
 
-        resolved = middleware._resolve_user_id(message)
+        resolved = middleware._resolve_user(message)
 
         # from_user takes priority
-        assert resolved == 123456
+        assert resolved.user_id == 123456

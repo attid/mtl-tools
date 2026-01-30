@@ -11,6 +11,7 @@ from loguru import logger
 
 from other.constants import BotValueTypes
 from services.command_registry_service import update_command_info
+from services.skyuser import SkyUser
 from db.repositories import ConfigRepository
 from routers.admin_panel import load_inaccessible_chats
 
@@ -312,7 +313,7 @@ def _log_feature_flags_stats(app_context):
 @update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
 @update_command_info("/set_moderate", "Включает\Выключает режим модерации по топикам/topic", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, bot: Bot, session, app_context=None):
+async def universal_command_handler(message: Message, bot: Bot, session, app_context=None, skyuser: SkyUser = None):
     command = message.text.lower().split()[0][1:]
     command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
     command_info = commands_info[command]
@@ -323,18 +324,20 @@ async def universal_command_handler(message: Message, bot: Bot, session, app_con
         await message.reply("Technical command. Ignore it.")
         return
 
-    if admin_check == "skynet_admin" and not app_context.utils_service.is_skynet_admin(message):
+    if admin_check == "skynet_admin" and (not skyuser or not skyuser.is_skynet_admin()):
         await message.reply("You are not my admin.")
         return
     elif admin_check == "admin":
-        if not await app_context.utils_service.is_admin(message):
-            await message.reply("You are not admin.")
+        if not skyuser or not await skyuser.is_admin():
+            text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+            await message.reply(text)
             return
 
     if action_type == "toggle_chat" and command_arg and len(command_arg) > 5:
         dest_chat = command_arg.split(":")[0]
-        if not await app_context.utils_service.is_admin(message, dest_chat):
-            await message.reply("Bad target chat. Or you are not admin.")
+        if not skyuser or not await skyuser.is_admin(dest_chat):
+            text = skyuser.admin_denied_text("Bad target chat. Or you are not admin.") if skyuser else "Bad target chat. Or you are not admin."
+            await message.reply(text)
             return
 
     await bot.set_message_reaction(chat_id=message.chat.id, message_id=message.message_id,
@@ -656,9 +659,11 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
 
     # Find the channel owner (creator)
     owner_id = None
+    owner_username = None
     for admin in admins:
         if admin.status == "creator" and admin.user and not admin.user.is_bot:
             owner_id = admin.user.id
+            owner_username = admin.user.username
             break
 
     if owner_id is None:
@@ -673,7 +678,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
         return
 
     # Link the channel to the owner
-    app_context.channel_link_service.link_channel(channel_id, owner_id)
+    app_context.channel_link_service.link_channel(channel_id, owner_id, owner_username)
 
     # Persist to database
     all_links = app_context.channel_link_service.get_all_links()

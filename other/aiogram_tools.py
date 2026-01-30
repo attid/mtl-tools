@@ -1,18 +1,15 @@
 import asyncio
 import html
 import re
-from contextlib import suppress
 from enum import Enum
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Filter
-from aiogram.types import Message, User, CallbackQuery, Chat, ChatMember, ReactionTypeCustomEmoji, BufferedInputFile
+from aiogram.types import Message, User, Chat, ChatMember, ReactionTypeCustomEmoji, BufferedInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from middlewares.retry import logger
 from other.config_reader import config
-from other.constants import MTLChats
 from services.app_context import app_context
 
 scheduler: AsyncIOScheduler
@@ -35,17 +32,17 @@ class AdminPermission(Enum):
 non_breaking_space = chr(0x00A0)
 
 
-def get_user_id(user_id: Message | int | User | CallbackQuery):
-    if isinstance(user_id, CallbackQuery):
-        user_id = user_id.from_user.id
-    elif isinstance(user_id, Message):
-        user_id = user_id.from_user.id
-    elif isinstance(user_id, User):
-        user_id = user_id.id
-    else:
-        user_id = user_id
-
-    return user_id
+## def get_user_id(user_id: Message | int | User | CallbackQuery):
+##     if isinstance(user_id, CallbackQuery):
+##         user_id = user_id.from_user.id
+##     elif isinstance(user_id, Message):
+##         user_id = user_id.from_user.id
+##     elif isinstance(user_id, User):
+##         user_id = user_id.id
+##     else:
+##         user_id = user_id
+##
+##     return user_id
 
 
 def get_chat_link(chat: Chat):
@@ -55,55 +52,55 @@ def get_chat_link(chat: Chat):
     return f"<a href='https://t.me/c/{chat.id}/999999999999'>{chat.title}</a>"
 
 
-async def is_admin(event: Message | CallbackQuery, chat_id=None, permission: AdminPermission = None):
-    """
-    Проверяет, является ли пользователь администратором чата и имеет ли указанные права.
-    
-    Args:
-        event (Message | CallbackQuery): Объект сообщения или колбэка.
-        chat_id: ID чата для проверки. Если None, будет определен из event.
-        permission (AdminPermission, optional): Право администратора для проверки из перечисления AdminPermission.
-            Например, AdminPermission.CAN_RESTRICT_MEMBERS.
-            Если None, проверяется только статус администратора.
-    
-    Returns:
-        bool: True, если пользователь является администратором и имеет указанные права (если указаны).
-    
-    Examples:
-        # Проверка, является ли пользователь администратором
-        is_admin_result = await is_admin(message)
-        
-        # Проверка, может ли администратор ограничивать пользователей
-        can_restrict = await is_admin(message, permission=AdminPermission.CAN_RESTRICT_MEMBERS)
-    """
-    if chat_id is None:
-        if isinstance(event, CallbackQuery):
-            chat_id = event.message.chat.id
-        else:
-            chat_id = event.chat.id
-
-    user_id = get_user_id(event)
-
-    if user_id == MTLChats.GroupAnonymousBot:
-        return True
-
-    if user_id == chat_id:
-        return True
-
-    with suppress(TelegramBadRequest):
-        members = await event.bot.get_chat_administrators(chat_id=chat_id)
-        
-        if permission is None:
-            # Проверяем только статус администратора
-            return any(member.user.id == user_id for member in members)
-        else:
-            # Проверяем наличие указанного права у администратора
-            for member in members:
-                if member.user.id == user_id:
-                    # Проверяем, есть ли у администратора указанное право
-                    return getattr(member, permission.value, False)
-            
-            return False
+## async def is_admin(event: Message | CallbackQuery, chat_id=None, permission: AdminPermission = None):
+##     \"\"\"
+##     Проверяет, является ли пользователь администратором чата и имеет ли указанные права.
+##     
+##     Args:
+##         event (Message | CallbackQuery): Объект сообщения или колбэка.
+##         chat_id: ID чата для проверки. Если None, будет определен из event.
+##         permission (AdminPermission, optional): Право администратора для проверки из перечисления AdminPermission.
+##             Например, AdminPermission.CAN_RESTRICT_MEMBERS.
+##         Если None, проверяется только статус администратора.
+##     
+##     Returns:
+##         bool: True, если пользователь является администратором и имеет указанные права (если указаны).
+##     
+##     Examples:
+##         # Проверка, является ли пользователь администратором
+##         is_admin_result = await is_admin(message)
+##         
+##         # Проверка, может ли администратор ограничивать пользователей
+##         can_restrict = await is_admin(message, permission=AdminPermission.CAN_RESTRICT_MEMBERS)
+##     \"\"\"
+##     if chat_id is None:
+##         if isinstance(event, CallbackQuery):
+##             chat_id = event.message.chat.id
+##         else:
+##             chat_id = event.chat.id
+##
+##     user_id = get_user_id(event)
+##
+##     if user_id == MTLChats.GroupAnonymousBot:
+##         return True
+##
+##     if user_id == chat_id:
+##         return True
+##
+##     with suppress(TelegramBadRequest):
+##         members = await event.bot.get_chat_administrators(chat_id=chat_id)
+##         
+##         if permission is None:
+##             # Проверяем только статус администратора
+##             return any(member.user.id == user_id for member in members)
+##         else:
+##             # Проверяем наличие указанного права у администратора
+##             for member in members:
+##                 if member.user.id == user_id:
+##                     # Проверяем, есть ли у администратора указанное право
+##                     return getattr(member, permission.value, False)
+##             
+##             return False
 
 
 def add_text(lines, num_line, text):

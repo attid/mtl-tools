@@ -13,16 +13,18 @@ class TestChannelLinkService:
 
     def test_link_and_get_channel(self):
         service = ChannelLinkService()
-        service.link_channel(-1001234567890, 123456)
+        service.link_channel(-1001234567890, 123456, "owner")
 
         assert service.get_user_for_channel(-1001234567890) == 123456
+        assert service.get_username_for_channel(-1001234567890) == "owner"
 
     def test_link_channel_overwrites_existing(self):
         service = ChannelLinkService()
-        service.link_channel(-1001234567890, 123456)
-        service.link_channel(-1001234567890, 789012)
+        service.link_channel(-1001234567890, 123456, "first")
+        service.link_channel(-1001234567890, 789012, "second")
 
         assert service.get_user_for_channel(-1001234567890) == 789012
+        assert service.get_username_for_channel(-1001234567890) == "second"
 
     def test_unlink_channel_returns_true_if_linked(self):
         service = ChannelLinkService()
@@ -53,8 +55,8 @@ class TestChannelLinkService:
 
     def test_get_all_links_returns_copy(self):
         service = ChannelLinkService()
-        service.link_channel(-1001234567890, 123456)
-        service.link_channel(-1009876543210, 789012)
+        service.link_channel(-1001234567890, 123456, "first")
+        service.link_channel(-1009876543210, 789012, "second")
 
         links = service.get_all_links()
         links[-1001111111111] = 999999  # Modify the copy
@@ -65,14 +67,14 @@ class TestChannelLinkService:
 
     def test_get_all_links_returns_all_links(self):
         service = ChannelLinkService()
-        service.link_channel(-1001234567890, 123456)
-        service.link_channel(-1009876543210, 789012)
+        service.link_channel(-1001234567890, 123456, "first")
+        service.link_channel(-1009876543210, 789012, "second")
 
         links = service.get_all_links()
 
         assert links == {
-            -1001234567890: 123456,
-            -1009876543210: 789012,
+            -1001234567890: {"user_id": 123456, "username": "first"},
+            -1009876543210: {"user_id": 789012, "username": "second"},
         }
 
     def test_load_from_dict_with_string_keys(self):
@@ -81,11 +83,12 @@ class TestChannelLinkService:
         # JSON storage uses string keys
         service.load_from_dict({
             "-1001234567890": 123456,
-            "-1009876543210": 789012,
+            "-1009876543210": {"user_id": 789012, "username": "second"},
         })
 
         assert service.get_user_for_channel(-1001234567890) == 123456
         assert service.get_user_for_channel(-1009876543210) == 789012
+        assert service.get_username_for_channel(-1009876543210) == "second"
 
     def test_load_from_dict_replaces_existing(self):
         service = ChannelLinkService()

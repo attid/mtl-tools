@@ -15,6 +15,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 sys.path.append(os.getcwd())
 
 from tests.fakes import FakeSession, TestAppContext
+from middlewares.user_resolver import UserResolverMiddleware
 from services import app_context as app_context_module
 from other import aiogram_tools as aiogram_tools_module
 
@@ -457,6 +458,7 @@ class RouterTestMiddleware(BaseMiddleware):
     """
     def __init__(self, app_context):
         self.app_context = app_context
+        self._user_resolver = UserResolverMiddleware(app_context, app_context.bot)
 
     async def __call__(self, handler, event, data):
         data["app_context"] = self.app_context
@@ -464,6 +466,8 @@ class RouterTestMiddleware(BaseMiddleware):
         data["session"] = self.app_context.session
         if hasattr(self.app_context, 'localization_service'):
             data["l10n"] = self.app_context.localization_service
+        skyuser = self._user_resolver._resolve_user(event)
+        data["skyuser"] = skyuser
         return await handler(event, data)
 
 class MockDbMiddleware(BaseMiddleware):

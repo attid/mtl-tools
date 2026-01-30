@@ -191,9 +191,11 @@ async def main():
     dp.message_reaction.middleware(app_context_middleware)
 
     # UserResolverMiddleware resolves user_id from channel links
-    user_resolver_middleware = UserResolverMiddleware(app_context_middleware.app_context)
+    user_resolver_middleware = UserResolverMiddleware(app_context_middleware.app_context, bot)
     dp.message.middleware(user_resolver_middleware)
     dp.callback_query.middleware(user_resolver_middleware)
+    dp.chat_member.middleware(user_resolver_middleware)
+    dp.message_reaction.middleware(user_resolver_middleware)
 
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
     dp.message.middleware(EmojiReactionMiddleware())

@@ -357,7 +357,7 @@ class TalkService:
                         reply_to_message_id=msg.message_id
                     )
 
-    async def remind(self, message, session, app_context):
+    async def remind(self, message, session, app_context, skyuser=None):
         from db.repositories import ConfigRepository
         from other.constants import BotValueTypes
         from other.stellar import cmd_alarm_url, send_by_list
@@ -367,7 +367,7 @@ class TalkService:
             msg = alarm_list + '\nСмотрите топик / Look at the topic message'
             await message.reply(text=msg)
             if alarm_list.find('@') != -1:
-                if app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
+                if skyuser and skyuser.is_skynet_admin():
                     all_users = alarm_list.split()
                     url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
                     await send_by_list(bot=self.bot, all_users=all_users, message=message, url=url, session=session)
@@ -451,11 +451,11 @@ class UtilsService:
         from other.aiogram_tools import multi_reply
         return await multi_reply(message, text)
         
-    async def is_admin(self, message, chat_id=None):
-        from other.aiogram_tools import is_admin
-        return await is_admin(message, chat_id=chat_id)
-
-
+    ## async def is_admin(self, message, chat_id=None):
+    ##     from other.aiogram_tools import is_admin
+    ##     return await is_admin(message, chat_id=chat_id)
+    ##
+    ##
     async def multi_answer(self, message, text):
         from other.aiogram_tools import multi_answer
         return await multi_answer(message, text)
@@ -468,12 +468,12 @@ class UtilsService:
         from other.aiogram_tools import add_text
         return add_text(lines, num_line, text)
 
-    def is_skynet_admin(self, message, app_context=None):
-        if app_context and app_context.admin_service:
-            username = message.from_user.username if message.from_user else None
-            return app_context.admin_service.is_skynet_admin(username)
-        # Fallback for cases without app_context - require admin_service
-        raise ValueError("app_context with admin_service required for is_skynet_admin")
+    ## def is_skynet_admin(self, message, app_context=None):
+    ##     if app_context and app_context.admin_service:
+    ##         username = message.from_user.username if message.from_user else None
+    ##         return app_context.admin_service.is_skynet_admin(username)
+    ##     # Fallback for cases without app_context - require admin_service
+    ##     raise ValueError(\"app_context with admin_service required for is_skynet_admin\")
 
     def get_username_link(self, user):
         from other.aiogram_tools import get_username_link

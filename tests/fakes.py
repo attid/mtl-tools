@@ -1,8 +1,9 @@
 import inspect
 from contextlib import suppress
 
-from other.aiogram_tools import add_text, answer_text_file, is_admin, multi_answer, multi_reply
+from other.aiogram_tools import add_text, answer_text_file, multi_answer, multi_reply
 from services.bot_state_service import BotStateService
+from services.channel_link_service import ChannelLinkService
 
 
 class FakeAsyncMethod:
@@ -455,15 +456,15 @@ class TestUtilsService:
         self.answer_text_file_calls.append((message, text, filename))
         return await answer_text_file(message, text, filename=filename)
 
-    async def is_admin(self, message, chat_id=None):
-        return await is_admin(message, chat_id=chat_id)
-
-    def is_skynet_admin(self, message, app_context=None):
-        # Use admin_service for is_skynet_admin checks
-        if self._admin_service:
-            username = message.from_user.username if message.from_user else None
-            return self._admin_service.is_skynet_admin(username)
-        return False
+    ## async def is_admin(self, message, chat_id=None):
+    ##     return await is_admin(message, chat_id=chat_id)
+    ##
+    ## def is_skynet_admin(self, message, app_context=None):
+    ##     # Use admin_service for is_skynet_admin checks
+    ##     if self._admin_service:
+    ##         username = message.from_user.username if message.from_user else None
+    ##         return self._admin_service.is_skynet_admin(username)
+    ##     return False
 
     def add_text(self, lines, num_line, text):
         return add_text(lines, num_line, text)
@@ -1447,6 +1448,7 @@ class TestAppContext:
         self.spam_status_service = FakeSpamStatusService()
         self.command_registry = FakeCommandRegistryService()
         self.db_service = FakeDatabaseService()
+        self.channel_link_service = ChannelLinkService()
         self.admin_id = 123456
         # Wire admin_service to utils_service
         self.utils_service.set_admin_service(self.admin_service)
