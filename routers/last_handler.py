@@ -437,7 +437,7 @@ async def cmd_last_check(message: Message, session: Session, bot: Bot, state: FS
         if app_context:
             deleted = await app_context.antispam_service.check_spam(message, session)
         else:
-            from other.antispam_tools import check_spam
+            from other.antispam_logic import check_spam
             deleted = await check_spam(message, session)
         if deleted:
             # If the message was deleted during spam check, we stop processing
