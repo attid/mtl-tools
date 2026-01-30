@@ -12,6 +12,7 @@ from other.constants import MTLChats
 from other.utils import float2str
 from services.command_registry_service import update_command_info
 from other.stellar import MTLAddresses
+from services.skyuser import SkyUser
 
 router = Router()
 
@@ -59,8 +60,8 @@ async def cmd_show_balance(message: Message, app_context=None):
 
 
 @router.message(Command(commands=["do_council"]))
-async def cmd_do_council(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_council(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -86,8 +87,8 @@ async def cmd_do_council(message: Message, session: Session, app_context=None):
 
 
 @router.message(Command(commands=["do_bim"]))
-async def cmd_do_bim(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_bim(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
     balance = await app_context.stellar_service.get_balances(MTLAddresses.public_bod_eur)
@@ -126,8 +127,8 @@ async def cmd_do_bim(message: Message, session: Session, app_context=None):
 
 @update_command_info("/do_resend", "Переотправить транзакцию. Только для админов")
 @router.message(Command(commands=["do_resend"]))
-async def cmd_do_key_rate(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_key_rate(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
 
@@ -151,21 +152,21 @@ async def cmd_do_key_rate(message: Message, session: Session, app_context=None):
 
 
 @router.message(Command(commands=["do_all"]))
-async def cmd_do_all(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_all(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
 
-    await cmd_do_div(message, session=session, app_context=app_context)
-    await cmd_do_sats_div(message, session=session, app_context=app_context)
+    await cmd_do_div(message, session=session, app_context=app_context, skyuser=skyuser)
+    await cmd_do_sats_div(message, session=session, app_context=app_context, skyuser=skyuser)
     await rt_show_bim_msg(message, session=session, app_context=app_context)
-    await cmd_do_bim(message, session=session, app_context=app_context)
+    await cmd_do_bim(message, session=session, app_context=app_context, skyuser=skyuser)
 
 
 @update_command_info("/do_div", "начать выплаты дивидентов")
 @router.message(Command(commands=["do_div"]))
-async def cmd_do_div(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_div(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -225,8 +226,8 @@ async def cmd_do_div(message: Message, session: Session, app_context=None):
 
 @update_command_info("/do_sats_div", "выплата дивидентов в satsmtl")
 @router.message(Command(commands=["do_sats_div"]))
-async def cmd_do_sats_div(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_sats_div(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -267,8 +268,8 @@ async def cmd_do_sats_div(message: Message, session: Session, app_context=None):
 
 
 @router.message(Command(commands=["do_usdm_div"]))
-async def cmd_do_usdm_div(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_usdm_div(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -310,8 +311,8 @@ async def cmd_do_usdm_div(message: Message, session: Session, app_context=None):
 
 @update_command_info("/do_usdm_usdm_div_daily", "выплата дивидентов в usdm от usdm")
 @router.message(Command(commands=["do_usdm_usdm_div_daily"]))
-async def cmd_do_usdm_usdm_div(message: Message, session: Session, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_do_usdm_usdm_div(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -462,8 +463,8 @@ async def cmd_get_toc_xdr(message: Message, app_context=None):
 
 @update_command_info("/update_airdrops", "Обновить файл airdrops")
 @router.message(Command(commands=["update_airdrops"]))
-async def cmd_update_airdrops(message: Message, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_update_airdrops(message: Message, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
 
@@ -499,8 +500,8 @@ async def route_show_data(message: Message, app_context=None):
 
 
 @router.message(Command(commands=["update_bim1"]))
-async def cmd_update_bim1(message: Message, bot: Bot, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_update_bim1(message: Message, bot: Bot, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
 
@@ -524,10 +525,10 @@ async def cmd_update_bim1(message: Message, bot: Bot, app_context=None):
 
 
 @router.message(Command(commands=["check_bim"]))
-async def cmd_check_bim(message: Message, app_context=None):
+async def cmd_check_bim(message: Message, app_context=None, skyuser: SkyUser = None):
     cmd = message.text.split()
     if len(cmd) > 1 and cmd[1][0] == '@':
-        if not app_context.utils_service.is_skynet_admin(message):
+        if not skyuser or not skyuser.is_skynet_admin():
             await message.reply('You are not my admin.')
             return
         msg = await app_context.gspread_service.check_bim(user_id_or_name=cmd[1][1:])
@@ -538,8 +539,8 @@ async def cmd_check_bim(message: Message, app_context=None):
 
 
 @router.message(Command(commands=["check_mtlap"]))
-async def cmd_check_mtlap(message: Message, app_context=None):
-    if not app_context.utils_service.is_skynet_admin(message):
+async def cmd_check_mtlap(message: Message, app_context=None, skyuser: SkyUser = None):
+    if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return
         

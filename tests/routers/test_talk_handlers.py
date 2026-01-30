@@ -1356,31 +1356,31 @@ async def test_is_skynet_img_user_helper():
 
 
 @pytest.mark.asyncio
-async def test_is_skynet_admin_helper():
-    """Test _is_skynet_admin helper function."""
-    from routers.talk_handlers import _is_skynet_admin
+async def test_skyuser_is_skynet_admin():
+    """Test SkyUser.is_skynet_admin helper behavior."""
+    from services.skyuser import SkyUser
     from tests.fakes import FakeAdminService
 
-    # Create a simple app_context mock
     class MockAppContext:
         def __init__(self):
             self.admin_service = FakeAdminService()
 
-    class MockMessage:
-        def __init__(self):
-            self.from_user = type('User', (), {'username': 'testuser'})()
-
     app_ctx = MockAppContext()
     app_ctx.admin_service.set_skynet_admins(["@testuser"])
 
-    msg = MockMessage()
+    skyuser = SkyUser(
+        user_id=1,
+        username="testuser",
+        chat_id=1,
+        sender_chat_id=None,
+        bot=None,
+        app_context=app_ctx,
+    )
 
-    # Test admin user
-    assert _is_skynet_admin(msg, app_ctx) is True
+    assert skyuser.is_skynet_admin() is True
 
-    # Test non-admin user
     app_ctx.admin_service.set_skynet_admins([])
-    assert _is_skynet_admin(msg, app_ctx) is False
+    assert skyuser.is_skynet_admin() is False
 
 
 @pytest.mark.asyncio
@@ -1401,24 +1401,38 @@ async def test_is_skynet_img_user_no_admin_service():
 
 
 @pytest.mark.asyncio
-async def test_is_skynet_admin_no_admin_service():
-    """Test _is_skynet_admin raises ValueError when admin_service missing."""
-    from routers.talk_handlers import _is_skynet_admin
+async def test_skyuser_is_skynet_admin_no_admin_service():
+    """Test SkyUser.is_skynet_admin raises ValueError when admin_service missing."""
+    from services.skyuser import SkyUser
     import pytest as pt
 
     class MockAppContext:
         def __init__(self):
             self.admin_service = None
 
-    class MockMessage:
-        def __init__(self):
-            self.from_user = type('User', (), {'username': 'testuser'})()
+    skyuser = SkyUser(
+        user_id=1,
+        username="testuser",
+        chat_id=1,
+        sender_chat_id=None,
+        bot=None,
+        app_context=MockAppContext(),
+    )
 
     with pt.raises(ValueError, match="app_context with admin_service required"):
-        _is_skynet_admin(MockMessage(), MockAppContext())
+        skyuser.is_skynet_admin()
+
+    skyuser_no_ctx = SkyUser(
+        user_id=1,
+        username="testuser",
+        chat_id=1,
+        sender_chat_id=None,
+        bot=None,
+        app_context=None,
+    )
 
     with pt.raises(ValueError, match="app_context with admin_service required"):
-        _is_skynet_admin(MockMessage(), None)
+        skyuser_no_ctx.is_skynet_admin()
 
 
 @pytest.mark.asyncio

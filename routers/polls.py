@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext
+from services.skyuser import SkyUser
 from other.grist_tools import MTLGrist
 from other.stellar import MTLAddresses
 from db.repositories import ConfigRepository
@@ -262,8 +263,8 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
 
 @update_command_info("/poll_reload_vote", "Перечитать голоса из блокчейна")
 @router.message(Command(commands=["poll_reload_vote"]))
-async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_context: AppContext):
-    if not app_context.admin_service.is_skynet_admin(message.from_user.username if message.from_user else None):
+async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
+    if not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
 

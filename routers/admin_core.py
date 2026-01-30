@@ -18,29 +18,16 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.repositories import ConfigRepository
-from other.aiogram_tools import is_admin, ChatInOption, get_username_link
+from other.aiogram_tools import ChatInOption, get_username_link
 from other.config_reader import config
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
 from routers.multi_handler import run_entry_channel_check
 from other.timedelta import parse_timedelta_from_message
 from services.app_context import AppContext
+from services.skyuser import SkyUser
 
 router = Router()
-
-
-def _check_topic_admin(event: Union[Message, ChatMemberUpdated, CallbackQuery, MessageReactionUpdated],
-                       app_context) -> bool:
-    """Check if user is topic admin using DI service."""
-    if not event.message_thread_id:
-        return False
-
-    if not app_context or not app_context.admin_service:
-        raise ValueError("app_context with admin_service required")
-    username = event.from_user.username if event.from_user else None
-    return app_context.admin_service.is_topic_admin(
-        event.chat.id, event.message_thread_id, username
-    )
 
 
 def _has_topic_admins(chat_id: int, thread_id: int, app_context) -> bool:
@@ -53,9 +40,9 @@ def _has_topic_admins(chat_id: int, thread_id: int, app_context) -> bool:
 
 
 @router.message(F.text.startswith("!ro"))
-async def cmd_set_ro(message: Message):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
+async def cmd_set_ro(message: Message, skyuser: SkyUser):
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text())
         return False
 
     if message.reply_to_message is None:
@@ -74,9 +61,9 @@ async def cmd_set_ro(message: Message):
 
 
 @router.message(Command(commands=["topic"]))
-async def cmd_create_topic(message: Message):
-    if not await is_admin(message):
-        await message.reply("You are not an admin.")
+async def cmd_create_topic(message: Message, skyuser: SkyUser):
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text("You are not an admin."))
         return
 
     if not message.chat.is_forum:
@@ -124,11 +111,11 @@ async def cmd_all(message: Message, app_context: AppContext):
 @update_command_info("/check_entry_channel",
                      "Запустить проверку всех участников на подписку в обязательный канал.")
 @router.message(Command(commands=["check_entry_channel"]))
-async def cmd_check_entry_channel(message: Message, bot: Bot, app_context: AppContext):
+async def cmd_check_entry_channel(message: Message, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.group_service or not app_context.utils_service:
         raise ValueError("app_context with group_service and utils_service required")
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text())
         return
 
     try:
@@ -147,11 +134,11 @@ async def cmd_check_entry_channel(message: Message, bot: Bot, app_context: AppCo
 
 
 @router.message(Command(commands=["delete_dead_members"]))
-async def cmd_delete_dead_members(message: Message, state: FSMContext, app_context: AppContext):
+async def cmd_delete_dead_members(message: Message, state: FSMContext, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text())
         return
 
     parts = message.text.split()
@@ -179,8 +166,8 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
     else:
         chat_id = int(chat_id)
 
-    if not await is_admin(message, chat_id=chat_id):
-        await message.reply(f"You are not an admin of the chat {chat_id}.")
+    if not await skyuser.is_admin(chat_id=chat_id):
+        await message.reply(skyuser.admin_denied_text(f"You are not an admin of the chat {chat_id}."))
         return
 
     await message.reply("Starting to remove deleted users. This may take some time...")
@@ -194,7 +181,7 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
 @update_command_info("/mute", "Блокирует пользователя в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["mute"]))
-async def cmd_mute(message: Message, session: Session, app_context: AppContext):
+async def cmd_mute(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
@@ -203,7 +190,7 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext):
         await message.reply('Local admins not set yet')
         return False
 
-    if not _check_topic_admin(message, app_context):
+    if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
         await message.reply('You are not local admin')
         return False
 
@@ -233,7 +220,7 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext):
 
 @update_command_info("/show_mute", "Показывает пользователей, которые заблокированы в текущей ветке")
 @router.message(ChatInOption('moderate'), Command(commands=["show_mute"]))
-async def cmd_show_mutes(message: Message, session: Session, app_context: AppContext):
+async def cmd_show_mutes(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
@@ -242,7 +229,7 @@ async def cmd_show_mutes(message: Message, session: Session, app_context: AppCon
         await message.reply('Local admins not set yet')
         return False
 
-    if not _check_topic_admin(message, app_context):
+    if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
         await message.reply('You are not local admin')
         return False
 
@@ -285,9 +272,19 @@ async def cmd_show_mutes(message: Message, session: Session, app_context: AppCon
 
 
 @router.message_reaction(ChatInOption('moderate'))
-async def message_reaction(message: MessageReactionUpdated, bot: Bot, session: Session, app_context: AppContext):
+async def message_reaction(message: MessageReactionUpdated, bot: Bot, session: Session, app_context: AppContext, skyuser: SkyUser | None = None):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
+    if skyuser is None:
+        user = message.from_user if hasattr(message, "from_user") else None
+        skyuser = SkyUser(
+            user_id=user.id if user else None,
+            username=user.username if user else None,
+            chat_id=message.chat.id if message.chat else None,
+            sender_chat_id=None,
+            bot=bot,
+            app_context=app_context,
+        )
     if message.new_reaction and isinstance(message.new_reaction[0], ReactionTypeCustomEmoji):
         reaction: ReactionTypeCustomEmoji = message.new_reaction[0]
 
@@ -301,7 +298,7 @@ async def message_reaction(message: MessageReactionUpdated, bot: Bot, session: S
                 await message.reply('Local admins not set yet')
                 return False
 
-            if not _check_topic_admin(message, app_context):
+            if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
                 await message.reply('You are not local admin')
                 return False
 
@@ -382,9 +379,9 @@ async def on_migrate(message: Message, bot: Bot):
 
 @router.message(Command(commands=["s"]))
 @router.message(Command(commands=["send_me"]))
-async def cmd_send_me(message: Message, bot: Bot):
-    if not await is_admin(message):
-        await message.reply('You are not admin.')
+async def cmd_send_me(message: Message, bot: Bot, skyuser: SkyUser):
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text())
         return
 
     if message.reply_to_message is None:
@@ -490,11 +487,11 @@ async def cmd_web_pin(message: Message, command: CommandObject):
 
 @update_command_info("/show_all_topic_admin", "Показать всех администраторов всех топиков")
 @router.message(Command(commands=["show_all_topic_admin"]))
-async def cmd_show_all_topic_admin(message: Message, app_context: AppContext):
+async def cmd_show_all_topic_admin(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
-    if not await is_admin(message):
-        await message.reply("You are not an admin.")
+    if not await skyuser.is_admin():
+        await message.reply(skyuser.admin_denied_text("You are not an admin."))
         return
 
     chat_id = message.chat.id

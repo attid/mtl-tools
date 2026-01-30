@@ -14,6 +14,7 @@ from services.command_registry_service import update_command_info
 from other.pyro_tools import extract_telegram_info, pyro_update_msg_info
 from other.miniapps_tools import miniapps
 from services.app_context import AppContext
+from services.skyuser import SkyUser
 from db.repositories import ConfigRepository
 
 router = Router()
@@ -26,14 +27,6 @@ def _is_skynet_img_user(username: str, app_context) -> bool:
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
     return app_context.admin_service.is_skynet_img_user(username)
-
-
-def _is_skynet_admin(message, app_context) -> bool:
-    """Check if user is a skynet admin."""
-    if not app_context or not app_context.admin_service:
-        raise ValueError("app_context with admin_service required")
-    username = message.from_user.username if message.from_user else None
-    return app_context.admin_service.is_skynet_admin(username)
 
 
 @router.message(Command(commands=["img"]))
@@ -138,10 +131,10 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
 @update_command_info("Скайнет напомни", "Попросить Скайнет напомнить про подпись транзакции. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('НАПОМНИ',)))
-async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context: AppContext):
+async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.talk_service:
         raise ValueError("app_context with talk_service required")
-    await app_context.talk_service.remind(message, session, app_context)
+    await app_context.talk_service.remind(message, session, app_context, skyuser=skyuser)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -179,10 +172,10 @@ async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot,
 @update_command_info("Скайнет обнови гарантов", "Попросить Скайнет обновить файл гарантов. Только в рабочем чате.")
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
                 HasText(('ОБНОВИ',)))
-async def cmd_last_check_update(message: Message, session: Session, bot: Bot, app_context: AppContext):
+async def cmd_last_check_update(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service or not app_context.report_service:
         raise ValueError("app_context with admin_service and report_service required")
-    if not _is_skynet_admin(message, app_context):
+    if not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
 

@@ -22,6 +22,7 @@ from start import add_bot_users
 from other.aiogram_tools import get_username_link, get_chat_link
 from other.constants import MTLChats, BotValueTypes
 from services.command_registry_service import update_command_info
+from services.skyuser import SkyUser
 from other.pyro_tools import GroupMember
 from shared.domain.user import SpamStatus
 from db.repositories import ConfigRepository, ChatsRepository
@@ -105,11 +106,12 @@ def create_emoji_captcha_keyboard(user_id, required_num):
 
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
-async def cmd_delete_welcome(message: Message, session: Session, app_context=None):
-    admin = await app_context.utils_service.is_admin(message)
+async def cmd_delete_welcome(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
-        await message.reply('You are not admin.')
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await message.reply(text)
         return False
 
     has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
@@ -125,11 +127,12 @@ async def cmd_delete_welcome(message: Message, session: Session, app_context=Non
 @update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
                      "welcome_messages")
 @router.message(Command(commands=["set_welcome"]))
-async def cmd_set_welcome(message: Message, session: Session, app_context=None):
-    admin = await app_context.utils_service.is_admin(message)
+async def cmd_set_welcome(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
-        await message.reply('You are not admin.')
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await message.reply(text)
         return False
 
     if len(message.text.split()) > 1:
@@ -146,11 +149,12 @@ async def cmd_set_welcome(message: Message, session: Session, app_context=None):
 
 @update_command_info("/set_welcome_button", "Установить текст на кнопке капчи", 2, "welcome_button")
 @router.message(Command(commands=["set_welcome_button"]))
-async def cmd_set_welcome_button(message: Message, session: Session, app_context=None):
-    admin = await app_context.utils_service.is_admin(message)
+async def cmd_set_welcome_button(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
-        await message.reply('You are not admin.')
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await message.reply(text)
         return False
 
     if len(message.text.split()) > 1:
@@ -168,8 +172,8 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
 
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
-async def cmd_stop_exchange(message: Message, session: Session, app_context=None):
-    is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
+async def cmd_stop_exchange(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
         await message.reply('You are not my admin.')
@@ -183,8 +187,8 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context=None
 
 @update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
-async def cmd_start_exchange(message: Message, session: Session, app_context=None):
-    is_admin_user = app_context.admin_service.is_skynet_admin(message.from_user.username)
+async def cmd_start_exchange(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
         await message.reply('You are not my admin.')
@@ -313,7 +317,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
-async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
+async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None, skyuser: SkyUser = None):
     chat_id = event.chat.id
 
     ChatsRepository(session).remove_user_from_chat(chat_id, event.new_chat_member.user.id)
@@ -332,7 +336,7 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot,
             config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
-        is_admin_user = app_context.admin_service.is_skynet_admin(event.from_user.username)
+        is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
         if is_admin_user:
             logger.info(
@@ -421,11 +425,12 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
 
 
 @router.message(Command(commands=["recaptcha"]))
-async def cmd_recaptcha(message: Message, session: Session, app_context=None):
-    admin = await app_context.utils_service.is_admin(message)
+async def cmd_recaptcha(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
-        await message.reply('You are not admin.')
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await message.reply(text)
         return None
 
     if len(message.text.split()) < 2:
@@ -524,11 +529,12 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
 
 
 @router.callback_query(JoinCallbackData.filter())
-async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot, app_context=None):
-    admin = await app_context.utils_service.is_admin(query, callback_data.chat_id)
+async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin(callback_data.chat_id) if skyuser else False
 
     if not admin:
-        await query.answer('You are not admin.', show_alert=True)
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await query.answer(text, show_alert=True)
         return False
 
     if callback_data.can_join:

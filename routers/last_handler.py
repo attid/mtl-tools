@@ -19,13 +19,13 @@ from other.text_tools import extract_url
 from db.repositories import MessageRepository, ChatsRepository
 from middlewares.throttling import rate_limit
 from start import add_bot_users
-from other.aiogram_tools import (is_admin, ChatInOption,
-                                 get_username_link, cmd_sleep_and_delete)
+from other.aiogram_tools import ChatInOption, get_username_link, cmd_sleep_and_delete
 from other.constants import MTLChats, BotValueTypes
 from other.pyro_tools import MessageInfo, pyro_update_msg_info
 from other.miniapps_tools import miniapps
 from shared.domain.user import SpamStatus
 from db.repositories import ConfigRepository
+from services.skyuser import SkyUser
 
 router = Router()
 
@@ -509,14 +509,12 @@ def get_named_reply_markup(button_text):
 
 @rate_limit(0, 'listen')
 @router.callback_query(SpamCheckCallbackData.filter())
-async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(query)
-    else:
-        admin = await is_admin(query)
+async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
-        await query.answer('You are not admin.', show_alert=True)
+        text = skyuser.admin_denied_text() if skyuser else "You are not admin."
+        await query.answer(text, show_alert=True)
         return False
 
     if callback_data.good:
@@ -538,20 +536,12 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
 
 
 @router.callback_query(ReplyCallbackData.filter())
-async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, app_context=None):
-    if app_context:
-        admin = await app_context.utils_service.is_admin(query) #, callback_data.chat_id
-        # Wrapper: is_admin(message, chat_id=None).
-        # Check external_services.py wrapping.
-        # it just calls `is_admin(message)`.
-        # `other.aiogram_tools.is_admin` signature: (message, chat_id=None).
-        # Wrapper passes only 1 arg. I should update wrapper or call passing optional arg if supported.
-        pass
-    else:
-        admin = await is_admin(query, callback_data.chat_id)
+async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, app_context=None, skyuser: SkyUser = None):
+    admin = await skyuser.is_admin(callback_data.chat_id) if skyuser else False
 
     if not admin:
-        await query.answer("Вы не являетесь администратором в том чате.", show_alert=True)
+        text = skyuser.admin_denied_text("Вы не являетесь администратором в том чате.") if skyuser else "Вы не являетесь администратором в том чате."
+        await query.answer(text, show_alert=True)
         return
 
     with suppress(TelegramBadRequest):
@@ -579,7 +569,7 @@ async def cq_look(query: CallbackQuery):
 
 @router.callback_query(FirstMessageCallbackData.filter())
 async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot,
-                              session: Session, app_context=None):
+                              session: Session, app_context=None, skyuser: SkyUser = None):
     if query.from_user.id == callback_data.user_id:
         await query.answer("You can't vote", show_alert=True)
         return False
@@ -594,10 +584,7 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
         return False
 
     # Определяем вес голоса: 5 для администраторов, 1 для остальных
-    if app_context:
-        admin = await app_context.utils_service.is_admin(query)
-    else:
-        admin = await is_admin(query)
+    admin = await skyuser.is_admin() if skyuser else False
 
     vote_weight = 5 if admin else 1
     username_link = get_username_link(query.from_user)
