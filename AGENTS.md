@@ -1,18 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `start.py`: Entry point. Creates bot, registers middlewares/routers, starts polling.
-- `routers/`: Aiogram handlers grouped by feature (e.g., `admin_system.py`, `stellar.py`). Each module should expose `register_handlers(dp, bot)` and may set `register_handlers.priority = <int>` for load order.
-- `middlewares/`: Cross‑cutting concerns (`db`, `throttling`, `retry`, `sentry_error_handler`).
-- `db/`: SQLAlchemy models and data access, plus Firebird/Mongo helpers.
-- `other/`: Utilities (config, Stellar, caching, OpenAI, etc.). Avoid business logic in routers when possible.
+- `start.py`: Entry point. Creates bot, wires `AppContext`, registers middlewares/routers, starts polling.
+- `routers/`: Aiogram handlers grouped by feature. Keep thin, delegate to services.
+- `middlewares/`: Cross‑cutting concerns (`db`, `app_context`, `throttling`, `emoji_reaction`, etc.).
+- `services/`: Application services/use‑cases. DI container is `services/app_context.py`.
+  - `services/interfaces/`: Repository interfaces (protocols).
+  - `services/repositories/`: Adapters to `db/` repositories.
+- `shared/domain/`: Domain entities and enums (no aiogram/db imports).
+- `shared/infrastructure/database/`: SQLAlchemy models + Alembic.
+- `db/`: SQLAlchemy repositories and database helpers (legacy Firebird/Mongo logic is adapted here).
+- `other/`: Utilities and integrations (Telegram helpers, external APIs, caching, etc.).
+- `tests/`: Unit/integration tests (use fakes/mocks; see `tests/fakes.py`).
 - `scripts/`: Operational scripts (reports, exchanges, ledger checks).
 - `deploy/`: Systemd units and update scripts for production.
 - `docs/`: Design and improvement notes.
 
 ## Build, Test, and Development Commands
 - Install deps: `uv sync`
-- Configure: copy `.env_sample` to `.env` and fill required keys.
+- Configure: copy `.env.example` to `.env` and fill required keys.
 - Run bot locally: `uv run python start.py`
 - Type check: `uv run mypy .` (incrementally fix violations)
 - Lint (if installed): `uv run ruff .` (or your preferred linter)
@@ -26,7 +32,7 @@
 - Logging: use `loguru` logger; no `print()` in runtime paths.
 
 ## Testing Guidelines
-- No formal suite yet. Add `pytest` tests under `tests/` for new logic (pure utils in `other/`, DB helpers, router helpers via unit‑level functions).
+- Add `pytest` tests under `tests/` for new logic (pure utils in `other/`, DB helpers, router helpers via unit‑level functions).
 - Keep tests isolated from Telegram/DB: mock network and DB calls; use small fixtures.
 - Run locally (if added): `uv run pytest -q`.
 
@@ -42,7 +48,7 @@
 
 ## Router/Agent Instructions
 - New feature: create `routers/<feature>.py` with `register_handlers(dp, bot)`. Optionally set `register_handlers.priority` (lower loads earlier).
-- Add pure helpers to `other/` and DB access in `db/` to keep handlers small, testable, and reusable.
+- Keep handlers thin: move use‑cases to `services/`, keep integrations in `other/`, and DB access in `db/`.
 
 ## Task Intake Protocol
 - For each new task, first analyze the requirements and explicitly state which files or directories need to change.

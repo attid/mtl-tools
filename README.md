@@ -1,13 +1,24 @@
 # mtl-tools
 
-Инструменты и боты для экосистемы MTL.
+Инструменты и боты для экосистемы MTL (aiogram).
+
+## Архитектура (текущая)
+
+Проект следует принципам Clean Architecture с адаптацией под Telegram‑бота:
+
+- **Delivery**: `routers/` (handlers) и `middlewares/` (db/app_context/throttling и т.п.).
+- **Application**: `services/` — прикладные сервисы и use‑cases. Входная точка DI — `services/app_context.py`.
+- **Domain**: `shared/domain/` — сущности и статусы (например, `SpamStatus`, `AdminStatus`).
+- **Infrastructure**: `db/` (SQLAlchemy репозитории) и `shared/infrastructure/database/` (модели и Alembic).
+- **Utilities/Integrations**: `other/` — утилиты, внешние сервисы, Telegram‑хелперы.
+
+Важно: статус спама пользователя хранится в `BotUsers.user_type` и читается через `SpamStatusService`.
 
 ## Локальный запуск
 
-1. Создайте виртуальное окружение: `python -m venv .venv && source .venv/bin/activate`.
-2. Установите зависимости: `pip install -r requirements.txt`.
-3. Скопируйте `.env_sample` в `.env` и заполните обязательные значения.
-4. Запустите бота: `python start.py`.
+1. Установите зависимости: `uv sync`.
+2. Скопируйте `.env.example` в `.env` и заполните обязательные значения.
+3. Запустите бота: `uv run python start.py`.
 
 ## Запуск через Docker Compose
 
@@ -24,8 +35,10 @@
 Для запуска тестов используется `uv`:
 
 ```bash
-uv run pytest
+uv run pytest -q
 ```
+
+Подробнее — `TESTING.md`.
 
 ## Полезные команды
 

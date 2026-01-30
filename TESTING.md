@@ -1,32 +1,31 @@
 # Testing Guidelines
 
-This project enforces strict testing standards to ensure maintainability, reliability, and ease of debugging.
+This project enforces testing standards to ensure maintainability, reliability, and ease of debugging.
 
 ## Core Principles
 
-1.  **1:1 Router-Test Mapping**: Every router file in `routers/` must have a corresponding test file in `tests/routers/`. For example, `routers/start.py` -> `tests/routers/test_start.py`.
-2.  **No Patches**: The use of `unittest.mock.patch` (including `@patch`, `with patch`, etc.) is **strictly prohibited**. All dependencies must be injectable.
-3.  **Dependency Injection (DI)**: Use the `app_context` to inject dependencies (services, repositories, bots) into handlers and routers. Tests should configure mocks on the `app_context`.
-4.  **End-to-End Flow**: Tests should simulate the full flow of handling an update, from the `Dispatcher` down to the handler, without mocking internal calls within the flows (unless absolutely necessary for external boundaries).
-5.  **Full Coverage**: Every handler in a router must have at least one positive test case.
+1.  **Router coverage**: Для ключевых роутеров добавлять тесты в `tests/routers/` (минимум позитивный сценарий на хендлер).
+2.  **DI first**: Зависимости передаются через `app_context`, моки настраиваются через `tests/fakes.py` и fixtures.
+3.  **External boundaries**: Внешние вызовы (Telegram/HTTP) мокать; внутреннюю бизнес‑логику тестировать через сервисы.
+4.  **Тонкие хендлеры**: Сложную логику выносить в `services/` или `other/` и тестировать там.
 
 ## Mocking Strategy
 
 ### External Services
--   **Telegram**: Use `aiogram.client.telegram.TelegramAPIServer` and `MockBot`/`MockDispatcher` infrastructure (provided in `conftest.py`) to simulate Telegram interactions. verify outgoing requests by inspecting the `mock_server` request log.
--   **Horizon (Stellar)**: Use `MockHorizon` (provided in `conftest.py`) to simulate the Stellar network. Configure account states, offers, and transaction responses directly on the mock before running the test. **Do not mock `StellarService` methods unless testing the service itself.**
--   **Grist**: Use `MockGrist` (provided in `conftest.py`) to simulate Grist database interactions.
+-   **Telegram**: Use mock bot/dispatcher helpers from tests (see `tests/` fixtures). Проверяйте исходящие запросы через лог/коллекцию моков.
+-   **Stellar/Horizon**: Мокать сетевые вызовы и состояния (если тестируется Stellar‑часть).
+-   **HTTP/внешние API**: Использовать `AsyncMock` и явные фикстуры.
 
 ### Internal Components
--   **Repositories**: Mock repositories at the `IRepositoryFactory` level. Create mock repository objects with `AsyncMock`/`MagicMock` methods and assign them to `app_context.repository_factory.get_X_repository`.
--   **Services**: Mock internal services (e.g., `LocalizationService`, `EncryptionService`) at the `app_context` level.
+-   **Repositories**: Использовать fake‑реализации или моки через `app_context`/service adapters.
+-   **Services**: Мокать на уровне `app_context` или через `tests/fakes.py`.
 
 ## Test Structure
 
 ### Fixtures
--   `router_app_context`: The primary fixture for router tests. It provides a fully configured `AppContext` with a real `StellarService` connected to `MockHorizon`, a real `Bot` connected to `MockTelegram`, and mocked repositories/internal services.
--   `mock_horizon`: Use this to configure Stellar network state (balances, accounts, etc.).
--   `mock_telegram`: Use this to inspect messages sent by the bot.
+-   `router_app_context`: основной фикстурный `AppContext` для роутеров.
+-   `mock_telegram`: проверка исходящих сообщений/запросов.
+-   `tests/fakes.py`: базовые фейки сервисов/контекста.
 
 ### Example Test Pattern
 
@@ -56,8 +55,7 @@ async def test_cmd_balance(mock_telegram, mock_horizon, router_app_context):
 
 ## Database Tests
 
-We have migrated from a monolithic `db/requests.py` to a Repository Pattern in `db/repositories/`. 
-Tests have been added to verify the new architecture without requiring a live Postgres connection (using in-memory SQLite).
+We use `db/repositories/` + `DatabaseService` with SQLite for unit tests.
 
 ### Running Tests
 
@@ -69,17 +67,5 @@ uv run pytest tests/db/
 
 ### Test Coverage
 
-1.  **Repositories (`tests/db/test_repositories.py`)**:
-    *   **ConfigRepository**:
-        *   Saving/loading bot values (handling Strings, JSON objects, legacy formats).
-        *   Updating dictionary values.
-        *   KVStore operations.
-    *   **ChatsRepository**:
-        *   Creating and updating Chat info.
-        *   Managing Chat Members (add/remove).
-        *   Tracking joined/left users (filtering by date).
-
-2.  **Service Layer (`tests/db/test_database_service.py`)**:
-    *   Verifies that `DatabaseService` correctly delegates calls to repositories.
-    *   Ensures sessions are committed.
-    *   Mocks `SessionPool` and Repositories to isolate logic.
+1.  **Repositories (`tests/db/`)**: Config/Chats repository сценарии.
+2.  **Service Layer (`tests/db/test_database_service.py`)**: делегирование и коммиты.
