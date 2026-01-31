@@ -22,14 +22,16 @@ class ChannelLinkService:
         """
         value = self._channel_to_user.get(channel_id)
         if isinstance(value, dict):
-            return value.get("user_id")
-        return value
+            user_id = value.get("user_id")
+            return int(user_id) if isinstance(user_id, (int, str)) else None
+        return value if isinstance(value, int) else None
 
     def get_username_for_channel(self, channel_id: int) -> str | None:
         """Get the username linked to a channel (if stored)."""
         value = self._channel_to_user.get(channel_id)
         if isinstance(value, dict):
-            return value.get("username")
+            username = value.get("username")
+            return str(username) if username is not None else None
         return None
 
     def link_channel(self, channel_id: int, user_id: int, username: str | None = None) -> None:

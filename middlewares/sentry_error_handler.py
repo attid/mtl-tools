@@ -11,7 +11,7 @@ async def sentry_error_handler(event: ErrorEvent, state: FSMContext = None) -> N
     # Always log errors - fail fast principle
     logger.exception(f"Error catch: {event.exception} on update: {event.update}")
 
-    user_id = event.update.message.from_user.id if event.update.message else None
+    user_id = event.update.message.from_user.id if event.update.message and event.update.message.from_user else None
 
     if len(config.sentry_dsn) > 20:
         with push_scope() as scope:

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     coinmarketcap: SecretStr
     #mongodb_url: str
     pyro_api_id: int = 0
-    pyro_api_hash: SecretStr = ''
+    pyro_api_hash: SecretStr | None = None
     grist_token: str
     miniapps_key: str | None = None
     test_mode: bool = True
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     )
 
 
-config: Settings = Settings()
+config: Settings = Settings()  # type: ignore[call-arg]
 
 if os.getenv('ENVIRONMENT', 'test') == 'production':
     config.test_mode = False

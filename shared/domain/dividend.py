@@ -32,7 +32,7 @@ class DividendList:
     @property
     def total_amount(self) -> Decimal:
         """Calculate total distribution amount."""
-        return sum(d.amount for d in self.dividends)
+        return sum((d.amount for d in self.dividends), Decimal("0"))
 
     @property
     def holder_count(self) -> int:

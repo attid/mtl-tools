@@ -94,7 +94,7 @@ class SkyUser:
             with admin_service._lock:
                 has_cache = target_chat_id in admin_service._admins
 
-        if has_cache:
+        if has_cache and admin_service:
             result = admin_service.is_chat_admin(target_chat_id, self.user_id)
             logger.debug(
                 "skyuser.is_admin: cache result={} (user_id={}, chat_id={}, sender_chat_id={}, username={})",

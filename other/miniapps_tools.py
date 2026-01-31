@@ -136,12 +136,12 @@ class MiniAppsAPI:
         title = f"Message from {msg_info.user_from}"
 
         body_parts = [f'<p><b>Сообщение от {msg_info.user_from}:</b></p>']
-        body_parts.append(_text_to_html(msg_info.message_text))
+        body_parts.append(_text_to_html(msg_info.message_text or ""))
 
         if msg_info.reply_to_message:
             body_parts.append(f'<p>{adv_text}</p>')
             body_parts.append(f'<blockquote><b>Ответ на сообщение от {msg_info.reply_to_message.user_from}:</b><br>')
-            body_parts.append(_text_to_html(msg_info.reply_to_message.message_text))
+            body_parts.append(_text_to_html(msg_info.reply_to_message.message_text or ""))
             body_parts.append('</blockquote>')
 
         body_html = '\n'.join(body_parts)

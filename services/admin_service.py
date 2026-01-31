@@ -237,7 +237,7 @@ class AdminManagementService:
             self._admins = {k: (v.copy() if isinstance(v, (list, dict)) else v)
                            for k, v in admins_data.items()}
 
-    def load_topic_admins(self, topic_admins_data: dict[str, list[int]]) -> None:
+    def load_topic_admins(self, topic_admins_data: dict[str, list]) -> None:  # type: ignore[type-arg]
         with self._lock:
             self._topic_admins = {k: (v.copy() if isinstance(v, (list, dict)) else v)
                                  for k, v in topic_admins_data.items()}

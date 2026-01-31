@@ -40,6 +40,8 @@ def parse_timedelta(value: str) -> datetime.timedelta:
 async def parse_timedelta_from_message(
     message: Message,
 ) -> typing.Optional[datetime.timedelta]:
+    if not message.text:
+        return None
     _, *args = message.text.split()
 
     if args:  # Parse custom duration
@@ -47,7 +49,7 @@ async def parse_timedelta_from_message(
             duration = parse_timedelta(args[0])
         except TimedeltaParseError:
             await message.reply("Failed to parse duration")
-            return
+            return None
         if duration <= datetime.timedelta(seconds=30):
             return datetime.timedelta(seconds=30)
         return duration

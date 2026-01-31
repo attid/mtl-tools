@@ -15,7 +15,7 @@ class VotingService:
         self._lock = Lock()
         self._votes: dict[int, dict] = {}  # chat_id -> {msg_id: vote_data}
         self._first_vote: list[int] = []  # chat_ids with first-vote enabled
-        self._first_vote_data: dict[int, dict] = {}  # chat_id -> vote_state
+        self._first_vote_data: dict[int | str, dict[Any, Any]] = {}  # chat_id or key -> vote_state
         self._vote_weights: dict[str, dict] = {}  # address -> {user: weight, "NEED": {50: X, 75: Y, 100: Z}}
 
     # Poll votes methods

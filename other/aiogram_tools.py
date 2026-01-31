@@ -220,7 +220,8 @@ class HasRegex(Filter):
 
 class ReplyToBot(Filter):
     async def __call__(self, message: Message, bot: Bot) -> bool:
-        return message.reply_to_message and message.reply_to_message.from_user.id == bot.id
+        reply = message.reply_to_message
+        return bool(reply and reply.from_user and reply.from_user.id == bot.id)
 
 
 class ChatInOption(Filter):

@@ -124,7 +124,9 @@ async def get_debank_balance(
     try:
         response = await session_manager.get_web_request('GET', url, headers=headers, return_type='json')
         if response.status == 200:
-            return float(response.data.get('usd_value', 0.0))
+            if isinstance(response.data, dict):
+                return float(response.data.get('usd_value', 0.0))
+            return 0.0
         else:
             raise Exception(f'Ошибка запроса: Статус {response.status}')
     except Exception as e:

@@ -47,15 +47,15 @@ async def check_user_in_sp_chats(bot: Bot, need_remove: bool = False):
         # --- Logic to determine who should be REMOVED ---
         users_to_remove_ids = set()
         for member_id in member_ids:
-            user = user_map.get(member_id)
+            member_user: dict | None = user_map.get(member_id)
 
             # Rule: Kick anyone not in our user database
-            if not user:
+            if not member_user:
                 users_to_remove_ids.add(member_id)
                 continue
 
-            is_active = user.get('ACTIVE', False)
-            is_only_additional = user.get('ONLY_ADDITIONAL', False)
+            is_active = member_user.get('ACTIVE', False)
+            is_only_additional = member_user.get('ONLY_ADDITIONAL', False)
             is_chat_additional = chat.get('ADDITIONAL', False)
 
             should_be_removed = False
@@ -71,14 +71,14 @@ async def check_user_in_sp_chats(bot: Bot, need_remove: bool = False):
 
         # --- Generate alerts ---
         for user_id in users_to_add_ids:
-            user = user_map.get(user_id)
-            username = user['USERNAME'] if user else 'Unknown'
+            user_data: dict | None = user_map.get(user_id)
+            username = user_data['USERNAME'] if user_data else 'Unknown'
             alerts.append(f"Need Add User @{username} (ID: {user_id}) to chat: {chat['TITLE']}")
 
         for member_id in users_to_remove_ids:
-            user = user_map.get(member_id)
-            if user:
-                username = user['USERNAME']
+            user_data = user_map.get(member_id)
+            if user_data:
+                username = user_data['USERNAME']
             else:
                 member = next((m for m in members if m.user_id == member_id), None)
                 username = member.username if member else 'Unknown'
