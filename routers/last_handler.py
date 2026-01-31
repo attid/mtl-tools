@@ -265,7 +265,7 @@ async def notify_message(message: Message, app_context=None):
             else:
                 user_mention = f"@{username}" if username else f"{message.from_user.first_name}"
 
-            msg = await message.bot.send_message(
+            await message.bot.send_message(
                 chat_id=dest_chat,
                 message_thread_id=dest_topic,
                 text=f'User {user_mention}: \nChat: {html.escape(message.chat.title)}',

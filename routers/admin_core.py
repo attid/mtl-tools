@@ -4,7 +4,6 @@ import csv
 import io
 from contextlib import suppress
 from datetime import datetime
-from typing import Union
 
 import aiohttp
 from aiogram import Router, Bot, F
@@ -13,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ChatPermissions, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton, \
-    MessageReactionUpdated, ReactionTypeCustomEmoji, BufferedInputFile, CallbackQuery
+    MessageReactionUpdated, ReactionTypeCustomEmoji, BufferedInputFile
 from loguru import logger
 from sqlalchemy.orm import Session
 

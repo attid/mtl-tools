@@ -113,7 +113,7 @@ async def cmd_me(message: Message, bot: Bot):
                            message_thread_id=None if message.reply_to_message else message.message_thread_id)
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
 
 @update_command_info("/link", "показать ссылки на Stellar адреса из сообщения")

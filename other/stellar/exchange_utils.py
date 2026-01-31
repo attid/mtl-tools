@@ -224,12 +224,9 @@ def build_cancel_offers_xdr(
     Returns:
         Transaction XDR or None if no offers
     """
-    from .sdk_utils import decode_xdr_envelope
-
     server = Server(horizon_url=config.horizon_url)
 
     if xdr:
-        envelope = decode_xdr_envelope(xdr)
         # Get the transaction builder from existing XDR
         root_account = server.load_account(public_key)
         transaction = TransactionBuilder(

@@ -258,7 +258,7 @@ async def update_fire(session: Session):
 
     logger.info(f'cost_fire {cost_fire}')
     cost_fire = float(cost_fire.replace(',', '.')) * 0.8
-    await check_fire(cost_fire)
+    # check_fire removed (unused/undefined)
 
 
 async def update_guarantors_report():
@@ -309,11 +309,6 @@ async def update_guarantors_report():
             balances = await get_balances(address)
             eur_sum = round(float(balances.get('EURMTL', 0)))
             debt_sum = float(balances.get('EURDEBT', 0))
-            if eur_sum >= debt_sum:
-                dt = ''
-            else:
-                dt = date_list[idx] if len(date_list[idx]) > 3 else now.strftime('%d.%m.%Y')
-
         dt_google = ''  # if dt == '' else (
         # datetime.strptime(dt, '%d.%m.%Y') - datetime(1899, 12, 30)).days
         update_list.append([dt_google, eur_sum, debt_sum])
@@ -528,7 +523,7 @@ async def update_airdrop():
                     address = await resolve_stellar_address_async(fed_address_list[idx], client=client)
                     # print(address.account_id)
                     await wks.update(range_name=f'D{idx + 1}', values=[[address.account_id]])
-                except:
+                except Exception:
                     logger.info('Resolving error', address_list[idx], fed_address_list[idx])
         else:  # if federal more that address
             if (len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count('*') > 0):
@@ -571,7 +566,7 @@ async def update_airdrop():
 
 
 async def update_donate_report(session: Session):
-    agc = await agcm.authorize()
+    await agcm.authorize()
 
 
 #    # Open a sheet from a spreadsheet in one go

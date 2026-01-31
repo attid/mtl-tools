@@ -62,7 +62,7 @@ async def cmd_comment(message: Message, app_context: AppContext):
         msg = message.reply_to_message.caption
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
 
     msg = await app_context.ai_service.talk_get_comment(message.chat.id, msg)
@@ -81,7 +81,7 @@ async def cmd_last_check_reply_to_bot(message: Message, app_context: AppContext)
 
         try:
             msg = await message.reply(msg_text, parse_mode=ParseMode.MARKDOWN)
-        except:
+        except Exception:
             msg = await message.reply(msg_text)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
@@ -282,7 +282,7 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_con
         msg = '=( connection error, retry again )='
     try:
         msg = await message.reply(msg, parse_mode=ParseMode.MARKDOWN)
-    except:
+    except Exception:
         msg = await message.reply(msg)
     if message.chat.type != ChatType.PRIVATE:
         # на случай вызова из /skynet

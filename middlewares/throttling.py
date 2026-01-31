@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import *
+from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 import redis.asyncio.client

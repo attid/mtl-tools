@@ -29,7 +29,7 @@ async def test_start_command(mock_telegram, router_app_context):
     
     # 3. Verify Output
     # Check that the bot sent the correct message via mock_server
-    req = next((r for r in mock_telegram.get_requests() if r["method"] == "sendMessage" and "/start" not in r["data"].get("text", "")), None)
+    next((r for r in mock_telegram.get_requests() if r["method"] == "sendMessage" and "/start" not in r["data"].get("text", "")), None)
     # Note: we filter out the command itself if it was somehow echoed, but mainly we look for the response
     
     # Actually, we should look for the last sendMessage

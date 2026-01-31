@@ -91,7 +91,7 @@ async def load_from_redis(chat_id):
 
     # Удаляем старые сообщения, если количество токенов превышает максимальное значение
     while total_tokens > MAX_TOKENS and messages:
-        removed_message = messages.pop(0)
+        messages.pop(0)
         total_tokens = num_tokens_from_messages([msg[1] for msg in messages], model=model)
         logger.info(f"Total tokens after removing: {total_tokens}")
 

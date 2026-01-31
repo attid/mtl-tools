@@ -146,8 +146,7 @@ async def gs_close_support(url):
     data = await ws.find(url, in_column=5)
     if data:
         # print(data)
-        record = await ws.row_values(data.row)
-        user_id = record[3]
+        await ws.row_values(data.row)
 
 
 async def gs_find_user(user_id):

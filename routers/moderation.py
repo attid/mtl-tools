@@ -37,7 +37,6 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
     with suppress(TelegramBadRequest):
         if message.reply_to_message:
             user_id = message.reply_to_message.from_user.id
-            username = message.reply_to_message.from_user.username
 
             await app_context.utils_service.sleep_and_delete(message.reply_to_message, 5)
 
@@ -49,7 +48,6 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
         elif len(message.text.split()) > 1 and skynet_admin:
             try:
                 user_id = app_context.moderation_service.get_user_id(session, message.text.split()[1])
-                username = None
             except ValueError as e:
                 await message.reply(str(e))
                 return

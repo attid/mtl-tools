@@ -1,6 +1,7 @@
 import pytest
 import os
 import hashlib
+from pathlib import Path
 from aiogram import types
 from routers.admin_system import router as admin_router
 from tests.conftest import RouterTestMiddleware
@@ -1758,8 +1759,7 @@ async def test_log_file_empty(mock_telegram, router_app_context):
     dp.include_router(admin_router)
 
     # Create empty log file
-    with open("skynet.log", "w") as f:
-        pass  # Empty file
+    Path("skynet.log").touch()
 
     try:
         update = types.Update(

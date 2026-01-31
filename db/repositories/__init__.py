@@ -1,7 +1,10 @@
-from .base import BaseRepository
-from .chats import ChatsRepository, ChatDTO, ChatUserDTO
-from .config import ConfigRepository
-from .finance import FinanceRepository
-from .messages import MessageRepository
-from .payments import PaymentsRepository
-from .wallets import WalletsRepository, WalletDTO
+from .base import BaseRepository as BaseRepository
+from .chats import ChatsRepository as ChatsRepository
+from .chats import ChatDTO as ChatDTO
+from .chats import ChatUserDTO as ChatUserDTO
+from .config import ConfigRepository as ConfigRepository
+from .finance import FinanceRepository as FinanceRepository
+from .messages import MessageRepository as MessageRepository
+from .payments import PaymentsRepository as PaymentsRepository
+from .wallets import WalletsRepository as WalletsRepository
+from .wallets import WalletDTO as WalletDTO

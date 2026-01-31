@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock
 from aiogram import types
 from routers.admin_core import router as admin_router, message_reaction as message_reaction_handler
 from tests.conftest import RouterTestMiddleware
@@ -2209,8 +2210,6 @@ async def test_mute_command_reply_to_forum_topic(mock_telegram, router_app_conte
     assert "reply message" in req["data"]["text"]
 
 
-# Import AsyncMock for tests that need it
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
@@ -2476,8 +2475,6 @@ async def test_get_users_csv_user_check_generic_error(mock_telegram, router_app_
     dp.include_router(admin_router)
 
     call_count = [0]
-    original_get_chat_member = router_app_context.bot.get_chat_member
-
     async def mock_get_chat_member(chat_id, user_id):
         call_count[0] += 1
         if call_count[0] == 1:

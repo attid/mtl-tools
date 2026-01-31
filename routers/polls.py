@@ -144,7 +144,6 @@ async def cmd_poll_check(message: Message, session: Session, app_context: AppCon
     if not app_context or not app_context.poll_service or not app_context.voting_service:
         raise ValueError("app_context with poll_service and voting_service required")
     chat_id = message.chat.id
-    message_id = None
 
     if message.reply_to_message:
         # Original logic used negated ID in mongo

@@ -529,7 +529,7 @@ async def cmd_update_bim1(message: Message, bot: Bot, app_context=None, skyuser:
             try:
                 chat_member = await bot.get_chat_member(chat_id=MTLChats.ShareholderGroup, user_id=int(record[3]))
                 new_data = chat_member.is_member
-            except:
+            except Exception:
                 new_data = False
         update_list.append([new_data])
 
