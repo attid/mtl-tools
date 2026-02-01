@@ -18,6 +18,7 @@ class BotStateService:
         self._reboot: bool = False
         self._need_decode: list[int] = []
         self._last_pong_response: Optional[datetime] = None
+        self._last_ping_sent: Optional[datetime] = None
 
     # Sync state methods
     def get_sync_state(self, key: str, default: Any = None) -> Any:
@@ -76,3 +77,12 @@ class BotStateService:
     def set_last_pong(self, dt: Optional[datetime]) -> None:
         with self._lock:
             self._last_pong_response = dt
+
+    # Ping tracking (for health check)
+    def get_last_ping_sent(self) -> Optional[datetime]:
+        with self._lock:
+            return self._last_ping_sent
+
+    def update_last_ping_sent(self) -> None:
+        with self._lock:
+            self._last_ping_sent = datetime.now()

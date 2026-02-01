@@ -36,6 +36,7 @@ from other.constants import MTLChats
 from other.pyro_tools import pyro_start
 from other.support_tools import work_with_support
 from services.command_registry_service import get_pending_commands
+from services.health_server import start_health_server
 
 # Task list for background asyncio tasks - was previously in global_data
 global_tasks = []
@@ -208,6 +209,9 @@ async def main():
     app_context_module.app_context = app_context_middleware.app_context
 
     global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot, app_context_middleware.app_context)))
+
+    # Start health server for Docker healthcheck
+    _health_runner = await start_health_server(app_context_middleware.app_context.bot_state_service)
 
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)

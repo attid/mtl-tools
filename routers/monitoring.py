@@ -34,6 +34,7 @@ async def check_ping_responses(bot: Bot, app_context: AppContext):
                 chat_id=MTLChats.BotsChanel,
                 text="#mmwb #skynet command=ping"
             )
+            app_context.bot_state_service.update_last_ping_sent()
             logger.debug("Sent ping message to channel")
         except Exception as e:
             logger.error(f"Failed to send ping message: {e}")
