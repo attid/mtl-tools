@@ -373,7 +373,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Sync,
                                                           json.dumps(channel_sync))
 
-            await message.reply('Синхронизация восстановлена')
+            await message.reply('Синхронизация восстановлена, сообщение не обновленно, внесите любую правку в оригинал.')
 
     except Exception as e:
         logger.error(f"Error in cmd_resync_post: {e}")

@@ -1,7 +1,8 @@
 from datetime import datetime
 import json
 import asyncio
-from typing import cast
+import re
+from typing import Any, Optional, cast
 
 import numpy as np
 import requests
@@ -30,6 +31,61 @@ from loguru import logger
 from other.loguru_tools import safe_catch_async
 
 # https://docs.gspread.org/en/latest/
+
+def parse_sheet_number(value: object) -> Optional[float]:
+    """Parse a numeric value from a Google Sheets cell."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # Normalize common minus signs and negatives in parentheses.
+    text = text.replace('\u2212', '-').replace('\u2014', '-').replace('\u2013', '-')
+    if text.startswith('(') and text.endswith(')'):
+        text = f"-{text[1:-1]}"
+
+    # Remove whitespace (including non-breaking/skinny spaces) and non-numeric symbols.
+    text = text.replace('\u00a0', '').replace('\u2009', '').replace('\u202f', '').replace(' ', '')
+    text = re.sub(r'[^0-9,.\-+]', '', text)
+
+    if ',' in text and '.' in text:
+        text = text.replace(',', '')
+    else:
+        text = text.replace(',', '.')
+
+    if not re.fullmatch(r'[+-]?\d+(?:\.\d+)?', text):
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+@safe_catch_async
+async def check_eurmtl_b13_negative(session: Session, ss: Optional[Any] = None) -> Optional[float]:
+    """Check eurmtl_report!B13 for negative values and notify if needed."""
+    if ss is None:
+        agc = await agcm.authorize()
+        ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
+
+    wks_eurmtl = await ss.worksheet("eurmtl_report")
+    cell_b13 = await wks_eurmtl.acell('B13')
+    b13_value = parse_sheet_number(cell_b13.value)
+    if b13_value is None:
+        logger.warning("B13 value не удалось распарсить: {raw!r}", raw=cell_b13.value)
+        return None
+
+    if b13_value < 0:
+        MessageRepository(session).add_message(
+            MTLChats.SignGroup,
+            f"⚠️ Сумма отрицательная: {b13_value}",
+            topic_id=59548
+        )
+    return b13_value
+
 
 @safe_catch_async
 async def update_main_report(session: Session):
@@ -121,19 +177,7 @@ async def update_main_report(session: Session):
     await update_main_report_additional(session=session)
 
     # Проверка B13 на отрицательное значение
-    wks_eurmtl = await ss.worksheet("eurmtl_report")
-    cell_b13 = await wks_eurmtl.acell('B13')
-    if cell_b13.value:
-        try:
-            b13_value = float(str(cell_b13.value).replace(',', '.'))
-            if b13_value < 0:
-                MessageRepository(session).add_message(
-                    MTLChats.SignGroup,
-                    f"⚠️ Сумма отрицательная: {b13_value}",
-                    topic_id=59548
-                )
-        except (ValueError, TypeError):
-            pass
+    await check_eurmtl_b13_negative(session=session, ss=ss)
 
     logger.info(f'Main report all done {datetime.now()}')
 
@@ -756,6 +800,7 @@ async def lite_report(session_pool):
         await update_top_holders_report(session)
         await asyncio.sleep(10)
         await update_mmwb_report(session)
+        session.commit()
         # await update_wallet_report(session)
         # await update_wallet_report2(session)
 
@@ -765,7 +810,7 @@ async def test_report():
 
     logger.add("logs/update_report.log", rotation="1 MB")
 
-    await update_top_holders_report(SessionPool())
+    await check_eurmtl_b13_negative(SessionPool())
 
 
 if __name__ == "__main__":
