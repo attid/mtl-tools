@@ -5,10 +5,10 @@ from typing import Optional
 from decimal import Decimal, ROUND_DOWN
 from dataclasses import dataclass
 
-import requests
 from stellar_sdk import Asset
 
 from other.config_reader import config
+from other.web_tools import http_session_manager
 from .constants import MTLAddresses, MTLAssets
 from .balance_utils import stellar_get_holders
 
@@ -61,7 +61,12 @@ async def get_bim_list_from_gsheet(agcm) -> list[list]:
     for address in addresses:
         balances = {}
         try:
-            rq = requests.get(f'{config.horizon_url}/accounts/{address}').json()
+            response = await http_session_manager.get_web_request(
+                'GET',
+                url=f'{config.horizon_url}/accounts/{address}',
+                return_type='json'
+            )
+            rq = response.data if isinstance(response.data, dict) else {}
             if rq.get("balances"):
                 for balance in rq["balances"]:
                     if balance["asset_type"] == 'credit_alphanum12':

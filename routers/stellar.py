@@ -20,7 +20,7 @@ router = Router()
 @update_command_info("/fee", "показать комиссию в стелларе")
 @router.message(Command(commands=["fee"]))
 async def cmd_fee(message: Message, app_context=None):
-    fee = app_context.stellar_service.check_fee()
+    fee = await app_context.stellar_service.check_fee()
     await message.answer("Комиссия (мин и мах) " + fee)
 
 
@@ -68,7 +68,7 @@ async def cmd_do_council(message: Message, session: Session, app_context=None, s
     balance = await app_context.stellar_service.get_balances(MTLAddresses.public_council)
     eurmtl_balance = float(balance.get('EURMTL', 0) or 0)
     if eurmtl_balance > 5:
-        swap_xdr = app_context.stellar_service.build_swap_xdr(
+        swap_xdr = await app_context.stellar_service.build_swap_xdr(
             source_address=MTLAddresses.public_council,
             send_asset=MTLAssets.eurmtl_asset,
             send_amount=float2str(eurmtl_balance),

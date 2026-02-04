@@ -1,7 +1,6 @@
 # other/stellar/display_commands.py
 """Display and show commands for Stellar data presentation."""
 
-import requests
 from sqlalchemy.orm import Session
 
 from other.config_reader import config
@@ -10,6 +9,7 @@ from other.utils import float2str
 from other.grist_tools import MTLGrist, grist_manager
 from other.gspread_tools import agcm
 from db.repositories import FinanceRepository
+from other.web_tools import http_session_manager
 from .constants import MTLAddresses
 from .balance_utils import get_balances, stellar_get_account, stellar_get_all_mtl_holders
 from .xdr_utils import decode_data_value
@@ -46,7 +46,12 @@ async def get_bim_list() -> list:
     for address in addresses:
         # get balance
         balances = {}
-        rq = requests.get(f'{config.horizon_url}/accounts/{address}').json()
+        response = await http_session_manager.get_web_request(
+            'GET',
+            url=f'{config.horizon_url}/accounts/{address}',
+            return_type='json'
+        )
+        rq = response.data if isinstance(response.data, dict) else {}
         if rq.get("balances"):
             for balance in rq["balances"]:
                 if balance["asset_type"] == 'credit_alphanum12':
@@ -77,8 +82,13 @@ async def cmd_show_bim(session: Session) -> str:
     result += f'\nЧерез систему за всю историю выплачено {round(total_sum, 2)} EURMTL'
 
     balances = {}
-    rq = requests.get(f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}').json()
-    for balance in rq["balances"]:
+    response = await http_session_manager.get_web_request(
+        'GET',
+        url=f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}',
+        return_type='json'
+    )
+    rq = response.data if isinstance(response.data, dict) else {}
+    for balance in rq.get("balances", []):
         if balance["asset_type"] == 'credit_alphanum12':
             balances[balance["asset_code"]] = balance["balance"]
 
@@ -192,7 +202,12 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
         # get all donations
         result_data = await cmd_show_donates()
     else:
-        account_json = requests.get(f'{config.horizon_url}/accounts/{account_id}').json()
+        response = await http_session_manager.get_web_request(
+            'GET',
+            url=f'{config.horizon_url}/accounts/{account_id}',
+            return_type='json'
+        )
+        account_json = response.data if isinstance(response.data, dict) else {}
         if "data" in account_json:
             data = account_json["data"]
             for data_name in list(data):

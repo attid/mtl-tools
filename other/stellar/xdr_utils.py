@@ -8,12 +8,13 @@ from loguru import logger
 from stellar_sdk import (
     Account,
     Network,
-    Server,
     TextMemo,
     TransactionBuilder,
     TransactionEnvelope,
     FeeBumpTransactionEnvelope,
 )
+from stellar_sdk.client.aiohttp_client import AiohttpClient
+from stellar_sdk.server_async import ServerAsync
 
 from other.config_reader import config
 from other.web_tools import get_eurmtl_xdr
@@ -339,15 +340,19 @@ async def decode_xdr(
         return []
 
 
-def cmd_check_fee() -> str:
+async def cmd_check_fee() -> str:
     """
     Get current network fee range.
 
     Returns:
         String with fee range like "100-500"
     """
-    fee = Server(horizon_url=config.horizon_url).fee_stats().call()["fee_charged"]
-    return fee['min'] + '-' + fee['max']
+    async with ServerAsync(
+        horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        fee = await server.fee_stats().call()
+    fee_charged = fee["fee_charged"]
+    return fee_charged['min'] + '-' + fee_charged['max']
 
 
 def stellar_get_transaction_builder(xdr: str) -> TransactionBuilder:

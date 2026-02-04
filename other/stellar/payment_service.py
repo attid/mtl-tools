@@ -6,7 +6,6 @@ from typing import Optional
 from stellar_sdk import (
     Asset,
     Network,
-    Server,
     TransactionBuilder,
     TransactionEnvelope,
 )
@@ -80,7 +79,7 @@ async def stellar_async_submit(xdr: str) -> dict:
         return await server.submit_transaction(transaction)
 
 
-def stellar_sync_submit(xdr: str) -> dict:
+async def stellar_sync_submit(xdr: str) -> dict:
     """
     Submit signed XDR transaction synchronously.
 
@@ -90,15 +89,17 @@ def stellar_sync_submit(xdr: str) -> dict:
     Returns:
         Submission response dict
     """
-    with Server(horizon_url=config.horizon_url) as server:
+    async with ServerAsync(
+        horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
         transaction = TransactionEnvelope.from_xdr(
             xdr,
             network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE
         )
-        return server.submit_transaction(transaction)
+        return await server.submit_transaction(transaction)
 
 
-def build_batch_payment_xdr(
+async def build_batch_payment_xdr(
     source_address: str,
     payments: list[dict],
     memo: Optional[str] = None,
@@ -114,8 +115,10 @@ def build_batch_payment_xdr(
     Returns:
         Unsigned transaction XDR
     """
-    with Server(horizon_url=config.horizon_url) as server:
-        source_account = server.load_account(source_address)
+    async with ServerAsync(
+        horizon_url=config.horizon_url, client=AiohttpClient()
+    ) as server:
+        source_account = await server.load_account(source_address)
 
     builder = TransactionBuilder(
         source_account=source_account,

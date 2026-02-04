@@ -5,12 +5,12 @@ import math
 from copy import deepcopy
 from datetime import datetime, timedelta
 
-import requests
 from loguru import logger
 from stellar_sdk import Account, TransactionBuilder
 
 from .sdk_utils import load_account_async, get_network_passphrase, get_server, get_server_async
 from other.grist_tools import MTLGrist, grist_manager
+from other.web_tools import http_session_manager
 from other.mytypes import MyShareHolder
 
 from .constants import BASE_FEE, MTLAddresses, MTLAssets
@@ -18,14 +18,21 @@ from .balance_utils import stellar_get_account, stellar_get_all_mtl_holders, ste
 from .xdr_utils import decode_data_value
 
 
-def cmd_get_blacklist() -> dict:
+async def cmd_get_blacklist() -> dict:
     """
     Fetch the MTL blacklist from GitHub.
 
     Returns:
         Dictionary of blacklisted addresses
     """
-    return requests.get('https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json').json()
+    response = await http_session_manager.get_web_request(
+        'GET',
+        url='https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json',
+        return_type='json'
+    )
+    if isinstance(response.data, dict):
+        return response.data
+    raise ValueError('Invalid blacklist response format')
 
 
 def check_mtla_delegate(account: str, result: dict, delegated_list: list = None):
@@ -221,7 +228,7 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
     delegate_list.clear()
 
     # Delete blacklist user
-    bl = cmd_get_blacklist()
+    bl = await cmd_get_blacklist()
     # Process blacklist for shareholder_list
     for shareholder in shareholder_list:
         if bl.get(shareholder.account_id):

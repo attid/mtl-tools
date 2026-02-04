@@ -63,6 +63,31 @@ def get_last_digit_of_sum(number):
     return digits_sum % 10
 
 
+def build_ban_message(user, chat, reason: str, actor=None) -> str:
+    username = f"@{user.username}" if user.username else "—"
+    full_name = user.full_name or "—"
+    user_line = f"{user.mention_html()} was banned (id={user.id}, username={username}, name={full_name})"
+
+    chat_username = f"@{chat.username}" if chat.username else "—"
+    chat_title = chat.title or "—"
+    chat_line = f"Чат: {get_chat_link(chat)} (id={chat.id}, username={chat_username}, title={chat_title})"
+
+    parts = [
+        user_line,
+        chat_line,
+        f"Причина: {reason}",
+    ]
+
+    if actor and actor.id != user.id:
+        actor_username = f"@{actor.username}" if actor.username else "—"
+        actor_name = actor.full_name or "—"
+        parts.append(
+            f"Кем: {actor.mention_html()} (id={actor.id}, username={actor_username}, name={actor_name})"
+        )
+
+    return "\n".join(parts)
+
+
 emoji_pairs = [
     ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫️", "⚪️", "🟤"],  # Круги
     ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "⬛️", "⬜️", "🟫"]  # Квадраты
@@ -180,7 +205,7 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context=None
         return False
 
     ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, 1)
-    app_context.stellar_service.stop_all_exchange()
+    await app_context.stellar_service.stop_all_exchange()
 
     await message.reply('Was stop')
 
@@ -210,10 +235,14 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
 
     if is_spam1:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
+        reason = f'<a href="https://cas.chat/query?u={new_user_id}">CAS ban</a>'
         await bot.send_message(MTLChats.SpamGroup,
-                               f'{event.new_chat_member.user.mention_html()} '
-                               f'был забанен в чате {get_chat_link(event.chat)}'
-                               f'Reason: <a href="https://cas.chat/query?u={new_user_id}">CAS ban</a>',
+                               build_ban_message(
+                                   event.new_chat_member.user,
+                                   event.chat,
+                                   reason,
+                                   actor=event.from_user
+                               ),
                                disable_web_page_preview=True)
         return
 
@@ -221,19 +250,27 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
 
     if is_spam2:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
+        reason = f'<a href="https://lols.bot/?u={new_user_id}">LOLS base</a>'
         await bot.send_message(MTLChats.SpamGroup,
-                               f'{event.new_chat_member.user.mention_html()} '
-                               f'был забанен в чате {get_chat_link(event.chat)}'
-                               f'Reason: <a href="https://lols.bot/?u={new_user_id}">LOLS base</a>',
+                               build_ban_message(
+                                   event.new_chat_member.user,
+                                   event.chat,
+                                   reason,
+                                   actor=event.from_user
+                               ),
                                disable_web_page_preview=True)
         return
 
     if event.new_chat_member.user.full_name in bad_names:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
+        reason = f'за использование запрещенного никнейма: {event.new_chat_member.user.full_name}'
         await bot.send_message(MTLChats.SpamGroup,
-                               f'{event.new_chat_member.user.mention_html()} '
-                               f'был забанен в чате {get_chat_link(event.chat)}'
-                               f' за использование запрещенного никнейма')
+                               build_ban_message(
+                                   event.new_chat_member.user,
+                                   event.chat,
+                                   reason,
+                                   actor=event.from_user
+                               ))
         return
 
     required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
@@ -262,7 +299,14 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                                                  chat_id=chat_id).pack())
         ]])
         # await bot.send_message(chat_id, f'{username} was banned', reply_markup=kb_unban)
-        await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
+        reason = "SpamStatus.BAD (db)"
+        await bot.send_message(MTLChats.SpamGroup,
+                               build_ban_message(
+                                   event.new_chat_member.user,
+                                   event.chat,
+                                   reason,
+                                   actor=event.from_user
+                               ),
                                reply_markup=kb_unban)
 
     welcome_msg = app_context.config_service.get_welcome_message(chat_id)
@@ -351,13 +395,19 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot,
                 return
 
             add_bot_users(session, event.old_chat_member.user.id, None, 2)
-            username = get_username_link(event.new_chat_member.user)
             kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text='unban',
                                      callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
                                                                      chat_id=chat_id).pack())
             ]])
-            await bot.send_message(MTLChats.SpamGroup, f'{username} was banned in {get_chat_link(event.chat)}',
+            reason = "Kicked by admin"
+            await bot.send_message(MTLChats.SpamGroup,
+                                   build_ban_message(
+                                       event.new_chat_member.user,
+                                       event.chat,
+                                       reason,
+                                       actor=event.from_user
+                                   ),
                                    reply_markup=kb_unban)
 
 

@@ -735,18 +735,18 @@ class FakeMtlService:
 
 class FakeStellarService:
     def __init__(self):
-        self.check_fee = FakeSyncMethod(return_value="")
+        self.check_fee = FakeAsyncMethod(return_value="")
         self.decode_xdr = FakeAsyncMethod(return_value=[])
         self.show_bim = FakeAsyncMethod(return_value="")
         self.get_balances = FakeAsyncMethod(return_value={})
         self.send_payment_async = FakeAsyncMethod(return_value={})
         self.sign = FakeSyncMethod(return_value="")
-        self.build_swap_xdr = FakeSyncMethod(return_value="")
+        self.build_swap_xdr = FakeAsyncMethod(return_value="")
         self.async_submit = FakeAsyncMethod(return_value=None)
         self.find_public_key = FakeSyncMethod(return_value=None)
         self.check_mtlap = FakeAsyncMethod(return_value="")
         self.get_mtlap_votes = FakeAsyncMethod(return_value={})
-        self.stop_all_exchange = FakeSyncMethod(return_value=None)
+        self.stop_all_exchange = FakeAsyncMethod(return_value=None)
         self.address_id_to_username = FakeAsyncMethod(return_value="@user")
         self.check_url_xdr = FakeAsyncMethod(return_value=["Decoded XDR info"])
         self.get_cash_balance = FakeAsyncMethod(return_value="Balance: 100 EURMTL")

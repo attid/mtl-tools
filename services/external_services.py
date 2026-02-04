@@ -71,9 +71,9 @@ class StellarService:
     async def send_payment_async(self, source_address, destination, asset, amount):
         return await send_payment_async(source_address, destination, asset, amount)
 
-    def check_fee(self):
+    async def check_fee(self):
         from other.stellar import cmd_check_fee
-        return cmd_check_fee()
+        return await cmd_check_fee()
 
     async def check_url_xdr(self, url, full_data=False):
         from other.stellar import check_url_xdr
@@ -167,9 +167,9 @@ class StellarService:
         from other.stellar import stellar_sign
         return stellar_sign(xdr)
 
-    def build_swap_xdr(self, source_address, send_asset, send_amount, receive_asset, receive_amount):
+    async def build_swap_xdr(self, source_address, send_asset, send_amount, receive_asset, receive_amount):
         from other.stellar import build_swap_xdr
-        return build_swap_xdr(
+        return await build_swap_xdr(
             source_address=source_address,
             send_asset=send_asset,
             send_amount=send_amount,
@@ -181,9 +181,9 @@ class StellarService:
         from other.stellar import cmd_calc_usdm_daily
         return await cmd_calc_usdm_daily(session, list_id)
         
-    def stop_all_exchange(self):
+    async def stop_all_exchange(self):
         from other.stellar import stellar_stop_all_exchange
-        return stellar_stop_all_exchange()
+        return await stellar_stop_all_exchange()
 
     async def get_mtlap_votes(self):
         from other.stellar import get_mtlap_votes
@@ -373,7 +373,7 @@ class TalkService:
         from other.stellar import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
         if message.reply_to_message and message.reply_to_message.forward_from_chat:
-            alarm_list = cmd_alarm_url(extract_url(message.reply_to_message.text))
+            alarm_list = await cmd_alarm_url(extract_url(message.reply_to_message.text))
             msg = alarm_list + '\nСмотрите топик / Look at the topic message'
             await message.reply(text=msg)
             if alarm_list.find('@') != -1:

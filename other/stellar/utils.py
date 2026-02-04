@@ -3,13 +3,13 @@
 
 import re
 
-import requests
 from aiogram import Bot
 from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.repositories import ChatsRepository
+from other.web_tools import http_session_manager
 
 
 def cleanhtml(raw_html: str) -> str:
@@ -31,7 +31,7 @@ def cleanhtml(raw_html: str) -> str:
     return cleantext
 
 
-def cmd_alarm_url(url: str) -> str:
+async def cmd_alarm_url(url: str) -> str:
     """
     Parse alarm content from web page.
 
@@ -44,7 +44,8 @@ def cmd_alarm_url(url: str) -> str:
     Returns:
         String with users who need to sign or message if already published
     """
-    rq = requests.get(url).text
+    response = await http_session_manager.get_web_request('GET', url=url)
+    rq = response.data if isinstance(response.data, str) else str(response.data)
     if rq.find('<h4 class="published">') > -1:
         return 'Нечего напоминать, транзакция отправлена.'
     rq = rq[rq.find('<div class="col-10 ignorants-nicks">'):]
