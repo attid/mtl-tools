@@ -100,6 +100,12 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
 async def on_shutdown(bot: Bot):
     with suppress(TelegramBadRequest):
         await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot stopped')
+
+    # Stop stellar notification service
+    import services.app_context as app_context_module
+    if app_context_module.app_context and app_context_module.app_context.stellar_notification_service:
+        await app_context_module.app_context.stellar_notification_service.stop()
+
     for task in global_tasks:
         task.cancel()
 
@@ -212,6 +218,17 @@ async def main():
 
     # Start health server for Docker healthcheck
     _health_runner = await start_health_server(app_context_middleware.app_context.bot_state_service)
+
+    # Initialize and start Stellar notification service
+    app_context_middleware.app_context.init_stellar_notification_service(bot, db_pool)
+    stellar_service = app_context_middleware.app_context.stellar_notification_service
+    if stellar_service:
+        await stellar_service.start_server()
+        if not config.test_mode:
+            # Initial sync of subscriptions
+            global_tasks.append(asyncio.create_task(stellar_service.sync_subscriptions()))
+            # Periodic sync task
+            global_tasks.append(asyncio.create_task(stellar_service.periodic_sync_task(interval_hours=1)))
 
     # Загрузка и регистрация роутеров
     await load_routers(dp, bot)

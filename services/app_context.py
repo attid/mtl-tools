@@ -13,6 +13,7 @@ from services.command_registry_service import CommandRegistryService
 from services.database_service import DatabaseService
 from services.repositories.chats_repo_adapter import ChatsRepositoryAdapter
 from services.channel_link_service import ChannelLinkService
+from services.stellar_notification_service import StellarNotificationService
 
 
 class AppContext:
@@ -42,6 +43,7 @@ class AppContext:
         self.command_registry = None
         self.db_service = None
         self.channel_link_service = None
+        self.stellar_notification_service = None
 
     def check_user(self, user_id: int):
         """Check user status for antispam. Uses spam_status_service cache."""
@@ -80,8 +82,19 @@ class AppContext:
         ctx.db_service = DatabaseService()
         ctx.spam_status_service = SpamStatusService(ChatsRepositoryAdapter(ctx.db_service.session_pool))
         ctx.channel_link_service = ChannelLinkService()
+        # stellar_notification_service is initialized later in start.py
+        # when session_pool is available
 
         return ctx
+
+    def init_stellar_notification_service(self, bot, session_pool):
+        """Initialize stellar notification service with bot and session pool.
+
+        Called from start.py after session_pool is created.
+        """
+        from other.config_reader import config
+        if config.notifier_url:
+            self.stellar_notification_service = StellarNotificationService(bot, session_pool)
 
 
 # Singleton instance for backwards compatibility

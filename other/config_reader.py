@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     miniapps_key: str | None = None
     test_mode: bool = True
 
+    # Stellar Notifier webhook settings
+    notifier_url: str | None = None  # http://operations-notifier:8000
+    webhook_public_url: str | None = None  # http://skynet_bot:8081/webhook
+    webhook_port: int = 8081
+    notifier_auth_token: str | None = None  # Bearer token for notifier API
+
     model_config = SettingsConfigDict(
         env_file=dotenv_path,
         env_file_encoding='utf-8',
