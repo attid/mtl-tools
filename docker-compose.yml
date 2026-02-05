@@ -10,6 +10,9 @@ services:
     environment:
       POSTGRES_URL: postgresql://bot:bot_password@postgres:5432/mtldb
       REDIS_URL: redis://redis:6379/4
+      NOTIFIER_URL: http://operations-notifier:8000
+      WEBHOOK_PUBLIC_URL: http://bot:8081/webhook
+      WEBHOOK_PORT: "8081"
     depends_on:
       migrations:
         condition: service_completed_successfully
