@@ -114,11 +114,17 @@ async def delete_last_redis(chat_id):
 async def talk(chat_id, msg, gpt_maxi=False, googleit=False):
     await save_to_redis(chat_id, msg)
     if gpt_maxi:
-        msg = f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n\n{msg}"
+        msg = (f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
+               f"Для форматирования используй ТОЛЬКО Telegram Markdown: "
+               f"*жирный*, _курсив_, `код`, ```блок кода```. "
+               f"НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку.\n\n{msg}")
         msg = await talk_open_ai_async(msg=msg, gpt_maxi=True, googleit=googleit)
     else:
         msg_data = await load_from_redis(chat_id)
-        msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде."})
+        msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
+            "Для форматирования используй ТОЛЬКО Telegram Markdown:\n"
+            "*жирный*, _курсив_, `код`, ```блок кода```\n"
+            "НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку."})
         msg = await talk_open_ai_async(msg_data=msg_data, googleit=googleit)
     if msg:
         await save_to_redis(chat_id, msg, is_answer=True)

@@ -1,5 +1,6 @@
 from aiogram import F, Bot, Router
 from aiogram.enums import ChatType, ParseMode, ChatAction
+from aiogram.utils.text_decorations import html_decoration
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import (Message, InlineKeyboardMarkup, InlineKeyboardButton, URLInputFile)
@@ -282,8 +283,11 @@ async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_con
         msg = '=( connection error, retry again )='
     try:
         msg = await message.reply(msg, parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        msg = await message.reply(msg)
+    except TelegramBadRequest:
+        try:
+            msg = await message.reply(html_decoration.quote(msg), parse_mode=ParseMode.HTML)
+        except TelegramBadRequest:
+            msg = await message.reply(html_decoration.quote(msg))
     if message.chat.type != ChatType.PRIVATE:
         # на случай вызова из /skynet
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
