@@ -104,6 +104,7 @@ class StellarNotificationService:
             except json.JSONDecodeError:
                 return web.Response(text="Invalid JSON", status=400)
 
+            logger.info(f"Webhook received: {json.dumps(payload)[:200]}")
             await self.process_notification(payload)
             return web.Response(text="OK")
 
@@ -123,13 +124,14 @@ class StellarNotificationService:
         op_info = payload.get("operation", {})
         subscription_id = payload.get("subscription")
 
-        # Deduplicate by operation ID
+        # Deduplicate by (operation_id, subscription_id)
         stellar_op_id = op_info.get("id")
-        if stellar_op_id:
-            if stellar_op_id in self.notified_operations:
-                logger.debug(f"Skipping duplicate operation {stellar_op_id}")
+        dedup_key = (stellar_op_id, subscription_id) if stellar_op_id else None
+        if dedup_key:
+            if dedup_key in self.notified_operations:
+                logger.debug(f"Skipping duplicate operation {stellar_op_id} for subscription {subscription_id}")
                 return
-            self.notified_operations.add(stellar_op_id)
+            self.notified_operations.add(dedup_key)
             # Clear cache if too large
             if len(self.notified_operations) > self.max_cache_size:
                 self.notified_operations.clear()
@@ -154,6 +156,7 @@ class StellarNotificationService:
         # Format and send message
         message = self._format_message(payload, destination)
         if message:
+            logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
             await self._send_to_telegram(
                 chat_id=destination["chat_id"],
                 topic_id=destination.get("topic_id"),
