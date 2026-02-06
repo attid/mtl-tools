@@ -185,12 +185,10 @@ def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool, db_servi
     ###########
     # m h  dom mon dow   command
 
-    # Задача проверки транзакций Stellar - fallback механизм
-    # Основной механизм - webhook от operations-notifier через stellar_notification_service
-    # Polling оставлен как резерв с увеличенным интервалом (30 минут)
-    # */5 * * * * /home/skynet_bot/deploy/check_stellar.sh check_transaction
-    scheduler.add_job(cmd_check_cron_transaction, "interval", minutes=30, args=(session_pool,),
-                      misfire_grace_time=360, jitter=120)
+    # Задача проверки транзакций Stellar - отключена, заменена на webhook
+    # через stellar_notification_service
+    # scheduler.add_job(cmd_check_cron_transaction, "interval", minutes=30, args=(session_pool,),
+    #                   misfire_grace_time=360, jitter=120)
 
     # 30 */3 * * * /home/skynet_bot/deploy/check_stellar.sh check_grist
     scheduler.add_job(cmd_check_grist, "interval", hours=3, minutes=30,
