@@ -82,6 +82,20 @@ async def cmd_ping_piro(message: Message, app_context: AppContext, skyuser: SkyU
     await group_service.ping_piro()
 
 
+@router.message(Command(commands=["reload"]))
+async def cmd_reload_subscriptions(message: Message, app_context: AppContext, skyuser: SkyUser):
+    if not skyuser.is_skynet_admin():
+        await message.reply('You are not my admin.')
+        return False
+    if not app_context.stellar_notification_service:
+        await message.reply("Stellar notification service not available")
+        return
+    await message.reply("Syncing subscriptions...")
+    await app_context.stellar_notification_service.sync_subscriptions()
+    count = len(app_context.stellar_notification_service.subscriptions_map)
+    await message.reply(f"Done. Active subscriptions: {count}")
+
+
 @router.message(Command(commands=["test"]))
 async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
