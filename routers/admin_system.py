@@ -388,23 +388,67 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.bot_state_service:
         raise ValueError("app_context with bot_state_service required")
+    logger.info(
+        "edited_channel_post received: channel_id={}, post_id={}",
+        message.chat.id,
+        message.message_id,
+    )
     # Get sync state for this channel
     sync_key = str(message.chat.id)
     channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
 
-    if str(message.message_id) in channel_sync:
-        for data in channel_sync[str(message.message_id)]:
-            with suppress(TelegramBadRequest):
-                msg_text = message.html_text
-                reply_markup = InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
-                                      InlineKeyboardButton(text='Edit', url=data['url'])]])
-                if msg_text[-1] == '*':
-                    msg_text = msg_text[:-1]
-                    reply_markup = None
-                await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
-                                            message_id=data['message_id'], disable_web_page_preview=True,
-                                            reply_markup=reply_markup)
+    post_sync_records = channel_sync.get(str(message.message_id), [])
+    if not post_sync_records:
+        logger.info(
+            "No sync records found: channel_id={}, post_id={}",
+            message.chat.id,
+            message.message_id,
+        )
+        return
+
+    logger.info(
+        "Sync records found: channel_id={}, post_id={}, targets={}",
+        message.chat.id,
+        message.message_id,
+        len(post_sync_records),
+    )
+
+    for data in post_sync_records:
+        msg_text = message.html_text
+        reply_markup = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
+                              InlineKeyboardButton(text='Edit', url=data['url'])]])
+        if msg_text and msg_text[-1] == '*':
+            msg_text = msg_text[:-1]
+            reply_markup = None
+        logger.info(
+            "Syncing edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
+            data['chat_id'],
+            data['message_id'],
+            message.chat.id,
+            message.message_id,
+        )
+        try:
+            await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
+                                        message_id=data['message_id'], disable_web_page_preview=True,
+                                        reply_markup=reply_markup)
+        except Exception as exc:
+            logger.error(
+                "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
+                data['chat_id'],
+                data['message_id'],
+                message.chat.id,
+                message.message_id,
+                exc,
+            )
+            raise
+        logger.info(
+            "Synced edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
+            data['chat_id'],
+            data['message_id'],
+            message.chat.id,
+            message.message_id,
+        )
 
 
 @router.message(Command(commands=["eurmtl"]))

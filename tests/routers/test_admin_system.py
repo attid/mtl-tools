@@ -1,8 +1,10 @@
 import pytest
 import os
 import hashlib
+from unittest.mock import AsyncMock
 from pathlib import Path
 from aiogram import types
+from aiogram.exceptions import TelegramBadRequest
 from routers.admin_system import router as admin_router
 from tests.conftest import RouterTestMiddleware
 from other.constants import MTLChats
@@ -532,6 +534,44 @@ async def test_edited_channel_post(mock_telegram, router_app_context):
     edit_req = next((r for r in requests if r["method"] == "editMessageText"), None)
     assert edit_req is not None
     assert "Updated post text" in edit_req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_edited_channel_post_raises_telegram_error(mock_telegram, router_app_context):
+    """Test edited channel post does not suppress Telegram API errors."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.edited_channel_post.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    channel_id = -1001234567890
+    post_id = 100
+
+    sync_data = {
+        str(post_id): [{
+            'chat_id': -100987654321,
+            'message_id': 50,
+            'url': f'https://t.me/c/{str(channel_id)[4:]}/{post_id}'
+        }]
+    }
+    router_app_context.bot_state_service.set_sync_state(str(channel_id), sync_data)
+
+    router_app_context.bot.edit_message_text = AsyncMock(
+        side_effect=TelegramBadRequest(method=None, message="Bad Request: message to edit not found")
+    )
+
+    update = types.Update(
+        update_id=127,
+        edited_channel_post=types.Message(
+            message_id=post_id,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=channel_id, type='channel'),
+            text="Updated post text"
+        )
+    )
+
+    with pytest.raises(TelegramBadRequest):
+        await dp.feed_update(bot=router_app_context.bot, update=update)
 
 
 @pytest.mark.asyncio
