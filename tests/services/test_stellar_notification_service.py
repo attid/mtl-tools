@@ -377,8 +377,6 @@ class TestWebhookHandler:
 
     @pytest.mark.asyncio
     async def test_handle_webhook_empty_payload(self, service):
-        from aiohttp.test_utils import make_mocked_request
-
         request = MagicMock()
         request.read = AsyncMock(return_value=b"")
 

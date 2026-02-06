@@ -49,5 +49,14 @@ push-gitdocker-full tag="latest":
     docker tag {{IMAGE_NAME}} ghcr.io/montelibero/{{IMAGE_NAME}}:{{tag}}
     docker push ghcr.io/montelibero/{{IMAGE_NAME}}:{{tag}}
 
+lint:
+    uv run --group dev ruff check .
+
+format:
+    uv run --group dev ruff format .
+
+types:
+    uv run --group dev pyright
+
 test:
-    uv run pytest
+    uv run --group dev pytest
