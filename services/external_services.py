@@ -3,6 +3,7 @@ from other.gspread_tools import gs_get_all_mtlap, gs_get_update_mtlap_skynet_row
 from other.mtl_tools import check_consul_mtla_chats
 from other.stellar import get_balances, send_payment_async
 from other.grist_tools import grist_check_airdrop_records, grist_log_airdrop_payment, grist_load_airdrop_configs
+from typing import Any, cast
 
 class GristService:
     async def load_table_data(self, table_id):
@@ -229,8 +230,8 @@ class ReportService:
         return await update_mmwb_report(session)
 
     async def update_bim_data(self, session):
-        from scripts.update_report import update_bim_data
-        return await update_bim_data(session)
+        from scripts.update_report import update_bdm_report
+        return await update_bdm_report()
 
 class AntispamService:
     async def check_spam(self, message, session=None):
@@ -373,7 +374,11 @@ class TalkService:
         from other.stellar import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
         if message.reply_to_message and message.reply_to_message.forward_from_chat:
-            alarm_list = await cmd_alarm_url(extract_url(message.reply_to_message.text))
+            url = extract_url(message.reply_to_message.text)
+            if not url:
+                await message.reply("Ссылка не найдена")
+                return
+            alarm_list = await cmd_alarm_url(url)
             msg = alarm_list + '\nСмотрите топик / Look at the topic message'
             await message.reply(text=msg)
             if alarm_list.find('@') != -1:
@@ -472,7 +477,7 @@ class UtilsService:
 
     async def answer_text_file(self, message, text, filename=None):
         from other.aiogram_tools import answer_text_file
-        return await answer_text_file(message, text, filename=filename)
+        return await answer_text_file(message, text, filename=cast(Any, filename))
 
     def add_text(self, lines, num_line, text):
         from other.aiogram_tools import add_text

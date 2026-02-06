@@ -3,7 +3,7 @@
   "pythonVersion": "3.12",
   "include": [
     "shared/domain",
-    "services/bot_state_service.py",
+    "services",
     "middlewares"
   ],
   "exclude": [

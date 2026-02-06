@@ -1,6 +1,6 @@
 import asyncio
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 from db.session import SessionPool
 from db.repositories import ConfigRepository, ChatsRepository, ChatDTO, ChatUserDTO
@@ -161,13 +161,14 @@ class DatabaseService:
             repo = ChatsRepository(session)
             chat = repo.get_chat_by_id(chat_id)
             if chat:
+                admins_raw = cast(Any, chat.admins)
                 return ChatDTO(
-                    chat_id=chat.chat_id,
-                    username=chat.username,
-                    title=chat.title,
-                    created_at=chat.created_at,
-                    last_updated=chat.last_updated,
-                    admins=chat.admins or []
+                    chat_id=cast(int, chat.chat_id),
+                    username=cast(Optional[str], chat.username),
+                    title=cast(Optional[str], chat.title),
+                    created_at=cast(Any, chat.created_at),
+                    last_updated=cast(Any, chat.last_updated),
+                    admins=cast(List[int], admins_raw or [])
                 )
             return None
 

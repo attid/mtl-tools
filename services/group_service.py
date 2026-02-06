@@ -5,14 +5,14 @@ class IGroupService(Protocol):
     async def get_members(self, chat_id: int) -> List[GroupMember]:
         ...
     
-    async def remove_deleted_users(self, chat_id: int) -> int:
+    async def remove_deleted_users(self, chat_id: int) -> int | None:
         ...
 
 class GroupService:
     async def get_members(self, chat_id: int) -> List[GroupMember]:
         return await get_group_members(chat_id)
         
-    async def remove_deleted_users(self, chat_id: int) -> int:
+    async def remove_deleted_users(self, chat_id: int) -> int | None:
         return await remove_deleted_users(chat_id)
 
     async def ping_piro(self):

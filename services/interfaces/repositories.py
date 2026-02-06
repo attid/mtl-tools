@@ -4,6 +4,7 @@
 from typing import Protocol, Optional, Any, List
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 
 class IFinanceRepository(Protocol):
@@ -61,15 +62,15 @@ class IChatsRepository(Protocol):
 class IConfigRepository(Protocol):
     """Interface for configuration data access."""
 
-    def save_bot_value(self, chat_id: int, chat_key: str, chat_value: Any) -> bool:
+    def save_bot_value(self, chat_id: int, chat_key: str | int | Enum, chat_value: Any) -> bool:
         """Save configuration value."""
         ...
 
-    def load_bot_value(self, chat_id: int, chat_key: str, default_value: Any = None) -> Any:
+    def load_bot_value(self, chat_id: int, chat_key: str | int | Enum, default_value: Any = None) -> Any:
         """Load configuration value."""
         ...
 
-    def get_chat_ids_by_key(self, chat_key: str) -> list[int]:
+    def get_chat_ids_by_key(self, chat_key: str | int | Enum) -> list[int]:
         """Get all chat IDs with specific config key."""
         ...
 
@@ -166,8 +167,8 @@ class IMessageRepository(Protocol):
         user_id: int,
         text: str,
         use_alarm: int = 0,
-        update_id: int = None,
-        button_json: str = None,
+        update_id: int | None = None,
+        button_json: str | None = None,
         topic_id: int = 0,
     ) -> None:
         """Add a new message to the queue."""
@@ -184,7 +185,7 @@ class IMessageRepository(Protocol):
         chat_id: int,
         thread_id: int,
         text: str,
-        summary_id: int = None,
+        summary_id: int | None = None,
     ) -> None:
         """Save a message for summarization."""
         ...
@@ -193,12 +194,12 @@ class IMessageRepository(Protocol):
         self,
         chat_id: int,
         thread_id: int,
-        dt: datetime = None,
+        dt: datetime | None = None,
     ) -> List[Any]:
         """Get messages that haven't been summarized yet."""
         ...
 
-    def add_summary(self, text: str, summary_id: int = None) -> Any:
+    def add_summary(self, text: str, summary_id: int | None = None) -> Any:
         """Add a summary record."""
         ...
 
@@ -206,7 +207,7 @@ class IMessageRepository(Protocol):
         self,
         chat_id: int,
         thread_id: int,
-        dt: datetime = None,
+        dt: datetime | None = None,
     ) -> List[Any]:
         """Get summaries for chat thread on date."""
         ...

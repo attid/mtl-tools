@@ -39,7 +39,7 @@ class StellarNotificationService:
         self.site: web.TCPSite | None = None
 
         # Deduplication: track notified operation IDs
-        self.notified_operations: set[str] = set()
+        self.notified_operations: set[tuple[str, Any]] = set()
         self.max_cache_size = 1024
 
         # Mapping: subscription_id -> destination info

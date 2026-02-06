@@ -29,6 +29,13 @@ def _resolve_key(key: Union[str, Enum, int]) -> Union[Enum, int, str]:
     return key
 
 
+def _cache_key(key: Union[str, Enum, int]) -> str:
+    """Normalize key to cache-compatible string."""
+    if isinstance(key, Enum):
+        return key.name
+    return str(key)
+
+
 class ConfigService:
     """
     Service for bot configuration management.
@@ -80,7 +87,7 @@ class ConfigService:
         # Update cache
         with self._lock:
             if chat_id in self._cache:
-                self._cache[chat_id].set(key, value)
+                self._cache[chat_id].set(_cache_key(key), value)
 
         return result
 
@@ -139,22 +146,22 @@ class ConfigService:
         with self._lock:
             return self._welcome_messages.get(chat_id)
 
-    def set_welcome_message(self, chat_id: int, message: str, session: Session = None) -> None:
+    def set_welcome_message(self, chat_id: int, message: str, session: Session | None = None) -> None:
         """Set welcome message for chat. Saves to DB if session provided."""
         with self._lock:
             self._welcome_messages[chat_id] = message
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.WelcomeMessage, message
             )
 
-    def remove_welcome_message(self, chat_id: int, session: Session = None) -> None:
+    def remove_welcome_message(self, chat_id: int, session: Session | None = None) -> None:
         """Remove welcome message for chat. Removes from DB if session provided."""
         with self._lock:
             self._welcome_messages.pop(chat_id, None)
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.WelcomeMessage, None
             )
@@ -170,22 +177,22 @@ class ConfigService:
         with self._lock:
             return self._welcome_buttons.get(chat_id)
 
-    def set_welcome_button(self, chat_id: int, button: dict, session: Session = None) -> None:
+    def set_welcome_button(self, chat_id: int, button: dict, session: Session | None = None) -> None:
         """Set welcome button config for chat. Saves to DB if session provided."""
         with self._lock:
             self._welcome_buttons[chat_id] = button
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.WelcomeButton, button
             )
 
-    def remove_welcome_button(self, chat_id: int, session: Session = None) -> None:
+    def remove_welcome_button(self, chat_id: int, session: Session | None = None) -> None:
         """Remove welcome button config for chat. Removes from DB if session provided."""
         with self._lock:
             self._welcome_buttons.pop(chat_id, None)
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.WelcomeButton, None
             )
@@ -201,22 +208,22 @@ class ConfigService:
         with self._lock:
             return self._delete_income.get(chat_id)
 
-    def set_delete_income(self, chat_id: int, config: Any, session: Session = None) -> None:
+    def set_delete_income(self, chat_id: int, config: Any, session: Session | None = None) -> None:
         """Set delete income config for chat. Saves to DB if session provided."""
         with self._lock:
             self._delete_income[chat_id] = config
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.DeleteIncome, config
             )
 
-    def remove_delete_income(self, chat_id: int, session: Session = None) -> None:
+    def remove_delete_income(self, chat_id: int, session: Session | None = None) -> None:
         """Remove delete income config for chat. Removes from DB if session provided."""
         with self._lock:
             self._delete_income.pop(chat_id, None)
 
-        if session:
+        if session is not None:
             ConfigRepository(session).save_bot_value(
                 chat_id, BotValueTypes.DeleteIncome, None
             )
@@ -241,4 +248,3 @@ class ConfigService:
             "join_request_captcha",
             "full_data",
         ]
-

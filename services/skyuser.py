@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -91,8 +91,9 @@ class SkyUser:
         admin_service = self.app_context.admin_service if self.app_context else None
         has_cache = False
         if admin_service and permission is None:
-            with admin_service._lock:
-                has_cache = target_chat_id in admin_service._admins
+            admin_service_any = cast(Any, admin_service)
+            with admin_service_any._lock:
+                has_cache = target_chat_id in admin_service_any._admins
 
         if has_cache and admin_service:
             result = admin_service.is_chat_admin(target_chat_id, self.user_id)
