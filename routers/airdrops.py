@@ -1,7 +1,6 @@
-import asyncio
 import html
 import re
-from typing import Optional
+from typing import Any, Mapping, Optional, cast
 
 from aiogram import Bot, F, Router, types
 from aiogram.enums import ChatMemberStatus
@@ -89,9 +88,10 @@ async def build_trustline_checks(stellar_address: str, stellar_service=None) -> 
         return ["Не удалось получить данные о трастлайнах"]
 
     checks: list[str] = []
+    balances_map = cast(Mapping[str, Any], balances or {})
     for code in asset_codes:
-        if balances and code in balances:
-            balance_value = balances[code]
+        if code in balances_map:
+            balance_value = balances_map[code]
             checks.append(f"Линия доверия к {code}: открыта (баланс {balance_value})")
         else:
             checks.append(f"Линия доверия к {code}: не открыта")
@@ -108,7 +108,8 @@ async def check_source_balance(source_address: str, asset_code: str, amount: str
         logger.error(f"Не удалось получить балансы источника {source_address}: {exc}")
         return False, "Не удалось получить балансы источника"
 
-    if not balances or asset_code not in balances:
+    balances_map = cast(Mapping[str, Any], balances or {})
+    if asset_code not in balances_map:
         return False, f"На источнике нет трастлайна к {asset_code}"
 
     try:
@@ -116,7 +117,7 @@ async def check_source_balance(source_address: str, asset_code: str, amount: str
     except (TypeError, ValueError):
         return False, "Некорректная сумма аирдропа"
 
-    balance_value = float(balances[asset_code])
+    balance_value = float(balances_map[asset_code])
     if balance_value < needed_amount:
         return False, (
             f"Недостаточно средств на источнике: баланс {balance_value} {asset_code}, "
@@ -142,7 +143,8 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         asset = build_airdrop_asset(config_item)
     except ValueError as exc:
         logger.error(f"Некорректный конфиг аирдропа: {exc}")
-        await callback.message.answer("Конфиг аирдропа некорректный. Проверьте данные в Grist.")
+        if callback.message:
+            await callback.message.answer("Конфиг аирдропа некорректный. Проверьте данные в Grist.")
         return
 
     balance_ok, balance_message = await check_source_balance(
@@ -152,7 +154,8 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         app_context.stellar_service if app_context else None
     )
     if not balance_ok:
-        await callback.message.answer(balance_message)
+        if callback.message:
+            await callback.message.answer(balance_message)
         return
 
     try:
@@ -172,7 +175,8 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
             )
     except Exception as exc:
         logger.error(f"Ошибка при отправке аирдропа: {exc}")
-        await callback.message.answer("Не удалось отправить аирдроп. Проверьте логи.")
+        if callback.message:
+            await callback.message.answer("Не удалось отправить аирдроп. Проверьте логи.")
         return
 
     tx_hash = tx_result.get("hash") or tx_result.get("id") or ""
@@ -199,14 +203,17 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         logger.error(f"Не удалось записать аирдроп в Grist: {exc}")
 
     confirmation_keyboard = build_confirmation_keyboard(callback.from_user.username or str(callback.from_user.id))
-    await callback.message.edit_reply_markup(reply_markup=confirmation_keyboard)
+    if callback.message:
+        message_any = cast(Any, callback.message)
+        await message_any.edit_reply_markup(reply_markup=confirmation_keyboard)
     airdrop_requests.pop(message_id, None)
 
     if tx_hash:
-        await callback.message.answer(
-            f"Перевод {config_item.amount} {config_item.asset_code} отправлен. "
-            f"https://viewer.eurmtl.me/transaction/{tx_hash}"
-        )
+        if callback.message:
+            await callback.message.answer(
+                f"Перевод {config_item.amount} {config_item.asset_code} отправлен. "
+                f"https://viewer.eurmtl.me/transaction/{tx_hash}"
+            )
 
 
 @router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
@@ -235,6 +242,8 @@ async def handle_address_messages(message: types.Message, app_context=None):
         (MTLChats.MTLAAgoraGroup, "MTLAAgoraGroup"),
         (-1001429770534, "chat Montelibero ru"),
     )
+    if not message.bot:
+        return
 
     for chat_id, chat_name in chat_list:
         is_member, user = await check_membership(message.bot, chat_id, tg_id)
@@ -291,12 +300,16 @@ async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: 
 
     if not request_data:
         await callback.answer("Данные не найдены", show_alert=True)
-        await callback.message.edit_reply_markup(reply_markup=None)
+        if callback.message:
+            message_any = cast(Any, callback.message)
+            await message_any.edit_reply_markup(reply_markup=None)
         return
 
     if action == "remove":
         airdrop_requests.pop(message_id, None)
-        await callback.message.edit_reply_markup(reply_markup=None)
+        if callback.message:
+            message_any = cast(Any, callback.message)
+            await message_any.edit_reply_markup(reply_markup=None)
         await callback.answer("Кнопки убраны")
         return
 
@@ -316,4 +329,4 @@ def register_handlers(dp, bot):
 
 
 if __name__ == '__main__':
-    print(asyncio.run(print('GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2')))
+    print("GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2")

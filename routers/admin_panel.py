@@ -4,6 +4,7 @@
 import html
 import json
 from contextlib import suppress
+from typing import Any, cast
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatType, ParseMode
@@ -69,7 +70,8 @@ def get_feature_description(feature_key: str, app_context: AppContext) -> str:
     if not app_context or not app_context.command_registry:
         return ''
 
-    for cmd in app_context.command_registry.get_all_commands().values():
+    command_registry = cast(Any, app_context.command_registry)
+    for cmd in command_registry.get_all_commands().values():
         if feature_key in cmd.cmd_list:
             return cmd.description
     return ''
@@ -84,7 +86,7 @@ _chat_owners: dict[int, int | None] = {}  # chat_id -> owner_user_id (or None if
 
 # ============ Helper Functions ============
 
-def mark_chat_inaccessible(chat_id: int, session: Session = None) -> None:
+def mark_chat_inaccessible(chat_id: int, session: Session | None = None) -> None:
     """Mark chat as inaccessible. Optionally save to DB."""
     _inaccessible_chats.add(chat_id)
     if session:
@@ -103,7 +105,7 @@ def is_chat_accessible(chat_id: int) -> bool:
     return chat_id not in _inaccessible_chats
 
 
-def unmark_chat_accessible(chat_id: int, session: Session = None) -> None:
+def unmark_chat_accessible(chat_id: int, session: Session | None = None) -> None:
     """Remove chat from inaccessible list (it's accessible now)."""
     if chat_id not in _inaccessible_chats:
         return
@@ -124,7 +126,12 @@ def load_inaccessible_chats(chat_ids: list[int]) -> None:
     _inaccessible_chats.update(chat_ids)
 
 
-async def get_chat_title(chat_id: int, bot: Bot, session: Session = None, app_context: AppContext = None) -> str | None:
+async def get_chat_title(
+    chat_id: int,
+    bot: Bot,
+    session: Session | None = None,
+    app_context: AppContext | None = None
+) -> str | None:
     """Get chat title from cache, database, or API. Returns None if chat inaccessible."""
     # Skip inaccessible chats
     if chat_id in _inaccessible_chats:
@@ -186,7 +193,7 @@ async def notify_owner_about_settings_change(
     chat_id: int,
     admin_user: User,
     change_description: str,
-    app_context: AppContext = None
+    app_context: AppContext | None = None
 ) -> None:
     """Notify chat owner about settings change by admin.
 
@@ -228,7 +235,12 @@ async def notify_owner_about_settings_change(
         pass
 
 
-async def get_user_admin_chats(user_id: int, app_context: AppContext, bot: Bot, session: Session = None) -> list[tuple[int, str]]:
+async def get_user_admin_chats(
+    user_id: int,
+    app_context: AppContext,
+    bot: Bot,
+    session: Session | None = None
+) -> list[tuple[int, str]]:
     """
     Get list of chats where user is an administrator.
 
@@ -242,13 +254,14 @@ async def get_user_admin_chats(user_id: int, app_context: AppContext, bot: Bot, 
         return []
 
     # Get chats where user is admin from cache (fast)
-    with app_context.admin_service._lock:
-        all_chats = list(app_context.admin_service._admins.keys())
+    admin_service = cast(Any, app_context.admin_service)
+    with admin_service._lock:
+        all_chats = list(admin_service._admins.keys())
 
     # Filter out inaccessible chats early
     user_chats = [
         chat_id for chat_id in all_chats
-        if app_context.admin_service.is_chat_admin(chat_id, user_id) and is_chat_accessible(chat_id)
+        if admin_service.is_chat_admin(chat_id, user_id) and is_chat_accessible(chat_id)
     ]
 
     if not user_chats:
@@ -415,10 +428,13 @@ async def cmd_admin(message: Message, session: Session, bot: Bot, app_context: A
         await message.answer("Service unavailable.")
         return
 
+    if not message.from_user:
+        await message.answer("Cannot identify user.")
+        return
     user_id = message.from_user.id
 
     # Check for direct chat argument
-    args = message.text.split(maxsplit=1)
+    args = (message.text or "").split(maxsplit=1)
     if len(args) > 1:
         chat_arg = args[1].strip()
         target_chat_id = None
@@ -470,6 +486,7 @@ async def cmd_admin_reload(message: Message, session: Session, bot: Bot, app_con
     """Reload admin list for current chat (group command)."""
     if not app_context or not app_context.admin_service:
         return
+    admin_service = app_context.admin_service
 
     chat_id = message.chat.id
 
@@ -478,7 +495,7 @@ async def cmd_admin_reload(message: Message, session: Session, bot: Bot, app_con
         new_admins = [member.user.id for member in members]
 
         # Update cache
-        app_context.admin_service.set_chat_admins(chat_id, new_admins)
+        admin_service.set_chat_admins(chat_id, new_admins)
 
         # Save to DB
         ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
@@ -487,8 +504,9 @@ async def cmd_admin_reload(message: Message, session: Session, bot: Bot, app_con
 
         # Delete both messages after 5 seconds
         if app_context.utils_service:
-            await app_context.utils_service.sleep_and_delete(message, 5)
-            await app_context.utils_service.sleep_and_delete(reply, 5)
+            utils_service = cast(Any, app_context.utils_service)
+            await utils_service.sleep_and_delete(message, 5)
+            await utils_service.sleep_and_delete(reply, 5)
 
     except TelegramBadRequest as e:
         logger.error(f"Failed to reload admins for chat {chat_id}: {e}")
@@ -507,6 +525,9 @@ async def cb_show_chat_list(query: CallbackQuery, callback_data: AdminCallback, 
     """Show list of chats where user is admin (paginated)."""
     if not app_context or not app_context.admin_service:
         await query.answer("Service unavailable.", show_alert=True)
+        return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
         return
 
     user_id = query.from_user.id
@@ -530,6 +551,9 @@ async def cb_show_chat_menu(query: CallbackQuery, callback_data: AdminCallback, 
     """Show main menu for selected chat."""
     chat_id = callback_data.chat_id
     user_id = query.from_user.id
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     if not await verify_admin_via_api(user_id, chat_id, bot):
         await query.answer("You are not an admin of this chat.", show_alert=True)
@@ -556,6 +580,9 @@ async def cb_show_feature_flags(query: CallbackQuery, callback_data: AdminCallba
     if not app_context or not app_context.feature_flags:
         await query.answer("Service unavailable.", show_alert=True)
         return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     chat_id = callback_data.chat_id
 
@@ -578,12 +605,16 @@ async def cb_toggle_feature(query: CallbackQuery, callback_data: AdminCallback, 
     if not app_context or not app_context.feature_flags:
         await query.answer("Service unavailable.", show_alert=True)
         return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     chat_id = callback_data.chat_id
     feature = callback_data.param
+    feature_flags = app_context.feature_flags
 
     # Toggle the feature
-    new_state = app_context.feature_flags.toggle(chat_id, feature)
+    new_state = feature_flags.toggle(chat_id, feature)
 
     title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
@@ -591,7 +622,7 @@ async def cb_toggle_feature(query: CallbackQuery, callback_data: AdminCallback, 
     with suppress(TelegramBadRequest):
         await query.message.edit_text(
             f"Feature Flags: {title}",
-            reply_markup=feature_flags_kb(chat_id, app_context.feature_flags)
+            reply_markup=feature_flags_kb(chat_id, feature_flags)
         )
 
     label = FEATURE_LABELS.get(feature, feature)
@@ -629,6 +660,12 @@ async def cb_show_welcome_settings(query: CallbackQuery, callback_data: AdminCal
     if not app_context or not app_context.config_service:
         await query.answer("Service unavailable.", show_alert=True)
         return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     chat_id = callback_data.chat_id
 
@@ -665,13 +702,17 @@ async def cb_remove_dead_users(query: CallbackQuery, callback_data: AdminCallbac
     if not app_context or not app_context.group_service:
         await query.answer("Service unavailable.", show_alert=True)
         return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     chat_id = callback_data.chat_id
+    group_service = cast(Any, app_context.group_service)
 
     await query.answer("Starting to remove deleted users...", show_alert=True)
 
     try:
-        count = await app_context.group_service.remove_deleted_users(chat_id)
+        count = await group_service.remove_deleted_users(chat_id)
         await query.message.answer(f"Finished removing deleted users.\nTotal removed: {count}")
 
         # Notify owner about settings change
@@ -690,6 +731,9 @@ async def cb_edit_welcome(query: CallbackQuery, callback_data: AdminCallback, st
     """Start editing welcome message or button."""
     chat_id = callback_data.chat_id
     edit_type = callback_data.param  # "msg" or "btn"
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
 
     # Store chat_id in FSM state
     await state.update_data(edit_chat_id=chat_id)
@@ -711,6 +755,12 @@ async def cb_delete_welcome(query: CallbackQuery, callback_data: AdminCallback, 
     """Delete welcome settings."""
     if not app_context or not app_context.config_service:
         await query.answer("Service unavailable.", show_alert=True)
+        return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
+        return
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible.", show_alert=True)
         return
 
     chat_id = callback_data.chat_id
@@ -781,11 +831,12 @@ async def process_welcome_message(message: Message, state: FSMContext, session: 
     )
 
     # Notify owner about settings change
-    await notify_owner_about_settings_change(
-        bot, chat_id, message.from_user,
-        "Изменено приветственное сообщение",
-        app_context
-    )
+    if message.from_user:
+        await notify_owner_about_settings_change(
+            bot, chat_id, message.from_user,
+            "Изменено приветственное сообщение",
+            app_context
+        )
 
 
 @router.message(AdminPanelStates.waiting_welcome_button, F.chat.type == ChatType.PRIVATE)
@@ -822,11 +873,12 @@ async def process_welcome_button(message: Message, state: FSMContext, session: S
     )
 
     # Notify owner about settings change
-    await notify_owner_about_settings_change(
-        bot, chat_id, message.from_user,
-        "Изменена кнопка приветствия",
-        app_context
-    )
+    if message.from_user:
+        await notify_owner_about_settings_change(
+            bot, chat_id, message.from_user,
+            "Изменена кнопка приветствия",
+            app_context
+        )
 
 
 # ============ Register Handlers ============

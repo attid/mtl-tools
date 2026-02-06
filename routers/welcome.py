@@ -3,6 +3,7 @@ import random
 import re
 import datetime
 from contextlib import suppress
+from typing import Any, cast
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
@@ -131,7 +132,16 @@ def create_emoji_captcha_keyboard(user_id, required_num):
 
 @update_command_info("/delete_welcome", "Отключить сообщения приветствия")
 @router.message(Command(commands=["delete_welcome"]))
-async def cmd_delete_welcome(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_delete_welcome(
+    message: Message,
+    session: Session,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
+    if not app_context or not app_context.config_service or not app_context.utils_service:
+        raise ValueError("app_context with config_service and utils_service required")
+    config_service = cast(Any, app_context.config_service)
+    utils_service = cast(Any, app_context.utils_service)
     admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
@@ -139,20 +149,29 @@ async def cmd_delete_welcome(message: Message, session: Session, app_context=Non
         await message.reply(text)
         return False
 
-    has_welcome = app_context.config_service.get_welcome_message(message.chat.id) is not None
+    has_welcome = config_service.get_welcome_message(message.chat.id) is not None
 
     if has_welcome:
-        app_context.config_service.remove_welcome_message(message.chat.id, session)
+        config_service.remove_welcome_message(message.chat.id, session)
 
     msg = await message.reply('Removed')
-    await app_context.utils_service.sleep_and_delete(msg, 60)
-    await app_context.utils_service.sleep_and_delete(message, 60)
+    await utils_service.sleep_and_delete(msg, 60)
+    await utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
                      "welcome_messages")
 @router.message(Command(commands=["set_welcome"]))
-async def cmd_set_welcome(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_set_welcome(
+    message: Message,
+    session: Session,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
+    if not app_context or not app_context.config_service or not app_context.utils_service:
+        raise ValueError("app_context with config_service and utils_service required")
+    config_service = cast(Any, app_context.config_service)
+    utils_service = cast(Any, app_context.utils_service)
     admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
@@ -160,21 +179,31 @@ async def cmd_set_welcome(message: Message, session: Session, app_context=None, 
         await message.reply(text)
         return False
 
-    if len(message.text.split()) > 1:
-        welcome_text = message.html_text[13:]
+    if len((message.text or "").split()) > 1:
+        welcome_html = message.html_text or message.text or ""
+        welcome_text = welcome_html[13:]
 
-        app_context.config_service.set_welcome_message(message.chat.id, welcome_text, session)
+        config_service.set_welcome_message(message.chat.id, welcome_text, session)
         msg = await message.reply('Added')
-        await app_context.utils_service.sleep_and_delete(msg, 60)
+        await utils_service.sleep_and_delete(msg, 60)
     else:
-        await cmd_delete_welcome(message, session, app_context=app_context)
+        await cmd_delete_welcome(message, session, app_context=app_context, skyuser=skyuser)
 
-    await app_context.utils_service.sleep_and_delete(message, 60)
+    await utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/set_welcome_button", "Установить текст на кнопке капчи", 2, "welcome_button")
 @router.message(Command(commands=["set_welcome_button"]))
-async def cmd_set_welcome_button(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_set_welcome_button(
+    message: Message,
+    session: Session,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
+    if not app_context or not app_context.config_service or not app_context.utils_service:
+        raise ValueError("app_context with config_service and utils_service required")
+    config_service = cast(Any, app_context.config_service)
+    utils_service = cast(Any, app_context.utils_service)
     admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
@@ -182,37 +211,40 @@ async def cmd_set_welcome_button(message: Message, session: Session, app_context
         await message.reply(text)
         return False
 
-    if len(message.text.split()) > 1:
-        text = message.text[19:].strip()
+    if len((message.text or "").split()) > 1:
+        text = (message.text or "")[19:].strip()
 
-        app_context.config_service.set_welcome_button(message.chat.id, text, session)
+        config_service.set_welcome_button(message.chat.id, text, session)
         msg = await message.reply('Added')
-        await app_context.utils_service.sleep_and_delete(msg, 60)
+        await utils_service.sleep_and_delete(msg, 60)
     else:
         msg = await message.reply('need more words')
-        await app_context.utils_service.sleep_and_delete(msg, 60)
+        await utils_service.sleep_and_delete(msg, 60)
 
-    await app_context.utils_service.sleep_and_delete(message, 60)
+    await utils_service.sleep_and_delete(message, 60)
 
 
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
-async def cmd_stop_exchange(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_stop_exchange(message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None):
     is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
         await message.reply('You are not my admin.')
         return False
 
+    if not app_context or not app_context.stellar_service:
+        raise ValueError("app_context with stellar_service required")
+    stellar_service = cast(Any, app_context.stellar_service)
     ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, 1)
-    await app_context.stellar_service.stop_all_exchange()
+    await stellar_service.stop_all_exchange()
 
     await message.reply('Was stop')
 
 
 @update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
-async def cmd_start_exchange(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_start_exchange(message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None):
     is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
@@ -227,11 +259,18 @@ bad_names = ['ЧВК ВАГНЕР', 'ЧВК ВАГНЕР']
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
-async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
+async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context: Any = None):
+    if not app_context or not app_context.antispam_service or not app_context.config_service or not app_context.group_service:
+        raise ValueError("app_context with antispam_service, config_service and group_service required")
+    antispam_service = cast(Any, app_context.antispam_service)
+    config_service = cast(Any, app_context.config_service)
+    group_service = cast(Any, app_context.group_service)
+    feature_flags = cast(Any, app_context.feature_flags) if app_context.feature_flags else None
+    utils_service = cast(Any, app_context.utils_service) if app_context.utils_service else None
     new_user_id = event.new_chat_member.user.id
     chat_id = event.chat.id
 
-    is_spam1 = await app_context.antispam_service.combo_check_spammer(new_user_id)
+    is_spam1 = await antispam_service.combo_check_spammer(new_user_id)
 
     if is_spam1:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
@@ -246,7 +285,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                disable_web_page_preview=True)
         return
 
-    is_spam2 = await app_context.antispam_service.lols_check_spammer(new_user_id)
+    is_spam2 = await antispam_service.lols_check_spammer(new_user_id)
 
     if is_spam2:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
@@ -273,10 +312,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                ))
         return
 
-    required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
+    required_channel = config_service.load_value(chat_id, 'entry_channel')
 
     if required_channel:
-        membership_ok, _ = await app_context.group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
+        membership_ok, _ = await group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
         if not membership_ok:
             return
 
@@ -287,7 +326,8 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
 
     ChatsRepository(session).add_user_to_chat(chat_id, member)
     user = ChatsRepository(session).get_user_by_id(event.new_chat_member.user.id)
-    user_type_now = user.user_type if user else 0
+    user_obj = cast(Any, user) if user else None
+    user_type_now = int(user_obj.user_type) if user_obj and user_obj.user_type is not None else 0
 
     username = get_username_link(event.new_chat_member.user)
     if user_type_now == SpamStatus.BAD:
@@ -309,7 +349,7 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                ),
                                reply_markup=kb_unban)
 
-    welcome_msg = app_context.config_service.get_welcome_message(chat_id)
+    welcome_msg = config_service.get_welcome_message(chat_id)
 
     if welcome_msg:
         if event.new_chat_member.user:
@@ -317,10 +357,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             msg = msg.replace('$$USER$$', username)
 
             kb_captcha = None
-            captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'captcha')
+            captcha_enabled = feature_flags.is_enabled(chat_id, 'captcha') if feature_flags else False
 
             if captcha_enabled:
-                btn_msg = app_context.config_service.get_welcome_button(chat_id) or "I'm not bot"
+                btn_msg = config_service.get_welcome_button(chat_id) or "I'm not bot"
 
                 kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text=btn_msg,
@@ -342,9 +382,10 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
             answer = await bot.send_message(chat_id, msg, parse_mode=ParseMode.HTML,
                                             disable_web_page_preview=True,
                                             reply_markup=kb_captcha)
-            await app_context.utils_service.sleep_and_delete(answer)
+            if utils_service:
+                await utils_service.sleep_and_delete(answer)
 
-    auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
+    auto_all_enabled = feature_flags.is_enabled(chat_id, 'auto_all') if feature_flags else False
 
     if auto_all_enabled:
         config_repo = ConfigRepository(session)
@@ -361,12 +402,22 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_MEMBER >> IS_NOT_MEMBER))
-async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None, skyuser: SkyUser = None):
+async def left_chat_member(
+    event: ChatMemberUpdated,
+    session: Session,
+    bot: Bot,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
+    if not app_context or not app_context.feature_flags or not app_context.group_service:
+        raise ValueError("app_context with feature_flags and group_service required")
+    feature_flags = cast(Any, app_context.feature_flags)
+    group_service = cast(Any, app_context.group_service)
     chat_id = event.chat.id
 
     ChatsRepository(session).remove_user_from_chat(chat_id, event.new_chat_member.user.id)
 
-    auto_all_enabled = app_context.feature_flags.is_enabled(chat_id, 'auto_all')
+    auto_all_enabled = feature_flags.is_enabled(chat_id, 'auto_all')
 
     if auto_all_enabled:
         config_repo = ConfigRepository(session)
@@ -386,9 +437,9 @@ async def left_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot,
             logger.info(
                 f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
 
-            c1, _ = await app_context.group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
-            c2, _ = await app_context.group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
-            c3, _ = await app_context.group_service.check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
+            c1, _ = await group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
+            c2, _ = await group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
+            c3, _ = await group_service.check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
             in_other_chats = c1 or c2 or c3
 
             if in_other_chats:
@@ -439,7 +490,7 @@ async def msg_delete_income(message: Message, app_context=None):
     if delete_income_config is not None:
         with suppress(TelegramBadRequest):
             if delete_income_config == 2:
-                if contains_emoji(message.from_user.full_name):
+                if message.from_user and contains_emoji(message.from_user.full_name):
                     await message.delete()
             else:
                 await message.delete()
@@ -448,10 +499,14 @@ async def msg_delete_income(message: Message, app_context=None):
 @router.callback_query(CaptchaCallbackData.filter())
 async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, bot: Bot):
     answer = callback_data.answer
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible", show_alert=True)
+        return
     if query.from_user.id == answer:
         await query.answer("Thanks !", show_alert=True)
         chat = await bot.get_chat(query.message.chat.id)
-        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions,
+        permissions = chat.permissions or ChatPermissions(can_send_messages=True)
+        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
                                        until_date=datetime.timedelta(seconds=65))
     else:
         await query.answer("For other user", show_alert=True)
@@ -460,12 +515,16 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
 
 @router.callback_query(EmojiCaptchaCallbackData.filter())
 async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCallbackData, bot: Bot):
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible", show_alert=True)
+        return
     if query.from_user.id == callback_data.user_id:
         index = emoji_pairs[1].index(callback_data.square)
         if get_last_digit_of_sum(callback_data.num) == index:
             await query.answer("Thanks !", show_alert=True)
             chat = await bot.get_chat(query.message.chat.id)
-            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=chat.permissions,
+            permissions = chat.permissions or ChatPermissions(can_send_messages=True)
+            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
                                            until_date=datetime.timedelta(seconds=65))
         else:
             await query.answer("Wrong answer", show_alert=True)
@@ -475,7 +534,15 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
 
 
 @router.message(Command(commands=["recaptcha"]))
-async def cmd_recaptcha(message: Message, session: Session, app_context=None, skyuser: SkyUser = None):
+async def cmd_recaptcha(
+    message: Message,
+    session: Session,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
+    if not app_context or not app_context.utils_service:
+        raise ValueError("app_context with utils_service required")
+    utils_service = cast(Any, app_context.utils_service)
     admin = await skyuser.is_admin() if skyuser else False
 
     if not admin:
@@ -483,12 +550,12 @@ async def cmd_recaptcha(message: Message, session: Session, app_context=None, sk
         await message.reply(text)
         return None
 
-    if len(message.text.split()) < 2:
+    if len((message.text or "").split()) < 2:
         msg = await message.reply('need more words')
-        await app_context.utils_service.sleep_and_delete(msg)
+        await utils_service.sleep_and_delete(msg)
         return None
 
-    await message.answer(' '.join(message.text.split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+    await message.answer(' '.join((message.text or "").split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text='Get Captcha',
                              callback_data='ReCaptcha')
     ]]))
@@ -497,7 +564,10 @@ async def cmd_recaptcha(message: Message, session: Session, app_context=None, sk
 
 
 @router.callback_query(F.data == "ReCaptcha")
-async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_context=None):
+async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_context: Any = None):
+    if not isinstance(query.message, Message):
+        await query.answer("Message not accessible", show_alert=True)
+        return
     await new_chat_member(ChatMemberUpdated(chat=query.message.chat,
                                             from_user=query.from_user,
                                             new_chat_member=ChatMemberMember(user=query.from_user),
@@ -509,7 +579,10 @@ async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_con
 
 @router.chat_member(ChatMemberUpdatedFilter(PROMOTED_TRANSITION))
 @router.chat_member(ChatMemberUpdatedFilter(ADMINISTRATOR >> MEMBER))
-async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot, app_context=None):
+async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot, app_context: Any = None):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
     chat_id = event.chat.id
 
     # Chat is accessible if we received this update - remove from inaccessible list
@@ -519,16 +592,20 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot,
     members = await event.chat.get_administrators()
     new_admins = [member.user.id for member in members]
 
-    app_context.admin_service.set_chat_admins(chat_id, new_admins)
+    admin_service.set_chat_admins(chat_id, new_admins)
     ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Admins, json.dumps(new_admins))
 
 
 @router.chat_join_request()
-async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot, app_context=None):
+async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot, app_context: Any = None):
+    if not app_context or not app_context.notification_service or not app_context.feature_flags:
+        raise ValueError("app_context with notification_service and feature_flags required")
+    notification_service = cast(Any, app_context.notification_service)
+    feature_flags = cast(Any, app_context.feature_flags)
     chat_id = chat_join_request.chat.id
     user_id = chat_join_request.from_user.id
 
-    info_chat_id = app_context.notification_service.get_join_notify_config(chat_id)
+    info_chat_id = notification_service.get_join_notify_config(chat_id)
 
     if info_chat_id:
         username = get_username_link(chat_join_request.from_user)
@@ -556,7 +633,7 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
                 reply_markup=kb_join
             )
 
-        join_request_captcha_enabled = app_context.feature_flags.is_enabled(chat_id, 'join_request_captcha')
+        join_request_captcha_enabled = feature_flags.is_enabled(chat_id, 'join_request_captcha')
 
         if join_request_captcha_enabled:
             with suppress(TelegramBadRequest, TelegramForbiddenError):
@@ -579,7 +656,13 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
 
 
 @router.callback_query(JoinCallbackData.filter())
-async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bot, app_context=None, skyuser: SkyUser = None):
+async def cq_join(
+    query: CallbackQuery,
+    callback_data: JoinCallbackData,
+    bot: Bot,
+    app_context: Any = None,
+    skyuser: SkyUser | None = None,
+):
     admin = await skyuser.is_admin(callback_data.chat_id) if skyuser else False
 
     if not admin:
@@ -589,18 +672,20 @@ async def cq_join(query: CallbackQuery, callback_data: JoinCallbackData, bot: Bo
 
     if callback_data.can_join:
         with suppress(TelegramBadRequest):
-            await query.bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
+            await bot.approve_chat_join_request(callback_data.chat_id, callback_data.user_id)
         await query.answer("✅")
-        await query.message.edit_reply_markup(
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=f"✅ {query.from_user.username}", callback_data="👀")]]))
+        if isinstance(query.message, Message):
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text=f"✅ {query.from_user.username}", callback_data="👀")]]))
 
     else:
-        await query.bot.decline_chat_join_request(callback_data.chat_id, callback_data.user_id)
+        await bot.decline_chat_join_request(callback_data.chat_id, callback_data.user_id)
         await query.answer("❌")
-        await query.message.edit_reply_markup(
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]))
+        if isinstance(query.message, Message):
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]))
 
     # await query.answer("Ready !", show_alert=True)
 

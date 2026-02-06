@@ -4,6 +4,7 @@ import csv
 import io
 from contextlib import suppress
 from datetime import datetime
+from typing import Any, cast
 
 import aiohttp
 from aiogram import Router, Bot, F
@@ -35,7 +36,8 @@ def _has_topic_admins(chat_id: int, thread_id: int, app_context) -> bool:
 
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
-    return app_context.admin_service.has_topic_admins_by_key(chat_thread_key)
+    admin_service = cast(Any, app_context.admin_service)
+    return admin_service.has_topic_admins_by_key(chat_thread_key)
 
 
 @router.message(F.text.startswith("!ro"))
@@ -48,14 +50,21 @@ async def cmd_set_ro(message: Message, skyuser: SkyUser):
         await message.reply('Please send for reply message to set ro')
         return
 
+    if not message.reply_to_message.from_user:
+        await message.reply('Please reply to a user message.')
+        return
     delta = await parse_timedelta_from_message(message)
+    if not delta:
+        await message.reply('Unable to parse duration.')
+        return
     await message.chat.restrict(message.reply_to_message.from_user.id,
                                 permissions=ChatPermissions(can_send_messages=False,
                                                             can_send_media_messages=False,
                                                             can_send_other_messages=False),
                                 until_date=delta)
 
-    user = message.reply_to_message.from_user.username if message.reply_to_message.from_user.username else message.reply_to_message.from_user.full_name
+    reply_user = message.reply_to_message.from_user
+    user = reply_user.username if reply_user.username else reply_user.full_name
     await message.reply(f'{user} was set ro for {delta}')
 
 
@@ -69,7 +78,7 @@ async def cmd_create_topic(message: Message, skyuser: SkyUser):
         await message.reply("Topics are not enabled in this chat.")
         return
 
-    command_parts = message.text.split(maxsplit=2)
+    command_parts = (message.text or "").split(maxsplit=2)
     if len(command_parts) != 3:
         await message.reply("Incorrect command format. Use: /topic 🔵 Topic Name")
         return
@@ -77,6 +86,9 @@ async def cmd_create_topic(message: Message, skyuser: SkyUser):
     emoji, topic_name = command_parts[1], command_parts[2]
 
     try:
+        if not message.bot:
+            await message.reply("Bot is not available for this message.")
+            return
         new_topic = await message.bot.create_forum_topic(name=topic_name, icon_custom_emoji_id=emoji,
                                                          chat_id=message.chat.id)
         await message.reply(f"New topic '{topic_name}' created successfully with ID: {new_topic.message_thread_id}")
@@ -92,7 +104,8 @@ async def cmd_create_topic(message: Message, skyuser: SkyUser):
 async def cmd_all(message: Message, app_context: AppContext):
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
-    user_list = await app_context.group_service.get_members(message.chat.id)
+    group_service = cast(Any, app_context.group_service)
+    user_list = await group_service.get_members(message.chat.id)
     members = []
     for user in user_list:
         if user.is_bot:
@@ -113,22 +126,23 @@ async def cmd_all(message: Message, app_context: AppContext):
 async def cmd_check_entry_channel(message: Message, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.group_service or not app_context.utils_service:
         raise ValueError("app_context with group_service and utils_service required")
+    utils_service = cast(Any, app_context.utils_service)
     if not await skyuser.is_admin():
         await message.reply(skyuser.admin_denied_text())
         return
 
     try:
-        checked_count, action_count = await run_entry_channel_check(bot, message.chat.id, app_context.group_service)
+        checked_count, action_count = await run_entry_channel_check(bot, message.chat.id, app_context=app_context)
     except ValueError:
         info_message = await message.reply('Настройка обязательного канала не включена в этом чате.')
-        await app_context.utils_service.sleep_and_delete(info_message, 10)
-        await app_context.utils_service.sleep_and_delete(message, 10)
+        await utils_service.sleep_and_delete(info_message, 10)
+        await utils_service.sleep_and_delete(message, 10)
         return
 
     info_message = await message.reply(
         f'Проверено участников: {checked_count}. Применено ограничений: {action_count}.')
-    await app_context.utils_service.sleep_and_delete(info_message, 30)
-    await app_context.utils_service.sleep_and_delete(message, 30)
+    await utils_service.sleep_and_delete(info_message, 30)
+    await utils_service.sleep_and_delete(message, 30)
 
 
 
@@ -140,7 +154,8 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
         await message.reply(skyuser.admin_denied_text())
         return
 
-    parts = message.text.split()
+    group_service = cast(Any, app_context.group_service)
+    parts = (message.text or "").split()
 
     if len(parts) != 2:
         await message.reply("Please provide a chat ID or username. "
@@ -157,6 +172,9 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
     if chat_id.startswith("@"):
         try:
+            if not message.bot:
+                await message.reply("Bot is not available for this message.")
+                return
             chat = await message.bot.get_chat(chat_id)
             chat_id = chat.id
         except TelegramBadRequest:
@@ -171,7 +189,7 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 
     await message.reply("Starting to remove deleted users. This may take some time...")
     try:
-        count = await app_context.group_service.remove_deleted_users(chat_id)
+        count = await group_service.remove_deleted_users(chat_id)
         await message.reply(f"Finished removing deleted users. \n Total deleted users: {count}")
     except Exception as e:
         logger.error(f"Error in cmd_delete_dead_members: {e}")
@@ -183,13 +201,18 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
 async def cmd_mute(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
+    if message.message_thread_id is None:
+        await message.reply('This command must be used in topic.')
+        return False
+    thread_id = message.message_thread_id
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
-    if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
+    if not _has_topic_admins(message.chat.id, thread_id, app_context):
         await message.reply('Local admins not set yet')
         return False
 
-    if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
+    if not skyuser.is_topic_admin(message.chat.id, thread_id):
         await message.reply('You are not local admin')
         return False
 
@@ -204,14 +227,20 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext, 
         user_id = message.reply_to_message.sender_chat.id
         user = f"Channel {message.reply_to_message.sender_chat.title}"
     else:
+        if not message.reply_to_message.from_user:
+            await message.reply('User not found in replied message')
+            return
         user_id = message.reply_to_message.from_user.id
         user = get_username_link(message.reply_to_message.from_user)
 
+    if not delta:
+        await message.reply('Unable to parse mute duration')
+        return
     end_time_str = (datetime.now() + delta).isoformat()
 
     # Use DI service
-    app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
-    all_mutes = app_context.admin_service.get_all_topic_mutes()
+    admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+    all_mutes = admin_service.get_all_topic_mutes()
     ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
@@ -222,18 +251,23 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext, 
 async def cmd_show_mutes(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
+    if message.message_thread_id is None:
+        await message.reply('This command must be used in topic.')
+        return False
+    thread_id = message.message_thread_id
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
-    if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
+    if not _has_topic_admins(message.chat.id, thread_id, app_context):
         await message.reply('Local admins not set yet')
         return False
 
-    if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
+    if not skyuser.is_topic_admin(message.chat.id, thread_id):
         await message.reply('You are not local admin')
         return False
 
     # Get mutes using DI service
-    topic_mutes = app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    topic_mutes = admin_service.get_topic_mutes_by_key(chat_thread_key)
 
     if not topic_mutes:
         await message.reply('No users are currently muted in this topic')
@@ -259,8 +293,8 @@ async def cmd_show_mutes(message: Message, session: Session, app_context: AppCon
     # Remove expired mutes
     if users_to_remove:
         for user_id in users_to_remove:
-            app_context.admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
-        all_mutes = app_context.admin_service.get_all_topic_mutes()
+            admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
+        all_mutes = admin_service.get_all_topic_mutes()
         ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     if muted_users:
@@ -274,49 +308,54 @@ async def cmd_show_mutes(message: Message, session: Session, app_context: AppCon
 async def message_reaction(message: MessageReactionUpdated, bot: Bot, session: Session, app_context: AppContext, skyuser: SkyUser | None = None):
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
+    message_any = cast(Any, message)
     if skyuser is None:
-        user = message.from_user if hasattr(message, "from_user") else None
+        user = message_any.from_user if hasattr(message_any, "from_user") else None
         skyuser = SkyUser(
             user_id=user.id if user else None,
             username=user.username if user else None,
-            chat_id=message.chat.id if message.chat else None,
+            chat_id=message_any.chat.id if message_any.chat else None,
             sender_chat_id=None,
             bot=bot,
             app_context=app_context,
         )
-    if message.new_reaction and isinstance(message.new_reaction[0], ReactionTypeCustomEmoji):
-        reaction: ReactionTypeCustomEmoji = message.new_reaction[0]
+    if message_any.new_reaction and isinstance(message_any.new_reaction[0], ReactionTypeCustomEmoji):
+        reaction: ReactionTypeCustomEmoji = message_any.new_reaction[0]
 
         if reaction.custom_emoji_id == '5220151067429335888':  # X emoji
             pass
 
         if reaction.custom_emoji_id in ['5220090169088045319', '5220223291599383581', '5221946956464548565']:
-            chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+            chat_thread_key = f"{message_any.chat.id}-{message_any.message_thread_id}"
 
-            if not _has_topic_admins(message.chat.id, message.message_thread_id, app_context):
-                await message.reply('Local admins not set yet')
+            if not _has_topic_admins(message_any.chat.id, message_any.message_thread_id, app_context):
+                await message_any.reply('Local admins not set yet')
                 return False
 
-            if not skyuser.is_topic_admin(message.chat.id, message.message_thread_id):
-                await message.reply('You are not local admin')
+            if not skyuser.is_topic_admin(message_any.chat.id, message_any.message_thread_id):
+                await message_any.reply('You are not local admin')
                 return False
 
-            if message.reply_to_message is None or message.reply_to_message.forum_topic_created:
-                await message.reply('Please send for reply message to set mute')
+            if message_any.reply_to_message is None or message_any.reply_to_message.forum_topic_created:
+                await message_any.reply('Please send for reply message to set mute')
                 return
 
-            delta = await parse_timedelta_from_message(message)
-            user_id = message.reply_to_message.from_user.id
+            delta = await parse_timedelta_from_message(cast(Message, message_any))
+            if not delta:
+                await message_any.reply('Unable to parse mute duration')
+                return
+            user_id = message_any.reply_to_message.from_user.id
             end_time_str = (datetime.now() + delta).isoformat()
 
-            user = get_username_link(message.reply_to_message.from_user)
+            user = get_username_link(message_any.reply_to_message.from_user)
 
             # Use DI service
-            app_context.admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
-            all_mutes = app_context.admin_service.get_all_topic_mutes()
+            admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+            all_mutes = admin_service.get_all_topic_mutes()
             ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
-            await message.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
+            await message_any.reply(f'{user} was set mute for {delta} in topic {chat_thread_key}')
 
     logger.info(f"message_reaction: {message}")
     #new_reaction=[ReactionTypeCustomEmoji(type='custom_emoji', custom_emoji_id='5220151067429335888')]
@@ -371,8 +410,10 @@ async def on_my_chat_member(update: ChatMemberUpdated, bot: Bot):
 async def on_migrate(message: Message, bot: Bot):
     old_chat_id = message.chat.id
     new_chat_id = message.migrate_to_chat_id
+    if new_chat_id is None:
+        return
     logger.info(f"Chat {old_chat_id} migrated to {new_chat_id}")
-    await message.bot.send_message(chat_id=new_chat_id,
+    await bot.send_message(chat_id=new_chat_id,
                                    text=f"Chat {old_chat_id} migrated to {new_chat_id}")
 
 
@@ -387,10 +428,13 @@ async def cmd_send_me(message: Message, bot: Bot, skyuser: SkyUser):
         await message.reply('Please send for reply message to get it')
         return
 
+    if not message.from_user:
+        await message.reply("Cannot identify user.")
+        return
     if message.reply_to_message:
         if message.reply_to_message.text or message.reply_to_message.caption:
             await bot.send_message(chat_id=message.from_user.id,
-                                   text=message.reply_to_message.html_text or message.reply_to_message.caption)
+                                   text=message.reply_to_message.html_text or message.reply_to_message.caption or "")
 
         if message.reply_to_message.photo:
             photo = message.reply_to_message.photo[-1]
@@ -409,17 +453,22 @@ async def cmd_send_me(message: Message, bot: Bot, skyuser: SkyUser):
 async def cmd_set_alert_me(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.notification_service or not app_context.utils_service:
         raise ValueError("app_context with notification_service and utils_service required")
+    if not message.from_user:
+        await message.reply("Cannot identify user.")
+        return
+    notification_service = cast(Any, app_context.notification_service)
+    utils_service = cast(Any, app_context.utils_service)
     chat_id = message.chat.id
     user_id = message.from_user.id
 
     # Use DI service
-    is_subscribed = app_context.notification_service.toggle_alert_user(chat_id, user_id)
-    alert_users = app_context.notification_service.get_alert_users(chat_id)
+    is_subscribed = notification_service.toggle_alert_user(chat_id, user_id)
+    alert_users = notification_service.get_alert_users(chat_id)
     ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.AlertMe, json.dumps(alert_users))
     msg = await message.reply('Added' if is_subscribed else 'Removed')
 
-    await app_context.utils_service.sleep_and_delete(message, 60)
-    await app_context.utils_service.sleep_and_delete(msg, 60)
+    await utils_service.sleep_and_delete(message, 60)
+    await utils_service.sleep_and_delete(msg, 60)
 
 
 @update_command_info("/calc", "Посчитать сообщения от ответного")
@@ -498,7 +547,8 @@ async def cmd_show_all_topic_admin(message: Message, app_context: AppContext, sk
     prefix = f"{chat_id}-"
 
     # Get topic admins using DI service
-    all_topic_admins = app_context.admin_service.get_all_topic_admins()
+    admin_service = cast(Any, app_context.admin_service)
+    all_topic_admins = admin_service.get_all_topic_admins()
 
     for key, admins in all_topic_admins.items():
         if key.startswith(prefix):
@@ -530,10 +580,11 @@ async def cmd_show_all_topic_admin(message: Message, app_context: AppContext, sk
 async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
+    group_service = cast(Any, app_context.group_service)
     if message.chat.id != MTLChats.MTLIDGroup:
         return
 
-    command_parts = message.text.split()
+    command_parts = (message.text or "").split()
     if len(command_parts) != 2:
         await message.reply("Usage: /get_users_csv <chat_id>")
         return
@@ -559,6 +610,9 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext)
         return
 
     try:
+        if not message.from_user:
+            await message.reply("Cannot identify user.")
+            return
         user_member = await bot.get_chat_member(target_chat_id, message.from_user.id)
         if user_member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.KICKED]:
             await message.reply("You are not a member of the target chat.")
@@ -574,7 +628,7 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext)
     await message.reply("Processing... This may take a while for large chats.")
 
     try:
-        members = await app_context.group_service.get_members(target_chat_id)
+        members = await group_service.get_members(target_chat_id)
     except Exception as e:
         await message.reply(f"Failed to get group members: {e}")
         logger.error(f"Failed to get group members for {target_chat_id}: {e}")

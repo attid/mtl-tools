@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
 from sqlalchemy.orm import Session
+from typing import Any, cast
 
 from db.repositories import ChatsRepository
 from other.constants import MTLChats
@@ -42,7 +43,7 @@ links_msg = f"""
 [BIM-EURMTL]({link_stellar}GDEK5KGFA3WCG3F2MLSXFGLR4T4M6W6BMGWY6FBDSDQM6HXFMRSTEWBW) / \
 [Wallet]({link_stellar}GB72L53HPZ2MNZQY4XEXULRD6AHYLK4CO55YTOBZUEORW2ZTSOEQ4MTL) / \
 [Бот сжигания]({link_stellar}GD44EAUQXNUVBJACZMW6GPT2GZ7I26EDQCU5HGKUTVEQTXIDEVGUFIRE) 
-Видео [Как подписывать](https://t.me/MTL_production/26) / [Как проверять](https://t.me/MTL_production/27) / [Как склеить\редактировать транзакции](https://t.me/MTL_production/28)
+Видео [Как подписывать](https://t.me/MTL_production/26) / [Как проверять](https://t.me/MTL_production/27) / [Как склеить\\редактировать транзакции](https://t.me/MTL_production/28)
 """
 
 
@@ -50,7 +51,8 @@ links_msg = f"""
 @router.message(CommandStart(deep_link=False, magic=F.args.is_(None)), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext, session: Session, bot: Bot):
     await state.clear()
-    ChatsRepository(session).save_bot_user(message.from_user.id, message.from_user.username)
+    if message.from_user:
+        ChatsRepository(session).save_bot_user(message.from_user.id, message.from_user.username)
     await message.reply(startmsg)
 
 
@@ -61,7 +63,7 @@ ALL_EMOJI = """👍 👎 ❤ 🔥 🥰 👏 😁 🤔 🤯 😱 🤬 😢 🎉 �
 
 @router.message(Command("emoji"), F.chat.type == "private")
 async def cmd_emoji(message: Message, state: FSMContext, session: Session, bot: Bot):
-    args = message.text.split()[1:]
+    args = (message.text or "").split()[1:]
 
     if not args:
         await message.answer("Используйте: /emoji [all | URL | URL emoji]")
@@ -85,7 +87,7 @@ async def cmd_emoji(message: Message, state: FSMContext, session: Session, bot: 
 @router.message(Command(commands=["save"]))
 async def cmd_save(message: Message):
     logger.info(f'{message.model_dump_json(indent=2)}')
-    if message.from_user.id == MTLChats.ITolstov:
+    if message.from_user and message.from_user.id == MTLChats.ITolstov:
         await message.answer("Готово")
     else:
         await message.answer('Saved')
@@ -106,8 +108,9 @@ async def cmd_show_id(message: Message):
 
 @router.message(Command(commands=["me"]))
 async def cmd_me(message: Message, bot: Bot):
-    msg = ' '.join(message.text.split(' ')[1:])
-    msg = f'<i><b>{message.from_user.username}</b> {msg}</i>'
+    msg = ' '.join((message.text or '').split(' ')[1:])
+    username = message.from_user.username if message.from_user and message.from_user.username else "user"
+    msg = f'<i><b>{username}</b> {msg}</i>'
     await bot.send_message(chat_id=message.chat.id, text=msg, parse_mode=ParseMode.HTML,
                            reply_to_message_id=message.reply_to_message.message_id if message.reply_to_message else None,
                            message_thread_id=None if message.reply_to_message else message.message_thread_id)
@@ -164,4 +167,4 @@ def register_handlers(dp, bot):
     dp.include_router(router)
     logger.info('router start_router was loaded')
 
-register_handlers.priority = 10
+cast(Any, register_handlers).priority = 10

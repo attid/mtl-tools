@@ -2,6 +2,7 @@ from aiogram import Bot, Router
 from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from loguru import logger
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from services.app_context import AppContext
 
@@ -85,7 +86,12 @@ async def _resolve_chat_id(bot: Bot, identifier: str) -> int:
 
 
 @router.inline_query()
-async def inline_handler(inline_query: InlineQuery, session: Session, bot: Bot, app_context: AppContext = None):
+async def inline_handler(
+    inline_query: InlineQuery,
+    session: Session,
+    bot: Bot,
+    app_context: Optional[AppContext] = None,
+):
     try:
         if not app_context:
             logger.error("app_context is None in inline_handler!")

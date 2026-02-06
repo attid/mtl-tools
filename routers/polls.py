@@ -1,6 +1,7 @@
 import json
 import math
 from contextlib import suppress
+from typing import Any, cast
 
 from aiogram import Router, Bot, F
 from loguru import logger
@@ -8,7 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, PollAnswer, \
-    ReactionTypeEmoji
+    ReactionTypeEmoji, MessageOriginChannel
 from sqlalchemy.orm import Session
 
 from other.constants import MTLChats, BotValueTypes
@@ -41,6 +42,7 @@ chat_to_address = {-1001649743884: MTLAddresses.public_issuer,
 async def channel_post(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service:
         raise ValueError("app_context with poll_service required")
+    poll_service = cast(Any, app_context.poll_service)
     if message.chat.id in (-1001649743884, -1001837984392, -1002042260878, -1002210483308):
         if message.poll:
             buttons = []
@@ -57,7 +59,7 @@ async def channel_post(message: Message, session: Session, app_context: AppConte
             my_poll['message_id'] = msg.message_id
             my_poll['buttons'] = my_buttons
 
-            app_context.poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
+            poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
 
 
 @update_command_info("/poll", "Создать голование с учетом веса голосов, "
@@ -66,6 +68,7 @@ async def channel_post(message: Message, session: Session, app_context: AppConte
 async def cmd_poll(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service:
         raise ValueError("app_context with poll_service required")
+    poll_service = cast(Any, app_context.poll_service)
     if message.reply_to_message and message.reply_to_message.poll:
         poll = message.reply_to_message.poll
         buttons = []
@@ -81,7 +84,7 @@ async def cmd_poll(message: Message, session: Session, app_context: AppContext):
         my_poll['message_id'] = msg.message_id
         my_poll['buttons'] = my_buttons
 
-        app_context.poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
+        poll_service.save_poll(session, message.chat.id, msg.message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -93,15 +96,17 @@ async def cmd_poll(message: Message, session: Session, app_context: AppContext):
 async def cmd_poll_rt(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service:
         raise ValueError("app_context with poll_service required")
+    poll_service = cast(Any, app_context.poll_service)
     if message.reply_to_message:
-        my_poll = app_context.poll_service.load_poll(session,message.chat.id, message.reply_to_message.message_id)
+        my_poll = poll_service.load_poll(session, message.chat.id, message.reply_to_message.message_id)
+        command_text = message.text or ""
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
-            my_poll["question"] = message.text[len('/poll_replace_text '):]
+            my_poll["question"] = command_text[len('/poll_replace_text '):]
 
-            app_context.poll_service.save_poll(session,message.chat.id, message.reply_to_message.message_id, my_poll)
+            poll_service.save_poll(session, message.chat.id, message.reply_to_message.message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -114,6 +119,7 @@ async def cmd_poll_rt(message: Message, session: Session, app_context: AppContex
 async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.poll_service:
         raise ValueError("app_context with poll_service required")
+    poll_service = cast(Any, app_context.poll_service)
     if message.reply_to_message and message.reply_to_message.poll:
         await bot.stop_poll(message.chat.id, message.reply_to_message.message_id)
         return
@@ -124,14 +130,14 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_conte
         else:
             message_id = message.reply_to_message.message_id
 
-        my_poll = app_context.poll_service.load_poll(session,message.chat.id, message_id)
+        my_poll = poll_service.load_poll(session, message.chat.id, message_id)
 
         if my_poll["closed"]:
             await message.reply("This poll is closed!")
         else:
             my_poll["closed"] = True
 
-            app_context.poll_service.save_poll(session,message.chat.id, message_id, my_poll)
+            poll_service.save_poll(session, message.chat.id, message_id, my_poll)
     else:
         await message.answer('Требуется в ответ на голосование')
 
@@ -143,6 +149,8 @@ async def cmd_poll_close(message: Message, session: Session, bot: Bot, app_conte
 async def cmd_poll_check(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service or not app_context.voting_service:
         raise ValueError("app_context with poll_service and voting_service required")
+    poll_service = cast(Any, app_context.poll_service)
+    voting_service = cast(Any, app_context.voting_service)
     chat_id = message.chat.id
 
     if message.reply_to_message:
@@ -150,27 +158,33 @@ async def cmd_poll_check(message: Message, session: Session, app_context: AppCon
         # Our service load_poll uses -1 * message_id
         # Here we need to manually handle or adjust service.
         # Let's keep it simple for now as it's a specific case.
-        if message.reply_to_message.forward_origin:
-             actual_chat_id = message.reply_to_message.forward_origin.chat.id
-             actual_msg_id = message.reply_to_message.forward_origin.message_id
+        forward_origin = message.reply_to_message.forward_origin
+        if isinstance(forward_origin, MessageOriginChannel):
+            actual_chat_id = forward_origin.chat.id
+            actual_msg_id = forward_origin.message_id
         else:
             actual_chat_id = chat_id
             actual_msg_id = message.reply_to_message.message_id
 
-        my_poll = app_context.poll_service.load_poll(session,actual_chat_id, actual_msg_id)
+        my_poll = poll_service.load_poll(session, actual_chat_id, actual_msg_id)
 
         address_key = chat_to_address.get(actual_chat_id)
-        votes_detail = app_context.voting_service.get_vote_weights(address_key)
+        votes_detail = voting_service.get_vote_weights(address_key) if address_key else None
         if address_key and votes_detail:
             all_voters = set(votes_detail.keys())
             with suppress(KeyError):
                 all_voters.remove("NEED")
 
-            for button in my_poll["buttons"]:
-                for voter in button[2]:
-                    voter = voter.strip("'")
-                    if voter in all_voters:
-                        all_voters.remove(voter)
+            buttons = my_poll.get("buttons")
+            if isinstance(buttons, list):
+                for button in buttons:
+                    if isinstance(button, list) and len(button) > 2 and isinstance(button[2], list):
+                        for voter in button[2]:
+                            if not isinstance(voter, str):
+                                continue
+                            normalized_voter = voter.strip("'")
+                            if normalized_voter in all_voters:
+                                all_voters.remove(normalized_voter)
 
             remaining_voters = ' '.join(all_voters)
             await message.reply_to_message.reply(f'{remaining_voters}\nСмотрите голосование / Look at the poll')
@@ -185,31 +199,50 @@ async def cmd_poll_check(message: Message, session: Session, app_context: AppCon
 async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service or not app_context.voting_service:
         raise ValueError("app_context with poll_service and voting_service required")
-    answer = callback_data.answer
-    user = '@' + query.from_user.username.lower() if query.from_user.username else query.from_user.id
+    poll_service = cast(Any, app_context.poll_service)
+    voting_service = cast(Any, app_context.voting_service)
+    if not isinstance(query.message, Message):
+        await query.answer("Message is not accessible", show_alert=True)
+        return False
 
-    my_poll = app_context.poll_service.load_poll(session,query.message.chat.id, query.message.message_id)
+    answer = callback_data.answer
+    user_key = f"@{query.from_user.username.lower()}" if query.from_user.username else str(query.from_user.id)
+
+    my_poll = poll_service.load_poll(session, query.message.chat.id, query.message.message_id)
 
     if my_poll["closed"]:
         await query.answer("This poll is closed!", show_alert=True)
     else:
         address = chat_to_address.get(query.message.chat.id)
-        local_votes = app_context.voting_service.get_vote_weights(address)
+        local_votes = voting_service.get_vote_weights(address) if address else None
         if not local_votes:
             await query.answer("No vote data for this chat", show_alert=True)
             return False
 
         need_close = False
-        if str(user) in local_votes or user in local_votes:
-            vote_weight = local_votes.get(user) or local_votes.get(str(user))
+        buttons = my_poll.get("buttons")
+        if not isinstance(buttons, list) or answer < 0 or answer >= len(buttons):
+            await query.answer("Poll data is invalid", show_alert=True)
+            return False
+        if user_key in local_votes:
+            vote_weight_raw = local_votes.get(user_key)
+            vote_weight = int(vote_weight_raw) if isinstance(vote_weight_raw, (int, float)) else 0
+            if vote_weight <= 0:
+                await query.answer("Vote weight is invalid", show_alert=True)
+                return False
 
-            if user in my_poll["buttons"][answer][2]:
-                my_poll["buttons"][answer][1] -= vote_weight
-                my_poll["buttons"][answer][2].remove(user)
+            current_button = buttons[answer]
+            if not (isinstance(current_button, list) and len(current_button) > 2 and isinstance(current_button[2], list)):
+                await query.answer("Poll data is invalid", show_alert=True)
+                return False
+            if user_key in current_button[2]:
+                current_button[1] -= vote_weight
+                current_button[2].remove(user_key)
             else:
-                my_poll["buttons"][answer][1] += vote_weight
-                my_poll["buttons"][answer][2].append(user)
-                if my_poll["buttons"][answer][1] >= local_votes["NEED"]["75"]:
+                current_button[1] += vote_weight
+                current_button[2].append(user_key)
+                need_votes = local_votes.get("NEED", {}).get("75") if isinstance(local_votes.get("NEED"), dict) else None
+                if isinstance(need_votes, (int, float)) and current_button[1] >= need_votes:
                     need_close = True
             msg = my_poll["question"] + "\n\n"
             buttons = []
@@ -223,7 +256,7 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
             if need_close:
                 my_poll["closed"] = True
 
-            app_context.poll_service.save_poll(session,query.message.chat.id, query.message.message_id, my_poll)
+            poll_service.save_poll(session, query.message.chat.id, query.message.message_id, my_poll)
         else:
             await query.answer("You are't in list!", show_alert=True)
     return True
@@ -232,6 +265,8 @@ async def cq_join_list(query: CallbackQuery, callback_data: PollCallbackData, se
 async def cmd_save_votes(session: Session, app_context: AppContext):
     if not app_context or not app_context.stellar_service or not app_context.config_service or not app_context.voting_service:
         raise ValueError("app_context with stellar_service, config_service, and voting_service required")
+    stellar_service = cast(Any, app_context.stellar_service)
+    voting_service = cast(Any, app_context.voting_service)
     vote_list = {}
     for chat_id in chat_to_address:
         address = chat_to_address[chat_id]
@@ -241,12 +276,12 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
             total = 0
             vote_list[address] = {}
 
-            _, signers = await app_context.stellar_service.get_balances(address=address, return_signers=True)
+            _, signers = await stellar_service.get_balances(address=address, return_signers=True)
 
             for signer in signers:
                 if signer['weight'] > 0:
                     total += signer['weight']
-                    username = await app_context.stellar_service.address_id_to_username(signer['key'], full_data=True)
+                    username = await stellar_service.address_id_to_username(signer['key'], full_data=True)
 
                     key_ = username.lower()
                     vote_list[address][key_] = signer['weight']
@@ -256,7 +291,7 @@ async def cmd_save_votes(session: Session, app_context: AppContext):
                                           '100': total}
 
     ConfigRepository(session).save_bot_value(0, BotValueTypes.Votes, json.dumps(vote_list))
-    app_context.voting_service.set_all_vote_weights(vote_list)
+    voting_service.set_all_vote_weights(vote_list)
     return vote_list
 
 
@@ -287,30 +322,36 @@ async def cmd_poll_reload_vote_handler(message: Message, session: Session, app_c
 async def cmd_apoll(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.gspread_service or not app_context.stellar_service or not app_context.poll_service:
         raise ValueError("app_context with gspread_service, stellar_service, and poll_service required")
+    gspread_service = cast(Any, app_context.gspread_service)
+    stellar_service = cast(Any, app_context.stellar_service)
+    poll_service = cast(Any, app_context.poll_service)
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
         my_poll = {}
 
-        google_url, google_id = await app_context.gspread_service.copy_a_table(message.reply_to_message.poll.question)
-        mtlap_votes = await app_context.stellar_service.get_mtlap_votes()
+        google_url, google_id = await gspread_service.copy_a_table(message.reply_to_message.poll.question)
+        mtlap_votes = await stellar_service.get_mtlap_votes()
 
         options = []
         options.extend([option.text for option in message.reply_to_message.poll.options])
 
-        await app_context.gspread_service.update_a_table_first(google_id, message.reply_to_message.poll.question, options, mtlap_votes)
+        await gspread_service.update_a_table_first(google_id, message.reply_to_message.poll.question, options, mtlap_votes)
 
         msg = await message.answer_poll(question=message.reply_to_message.poll.question,
                                         options=options,
                                         allows_multiple_answers=message.reply_to_message.poll.allows_multiple_answers,
                                         is_anonymous=message.reply_to_message.poll.is_anonymous)
         msg2 = await msg.reply(f'url {google_url}\nData will be here soon', disable_web_page_preview=True)
+        if not msg.poll:
+            await message.answer("Не удалось создать голосование")
+            return
         my_poll["poll_id"] = msg.poll.id
         my_poll["info_chat_id"] = msg2.chat.id
         my_poll["info_message_id"] = msg2.message_id
         my_poll["google_id"] = google_id
         my_poll["google_url"] = google_url
 
-        app_context.poll_service.save_mtla_poll(session,msg.poll.id, my_poll)
+        poll_service.save_mtla_poll(session, msg.poll.id, my_poll)
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -323,17 +364,23 @@ async def cmd_apoll(message: Message, session: Session, app_context: AppContext)
 async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.poll_service or not app_context.grist_service or not app_context.gspread_service:
         raise ValueError("app_context with poll_service, grist_service, and gspread_service required")
-    my_poll = app_context.poll_service.load_mtla_poll(session,poll.poll_id)
-    user_address_data = await app_context.grist_service.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"TGID": [poll.user.id]})
+    if not poll.user:
+        return
+    poll_service = cast(Any, app_context.poll_service)
+    grist_service = cast(Any, app_context.grist_service)
+    gspread_service = cast(Any, app_context.gspread_service)
+    my_poll = poll_service.load_mtla_poll(session, poll.poll_id)
+    user_address_data = await grist_service.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"TGID": [poll.user.id]})
 
     if not user_address_data:
         with suppress(Exception):
-            await bot.send_message(my_poll.get("info_chat_id", MTLChats.ITolstov), f'User @{poll.user.username} not found')
+            username = poll.user.username if poll.user.username else poll.user.id
+            await bot.send_message(my_poll.get("info_chat_id", MTLChats.ITolstov), f'User @{username} not found')
         return
     else:
         user_address = user_address_data[0]["Stellar"]
 
-    result = await app_context.gspread_service.update_a_table_vote(my_poll.get("google_id"), user_address, poll.option_ids)
+    result = await gspread_service.update_a_table_vote(my_poll.get("google_id"), user_address, poll.option_ids)
 
     msg_text = f'<a href="{my_poll.get("google_url")}">GoogleSheets</a>\n'
     if result:
@@ -350,11 +397,13 @@ async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, 
 async def cmd_apoll_check_handler(message: Message, session: Session, app_context: AppContext):
     if not app_context or not app_context.poll_service or not app_context.gspread_service:
         raise ValueError("app_context with poll_service and gspread_service required")
+    poll_service = cast(Any, app_context.poll_service)
+    gspread_service = cast(Any, app_context.gspread_service)
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
 
-        my_poll = app_context.poll_service.load_mtla_poll(session,message.reply_to_message.poll.id)
-        result, delegates = await app_context.gspread_service.check_vote_table(my_poll.get("google_id"))
+        my_poll = poll_service.load_mtla_poll(session, message.reply_to_message.poll.id)
+        result, delegates = await gspread_service.check_vote_table(my_poll.get("google_id"))
 
         msg_text = ' '.join(result)
         msg_text2 = ' '.join(delegates)

@@ -351,6 +351,7 @@ class StellarNotificationService:
             ("asset_code", asset_code),
             ("asset_issuer", asset_issuer),
             ("nonce", nonce),
+            ("operation_types", [1]),
             ("reaction_url", webhook),
         ]
 
@@ -535,6 +536,8 @@ class StellarNotificationService:
             current_sub_resources: set[str] = set()
             current_sub_map: dict[str, str] = {}  # resource -> subscription_id
 
+            current_sub_details: dict[str, dict[str, Any]] = {}  # resource -> full sub dict
+
             for sub in current_subs:
                 sub_id = sub.get("id") or sub.get("subscription_id")
                 # Resource can be account or asset
@@ -544,6 +547,7 @@ class StellarNotificationService:
                 if resource and sub_id:
                     current_sub_resources.add(resource)
                     current_sub_map[resource] = sub_id
+                    current_sub_details[resource] = sub
 
             # Process asset subscriptions
             for asset_cfg in assets_config:
@@ -562,16 +566,35 @@ class StellarNotificationService:
                 min_amount = int(asset_cfg.get("min", 0))
 
                 if resource_key in current_sub_resources:
-                    # Already subscribed, just update map
-                    sub_id = current_sub_map[resource_key]
-                    self.subscriptions_map[sub_id] = {
-                        "chat_id": chat_id,
-                        "topic_id": topic_id,
-                        "type": "asset",
-                        "asset": asset,
-                        "min": min_amount,
-                    }
-                    logger.debug(f"Asset {asset_code} already subscribed: {sub_id}")
+                    # Check if existing subscription has correct operation_types filter
+                    existing_sub = current_sub_details.get(resource_key, {})
+                    existing_op_types = existing_sub.get("operation_types")
+                    if existing_op_types != [1]:
+                        # Recreate subscription with payment-only filter
+                        old_sub_id = current_sub_map[resource_key]
+                        logger.info(f"Recreating asset subscription {asset_code}: operation_types {existing_op_types} -> [1]")
+                        await self.unsubscribe(old_sub_id)
+                        await asyncio.sleep(0.1)
+                        sub_id = await self.subscribe_token(asset_code, asset_issuer)
+                        if sub_id:
+                            self.subscriptions_map[sub_id] = {
+                                "chat_id": chat_id,
+                                "topic_id": topic_id,
+                                "type": "asset",
+                                "asset": asset,
+                                "min": min_amount,
+                            }
+                    else:
+                        # Already subscribed with correct filter, just update map
+                        sub_id = current_sub_map[resource_key]
+                        self.subscriptions_map[sub_id] = {
+                            "chat_id": chat_id,
+                            "topic_id": topic_id,
+                            "type": "asset",
+                            "asset": asset,
+                            "min": min_amount,
+                        }
+                        logger.debug(f"Asset {asset_code} already subscribed: {sub_id}")
                 else:
                     # Need to subscribe
                     sub_id = await self.subscribe_token(asset_code, asset_issuer)

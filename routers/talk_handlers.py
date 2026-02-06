@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import (Message, InlineKeyboardMarkup, InlineKeyboardButton, URLInputFile)
 from loguru import logger
 from sqlalchemy.orm import Session
+from typing import Any, cast
 
 from other.text_tools import extract_url
 from middlewares.throttling import rate_limit
@@ -23,24 +24,30 @@ router = Router()
 my_talk_message = []
 
 
-def _is_skynet_img_user(username: str, app_context) -> bool:
+def _is_skynet_img_user(username: str | None, app_context: AppContext) -> bool:
     """Check if user is allowed to use /img command."""
     if not app_context or not app_context.admin_service:
         raise ValueError("app_context with admin_service required")
-    return app_context.admin_service.is_skynet_img_user(username)
+    if not username:
+        return False
+    admin_service = cast(Any, app_context.admin_service)
+    return admin_service.is_skynet_img_user(username)
 
 
 @router.message(Command(commands=["img"]))
 async def cmd_img(message: Message, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.ai_service or not app_context.admin_service:
         raise ValueError("app_context with ai_service and admin_service required")
+    ai_service = cast(Any, app_context.ai_service)
     username = message.from_user.username if message.from_user else None
     if message.chat.id in (MTLChats.CyberGroup,) or _is_skynet_img_user(username, app_context):
+        actor_username = message.from_user.username if message.from_user and message.from_user.username else "unknown"
+        message_text = message.text or ""
         await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
-        await bot.send_message(chat_id=MTLChats.ITolstov, text=f'{message.from_user.username}:{message.text}')
-        text = message.text[5:]
+        await bot.send_message(chat_id=MTLChats.ITolstov, text=f'{actor_username}:{message_text}')
+        text = message_text[5:]
 
-        image_urls = await app_context.ai_service.generate_image(text)
+        image_urls = await ai_service.generate_image(text)
 
         for url in image_urls:
             image_file = URLInputFile(url, filename="image.png")
@@ -54,6 +61,7 @@ async def cmd_img(message: Message, bot: Bot, app_context: AppContext):
 async def cmd_comment(message: Message, app_context: AppContext):
     if not app_context or not app_context.ai_service:
         raise ValueError("app_context with ai_service required")
+    ai_service = cast(Any, app_context.ai_service)
     if message.reply_to_message is None:
         await message.reply('А чего комментировать то?')
         return
@@ -66,7 +74,7 @@ async def cmd_comment(message: Message, app_context: AppContext):
     except Exception:
         pass
 
-    msg = await app_context.ai_service.talk_get_comment(message.chat.id, msg)
+    msg = await ai_service.talk_get_comment(message.chat.id, msg)
 
     msg = await message.reply_to_message.reply(msg)
     my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
@@ -76,9 +84,11 @@ async def cmd_comment(message: Message, app_context: AppContext):
 async def cmd_last_check_reply_to_bot(message: Message, app_context: AppContext):
     if not app_context or not app_context.ai_service or not app_context.talk_service:
         raise ValueError("app_context with ai_service and talk_service required")
-    if f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
+    ai_service = cast(Any, app_context.ai_service)
+    talk_service = cast(Any, app_context.talk_service)
+    if message.reply_to_message and f'{message.reply_to_message.message_id}*{message.chat.id}' in my_talk_message:
         # answer on bot message
-        msg_text = await app_context.ai_service.talk(message.chat.id, message.text)
+        msg_text = await ai_service.talk(message.chat.id, message.text or "")
 
         try:
             msg = await message.reply(msg_text, parse_mode=ParseMode.MARKDOWN)
@@ -86,7 +96,7 @@ async def cmd_last_check_reply_to_bot(message: Message, app_context: AppContext)
             msg = await message.reply(msg_text)
         my_talk_message.append(f'{msg.message_id}*{msg.chat.id}')
 
-    await app_context.talk_service.answer_notify_message(message, app_context)
+    await talk_service.answer_notify_message(message, app_context)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -100,6 +110,8 @@ async def cmd_last_check_nap(message: Message):
 async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.stellar_service or not app_context.utils_service or not app_context.config_service:
         raise ValueError("app_context with stellar_service, utils_service, and config_service required")
+    stellar_service = cast(Any, app_context.stellar_service)
+    utils_service = cast(Any, app_context.utils_service)
     if message.reply_to_message:
         url = None
         if message.reply_to_message.text:
@@ -109,24 +121,24 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
         if not url and message.reply_to_message.entities:
             for entity in message.reply_to_message.entities:
                 if entity.type in ['url', 'text_link']:
-                    url = entity.url if entity.type == 'text_link' else entity.extract_from(
-                        message.reply_to_message.text)
-                    if 'eurmtl.me/sign_tools' in url:
+                    source_text = message.reply_to_message.text or ""
+                    url = entity.url if entity.type == 'text_link' else entity.extract_from(source_text)
+                    if url and 'eurmtl.me/sign_tools' in url:
                         break
                     else:
                         url = None
 
         if url:
-            msg = await app_context.stellar_service.check_url_xdr(url)
+            msg = await stellar_service.check_url_xdr(url)
             msg = '\n'.join(msg)
-            await app_context.utils_service.multi_reply(message, msg)
+            await utils_service.multi_reply(message, msg)
         else:
             await message.reply('Ссылка не найдена')
     else:
-        pinned_url = ConfigRepository(session).load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
-        msg = await app_context.stellar_service.check_url_xdr(pinned_url)
+        pinned_url = ConfigRepository(session).load_bot_value(message.chat.id, BotValueTypes.PinnedUrl) or ""
+        msg = await stellar_service.check_url_xdr(pinned_url)
         msg = '\n'.join(msg)
-        await app_context.utils_service.multi_reply(message, msg[:4000])
+        await utils_service.multi_reply(message, msg[:4000])
 
 
 @update_command_info("Скайнет напомни", "Попросить Скайнет напомнить про подпись транзакции. Только в рабочем чате.")
@@ -135,7 +147,8 @@ async def cmd_last_check_decode(message: Message, session: Session, bot: Bot, ap
 async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.talk_service:
         raise ValueError("app_context with talk_service required")
-    await app_context.talk_service.remind(message, session, app_context, skyuser=skyuser)
+    talk_service = cast(Any, app_context.talk_service)
+    await talk_service.remind(message, session, app_context, skyuser=skyuser)
 
 
 @router.message(StartText(('SKYNET', 'СКАЙНЕТ')),
@@ -143,18 +156,21 @@ async def cmd_last_check_remind(message: Message, session: Session, bot: Bot, ap
 async def cmd_last_check_task(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.ai_service:
         raise ValueError("app_context with ai_service required")
+    ai_service = cast(Any, app_context.ai_service)
     tmp_msg = await message.reply('Анализирую задачу...')
     msg = ''
     if message.reply_to_message:
-        msg += (f'сообщение от: {message.reply_to_message.from_user.username} \n'
+        reply_username = message.reply_to_message.from_user.username if message.reply_to_message.from_user and message.reply_to_message.from_user.username else "unknown"
+        msg += (f'сообщение от: {reply_username} \n'
                 f'ссылка: {message.reply_to_message.get_url()}\n')
         msg += f'текст: """{message.reply_to_message.text}"""\n\n\n'
 
-    msg += f'сообщение от: {message.from_user.username} \n'
+    sender_username = message.from_user.username if message.from_user and message.from_user.username else "unknown"
+    msg += f'сообщение от: {sender_username} \n'
     msg += f'ссылка: {message.get_url()}\n'
-    msg += f'текст: """{message.text[7:]}"""\n\n\n'
+    msg += f'текст: """{(message.text or "")[7:]}"""\n\n\n'
 
-    msg = await app_context.ai_service.add_task_to_google(msg)
+    msg = await ai_service.add_task_to_google(msg)
 
     await message.reply(msg)
     await tmp_msg.delete()
@@ -165,7 +181,8 @@ async def cmd_last_check_task(message: Message, session: Session, bot: Bot, app_
 async def cmd_last_check_horoscope(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.ai_service:
         raise ValueError("app_context with ai_service required")
-    horoscope = app_context.ai_service.get_horoscope()
+    ai_service = cast(Any, app_context.ai_service)
+    horoscope = ai_service.get_horoscope()
     await message.answer('\n'.join(horoscope), parse_mode=ParseMode.MARKDOWN)
 
 
@@ -180,24 +197,25 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
         await message.reply('You are not my admin.')
         return False
 
-    report_service = app_context.report_service
+    report_service = cast(Any, app_context.report_service)
+    message_text = message.text or ""
 
-    if has_words(message.text, ['MM', 'ММ']):
+    if has_words(message_text, ['MM', 'ММ']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await report_service.update_mmwb_report(session)
         await msg.reply('Обновление завершено')
-    if has_words(message.text, ['БДМ', 'BIM']):
+    if has_words(message_text, ['БДМ', 'BIM']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await report_service.update_bim_data(session)
         await msg.reply('Обновление завершено')
-    if has_words(message.text, ['ГАРАНТОВ']):
+    if has_words(message_text, ['ГАРАНТОВ']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await report_service.update_guarantors_report()
         await msg.reply('Обновление завершено')
-    if has_words(message.text, ['ОТЧЕТ', 'отчёт', 'report']):
+    if has_words(message_text, ['ОТЧЕТ', 'отчёт', 'report']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
@@ -207,7 +225,7 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
 
         await report_service.update_main_report(session)
         await msg.reply('Обновление завершено')
-    if has_words(message.text, ['donate', 'donates', 'donated']):
+    if has_words(message_text, ['donate', 'donates', 'donated']):
         msg = await message.reply('Зай, я запустила обновление')
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await report_service.update_donate_report(session)
@@ -219,11 +237,15 @@ async def cmd_last_check_update(message: Message, session: Session, bot: Bot, ap
 async def handle_private_message_links(message: Message, bot: Bot):
     telegram_links = []
     buttons = []
+    entities = message.entities or []
+    base_text = message.text or ""
+    if not message.from_user:
+        return
 
-    for entity in message.entities:
+    for entity in entities:
         if entity.type in ['url', 'text_link']:
-            url = entity.url if entity.type == 'text_link' else entity.extract_from(message.text)
-            if 't.me/' in url:
+            url = entity.url if entity.type == 'text_link' else entity.extract_from(base_text)
+            if url and 't.me/' in url:
                 msg_info = extract_telegram_info(url)
                 if msg_info:
                     try:
@@ -240,7 +262,8 @@ async def handle_private_message_links(message: Message, bot: Bot):
 
                             if msg_info.message_text:
                                 telegraph_link = await miniapps.create_uuid_page(msg_info)
-                                buttons.append([InlineKeyboardButton(text=f'ПП {msg_info.chat_name[:30]}',
+                                chat_name = msg_info.chat_name or ""
+                                buttons.append([InlineKeyboardButton(text=f'ПП {chat_name[:30]}',
                                                                      url=telegraph_link.url)])
                     except TelegramBadRequest as e:
                         logger.error(f"Ошибка TelegramBadRequest при обработке {url}: {e}")
@@ -264,20 +287,22 @@ async def handle_private_message_links(message: Message, bot: Bot):
 async def cmd_last_check_p(message: Message, session: Session, bot: Bot, app_context: AppContext):
     if not app_context or not app_context.ai_service:
         raise ValueError("app_context with ai_service required")
+    ai_service = cast(Any, app_context.ai_service)
+    message_text = message.text or ""
     gpt4 = False
-    if len(message.text) > 7 and message.text[7] == '4':
+    if len(message_text) > 7 and message_text[7] == '4':
         if message.chat.id != MTLChats.CyberGroup:
             await message.reply('Только в канале фракции Киберократии')
             return False
         gpt4 = True
 
-    msg = message.text
+    msg = message_text
     if message.reply_to_message and message.reply_to_message.text:
-        msg = f"{message.reply_to_message.text} \n================\n{message.text}"
+        msg = f"{message.reply_to_message.text} \n================\n{message_text}"
 
-    googleit = 'загугли' in message.text.lower()
+    googleit = 'загугли' in message_text.lower()
 
-    msg = await app_context.ai_service.talk(message.chat.id, msg, gpt4, googleit=googleit)
+    msg = await ai_service.talk(message.chat.id, msg, gpt4, googleit=googleit)
 
     if msg is None:
         msg = '=( connection error, retry again )='
@@ -298,4 +323,4 @@ def register_handlers(dp, bot):
     logger.info('router talk_handlers was loaded')
 
 
-register_handlers.priority = 90
+cast(Any, register_handlers).priority = 90

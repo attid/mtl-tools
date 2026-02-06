@@ -1,7 +1,7 @@
 import asyncio
 import json
 from contextlib import suppress
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -310,12 +310,24 @@ def _log_feature_flags_stats(app_context):
                      "Шлет пользователю капчу для подтверждения его человечности. "
                      "Работает только совместно с /notify_join_request")
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
-@update_command_info("/set_captcha", "Включает\Выключает капчу", 1, "captcha")
-@update_command_info("/set_moderate", "Включает\Выключает режим модерации по топикам/topic", 1, "moderate")
+@update_command_info("/set_captcha", "Включает\\Выключает капчу", 1, "captcha")
+@update_command_info("/set_moderate", "Включает\\Выключает режим модерации по топикам/topic", 1, "moderate")
 @router.message(Command(commands=list(commands_info.keys())))
-async def universal_command_handler(message: Message, bot: Bot, session, app_context=None, skyuser: SkyUser = None):
-    command = message.text.lower().split()[0][1:]
-    command_arg = message.text.lower().split()[1] if len(message.text.lower().split()) > 1 else None
+async def universal_command_handler(
+    message: Message,
+    bot: Bot,
+    session,
+    app_context=None,
+    skyuser: SkyUser | None = None,
+):
+    message_text = (message.text or "").lower()
+    if not message_text:
+        return
+    parts = message_text.split()
+    if not parts:
+        return
+    command = parts[0][1:]
+    command_arg = parts[1] if len(parts) > 1 else None
     command_info = commands_info[command]
     action_type = command_info[1]
     admin_check = command_info[2]
@@ -335,7 +347,8 @@ async def universal_command_handler(message: Message, bot: Bot, session, app_con
 
     if action_type == "toggle_chat" and command_arg and len(command_arg) > 5:
         dest_chat = command_arg.split(":")[0]
-        if not skyuser or not await skyuser.is_admin(dest_chat):
+        dest_chat_id = int(dest_chat) if dest_chat.lstrip("-").isdigit() else None
+        if not skyuser or not await skyuser.is_admin(dest_chat_id):
             text = skyuser.admin_denied_text("Bad target chat. Or you are not admin.") if skyuser else "Bad target chat. Or you are not admin."
             await message.reply(text)
             return
@@ -366,18 +379,22 @@ async def universal_command_handler(message: Message, bot: Bot, session, app_con
 
 async def handle_command(message: Message, command_info, session, app_context=None):
     """Handle toggle commands using feature_flags service."""
+    if not app_context or not app_context.feature_flags or not app_context.utils_service:
+        raise ValueError("app_context with feature_flags and utils_service required")
+    feature_flags = cast(Any, app_context.feature_flags)
+    utils_service = cast(Any, app_context.utils_service)
     chat_id = message.chat.id
     db_value_type = command_info[0]
     feature_name = command_info[4]
 
-    command_args = message.text.split()[1:]  # List of arguments after command
+    command_args = (message.text or "").split()[1:]  # List of arguments after command
 
     # Check current state using feature_flags service
-    is_enabled = app_context.feature_flags.is_enabled(chat_id, feature_name)
+    is_enabled = feature_flags.is_enabled(chat_id, feature_name)
 
     if is_enabled:
         # Disable the feature
-        app_context.feature_flags.set_feature(chat_id, feature_name, False, persist=False)
+        feature_flags.set_feature(chat_id, feature_name, False, persist=False)
         ConfigRepository(session).save_bot_value(chat_id, db_value_type, None)
 
         # Sync removal to specialized DI services
@@ -387,7 +404,7 @@ async def handle_command(message: Message, command_info, session, app_context=No
     else:
         # Enable the feature
         value_to_set = command_args[0] if command_args else '1'
-        app_context.feature_flags.set_feature(chat_id, feature_name, True, persist=False)
+        feature_flags.set_feature(chat_id, feature_name, True, persist=False)
         ConfigRepository(session).save_bot_value(chat_id, db_value_type, value_to_set)
 
         # Sync addition to specialized DI services
@@ -395,7 +412,7 @@ async def handle_command(message: Message, command_info, session, app_context=No
 
         info_message = await message.reply('Added')
 
-    await app_context.utils_service.sleep_and_delete(info_message, 5)
+    await utils_service.sleep_and_delete(info_message, 5)
 
     with suppress(TelegramBadRequest):
         await asyncio.sleep(1)
@@ -437,16 +454,20 @@ def _sync_toggle_addition(ctx, db_value_type: BotValueTypes, chat_id: int, value
 
 
 async def handle_entry_channel_toggle(message: Message, command_info, session, app_context=None):
+    if not app_context or not app_context.feature_flags or not app_context.utils_service:
+        raise ValueError("app_context with feature_flags and utils_service required")
+    feature_flags = cast(Any, app_context.feature_flags)
+    utils_service = cast(Any, app_context.utils_service)
     chat_id = message.chat.id
     feature_name = command_info[4]
 
-    is_enabled = app_context.feature_flags.is_enabled(chat_id, feature_name)
+    is_enabled = feature_flags.is_enabled(chat_id, feature_name)
 
     if not is_enabled:
-        command_args = message.text.split()[1:]
+        command_args = (message.text or "").split()[1:]
         if not command_args:
             info_message = await message.reply('Необходимо указать канал или чат в формате -100123456 или @channel.')
-            await app_context.utils_service.sleep_and_delete(info_message, 10)
+            await utils_service.sleep_and_delete(info_message, 10)
             with suppress(TelegramBadRequest):
                 await asyncio.sleep(1)
                 await message.delete()
@@ -456,7 +477,10 @@ async def handle_entry_channel_toggle(message: Message, command_info, session, a
 
 
 async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None) -> tuple[bool, bool]:
-    is_member, _ = await app_context.group_service.check_membership(bot, required_channel, user_id)
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
+    group_service = cast(Any, app_context.group_service)
+    is_member, _ = await group_service.check_membership(bot, required_channel, user_id)
 
     if is_member:
         return True, False
@@ -471,11 +495,14 @@ async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_c
 
 
 async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> tuple[int, int]:
+    if not app_context or not app_context.group_service:
+        raise ValueError("app_context with group_service required")
+    group_service = cast(Any, app_context.group_service)
     required_channel = _get_entry_channel(app_context, chat_id)
     if not required_channel:
         raise ValueError('entry_channel setting is not enabled for this chat')
 
-    members = await app_context.group_service.get_members(chat_id)
+    members = await group_service.get_members(chat_id)
 
     checked_count = 0
     action_count = 0
@@ -501,16 +528,19 @@ async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> t
 
 async def list_command_handler(message: Message, command_info, session, app_context=None):
     """Handle list commands (add/del/show) for skynet_admins and skynet_img using admin_service."""
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
     db_value_type = command_info[0]
     action_type = command_info[1]
 
-    command_args = message.text.lower().split()[1:]  # arguments after command
+    command_args = (message.text or "").lower().split()[1:]  # arguments after command
 
     # Get current list from admin_service
     if db_value_type == BotValueTypes.SkynetAdmins:
-        current_list = app_context.admin_service.get_skynet_admins()
+        current_list = admin_service.get_skynet_admins()
     elif db_value_type == BotValueTypes.SkynetImg:
-        current_list = app_context.admin_service.get_skynet_img_users()
+        current_list = admin_service.get_skynet_img_users()
     else:
         await message.reply("Unknown list type.")
         return
@@ -525,9 +555,9 @@ async def list_command_handler(message: Message, command_info, session, app_cont
                     current_list.append(arg)
             # Update service and persist
             if db_value_type == BotValueTypes.SkynetAdmins:
-                app_context.admin_service.set_skynet_admins(current_list)
+                admin_service.set_skynet_admins(current_list)
             else:
-                app_context.admin_service.set_skynet_img_users(current_list)
+                admin_service.set_skynet_img_users(current_list)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
             await message.reply(f'Added: {" ".join(command_args)}')
 
@@ -541,9 +571,9 @@ async def list_command_handler(message: Message, command_info, session, app_cont
                     current_list.remove(arg)
             # Update service and persist
             if db_value_type == BotValueTypes.SkynetAdmins:
-                app_context.admin_service.set_skynet_admins(current_list)
+                admin_service.set_skynet_admins(current_list)
             else:
-                app_context.admin_service.set_skynet_img_users(current_list)
+                admin_service.set_skynet_img_users(current_list)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
             await message.reply(f'Removed: {" ".join(command_args)}')
 
@@ -556,14 +586,17 @@ async def list_command_handler(message: Message, command_info, session, app_cont
 
 async def list_command_handler_topic(message: Message, command_info, session, app_context=None):
     """Handle topic-specific list commands using admin_service."""
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
     db_value_type = command_info[0]
     action_type = command_info[1]
 
-    command_args = message.text.lower().split()[1:]  # arguments after command
+    command_args = (message.text or "").lower().split()[1:]  # arguments after command
     chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
 
     # Get all topic admins from admin_service
-    all_topic_admins = app_context.admin_service.get_all_topic_admins()
+    all_topic_admins = admin_service.get_all_topic_admins()
 
     if action_type == "add_list_topic":
         if not command_args:
@@ -573,7 +606,7 @@ async def list_command_handler_topic(message: Message, command_info, session, ap
                 all_topic_admins[chat_thread_key] = []
             all_topic_admins[chat_thread_key].extend(command_args)
             # Update service and persist
-            app_context.admin_service.load_topic_admins(all_topic_admins)
+            admin_service.load_topic_admins(all_topic_admins)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
             await message.reply(f'Added at this thread: {" ".join(command_args)}')
 
@@ -586,7 +619,7 @@ async def list_command_handler_topic(message: Message, command_info, session, ap
                     if arg in all_topic_admins[chat_thread_key]:
                         all_topic_admins[chat_thread_key].remove(arg)
                 # Update service and persist
-                app_context.admin_service.load_topic_admins(all_topic_admins)
+                admin_service.load_topic_admins(all_topic_admins)
                 ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
                 await message.reply(f'Removed from this thread: {" ".join(command_args)}')
             else:
@@ -610,13 +643,18 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
     The bot checks if it's an admin in the channel and gets the channel owner.
     Toggle behavior: if channel is linked - unlink, if not linked - link.
     """
+    if not app_context or not app_context.utils_service or not app_context.channel_link_service:
+        raise ValueError("app_context with utils_service and channel_link_service required")
+    utils_service = cast(Any, app_context.utils_service)
+    channel_link_service = cast(Any, app_context.channel_link_service)
+
     # Check if message is sent from a channel
     if not message.sender_chat:
         info_message = await message.reply(
             "Эта команда должна быть отправлена от имени канала. "
             "Откройте настройки чата и выберите 'Отправлять как канал'."
         )
-        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
             await asyncio.sleep(1)
             await message.delete()
@@ -625,18 +663,18 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
     channel_id = message.sender_chat.id
 
     # Check if channel is already linked - if yes, unlink it (toggle behavior)
-    if app_context.channel_link_service.is_linked(channel_id):
-        app_context.channel_link_service.unlink_channel(channel_id)
+    if channel_link_service.is_linked(channel_id):
+        channel_link_service.unlink_channel(channel_id)
 
         # Persist to database
-        all_links = app_context.channel_link_service.get_all_links()
+        all_links = channel_link_service.get_all_links()
         ConfigRepository(session).save_bot_value(
             0, BotValueTypes.ChannelLinks,
             json.dumps({str(k): v for k, v in all_links.items()})
         )
 
         info_message = await message.reply(f"Канал {message.sender_chat.title} отвязан.")
-        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
             await asyncio.sleep(1)
             await message.delete()
@@ -651,7 +689,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
             "Не удалось получить информацию о канале. "
             "Убедитесь, что бот добавлен в канал как администратор."
         )
-        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
             await asyncio.sleep(1)
             await message.delete()
@@ -671,17 +709,17 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
             "Не удалось найти владельца канала. "
             "Убедитесь, что у канала есть владелец-пользователь."
         )
-        await app_context.utils_service.sleep_and_delete(info_message, 5)
+        await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
             await asyncio.sleep(1)
             await message.delete()
         return
 
     # Link the channel to the owner
-    app_context.channel_link_service.link_channel(channel_id, owner_id, owner_username)
+    channel_link_service.link_channel(channel_id, owner_id, owner_username)
 
     # Persist to database
-    all_links = app_context.channel_link_service.get_all_links()
+    all_links = channel_link_service.get_all_links()
     ConfigRepository(session).save_bot_value(
         0, BotValueTypes.ChannelLinks,
         json.dumps({str(k): v for k, v in all_links.items()})
@@ -690,7 +728,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
     info_message = await message.reply(
         f"Канал {message.sender_chat.title} привязан к владельцу (ID: {owner_id})."
     )
-    await app_context.utils_service.sleep_and_delete(info_message, 5)
+    await utils_service.sleep_and_delete(info_message, 5)
     with suppress(TelegramBadRequest):
         await asyncio.sleep(1)
         await message.delete()

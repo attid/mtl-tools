@@ -1,4 +1,5 @@
 from contextlib import suppress
+from typing import Any, cast
 
 from aiogram import Router, Bot, html
 from sqlalchemy.orm import Session
@@ -26,28 +27,39 @@ class UnbanCallbackData(CallbackData, prefix="unban"):
 async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.utils_service or not app_context.feature_flags or not app_context.moderation_service:
         raise ValueError("app_context with utils_service, feature_flags, and moderation_service required")
+    utils_service = cast(Any, app_context.utils_service)
+    feature_flags = cast(Any, app_context.feature_flags)
+    moderation_service = cast(Any, app_context.moderation_service)
     skynet_admin = skyuser.is_skynet_admin()
+    command_text = message.text or ""
+    actor_username = message.from_user.username if message.from_user and message.from_user.username else "unknown"
+    reply_message = message.reply_to_message if isinstance(message.reply_to_message, Message) else None
 
     admin = await skyuser.is_admin()
 
-    if not (skynet_admin or (admin and message.reply_to_message)):
+    if not (skynet_admin or (admin and reply_message)):
         await message.reply(skyuser.admin_denied_text("You are not my admin."))
         return False
 
     with suppress(TelegramBadRequest):
-        if message.reply_to_message:
-            user_id = message.reply_to_message.from_user.id
+        if reply_message:
+            if not reply_message.from_user:
+                await message.reply("Cannot detect user in replied message.")
+                return
+            user_id = reply_message.from_user.id
 
-            await app_context.utils_service.sleep_and_delete(message.reply_to_message, 5)
+            await utils_service.sleep_and_delete(reply_message, 5)
 
-            msg = await message.reply_to_message.forward(chat_id=MTLChats.SpamGroup)
-            spam_check = app_context.feature_flags.is_enabled(message.chat.id, 'no_first_link')
-            chat_url = html.link(message.chat.title, message.get_url())
-            await msg.reply(f"Was banned by {message.from_user.username} in {chat_url} chat.\n"
+            msg = await reply_message.forward(chat_id=MTLChats.SpamGroup)
+            spam_check = feature_flags.is_enabled(message.chat.id, 'no_first_link')
+            chat_title = message.chat.title or str(message.chat.id)
+            chat_link = message.get_url()
+            chat_url = html.link(chat_title, chat_link) if chat_link else chat_title
+            await msg.reply(f"Was banned by {actor_username} in {chat_url} chat.\n"
                             f"Spam check: {spam_check}")
-        elif len(message.text.split()) > 1 and skynet_admin:
+        elif len(command_text.split()) > 1 and skynet_admin:
             try:
-                user_id = app_context.moderation_service.get_user_id(session, message.text.split()[1])
+                user_id = moderation_service.get_user_id(session, command_text.split()[1])
             except ValueError as e:
                 await message.reply(str(e))
                 return
@@ -55,41 +67,43 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
             await message.reply("You need to specify user ID or @username and be skynet admin.")
             return
 
-        await app_context.moderation_service.ban_user(session, message.chat.id, user_id, bot)
+        await moderation_service.ban_user(session, message.chat.id, user_id, bot)
 
         msg = await message.answer(f"User (ID: {user_id}) has been banned.")
-        if message.reply_to_message is None:
-            await message.bot.send_message(chat_id=MTLChats.SpamGroup,
-                                         text=f"User (ID: {user_id}) has been banned by "
-                                              f"{message.from_user.username} in {message.chat.title} chat.")
+        if reply_message is None:
+            await bot.send_message(chat_id=MTLChats.SpamGroup,
+                                   text=f"User (ID: {user_id}) has been banned by "
+                                        f"{actor_username} in {message.chat.title} chat.")
 
         # If the command is sban, delete the messages quickly
-        tm  = 2 if message.text.startswith("/sban") else 10
+        tm = 2 if command_text.startswith("/sban") else 10
 
-        await app_context.utils_service.sleep_and_delete(message, tm)
-        await app_context.utils_service.sleep_and_delete(msg, tm)
+        await utils_service.sleep_and_delete(message, tm)
+        await utils_service.sleep_and_delete(msg, tm)
 
 
 @router.message(Command(commands=["unban"]))
 async def cmd_unban(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
+    moderation_service = cast(Any, app_context.moderation_service)
+    command_text = message.text or ""
     if not skyuser.is_skynet_admin():
         await message.reply("You are not my admin.")
         return False
 
-    if len(message.text.split()) > 1:
+    if len(command_text.split()) > 1:
         try:
-            param = message.text.split()[1]
+            param = command_text.split()[1]
             if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
                 user_id = int(param)
             else:
-                user_id = app_context.moderation_service.get_user_id(session, param)
+                user_id = moderation_service.get_user_id(session, param)
         except ValueError as e:
             await message.reply(str(e))
             return
 
-        await app_context.moderation_service.unban_user(session, message.chat.id, user_id, bot)
+        await moderation_service.unban_user(session, message.chat.id, user_id, bot)
 
         await message.reply(f"User (ID: {user_id}) has been unbanned.")
     else:
@@ -101,20 +115,23 @@ async def cmd_unban(message: Message, session: Session, bot: Bot, app_context: A
 async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
-    if len(message.text.split()) > 1:
-        param = message.text.split()[1]
+    moderation_service = cast(Any, app_context.moderation_service)
+    command_text = message.text or ""
+    if len(command_text.split()) > 1:
+        param = command_text.split()[1]
         try:
             if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
                 user_id = int(param)
             else:
-                user_id = app_context.moderation_service.get_user_id(session, param)
+                user_id = moderation_service.get_user_id(session, param)
         except ValueError as e:
             await message.reply(str(e))
             return
     else:
-        user_id = skyuser.sender_chat_id if message.from_user.id == MTLChats.Channel_Bot else message.from_user.id
+        sender_id = message.from_user.id if message.from_user else skyuser.sender_chat_id
+        user_id = skyuser.sender_chat_id if sender_id == MTLChats.Channel_Bot else sender_id
 
-    user_status = app_context.moderation_service.check_user_status(session, user_id)
+    user_status = moderation_service.check_user_status(session, user_id)
 
     if user_status == SpamStatus.NEW:
         message_text = "New User"
@@ -132,14 +149,16 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
 async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_data: UnbanCallbackData, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
+    moderation_service = cast(Any, app_context.moderation_service)
     if not skyuser.is_skynet_admin():
         await call.answer("You are not my admin.", show_alert=True)
         return False
 
-    await app_context.moderation_service.unban_user(session, callback_data.chat_id, callback_data.user_id, bot)
+    await moderation_service.unban_user(session, callback_data.chat_id, callback_data.user_id, bot)
 
     await call.answer("User unbanned successfully.")
-    await call.message.delete_reply_markup()
+    if isinstance(call.message, Message):
+        await call.message.delete_reply_markup()
 
 
 def register_handlers(dp, bot):

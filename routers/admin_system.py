@@ -7,6 +7,7 @@ import re
 import uuid
 from contextlib import suppress
 from datetime import datetime
+from typing import Any, cast
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatType, ChatMemberStatus
@@ -77,7 +78,8 @@ async def cmd_ping_piro(message: Message, app_context: AppContext, skyuser: SkyU
         return False
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
-    await app_context.group_service.ping_piro()
+    group_service = cast(Any, app_context.group_service)
+    await group_service.ping_piro()
 
 
 @router.message(Command(commands=["test"]))
@@ -86,10 +88,11 @@ async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: 
          await message.reply("Only for admins")
          return
 
+    user_from = message.from_user.username if message.from_user and message.from_user.username else "Unknown"
     msg_info = MessageInfo(
         chat_id=message.chat.id,
         message_id=message.message_id,
-        user_from=message.from_user.username or "Unknown",
+        user_from=user_from,
         message_text="This is a test message from Skynet Bot to verify MiniApps integration.\n<b>Bold Text</b>",
         reply_to_message=None
     )
@@ -105,15 +108,16 @@ async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: 
 
 
 @router.message(Command(commands=["check_gs"]))
-async def cmd_check_gs(message: Message, app_context=None, skyuser: SkyUser = None):
+async def cmd_check_gs(message: Message, app_context: AppContext | None = None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
         await message.reply('You are not my admin.')
         return False
     if not app_context or not app_context.gspread_service:
         await message.reply('GSpread сервис недоступен.')
         return False
+    gspread_service = cast(Any, app_context.gspread_service)
 
-    ok, info = await app_context.gspread_service.check_credentials()
+    ok, info = await gspread_service.check_credentials()
     info = (info or "").strip()
     if len(info) > 200:
         info = info[:200] + "..."
@@ -149,15 +153,19 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
     # Check if listening is enabled for this chat
     if not app_context or not app_context.feature_flags:
         raise ValueError("app_context with feature_flags required")
-    is_listening = app_context.feature_flags.is_listening(message.chat.id)
+    feature_flags = cast(Any, app_context.feature_flags)
+    is_listening = feature_flags.is_listening(message.chat.id)
 
     if not is_listening:
         await message.reply('No messages 1')
         return
 
     try:
-        data = MessageRepository(session).get_messages_without_summary(chat_id=message.chat.id,
-                                             thread_id=message.message_thread_id if message.is_topic_message else None)
+        thread_id = message.message_thread_id or 0
+        data = MessageRepository(session).get_messages_without_summary(
+            chat_id=message.chat.id,
+            thread_id=thread_id,
+        )
 
         if not data:
             await message.reply('Нет новых сообщений для обработки')
@@ -165,38 +173,45 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
 
         text = ''
         summary = MessageRepository(session).add_summary(text=text)
+        summary_obj = cast(Any, summary)
         session.flush()
 
         try:
             for record in data:
-                new_text = text + f'{record.username}: {record.text} \n\n'
+                record_username = str(record.username or "")
+                record_text = str(record.text or "")
+                new_text = text + f'{record_username}: {record_text} \n\n'
                 if len(new_text) < 16000:
                     text = new_text
                     record.summary_id = summary.id
                     session.flush()
                 else:
-                    summary.text = await talk_get_summary(text)
+                    summary_obj.text = await talk_get_summary(text)
                     session.flush()
                     summary = MessageRepository(session).add_summary(text='')
+                    summary_obj = cast(Any, summary)
                     session.flush()
-                    text = record.username + ': ' + record.text + '\n\n'
+                    text = f"{record_username}: {record_text}\n\n"
                     record.summary_id = summary.id
                     session.flush()
             
             if text:  # Обработка оставшегося текста
-                summary.text = await talk_get_summary(text)
+                summary_obj.text = await talk_get_summary(text)
                 session.flush()
 
-            summaries = MessageRepository(session).get_summary(chat_id=message.chat.id,
-                                     thread_id=message.message_thread_id if message.is_topic_message else None)
+            summaries = MessageRepository(session).get_summary(
+                chat_id=message.chat.id,
+                thread_id=thread_id,
+            )
 
             if not summaries:
                 await message.reply('Не удалось получить сводку сообщений')
                 return
 
             for record in summaries:
-                if record.text:
-                    await message.reply(record.text[:4000])
+                record_text = str(record.text or "")
+                if record_text:
+                    await message.reply(record_text[:4000])
                 else:
                     logger.warning(f"Empty summary text for record {record.id}")
 
@@ -217,7 +232,13 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
 @router.message(F.document, F.chat.type == ChatType.PRIVATE)
 async def cmd_get_sha1(message: Message, bot: Bot):
     document = message.document
+    if not document:
+        await message.reply("Файл не найден")
+        return
     file_data = await bot.download(document)
+    if not file_data:
+        await message.reply("Не удалось скачать файл")
+        return
     file_bytes = file_data.read()
 
     hasher = hashlib.sha1()
@@ -237,7 +258,8 @@ async def cmd_get_sha1(message: Message, bot: Bot):
 @router.message(Command(commands=["sha256"]))
 async def cmd_sha256(message: Message):
     sha256_hasher = hashlib.sha256()
-    sha256_hasher.update(message.text[8:].encode('utf-8'))
+    text = message.text or ""
+    sha256_hasher.update(text[8:].encode('utf-8'))
     sha256_hash = sha256_hasher.hexdigest()
     await message.reply(f'SHA-256: <code>{sha256_hash}</code>')
 
@@ -313,7 +335,8 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
         await message.reply(skyuser.admin_denied_text())
         return
 
-    if not message.reply_to_message or not message.reply_to_message.from_user.id == bot.id:
+    reply_message = message.reply_to_message if isinstance(message.reply_to_message, Message) else None
+    if not reply_message or not reply_message.from_user or reply_message.from_user.id != bot.id:
         await message.reply('Нужно ответить на сообщение, отправленное ботом')
         return
 
@@ -322,7 +345,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
     try:
         # Получаем клавиатуру из сообщения бота
-        reply_markup = message.reply_to_message.reply_markup
+        reply_markup = reply_message.reply_markup
         if not reply_markup or not isinstance(reply_markup, InlineKeyboardMarkup):
             await message.reply('Не найдена клавиатура с кнопкой редактирования')
             return
@@ -335,6 +358,9 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             return
 
         url = edit_button.url
+        if not url:
+            await message.reply('Неверный формат URL')
+            return
         # Извлекаем chat_id и post_id из URL
         match = re.search(r'https://t\.me/c/(\d+)/(\d+)', url)
         if not match:
@@ -356,7 +382,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
         # Get sync state for this channel
         sync_key = str(chat_id)
-        channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
+        channel_sync = cast(dict[str, list[dict[str, Any]]], app_context.bot_state_service.get_sync_state(sync_key, {}))
 
         if post_id not in channel_sync:
             channel_sync[post_id] = []
@@ -364,7 +390,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
         # Проверяем, существует ли уже запись для данного чата и сообщения
         existing_record = next((record for record in channel_sync[post_id]
                                 if record['chat_id'] == message.chat.id and
-                                record['message_id'] == message.reply_to_message.message_id), None)
+                                record['message_id'] == reply_message.message_id), None)
 
         if existing_record:
             await message.reply('Синхронизация для этого сообщения уже существует')
@@ -372,7 +398,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             # Добавляем новую запись, не затрагивая существующие
             channel_sync[post_id].append({
                 'chat_id': message.chat.id,
-                'message_id': message.reply_to_message.message_id,
+                'message_id': reply_message.message_id,
                 'url': url
             })
 
@@ -405,7 +431,7 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppCo
     )
     # Get sync state for this channel
     sync_key = str(message.chat.id)
-    channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
+    channel_sync = cast(dict[str, list[dict[str, Any]]], app_context.bot_state_service.get_sync_state(sync_key, {}))
 
     post_sync_records = channel_sync.get(str(message.message_id), [])
     if not post_sync_records:
@@ -479,9 +505,13 @@ async def cmd_eurmtl(message: Message):
 async def cmd_grist(message: Message, app_context: AppContext):
     if not app_context or not app_context.grist_service:
         raise ValueError("app_context with grist_service required")
+    if not message.from_user:
+        await message.answer("❌ Не удалось определить пользователя.")
+        return
     user_id = message.from_user.id
+    grist_service = cast(Any, app_context.grist_service)
     try:
-        access_records = await app_context.grist_service.load_table_data(MTLGrist.GRIST_access)
+        access_records = await grist_service.load_table_data(MTLGrist.GRIST_access)
 
         for r in access_records:
             print(r)
@@ -504,7 +534,7 @@ async def cmd_grist(message: Message, app_context: AppContext):
             }]
         }
 
-        await app_context.grist_service.patch_data(MTLGrist.GRIST_access, update_data)
+        await grist_service.patch_data(MTLGrist.GRIST_access, update_data)
 
         await message.answer(f"✅ Новый ключ доступа:\n<code>{new_key}</code>")
 
@@ -521,8 +551,10 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, 
 
     if not app_context or not app_context.gspread_service or not app_context.mtl_service:
         raise ValueError("app_context with gspread_service and mtl_service required")
+    gspread_service = cast(Any, app_context.gspread_service)
+    mtl_service = cast(Any, app_context.mtl_service)
 
-    data = await app_context.gspread_service.get_all_mtlap()
+    data = await gspread_service.get_all_mtlap()
 
     if not data or len(data) < 1:
         await message.reply("Ошибка: таблица пуста или не найдены данные.")
@@ -549,11 +581,11 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, 
             results.append(False)
         await asyncio.sleep(0.1)
 
-    await app_context.gspread_service.get_update_mtlap_skynet_row(results)
+    await gspread_service.get_update_mtlap_skynet_row(results)
 
     await message.reply("Готово 1")
 
-    result = await app_context.mtl_service.check_consul_mtla_chats(message.bot)
+    result = await mtl_service.check_consul_mtla_chats(message.bot)
 
     if result:
         await message.reply('\n'.join(result))
@@ -568,14 +600,15 @@ async def cmd_chats_info(message: Message, session: Session, app_context: AppCon
         return
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
+    group_service = cast(Any, app_context.group_service)
     await message.answer(text="Обновление информации о чатах...")
     for chat_id in [MTLChats.DistributedGroup, -1001892843127]:
-        members = await app_context.group_service.get_members(chat_id)
+        members = await group_service.get_members(chat_id)
         ChatsRepository(session).update_chat_info(chat_id, members)
     await message.answer(text="Обновление информации о чатах... Done.")
 
 
-async def check_membership(bot: Bot, chat_id: str, user_id: int) -> (bool, User):
+async def check_membership(bot: Bot, chat_id: int, user_id: int) -> tuple[bool, User | None]:
     try:
         member = await bot.get_chat_member(chat_id, user_id)
         is_member = member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR]
@@ -596,17 +629,23 @@ async def cmd_push(message: Message, bot: Bot, app_context: AppContext, skyuser:
         await message.reply('Команду надо посылать в ответ на список логинов')
         return
 
-    if message.reply_to_message.text.find('@') == -1:
+    source_text = message.reply_to_message.text or ""
+    if source_text.find('@') == -1:
         await message.reply('Нет не одной собаки. Команда работает в ответ на список логинов')
         return
 
-    all_users = message.reply_to_message.text.split()
+    all_users = source_text.split()
     await send_by_list(bot, all_users, message)
 
 
 @router.message(Command(commands=["get_info"]))
 @router.message(Command(re.compile(r"get_info_(\d+)")))
-async def cmd_get_info(message: Message, bot: Bot, app_context: AppContext = None, skyuser: SkyUser = None):
+async def cmd_get_info(
+    message: Message,
+    bot: Bot,
+    app_context: AppContext | None = None,
+    skyuser: SkyUser | None = None
+):
     if not skyuser or not skyuser.is_skynet_admin():
         if message.chat.id != MTLChats.HelperChat:
             await message.reply('You are not my admin.')

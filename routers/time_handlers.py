@@ -2,6 +2,7 @@ import asyncio
 import json
 from datetime import datetime
 import random
+from typing import Any, Optional, cast
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -55,29 +56,31 @@ async def cmd_send_message_start_month(bot: Bot):
 async def cmd_send_message_1m(bot: Bot, session_pool):
     with session_pool() as session:
         for record in MessageRepository(session).load_new_messages():
+            record_any = cast(Any, record)
             try:
-                if record.update_id > 0:
+                if record_any.update_id > 0:
                     reply_markup = None
-                    if len(record.button_json) > 10:
-                        button_json = json.loads(record.button_json)
+                    button_json_raw = cast(str, record_any.button_json or "")
+                    if len(button_json_raw) > 10:
+                        button_json = json.loads(button_json_raw)
                         reply_markup = InlineKeyboardMarkup(inline_keyboard=[[
                             InlineKeyboardButton(text=button_json['text'],
                                                  url=button_json['link'])
                         ]])
 
-                    await bot.edit_message_text(chat_id=record.user_id, message_id=record.update_id,
-                                                text=record.text,
+                    await bot.edit_message_text(chat_id=cast(int, record_any.user_id), message_id=cast(int, record_any.update_id),
+                                                text=cast(str, record_any.text),
                                                 disable_web_page_preview=True,
                                                 reply_markup=reply_markup)
                 else:
-                    topic_id = record.topic_id if record.topic_id > 0 else None
-                    await bot.send_message(record.user_id, record.text, disable_notification=record.use_alarm == 0,
+                    topic_id = cast(int, record_any.topic_id) if cast(int, record_any.topic_id) > 0 else None
+                    await bot.send_message(cast(int, record_any.user_id), cast(str, record_any.text), disable_notification=cast(int, record_any.use_alarm) == 0,
                                            disable_web_page_preview=True, message_thread_id=topic_id)
 
-                record.was_send = 1
+                record_any.was_send = 1
                 session.commit()
             except Exception as ex:
-                record.was_send = 2
+                record_any.was_send = 2
                 session.commit()
                 logger.error(f'Error in cmd_send_message_1m: {ex} {record}')
 
@@ -100,7 +103,7 @@ async def time_check_ledger(bot: Bot, session_pool):
 
 
 @safe_catch_async
-async def time_clear(bot: Bot, db_service: DatabaseService = None):
+async def time_clear(bot: Bot, db_service: Optional[DatabaseService] = None):
     chats = await grist_manager.load_table_data(
         MTLGrist.CONFIG_auto_clean,
         filter_dict={"enabled": [True]}
@@ -119,7 +122,7 @@ async def time_clear(bot: Bot, db_service: DatabaseService = None):
                 chat_title = chat_info.full_name
 
             count = await remove_deleted_users(chat_id)
-            if count > 0:
+            if count and count > 0:
                 await bot.send_message(MTLChats.SpamGroup, f"Finished removing deleted users from {chat_title}. \n Total deleted users: {count}")
         except Exception as e:
             logger.error(f"Error in cmd_delete_dead_members: {e}")
@@ -161,7 +164,7 @@ async def time_usdm_daily(session_pool, bot: Bot):
                     return
 
         logger.info("All work done. Step (7/7)")
-        balances = await get_balances(MTLAddresses.public_usdm_div)
+        balances = cast(dict[str, Any], await get_balances(MTLAddresses.public_usdm_div) or {})
         usdm_left = float(balances.get('USDM', 0)) if balances else 0
         usdm_left_str = f"{usdm_left:.2f}"
 
@@ -174,7 +177,7 @@ async def time_usdm_daily(session_pool, bot: Bot):
 
 
 @safe_catch
-def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool, db_service: DatabaseService = None):
+def scheduler_jobs(scheduler: AsyncIOScheduler, bot: Bot, session_pool, db_service: Optional[DatabaseService] = None):
     scheduler.add_job(cmd_send_message_1m, "interval", seconds=10, args=(bot, session_pool), misfire_grace_time=360)
 
     scheduler.add_job(cmd_send_message_start_month, "cron", day=1, hour=8, minute=10, args=(bot,),
@@ -234,4 +237,4 @@ def register_handlers(dp, bot):
     logger.info('router time_handlers was loaded')
 
 
-register_handlers.priority = 90
+cast(Any, register_handlers).priority = 90

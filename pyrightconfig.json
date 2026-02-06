@@ -4,6 +4,7 @@
   "include": [
     "shared/domain",
     "services",
+    "routers",
     "middlewares"
   ],
   "exclude": [

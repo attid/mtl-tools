@@ -20,6 +20,8 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
     text = message.text or message.caption
     if not text:
         return
+    if not app_context.bot_state_service:
+        return
 
     # Check for #skynet #mmwb command=pong pattern
     if re.search(r'#skynet\s+#mmwb\s+command=pong', text, re.IGNORECASE):
@@ -27,6 +29,9 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
         logger.debug(f"Updated last pong response time: {app_context.bot_state_service.get_last_pong()}")
 
 async def check_ping_responses(bot: Bot, app_context: AppContext):
+    if not app_context.bot_state_service:
+        logger.warning("bot_state_service not available for monitoring ping checks")
+        return
     while True:
         # Отправляем ping в канал
         try:
