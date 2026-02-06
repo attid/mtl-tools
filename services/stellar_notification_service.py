@@ -105,7 +105,12 @@ class StellarNotificationService:
                 return web.Response(text="Invalid JSON", status=400)
 
             logger.info(f"Webhook received: {json.dumps(payload)[:200]}")
-            await self.process_notification(payload)
+
+            # Extract subscription ID from top level, operation data from nested payload
+            subscription_id = payload.get("subscriptionId") or payload.get("subscription")
+            inner_payload = payload.get("payload", payload)
+
+            await self.process_notification(inner_payload, subscription_id)
             return web.Response(text="OK")
 
         except Exception as e:
@@ -114,15 +119,15 @@ class StellarNotificationService:
 
     # === Notification Processing ===
 
-    async def process_notification(self, payload: dict[str, Any]) -> None:
+    async def process_notification(self, payload: dict[str, Any], subscription_id: str | None = None) -> None:
         """
         Process a notification payload and send to appropriate Telegram chat.
 
         Args:
-            payload: Webhook payload from operations-notifier
+            payload: Inner payload from operations-notifier (contains operation, transaction)
+            subscription_id: Subscription ID from the top-level webhook body
         """
         op_info = payload.get("operation", {})
-        subscription_id = payload.get("subscription")
 
         # Deduplicate by (operation_id, subscription_id)
         stellar_op_id = op_info.get("id")
