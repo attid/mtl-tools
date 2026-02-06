@@ -344,6 +344,16 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
         chat_id, post_id = match.groups()
         chat_id = int(f"-100{chat_id}")
 
+        # Проверяем, что бот является участником канала
+        try:
+            bot_member = await bot.get_chat_member(chat_id, bot.id)
+            if bot_member.status not in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR):
+                await message.reply('Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова.')
+                return
+        except TelegramBadRequest:
+            await message.reply('Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова.')
+            return
+
         # Get sync state for this channel
         sync_key = str(chat_id)
         channel_sync = app_context.bot_state_service.get_sync_state(sync_key, {})
