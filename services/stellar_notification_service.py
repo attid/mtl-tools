@@ -104,7 +104,7 @@ class StellarNotificationService:
             except json.JSONDecodeError:
                 return web.Response(text="Invalid JSON", status=400)
 
-            subscription_id = request.headers.get("X-Subscription")
+            subscription_id = request.headers.get("X-Subscription") or payload.get("subscription")
             logger.info(f"Webhook received (sub={subscription_id}): {json.dumps(payload)[:200]}")
 
             await self.process_notification(payload, subscription_id)
