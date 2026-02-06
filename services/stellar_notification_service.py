@@ -17,6 +17,7 @@ from loguru import logger
 from other.config_reader import config
 from other.grist_tools import grist_manager, MTLGrist
 from other.stellar.address_utils import shorten_address
+from other.stellar.xdr_utils import decode_xdr
 from other.utils import float2str
 
 SAFE = "-_.!~*'()"
@@ -147,23 +148,72 @@ class StellarNotificationService:
             logger.warning(f"Unknown subscription {subscription_id}, cannot route notification")
             return
 
-        # Check minimum amount filter
-        min_amount = destination.get("min", 0)
-        if min_amount > 0:
-            amount = float(op_info.get("amount", 0))
-            if amount < min_amount:
-                logger.debug(f"Operation amount {amount} below minimum {min_amount}, skipping")
+        # For account subscriptions, check that our account is directly involved
+        if destination.get("type") == "account":
+            monitored_account = destination.get("account", "")
+            op_info = payload.get("operation", {})
+            tx_info = payload.get("transaction", {})
+            involved_accounts = {
+                op_info.get("account", ""),
+                op_info.get("source_account", ""),
+                op_info.get("from", ""),
+                op_info.get("to", ""),
+                op_info.get("destination", ""),
+                tx_info.get("source", ""),
+            }
+            if monitored_account not in involved_accounts:
+                logger.debug(f"Account {shorten_address(monitored_account)} not directly involved, skipping")
                 return
 
-        # Format and send message
-        message = self._format_message(payload, destination)
-        if message:
-            logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
+        # Format using decode_xdr if envelope_xdr is available
+        tx_info = payload.get("transaction", {})
+        envelope_xdr = tx_info.get("envelope_xdr")
+        tx_hash = tx_info.get("hash", "")
+
+        if envelope_xdr:
+            await self._process_with_xdr(envelope_xdr, tx_hash, destination)
+        else:
+            # Fallback to simple format if no XDR
+            message = self._format_message(payload, destination)
+            if message:
+                logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
+                await self._send_to_telegram(
+                    chat_id=destination["chat_id"],
+                    topic_id=destination.get("topic_id"),
+                    message=message
+                )
+
+    async def _process_with_xdr(self, envelope_xdr: str, tx_hash: str, destination: dict[str, Any]) -> None:
+        """Format and send notification using decode_xdr, matching the old transaction format."""
+        min_amount = destination.get("min", 0)
+        filter_sum = int(min_amount) if min_amount else -1
+        ignore_operation = ["CreateClaimableBalance", "SPAM"]
+
+        try:
+            tr_details = await decode_xdr(
+                envelope_xdr,
+                filter_sum=filter_sum,
+                ignore_operation=ignore_operation,
+            )
+            if not tr_details:
+                return
+
+            link = f'https://viewer.eurmtl.me/transaction/{tx_hash}'
+            tr_details.insert(0, f'(<a href="{link}">expert link</a>)')
+            tr_details.insert(0, "Получены новые транзакции")
+
+            msg = '\n'.join(tr_details)
+            if len(msg) > 4096:
+                msg = "Слишком много операций показаны первые . . . \n" + msg[:4000]
+
+            logger.info(f"Sending notification to chat {destination['chat_id']}: {msg[:100]}")
             await self._send_to_telegram(
                 chat_id=destination["chat_id"],
                 topic_id=destination.get("topic_id"),
-                message=message
+                message=msg,
             )
+        except Exception as e:
+            logger.exception(f"Error decoding XDR for notification: {e}")
 
     def _format_message(self, payload: dict[str, Any], destination: dict[str, Any]) -> str | None:
         """
