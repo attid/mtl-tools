@@ -104,13 +104,10 @@ class StellarNotificationService:
             except json.JSONDecodeError:
                 return web.Response(text="Invalid JSON", status=400)
 
-            logger.info(f"Webhook received: {json.dumps(payload)[:200]}")
+            subscription_id = request.headers.get("X-Subscription")
+            logger.info(f"Webhook received (sub={subscription_id}): {json.dumps(payload)[:200]}")
 
-            # Extract subscription ID from top level, operation data from nested payload
-            subscription_id = payload.get("subscriptionId") or payload.get("subscription")
-            inner_payload = payload.get("payload", payload)
-
-            await self.process_notification(inner_payload, subscription_id)
+            await self.process_notification(payload, subscription_id)
             return web.Response(text="OK")
 
         except Exception as e:
