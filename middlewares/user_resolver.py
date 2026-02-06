@@ -3,7 +3,7 @@
 When admins send commands from a channel (sender_chat), this middleware
 resolves the real user_id by looking up channel-to-user mappings.
 """
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, cast
 
 from aiogram import BaseMiddleware, Bot
 from aiogram.types import TelegramObject, Message, CallbackQuery
@@ -101,18 +101,22 @@ class UserResolverMiddleware(BaseMiddleware):
                     chat_id,
                 )
         else:
-            if hasattr(event, "from_user") and event.from_user:
-                user_id = event.from_user.id
-                username = event.from_user.username
+            event_any = cast(Any, event)
+            from_user = getattr(event_any, "from_user", None)
+            message = getattr(event_any, "message", None)
+            chat = getattr(event_any, "chat", None)
+            if from_user:
+                user_id = from_user.id
+                username = from_user.username
                 logger.debug(
                     "skyuser.resolve: generic from_user id={} username={}",
                     user_id,
                     username,
                 )
-            if hasattr(event, "message") and event.message and event.message.chat:
-                chat_id = event.message.chat.id
-            if hasattr(event, "chat") and event.chat:
-                chat_id = event.chat.id
+            if message and message.chat:
+                chat_id = message.chat.id
+            if chat:
+                chat_id = chat.id
 
         return SkyUser(
             user_id=user_id,

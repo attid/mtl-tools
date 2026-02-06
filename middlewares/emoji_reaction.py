@@ -4,7 +4,7 @@ from typing import Any, Awaitable, Callable
 import re
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, ReactionTypeEmoji
+from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
 from loguru import logger
 
 from other.openrouter_reactions import label_to_emoji
@@ -21,11 +21,11 @@ LINK_ONLY_RE = re.compile(r"^\s*(https?://\S+)\s*$")
 class EmojiReactionMiddleware(BaseMiddleware):
     async def __call__(
         self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        if self._should_process(event):
+        if isinstance(event, Message) and self._should_process(event):
             asyncio.create_task(self._handle_reaction(event))
         return await handler(event, data)
 
@@ -46,6 +46,8 @@ class EmojiReactionMiddleware(BaseMiddleware):
         return True
 
     async def _handle_reaction(self, message: Message) -> None:
+        if not message.text:
+            return
         label = await classify_message(message.text)
         emoji = label_to_emoji(label)
         if not emoji:

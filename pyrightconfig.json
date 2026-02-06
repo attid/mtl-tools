@@ -1,0 +1,29 @@
+{
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.12",
+  "include": [
+    "shared/domain",
+    "services/bot_state_service.py",
+    "middlewares"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "scripts",
+    "tests",
+    "db",
+    "shared/infrastructure/database",
+    "test.py",
+    "test2.py",
+    "test3.py"
+  ],
+  "ignore": [
+    "db",
+    "shared/infrastructure/database",
+    "tests",
+    "scripts",
+    "test.py",
+    "test2.py",
+    "test3.py"
+  ]
+}

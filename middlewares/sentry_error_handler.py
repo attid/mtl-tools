@@ -7,7 +7,7 @@ from sentry_sdk import capture_exception, push_scope
 from other.config_reader import config
 
 
-async def sentry_error_handler(event: ErrorEvent, state: FSMContext = None) -> None:
+async def sentry_error_handler(event: ErrorEvent, state: FSMContext | None = None) -> None:
     # Always log errors - fail fast principle
     logger.exception(f"Error catch: {event.exception} on update: {event.update}")
 
