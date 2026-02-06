@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, BigInteger, String, DateTime, SmallInteger, Float, ForeignKey, Text, JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -151,7 +151,7 @@ class Chat(Base):
     title = Column(String)
     created_at = Column(DateTime)
     last_updated = Column(DateTime)
-    admins = Column(JSON_VARIANT) # Using JSON variant instead of ARRAY for compatibility
+    admins = Column(ARRAY(BigInteger))
     metadata_ = Column('metadata', JSON_VARIANT) # Using metadata_ to avoid Python keyword conflict
 
     members = relationship("ChatMember", back_populates="chat")
