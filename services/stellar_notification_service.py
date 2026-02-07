@@ -106,7 +106,11 @@ class StellarNotificationService:
                 return web.Response(text="Invalid JSON", status=400)
 
             subscription_id = request.headers.get("X-Subscription") or payload.get("subscription")
-            logger.info(f"Webhook received (sub={subscription_id}): {json.dumps(payload)[:200]}")
+            op = payload.get("operation", {})
+            logger.info(
+                f"Webhook received (sub={subscription_id}) type={op.get('type')} "
+                f"account={op.get('account', '')[:8]} dest={op.get('destination', '')[:8]}"
+            )
 
             await self.process_notification(payload, subscription_id)
             return web.Response(text="OK")
