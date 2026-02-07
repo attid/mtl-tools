@@ -263,12 +263,12 @@ class TestDeduplication:
 
         # First call
         with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
-            await service.process_notification(payload)
+            await service.process_notification(payload, "sub-1")
             assert mock_send.called
 
         # Second call with same operation ID
         with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
-            await service.process_notification(payload)
+            await service.process_notification(payload, "sub-1")
             assert not mock_send.called
 
     @pytest.mark.asyncio
@@ -289,7 +289,7 @@ class TestDeduplication:
                     "operation": {"id": f"op-{i}", "type": "payment", "amount": "100"},
                     "transaction": {}
                 }
-                await service.process_notification(payload)
+                await service.process_notification(payload, "sub-1")
 
         # Cache should have been cleared after exceeding max_cache_size
         assert len(service.notified_operations) < 4
@@ -318,7 +318,7 @@ class TestMinimumAmountFilter:
         }
 
         with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
-            await service.process_notification(payload)
+            await service.process_notification(payload, "sub-1")
             assert not mock_send.called
 
     @pytest.mark.asyncio
@@ -341,7 +341,7 @@ class TestMinimumAmountFilter:
         }
 
         with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
-            await service.process_notification(payload)
+            await service.process_notification(payload, "sub-1")
             assert mock_send.called
 
 

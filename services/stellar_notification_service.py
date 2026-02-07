@@ -191,13 +191,17 @@ class StellarNotificationService:
         """Format and send notification using decode_xdr, matching the old transaction format."""
         min_amount = destination.get("min", 0)
         filter_sum = int(min_amount) if min_amount else -1
-        ignore_operation = ["CreateClaimableBalance", "SPAM"]
+        ignore_operation = ["CreateClaimableBalance", "SPAM", "MASS"]
+
+        # For account subscriptions, filter operations to only those involving our account
+        filter_account = destination.get("account") if destination.get("type") == "account" else None
 
         try:
             tr_details = await decode_xdr(
                 envelope_xdr,
                 filter_sum=filter_sum,
                 ignore_operation=ignore_operation,
+                filter_account=filter_account,
             )
             if not tr_details:
                 return

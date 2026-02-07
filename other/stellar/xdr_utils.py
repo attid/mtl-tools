@@ -65,6 +65,7 @@ async def decode_xdr(
     full_data: bool = False,
     grist_manager=None,
     global_data=None,
+    filter_account: Optional[str] = None,
 ) -> List[str]:
     """
     Decode XDR and explain its operations in human-readable format.
@@ -95,8 +96,16 @@ async def decode_xdr(
     else:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
 
+    # Skip mass transactions (e.g. airdrop-style 100+ operations)
+    if 'MASS' in ignore_operation and len(transaction.transaction.operations) >= 90:
+        return []
+
+    tx_source_id = transaction.transaction.source.account_id
+    # If filter_account is the tx source, show all operations (no per-op filtering needed)
+    filter_ops_by_account = filter_account and tx_source_id != filter_account
+
     source_name = await address_id_to_username(
-        transaction.transaction.source.account_id,
+        tx_source_id,
         full_data=full_data,
         grist_manager=grist_manager,
         global_data=global_data
@@ -109,6 +118,24 @@ async def decode_xdr(
     result.append(f"  Всего {len(transaction.transaction.operations)} операций\n")
 
     for idx, operation in enumerate(transaction.transaction.operations):
+        # When filter_account is set and tx source is different,
+        # only show operations where filter_account is directly involved
+        if filter_ops_by_account:
+            op_source_id = operation.source.account_id if operation.source else tx_source_id
+            op_accounts = {op_source_id}
+            if hasattr(operation, 'destination'):
+                dest = operation.destination
+                if hasattr(dest, 'account_id'):
+                    op_accounts.add(dest.account_id)
+                elif isinstance(dest, str):
+                    op_accounts.add(dest)
+            if hasattr(operation, 'from_') and operation.from_:
+                op_accounts.add(operation.from_.account_id)
+            if hasattr(operation, 'trustor') and operation.trustor:
+                op_accounts.add(operation.trustor)
+            if filter_account not in op_accounts:
+                continue
+
         result.append(f"Операция {idx} - {type(operation).__name__}")
         if operation.source:
             op_source_name = await address_id_to_username(
