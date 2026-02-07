@@ -683,7 +683,7 @@ class StellarNotificationService:
                         "chat_id": chat_id,
                         "topic_id": topic_id,
                         "type": "account",
-                        "account_id": account_id,
+                        "account": account_id,
                         "min": 0,
                     }
                     logger.debug(f"Account {shorten_address(account_id)} already subscribed: {sub_id}")
@@ -695,7 +695,7 @@ class StellarNotificationService:
                             "chat_id": chat_id,
                             "topic_id": topic_id,
                             "type": "account",
-                            "account_id": account_id,
+                            "account": account_id,
                             "min": 0,
                         }
                     await asyncio.sleep(0.1)  # Rate limiting
