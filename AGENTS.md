@@ -53,3 +53,4 @@
 ## Task Intake Protocol
 - For each new task, first analyze the requirements and explicitly state which files or directories need to change.
 - Do not edit any files until there is direct permission that names the specific file(s) or directory that may be modified—no exceptions.
+- Shortcut: a user reply with a single `+` means "you may modify all files/directories you proposed in the immediately previous message."
