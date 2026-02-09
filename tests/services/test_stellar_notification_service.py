@@ -294,6 +294,31 @@ class TestDeduplication:
         # Cache should have been cleared after exceeding max_cache_size
         assert len(service.notified_operations) < 4
 
+    @pytest.mark.asyncio
+    async def test_same_transaction_hash_sent_once(self, service):
+        service.subscriptions_map["sub-1"] = {
+            "chat_id": 123,
+            "topic_id": None,
+            "type": "asset",
+            "min": 0,
+        }
+
+        payload_1 = {
+            "subscription": "sub-1",
+            "operation": {"id": "op-1", "type": "payment", "amount": "100"},
+            "transaction": {"hash": "tx-123", "envelope_xdr": None},
+        }
+        payload_2 = {
+            "subscription": "sub-1",
+            "operation": {"id": "op-2", "type": "manage_sell_offer", "amount": "0"},
+            "transaction": {"hash": "tx-123", "envelope_xdr": None},
+        }
+
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
+            await service.process_notification(payload_1, "sub-1")
+            await service.process_notification(payload_2, "sub-1")
+            assert mock_send.call_count == 1
+
 
 class TestMinimumAmountFilter:
     """Tests for minimum amount filtering."""

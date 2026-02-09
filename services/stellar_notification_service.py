@@ -5,8 +5,11 @@ This service replaces the polling mechanism with webhook-based notifications.
 """
 
 import asyncio
+import hashlib
 import json
 from collections import OrderedDict
+from collections import deque
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import quote
 
@@ -40,7 +43,9 @@ class StellarNotificationService:
         self.site: web.TCPSite | None = None
 
         # Deduplication: track notified operation IDs
-        self.notified_operations: set[tuple[str, Any]] = set()
+        self.notified_operations: set[tuple[Any, ...]] = set()
+        self._notified_order: deque[tuple[Any, ...]] = deque()
+        self._notified_lock = asyncio.Lock()
         self.max_cache_size = 1024
 
         # Mapping: subscription_id -> destination info
@@ -131,18 +136,6 @@ class StellarNotificationService:
         """
         op_info = payload.get("operation", {})
 
-        # Deduplicate by (operation_id, subscription_id)
-        stellar_op_id = op_info.get("id")
-        dedup_key = (stellar_op_id, subscription_id) if stellar_op_id else None
-        if dedup_key:
-            if dedup_key in self.notified_operations:
-                logger.debug(f"Skipping duplicate operation {stellar_op_id} for subscription {subscription_id}")
-                return
-            self.notified_operations.add(dedup_key)
-            # Clear cache if too large
-            if len(self.notified_operations) > self.max_cache_size:
-                self.notified_operations.clear()
-
         # Find destination from subscription map
         if not subscription_id:
             logger.warning("No subscription ID in payload, cannot route notification")
@@ -169,15 +162,45 @@ class StellarNotificationService:
                 logger.debug(f"Account {shorten_address(monitored_account)} not directly involved, skipping")
                 return
 
-        # Format using decode_xdr if envelope_xdr is available
         tx_info = payload.get("transaction", {})
         envelope_xdr = tx_info.get("envelope_xdr")
         tx_hash = tx_info.get("hash", "")
+
+        # Deduplicate by transaction hash (preferred) or operation id (fallback),
+        # scoped to a concrete destination (chat/topic). This prevents duplicate
+        # notifications when the notifier retries or emits multiple events per tx.
+        dedup_key = self._make_dedup_key(
+            tx_hash=tx_hash,
+            op_id=op_info.get("id"),
+            chat_id=destination["chat_id"],
+            topic_id=destination.get("topic_id"),
+            payload=payload,
+        )
+        if await self._is_duplicate_and_remember(dedup_key):
+            logger.debug(
+                "Skipping duplicate notification: sub=%s chat=%s topic=%s tx=%s op=%s",
+                subscription_id,
+                destination["chat_id"],
+                destination.get("topic_id"),
+                tx_hash,
+                op_info.get("id"),
+            )
+            return
 
         if envelope_xdr:
             await self._process_with_xdr(envelope_xdr, tx_hash, destination)
         else:
             # Fallback to simple format if no XDR
+            if self._should_skip_by_min(payload, destination):
+                logger.debug(
+                    "Skipping by min filter: sub=%s chat=%s topic=%s tx=%s op=%s",
+                    subscription_id,
+                    destination["chat_id"],
+                    destination.get("topic_id"),
+                    tx_hash,
+                    op_info.get("id"),
+                )
+                return
             message = self._format_message(payload, destination)
             if message:
                 logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
@@ -186,6 +209,69 @@ class StellarNotificationService:
                     topic_id=destination.get("topic_id"),
                     message=message
                 )
+
+    def _make_dedup_key(
+        self,
+        *,
+        tx_hash: str | None,
+        op_id: Any,
+        chat_id: int,
+        topic_id: Any,
+        payload: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        """Build a stable dedup key scoped to a concrete chat/topic."""
+        topic = int(topic_id) if topic_id is not None else 0
+        if tx_hash:
+            return ("tx", str(tx_hash), int(chat_id), topic)
+        if op_id:
+            return ("op", str(op_id), int(chat_id), topic)
+
+        # Last resort: hash the normalized payload. This is best-effort and
+        # should not be relied upon across upstream format changes.
+        normalized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return ("payload", digest, int(chat_id), topic)
+
+    async def _is_duplicate_and_remember(self, key: tuple[Any, ...]) -> bool:
+        """Return True if key already seen; otherwise remember it with LRU eviction."""
+        async with self._notified_lock:
+            if key in self.notified_operations:
+                return True
+
+            self.notified_operations.add(key)
+            self._notified_order.append(key)
+
+            # LRU eviction: keep bounded memory without wiping the entire cache.
+            while len(self._notified_order) > self.max_cache_size:
+                oldest = self._notified_order.popleft()
+                self.notified_operations.discard(oldest)
+
+            return False
+
+    def _should_skip_by_min(self, payload: dict[str, Any], destination: dict[str, Any]) -> bool:
+        """Apply min amount filter for non-XDR payloads (best-effort)."""
+        min_amount = destination.get("min") or 0
+        try:
+            min_dec = Decimal(str(int(min_amount)))
+        except Exception:
+            return False
+        if min_dec <= 0:
+            return False
+
+        op = payload.get("operation", {})
+        if op.get("type") != "payment":
+            return False
+
+        raw_amount = op.get("amount")
+        if raw_amount is None:
+            return False
+
+        try:
+            amount_dec = Decimal(str(raw_amount))
+        except (InvalidOperation, ValueError):
+            return False
+
+        return amount_dec < min_dec
 
     async def _process_with_xdr(self, envelope_xdr: str, tx_hash: str, destination: dict[str, Any]) -> None:
         """Format and send notification using decode_xdr, matching the old transaction format."""
