@@ -23,6 +23,9 @@
 - Type check: `uv run mypy .` (incrementally fix violations)
 - Lint (if installed): `uv run ruff .` (or your preferred linter)
 - Clean caches/logs: `./clean.sh`
+- Docker image (Just):
+  - Build: `just build latest`
+  - Push to GHCR: `just push-gitdocker latest` (positional arg; do NOT use `tag=latest`)
 
 ## Coding Style & Naming Conventions
 - You must communicate in Russian; code comments and docstrings must stay in English.
