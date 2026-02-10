@@ -33,6 +33,8 @@
 - Names: `snake_case` for functions/vars, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants.
 - Prefer type hints across public functions; keep routers thin and delegate to services in `other/`.
 - Logging: use `loguru` logger; no `print()` in runtime paths.
+- Telegram parse mode:
+  - Bot uses HTML parse mode; always escape user-provided text and any `<`/`>` in messages (use `html.escape()` or `&lt;...&gt;`).
 
 ## Testing Guidelines
 - Add `pytest` tests under `tests/` for new logic (pure utils in `other/`, DB helpers, router helpers via unit‑level functions).
