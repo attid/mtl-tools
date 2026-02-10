@@ -96,11 +96,17 @@ async def decode_xdr(
     else:
         transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
 
-    # Skip mass transactions (e.g. airdrop-style 100+ operations)
-    if 'MASS' in ignore_operation and len(transaction.transaction.operations) >= 90:
+    tx_source_id = transaction.transaction.source.account_id
+
+    # Skip mass transactions (e.g. airdrop-style 50+ operations) unless the tx was
+    # initiated by the monitored account (filter_account).
+    if (
+        "MASS" in ignore_operation
+        and len(transaction.transaction.operations) >= 50
+        and (not filter_account or tx_source_id != filter_account)
+    ):
         return []
 
-    tx_source_id = transaction.transaction.source.account_id
     # If filter_account is the tx source, show all operations (no per-op filtering needed)
     filter_ops_by_account = filter_account and tx_source_id != filter_account
 
