@@ -42,7 +42,8 @@ class Settings(BaseSettings):
         env_file=dotenv_path,
         env_file_encoding='utf-8',
         extra='allow',
-        case_sensitive=False
+        case_sensitive=False,
+        secrets_dir='/run/secrets',
     )
 
 
