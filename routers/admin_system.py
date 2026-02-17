@@ -435,7 +435,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
 
 @router.edited_channel_post(F.text)
-async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppContext):
+async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, app_context: AppContext):
     if not app_context or not app_context.bot_state_service:
         raise ValueError("app_context with bot_state_service required")
     logger.info(
@@ -463,6 +463,7 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppCo
         len(post_sync_records),
     )
 
+    stale_records = []
     for data in post_sync_records:
         msg_text = message.html_text
         reply_markup = InlineKeyboardMarkup(
@@ -482,6 +483,26 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppCo
             await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
                                         message_id=data['message_id'], disable_web_page_preview=True,
                                         reply_markup=reply_markup)
+        except TelegramBadRequest as exc:
+            if "message to edit not found" in str(exc):
+                logger.warning(
+                    "Stale sync record removed: chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
+                    data['chat_id'],
+                    data['message_id'],
+                    message.chat.id,
+                    message.message_id,
+                )
+                stale_records.append(data)
+                continue
+            logger.error(
+                "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
+                data['chat_id'],
+                data['message_id'],
+                message.chat.id,
+                message.message_id,
+                exc,
+            )
+            continue
         except Exception as exc:
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
@@ -491,13 +512,25 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, app_context: AppCo
                 message.message_id,
                 exc,
             )
-            raise
+            continue
         logger.info(
             "Synced edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
             data['chat_id'],
             data['message_id'],
             message.chat.id,
             message.message_id,
+        )
+
+    # Remove stale records and persist
+    if stale_records:
+        post_key = str(message.message_id)
+        for record in stale_records:
+            channel_sync[post_key].remove(record)
+        if not channel_sync[post_key]:
+            del channel_sync[post_key]
+        app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
+        ConfigRepository(session).save_bot_value(
+            message.chat.id, BotValueTypes.Sync, json.dumps(channel_sync)
         )
 
 
