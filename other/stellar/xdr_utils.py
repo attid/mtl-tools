@@ -20,6 +20,14 @@ from other.config_reader import config
 from other.web_tools import get_eurmtl_xdr
 from .address_utils import address_id_to_username
 
+# Operation types that carry meaningful amounts and can be filtered by filter_sum.
+# When filter_sum > 0, operations NOT in this set are skipped entirely.
+AMOUNT_OPERATIONS = {
+    "Payment", "ManageSellOffer", "ManageBuyOffer",
+    "PathPaymentStrictSend", "PathPaymentStrictReceive",
+    "CreatePassiveSellOffer", "Clawback",
+}
+
 
 def good_operation(operation, operation_name: str, filter_operation: list, ignore_operation: list) -> bool:
     """
@@ -124,6 +132,10 @@ async def decode_xdr(
     result.append(f"  Всего {len(transaction.transaction.operations)} операций\n")
 
     for idx, operation in enumerate(transaction.transaction.operations):
+        # When filter_sum is active, skip operations without meaningful amounts
+        if filter_sum > 0 and type(operation).__name__ not in AMOUNT_OPERATIONS:
+            continue
+
         # When filter_account is set and tx source is different,
         # only show operations where filter_account is directly involved
         if filter_ops_by_account:
