@@ -40,6 +40,16 @@ uv run pytest -q
 
 Подробнее — `TESTING.md`.
 
+## Documentation Map
+
+- [AGENTS.md](AGENTS.md) — правила работы агента и intake-процесс.
+- [AI_FIRST.md](AI_FIRST.md) — AI-first контракт и целевая operating model.
+- [docs/architecture.md](docs/architecture.md) — текущая карта слоёв и границ.
+- [docs/conventions.md](docs/conventions.md) — рабочие инженерные конвенции.
+- [docs/glossary.md](docs/glossary.md) — единый словарь доменных терминов.
+- [docs/exec-plans/](docs/exec-plans/) — execution plans (`active/` и `completed/`).
+- [docs/tasks.md](docs/tasks.md) — backlog/заметки по задачам.
+
 ## Полезные команды
 
 - Остановить стек: `docker compose down`.
