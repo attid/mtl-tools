@@ -59,3 +59,8 @@
 - For each new task, first analyze the requirements and explicitly state which files or directories need to change.
 - Do not edit any files until there is direct permission that names the specific file(s) or directory that may be modified—no exceptions.
 - Shortcut: a user reply with a single `+` means "you may modify all files/directories you proposed in the immediately previous message."
+
+## AI-First Execution Plan Rule
+- For every non-trivial task, create an execution plan file in `docs/exec-plans/active/` before code changes.
+- Use `docs/exec-plans/TEMPLATE.md` as the required format.
+- When task is completed, move the plan file to `docs/exec-plans/completed/` and mark checklist items.
