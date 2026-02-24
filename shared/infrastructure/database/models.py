@@ -8,6 +8,7 @@ Base = declarative_base()
 
 # Define a JSON type that uses JSONB on PostgreSQL and generic JSON (TEXT) on SQLite/others
 JSON_VARIANT = JSON().with_variant(JSONB, "postgresql")
+ADMINS_VARIANT = JSON().with_variant(ARRAY(BigInteger), "postgresql")
 
 # --- Firebird-derived models (adapted for PostgreSQL) ---
 
@@ -151,7 +152,7 @@ class Chat(Base):
     title = Column(String)
     created_at = Column(DateTime)
     last_updated = Column(DateTime)
-    admins = Column(ARRAY(BigInteger))
+    admins = Column(ADMINS_VARIANT)
     metadata_ = Column('metadata', JSON_VARIANT) # Using metadata_ to avoid Python keyword conflict
 
     members = relationship("ChatMember", back_populates="chat")

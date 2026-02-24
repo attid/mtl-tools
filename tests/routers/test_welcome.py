@@ -163,6 +163,15 @@ def build_chat_member_update(user, chat_id=-1001, update_id=200):
     return types.Update(update_id=update_id, chat_member=event)
 
 
+def _can_send_messages_value(req_data: dict) -> object:
+    permissions = req_data.get("permissions")
+    if isinstance(permissions, str):
+        permissions = json.loads(permissions)
+    if not isinstance(permissions, dict):
+        raise AssertionError(f"Unexpected permissions payload type: {type(permissions)!r}")
+    return permissions["can_send_messages"]
+
+
 @pytest.mark.asyncio
 async def test_cas_spam_ban(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
@@ -177,7 +186,10 @@ async def test_cas_spam_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    assert any("CAS ban" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    cas_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    assert cas_report is not None
+    assert "CAS ban" in cas_report["data"]["text"]
+    assert "Причина:" in cas_report["data"]["text"]
 
 
 @pytest.mark.asyncio
@@ -194,7 +206,10 @@ async def test_lols_spam_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    assert any("LOLS base" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    lols_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    assert lols_report is not None
+    assert "LOLS base" in lols_report["data"]["text"]
+    assert "Причина:" in lols_report["data"]["text"]
 
 
 @pytest.mark.asyncio
@@ -210,7 +225,10 @@ async def test_forbidden_name_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    assert any("запрещенного никнейма" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    forbidden_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    assert forbidden_report is not None
+    assert "запрещенного никнейма" in forbidden_report["data"]["text"]
+    assert "Причина:" in forbidden_report["data"]["text"]
 
 
 @pytest.mark.asyncio
@@ -228,8 +246,12 @@ async def test_existing_banned_user(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    # Message goes to SpamGroup, not the chat
-    assert any("was banned" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    # Message goes to SpamGroup, not the chat, and includes unban moderation artifact
+    spam_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    assert spam_report is not None
+    assert "was banned" in spam_report["data"]["text"]
+    assert "SpamStatus.BAD (db)" in spam_report["data"]["text"]
+    assert "unban" in str(spam_report["data"].get("reply_markup", ""))
 
 
 @pytest.mark.asyncio
@@ -290,7 +312,12 @@ async def test_welcome_captcha(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any(r["method"] == "restrictChatMember" for r in requests)
+    restrict_req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
+    assert restrict_req is not None
+    assert str(restrict_req["data"]["chat_id"]) == str(chat_id)
+    assert str(restrict_req["data"]["user_id"]) == str(user.id)
+    can_send_messages = _can_send_messages_value(restrict_req["data"])
+    assert can_send_messages in (False, "false", "False", 0, "0")
     msg_req = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None)
     assert msg_req is not None
     assert msg_req["data"].get("reply_markup") is not None
@@ -401,6 +428,8 @@ async def test_cq_captcha_restores_permissions(mock_telegram, router_app_context
     assert restrict_req is not None
     assert int(restrict_req["data"]["user_id"]) == user_id
     assert int(restrict_req["data"]["chat_id"]) == chat_id
+    can_send_messages = _can_send_messages_value(restrict_req["data"])
+    assert can_send_messages in (True, "true", "True", 1, "1")
 
     # Verify until_date is present
     # Aiogram converts timedelta to timestamp (int)

@@ -4,6 +4,29 @@ from other.mtl_tools import check_consul_mtla_chats
 from other.stellar import get_balances, send_payment_async
 from other.grist_tools import grist_check_airdrop_records, grist_log_airdrop_payment, grist_load_airdrop_configs
 from typing import Any, cast
+from loguru import logger
+
+
+def _log_moderation_action(
+    *,
+    action: str,
+    actor_id: int | None,
+    actor_username: str | None,
+    target_user_id: int,
+    chat_id: int,
+    source_handler: str,
+    result: str,
+) -> None:
+    logger.info(
+        "moderation_action action={} actor_id={} actor_username={} target_user_id={} chat_id={} source_handler={} result={}",
+        action,
+        actor_id,
+        actor_username,
+        target_user_id,
+        chat_id,
+        source_handler,
+        result,
+    )
 
 class GristService:
     async def load_table_data(self, table_id):
@@ -286,26 +309,82 @@ class PollService:
 class ModerationService:
     async def ban_user(self, session, chat_id, user_id, bot, revoke_messages=True):
         from aiogram.exceptions import TelegramBadRequest
-        from contextlib import suppress
         from start import add_bot_users
-        with suppress(TelegramBadRequest):
+        _log_moderation_action(
+            action="ban",
+            actor_id=None,
+            actor_username=None,
+            target_user_id=user_id,
+            chat_id=chat_id,
+            source_handler="services.external_services.ModerationService.ban_user",
+            result="started",
+        )
+        try:
             await bot.ban_chat_member(chat_id, user_id, revoke_messages=revoke_messages)
+        except TelegramBadRequest:
+            _log_moderation_action(
+                action="ban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.ModerationService.ban_user",
+                result="failed",
+            )
+            return False
+        else:
             add_bot_users(session, user_id, None, 2)
+            _log_moderation_action(
+                action="ban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.ModerationService.ban_user",
+                result="success",
+            )
             return True
-        return False
 
     async def unban_user(self, session, chat_id, user_id, bot):
         from aiogram.exceptions import TelegramBadRequest
-        from contextlib import suppress
         from start import add_bot_users
-        with suppress(TelegramBadRequest):
+        _log_moderation_action(
+            action="unban",
+            actor_id=None,
+            actor_username=None,
+            target_user_id=user_id,
+            chat_id=chat_id,
+            source_handler="services.external_services.ModerationService.unban_user",
+            result="started",
+        )
+        try:
             if user_id > 0:
                 await bot.unban_chat_member(chat_id, user_id)
             else:
                 await bot.unban_chat_sender_chat(chat_id, user_id)
+        except TelegramBadRequest:
+            _log_moderation_action(
+                action="unban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.ModerationService.unban_user",
+                result="failed",
+            )
+            return False
+        else:
             add_bot_users(session, user_id, None, 0)
+            _log_moderation_action(
+                action="unban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.ModerationService.unban_user",
+                result="success",
+            )
             return True
-        return False
 
     def check_user_status(self, session, user_id):
         from db.repositories import ChatsRepository
@@ -411,12 +490,38 @@ class GroupService:
         if is_member:
             return True, False
 
+        _log_moderation_action(
+            action="unban",
+            actor_id=None,
+            actor_username=None,
+            target_user_id=user_id,
+            chat_id=chat_id,
+            source_handler="services.external_services.GroupService.enforce_entry_channel",
+            result="started",
+        )
         try:
             await bot.unban_chat_member(chat_id, user_id)
             await asyncio.sleep(0.2)
+            _log_moderation_action(
+                action="unban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.GroupService.enforce_entry_channel",
+                result="success",
+            )
             return False, True
         except (TelegramBadRequest, TelegramForbiddenError) as exc:
-            from loguru import logger
+            _log_moderation_action(
+                action="unban",
+                actor_id=None,
+                actor_username=None,
+                target_user_id=user_id,
+                chat_id=chat_id,
+                source_handler="services.external_services.GroupService.enforce_entry_channel",
+                result="failed",
+            )
             logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
             return False, False
 

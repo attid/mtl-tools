@@ -122,6 +122,43 @@ async def test_cq_spam_check(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
     assert any("Banned" in r["data"]["text"] for r in requests if r["method"] == "answerCallbackQuery")
+    assert any(r["method"] == "editMessageReplyMarkup" for r in requests)
+    assert router_app_context.session._bot_users[456].user_type == 2
+
+
+@pytest.mark.asyncio
+async def test_cq_spam_check_restore_restrict_and_artifact(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(last_router)
+
+    cb_data = SpamCheckCallbackData(
+        message_id=1, chat_id=123, user_id=456, good=True, new_message_id=2, message_thread_id=0
+    ).pack()
+
+    update = types.Update(
+        update_id=31,
+        callback_query=types.CallbackQuery(
+            id="cb_restore",
+            chat_instance="ci_restore",
+            from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
+            message=types.Message(
+                message_id=10,
+                date=datetime.datetime.now(),
+                chat=types.Chat(id=123, type='supergroup'),
+                text="Spam rep",
+            ),
+            data=cb_data,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    assert any(r["method"] == "restrictChatMember" for r in requests)
+    assert any(r["method"] == "forwardMessage" for r in requests)
+    assert any("bringing the message back" in r["data"]["text"] for r in requests if r["method"] == "answerCallbackQuery")
+    assert router_app_context.session._bot_users[456].user_type == 1
 
 @pytest.mark.asyncio
 async def test_cq_reply_ban(mock_telegram, router_app_context):

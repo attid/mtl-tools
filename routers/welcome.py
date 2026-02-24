@@ -376,6 +376,12 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                                               permissions=ChatPermissions(can_send_messages=False,
                                                                           can_send_media_messages=False,
                                                                           can_send_other_messages=False))
+                    logger.info(
+                        "moderation_artifact action=restrict_captcha chat_id={} user_id={} actor_id={}",
+                        chat_id,
+                        event.new_chat_member.user.id,
+                        event.from_user.id if event.from_user else "system",
+                    )
                 except Exception as e:
                     MessageRepository(session).send_admin_message(f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
 
@@ -508,6 +514,11 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
         permissions = chat.permissions or ChatPermissions(can_send_messages=True)
         await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
                                        until_date=datetime.timedelta(seconds=65))
+        logger.info(
+            "moderation_artifact action=restrict_release chat_id={} user_id={} source=captcha_v1",
+            query.message.chat.id,
+            query.from_user.id,
+        )
     else:
         await query.answer("For other user", show_alert=True)
     await query.answer()
@@ -526,6 +537,11 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
             permissions = chat.permissions or ChatPermissions(can_send_messages=True)
             await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
                                            until_date=datetime.timedelta(seconds=65))
+            logger.info(
+                "moderation_artifact action=restrict_release chat_id={} user_id={} source=captcha_v2",
+                query.message.chat.id,
+                query.from_user.id,
+            )
         else:
             await query.answer("Wrong answer", show_alert=True)
             await query.message.delete_reply_markup()

@@ -51,6 +51,28 @@ class FirstMessageCallbackData(CallbackData, prefix="first"):
     spam: bool
 
 
+def _log_moderation_action(
+    *,
+    action: str,
+    actor_id: int | None,
+    actor_username: str | None,
+    target_user_id: int,
+    chat_id: int,
+    source_handler: str,
+    result: str,
+) -> None:
+    logger.info(
+        "moderation_action action={} actor_id={} actor_username={} target_user_id={} chat_id={} source_handler={} result={}",
+        action,
+        actor_id,
+        actor_username,
+        target_user_id,
+        chat_id,
+        source_handler,
+        result,
+    )
+
+
 ########################################################################################################################
 ##########################################  DI Helpers  ################################################################
 ########################################################################################################################
@@ -542,6 +564,8 @@ def get_named_reply_markup(button_text):
 @router.callback_query(SpamCheckCallbackData.filter())
 async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackData, bot: Bot, session: Session, app_context=None, skyuser: SkyUser | None = None):
     admin = await skyuser.is_admin() if skyuser else False
+    actor_id = query.from_user.id if query.from_user else None
+    actor_username = query.from_user.username if query.from_user else None
 
     if not admin:
         text = skyuser.admin_denied_text() if skyuser else "You are not admin."
@@ -555,8 +579,41 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         chat = await bot.get_chat(callback_data.chat_id)
         await bot.forward_message(callback_data.chat_id, query.message.chat.id, callback_data.new_message_id)
         permissions = chat.permissions or ChatPermissions(can_send_messages=True)
-        await bot.restrict_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id,
-                                       permissions=permissions)
+        _log_moderation_action(
+            action="restrict",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=callback_data.chat_id,
+            source_handler="routers.last_handler.cq_spam_check",
+            result="started",
+        )
+        try:
+            await bot.restrict_chat_member(
+                chat_id=callback_data.chat_id,
+                user_id=callback_data.user_id,
+                permissions=permissions,
+            )
+        except TelegramBadRequest:
+            _log_moderation_action(
+                action="restrict",
+                actor_id=actor_id,
+                actor_username=actor_username,
+                target_user_id=callback_data.user_id,
+                chat_id=callback_data.chat_id,
+                source_handler="routers.last_handler.cq_spam_check",
+                result="failed",
+            )
+            raise
+        _log_moderation_action(
+            action="restrict",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=callback_data.chat_id,
+            source_handler="routers.last_handler.cq_spam_check",
+            result="success",
+        )
         await query.answer("Oops, bringing the message back!", show_alert=True)
         add_bot_users(session, callback_data.user_id, None, 1)
         await query.message.edit_reply_markup(
@@ -566,13 +623,44 @@ async def cq_spam_check(query: CallbackQuery, callback_data: SpamCheckCallbackDa
         await query.answer("Banned !")
         await query.message.edit_reply_markup(
             reply_markup=get_named_reply_markup(f"✅ Banned {query.from_user.username}"))
-        with suppress(TelegramBadRequest):
+        _log_moderation_action(
+            action="ban",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=callback_data.chat_id,
+            source_handler="routers.last_handler.cq_spam_check",
+            result="started",
+        )
+        try:
             await bot.ban_chat_member(chat_id=callback_data.chat_id, user_id=callback_data.user_id)
+        except TelegramBadRequest:
+            _log_moderation_action(
+                action="ban",
+                actor_id=actor_id,
+                actor_username=actor_username,
+                target_user_id=callback_data.user_id,
+                chat_id=callback_data.chat_id,
+                source_handler="routers.last_handler.cq_spam_check",
+                result="failed",
+            )
+        else:
+            _log_moderation_action(
+                action="ban",
+                actor_id=actor_id,
+                actor_username=actor_username,
+                target_user_id=callback_data.user_id,
+                chat_id=callback_data.chat_id,
+                source_handler="routers.last_handler.cq_spam_check",
+                result="success",
+            )
 
 
 @router.callback_query(ReplyCallbackData.filter())
 async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, bot: Bot, app_context=None, skyuser: SkyUser | None = None):
     admin = await skyuser.is_admin(callback_data.chat_id) if skyuser else False
+    actor_id = query.from_user.id if query.from_user else None
+    actor_username = query.from_user.username if query.from_user else None
 
     if not admin:
         text = skyuser.admin_denied_text("Вы не являетесь администратором в том чате.") if skyuser else "Вы не являетесь администратором в том чате."
@@ -583,10 +671,39 @@ async def cq_reply_ban(query: CallbackQuery, callback_data: ReplyCallbackData, b
         await query.answer("Message is not accessible", show_alert=True)
         return
 
-    with suppress(TelegramBadRequest):
+    _log_moderation_action(
+        action="ban",
+        actor_id=actor_id,
+        actor_username=actor_username,
+        target_user_id=callback_data.user_id,
+        chat_id=callback_data.chat_id,
+        source_handler="routers.last_handler.cq_reply_ban",
+        result="started",
+    )
+    try:
         await bot.ban_chat_member(
             chat_id=callback_data.chat_id,
             user_id=callback_data.user_id
+        )
+    except TelegramBadRequest:
+        _log_moderation_action(
+            action="ban",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=callback_data.chat_id,
+            source_handler="routers.last_handler.cq_reply_ban",
+            result="failed",
+        )
+    else:
+        _log_moderation_action(
+            action="ban",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=callback_data.chat_id,
+            source_handler="routers.last_handler.cq_reply_ban",
+            result="success",
         )
 
     with suppress(TelegramBadRequest):
@@ -609,6 +726,8 @@ async def cq_look(query: CallbackQuery):
 @router.callback_query(FirstMessageCallbackData.filter())
 async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageCallbackData, bot: Bot,
                               session: Session, app_context=None, skyuser: SkyUser | None = None):
+    actor_id = query.from_user.id if query.from_user else None
+    actor_username = query.from_user.username if query.from_user else None
     if not isinstance(query.message, Message):
         await query.answer("Message is not accessible", show_alert=True)
         return False
@@ -654,12 +773,41 @@ async def cq_first_vote_check(query: CallbackQuery, callback_data: FirstMessageC
             await bot.delete_message(query.message.chat.id, query.message.message_id)
 
         # Рестрикт для пользователя
-        with suppress(TelegramBadRequest):
+        _log_moderation_action(
+            action="restrict",
+            actor_id=actor_id,
+            actor_username=actor_username,
+            target_user_id=callback_data.user_id,
+            chat_id=query.message.chat.id,
+            source_handler="routers.last_handler.cq_first_vote_check",
+            result="started",
+        )
+        try:
             await query.message.chat.restrict(callback_data.user_id,
                                               permissions=ChatPermissions(
                                                   can_send_messages=False,
                                                   can_send_media_messages=False,
                                                   can_send_other_messages=False))
+        except TelegramBadRequest:
+            _log_moderation_action(
+                action="restrict",
+                actor_id=actor_id,
+                actor_username=actor_username,
+                target_user_id=callback_data.user_id,
+                chat_id=query.message.chat.id,
+                source_handler="routers.last_handler.cq_first_vote_check",
+                result="failed",
+            )
+        else:
+            _log_moderation_action(
+                action="restrict",
+                actor_id=actor_id,
+                actor_username=actor_username,
+                target_user_id=callback_data.user_id,
+                chat_id=query.message.chat.id,
+                source_handler="routers.last_handler.cq_first_vote_check",
+                result="success",
+            )
         add_bot_users(session, callback_data.user_id, None, 2)
         await query.answer('Message marked as spam and user restricted.', show_alert=True)
         return None

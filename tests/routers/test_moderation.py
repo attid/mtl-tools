@@ -5,6 +5,7 @@ from aiogram import types
 from routers.moderation import router as moderation_router, UnbanCallbackData
 from tests.conftest import RouterTestMiddleware
 from other.constants import MTLChats
+from shared.domain.user import SpamStatus
 
 @pytest.fixture(autouse=True)
 async def cleanup_router():
@@ -33,7 +34,9 @@ async def test_ban_command(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     assert router_app_context.moderation_service.ban_user.called
+    assert router_app_context.moderation_service._user_status[123456] == SpamStatus.BAD
     requests = mock_telegram.get_requests()
+    assert any(r["method"] == "banChatMember" for r in requests)
     assert any("banned" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
@@ -57,7 +60,9 @@ async def test_unban_command(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     assert router_app_context.moderation_service.unban_user.called
+    assert router_app_context.moderation_service._user_status[123456] == SpamStatus.NEW
     requests = mock_telegram.get_requests()
+    assert any(r["method"] == "unbanChatMember" for r in requests)
     assert any("unbanned" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
 @pytest.mark.asyncio
@@ -82,7 +87,9 @@ async def test_unban_callback(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
     
     assert router_app_context.moderation_service.unban_user.called
+    assert router_app_context.moderation_service._user_status[123] == SpamStatus.NEW
     requests = mock_telegram.get_requests()
+    assert any(r["method"] == "unbanChatMember" for r in requests)
     assert any(r["method"] == "answerCallbackQuery" for r in requests)
 
 @pytest.mark.asyncio

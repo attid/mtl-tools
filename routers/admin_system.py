@@ -484,16 +484,6 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
                                         message_id=data['message_id'], disable_web_page_preview=True,
                                         reply_markup=reply_markup)
         except TelegramBadRequest as exc:
-            if "message to edit not found" in str(exc):
-                logger.warning(
-                    "Stale sync record removed: chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
-                    data['chat_id'],
-                    data['message_id'],
-                    message.chat.id,
-                    message.message_id,
-                )
-                stale_records.append(data)
-                continue
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
                 data['chat_id'],
@@ -502,7 +492,7 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
                 message.message_id,
                 exc,
             )
-            continue
+            raise
         except Exception as exc:
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",

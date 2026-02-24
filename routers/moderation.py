@@ -68,6 +68,12 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
             return
 
         await moderation_service.ban_user(session, message.chat.id, user_id, bot)
+        logger.info(
+            "moderation_artifact action=ban chat_id={} user_id={} actor_id={}",
+            message.chat.id,
+            user_id,
+            message.from_user.id if message.from_user else "unknown",
+        )
 
         msg = await message.answer(f"User (ID: {user_id}) has been banned.")
         if reply_message is None:
@@ -104,6 +110,20 @@ async def cmd_unban(message: Message, session: Session, bot: Bot, app_context: A
             return
 
         await moderation_service.unban_user(session, message.chat.id, user_id, bot)
+        logger.info(
+            "moderation_artifact action=unban chat_id={} user_id={} actor_id={}",
+            message.chat.id,
+            user_id,
+            message.from_user.id if message.from_user else "unknown",
+        )
+        await bot.send_message(
+            chat_id=MTLChats.SpamGroup,
+            text=(
+                f"User (ID: {user_id}) has been unbanned by "
+                f"{message.from_user.username if message.from_user and message.from_user.username else 'unknown'} "
+                f"in {message.chat.title} chat."
+            ),
+        )
 
         await message.reply(f"User (ID: {user_id}) has been unbanned.")
     else:
@@ -155,6 +175,20 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
         return False
 
     await moderation_service.unban_user(session, callback_data.chat_id, callback_data.user_id, bot)
+    logger.info(
+        "moderation_artifact action=unban_callback chat_id={} user_id={} actor_id={}",
+        callback_data.chat_id,
+        callback_data.user_id,
+        call.from_user.id if call.from_user else "unknown",
+    )
+    await bot.send_message(
+        chat_id=MTLChats.SpamGroup,
+        text=(
+            f"User (ID: {callback_data.user_id}) has been unbanned via callback by "
+            f"{call.from_user.username if call.from_user and call.from_user.username else 'unknown'} "
+            f"in chat_id={callback_data.chat_id}."
+        ),
+    )
 
     await call.answer("User unbanned successfully.")
     if isinstance(call.message, Message):
