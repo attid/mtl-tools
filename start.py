@@ -34,7 +34,6 @@ from middlewares.user_resolver import UserResolverMiddleware
 from other.config_reader import config
 from other.constants import MTLChats
 from other.pyro_tools import pyro_start
-from other.support_tools import work_with_support
 from services.command_registry_service import get_pending_commands
 from services.health_server import start_health_server
 
@@ -93,7 +92,6 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
         logger.info('test mode')
         # await pyro_start()
     else:
-        global_tasks.append(asyncio.create_task(work_with_support()))
         await pyro_start()
 
 
