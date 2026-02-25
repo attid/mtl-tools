@@ -1,3 +1,23 @@
+"""
+Monitoring protocol notes (ping/pong) for bot-to-bot channel communication.
+
+Canonical pattern:
+1) Message header uses addressing order: ``#<to> #<from> command=<...>``.
+2) Request/response pair is strict: ``ping -> pong``.
+
+Current actors:
+- SkyNet sends request:
+  ``#mmwb #skynet command=ping``
+- MTL Wallet (MMWB side) responds:
+  ``#skynet #mmwb command=pong``
+
+Operational rules:
+- This router updates health state only on incoming ``pong``.
+- ``ping`` is emitted by periodic task and is not treated as a health response.
+- Unknown commands should be ignored to avoid feedback loops.
+- Each side should process only counterpart request/response, not self-generated messages.
+"""
+
 from datetime import datetime
 from aiogram import Router, types, Bot
 from aiogram import F
@@ -45,11 +65,9 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
     url_raw = payload.get("url")
     if command not in {"taken", "closed"}:
         logger.warning("monitoring.helper: unknown command payload='{}'", text)
-        await message.answer("#skynet #helper command=error reason=unknown_command")
         return
     if not url_raw:
         logger.warning("monitoring.helper: missing url payload='{}'", text)
-        await message.answer("#skynet #helper command=error reason=missing_url")
         return
     url = unquote(url_raw)
     ack_url = quote(url, safe="")
@@ -60,7 +78,7 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
         processed = {}
     if dedup_key in processed:
         logger.debug("monitoring.helper: duplicate ignored key={}", dedup_key)
-        await message.answer(f"#skynet #helper command=ack status=duplicate op={command} url={ack_url}")
+        await message.answer(f"#helper #skynet command=ack status=duplicate op={command} url={ack_url}")
         return
 
     try:
@@ -91,16 +109,14 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
             logger.info("monitoring.helper: closed processed url={}", url)
     except (KeyError, ValueError) as exc:
         logger.warning("monitoring.helper: invalid payload='{}' error={}", text, exc)
-        await message.answer("#skynet #helper command=error reason=invalid_payload")
         return
     except Exception as exc:
         logger.error("monitoring.helper: failed payload='{}' error={}", text, exc)
-        await message.answer("#skynet #helper command=error reason=processing_failed")
         return
 
     processed[dedup_key] = True
     app_context.bot_state_service.set_sync_state(HELPER_DEDUP_KEY, processed)
-    await message.answer(f"#skynet #helper command=ack status=ok op={command} url={ack_url}")
+    await message.answer(f"#helper #skynet command=ack status=ok op={command} url={ack_url}")
 
 async def check_ping_responses(bot: Bot, app_context: AppContext):
     if not app_context.bot_state_service:
