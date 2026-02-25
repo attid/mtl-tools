@@ -3,6 +3,7 @@ from aiogram import Router, types, Bot
 from aiogram import F
 import re
 import asyncio
+from urllib.parse import quote, unquote
 from loguru import logger
 
 from other.config_reader import config
@@ -41,15 +42,17 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
 
     payload = _parse_kv_payload(text)
     command = payload.get("command", "").lower()
-    url = payload.get("url")
+    url_raw = payload.get("url")
     if command not in {"taken", "closed"}:
         logger.warning("monitoring.helper: unknown command payload='{}'", text)
         await message.answer("#skynet #helper command=error reason=unknown_command")
         return
-    if not url:
+    if not url_raw:
         logger.warning("monitoring.helper: missing url payload='{}'", text)
         await message.answer("#skynet #helper command=error reason=missing_url")
         return
+    url = unquote(url_raw)
+    ack_url = quote(url, safe="")
 
     dedup_key = f"{command}:{url}"
     processed = app_context.bot_state_service.get_sync_state(HELPER_DEDUP_KEY, {})
@@ -57,7 +60,7 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
         processed = {}
     if dedup_key in processed:
         logger.debug("monitoring.helper: duplicate ignored key={}", dedup_key)
-        await message.answer(f"#skynet #helper command=ack status=duplicate op={command} url={url}")
+        await message.answer(f"#skynet #helper command=ack status=duplicate op={command} url={ack_url}")
         return
 
     try:
@@ -97,7 +100,7 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
 
     processed[dedup_key] = True
     app_context.bot_state_service.set_sync_state(HELPER_DEDUP_KEY, processed)
-    await message.answer(f"#skynet #helper command=ack status=ok op={command} url={url}")
+    await message.answer(f"#skynet #helper command=ack status=ok op={command} url={ack_url}")
 
 async def check_ping_responses(bot: Bot, app_context: AppContext):
     if not app_context.bot_state_service:

@@ -159,3 +159,41 @@ async def test_monitoring_helper_dedup_by_url(mock_telegram, router_app_context,
     requests = mock_telegram.get_requests()
     duplicate_ack = next((r for r in requests if r["method"] == "sendMessage" and "command=ack status=duplicate op=taken" in r["data"].get("text", "")), None)
     assert duplicate_ack is not None
+
+
+@pytest.mark.asyncio
+async def test_monitoring_helper_decodes_url_before_save(mock_telegram, router_app_context, monkeypatch):
+    dp = router_app_context.dispatcher
+    dp.channel_post.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(monitoring_router)
+
+    save_mock = AsyncMock()
+    monkeypatch.setattr(monitoring_module, "gs_save_new_support", save_mock)
+    monkeypatch.setattr(monitoring_module, "gs_close_support", AsyncMock())
+
+    encoded_url = "https%3A%2F%2Ft.me%2Fc%2F1466779498%2F25527"
+    update = types.Update(
+        update_id=6,
+        channel_post=types.Message(
+            message_id=6,
+            date=datetime.now(),
+            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            text=(
+                "#skynet #helper command=taken user_id=84131737 username=itolstov "
+                f"agent_username=itolstov url={encoded_url}"
+            ),
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    save_mock.assert_awaited_once_with(
+        user_id=84131737,
+        username="itolstov",
+        agent_username="itolstov",
+        url="https://t.me/c/1466779498/25527",
+    )
+
+    requests = mock_telegram.get_requests()
+    ack = next((r for r in requests if r["method"] == "sendMessage" and f"url={encoded_url}" in r["data"].get("text", "")), None)
+    assert ack is not None
