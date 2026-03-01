@@ -20,12 +20,18 @@
 - Install deps: `uv sync`
 - Configure: copy `.env.example` to `.env` and fill required keys.
 - Run bot locally: `uv run python start.py`
-- Type check: `uv run mypy .` (incrementally fix violations)
-- Lint (if installed): `uv run ruff .` (or your preferred linter)
 - Clean caches/logs: `./clean.sh`
+- Quality (via justfile):
+  - Lint: `just lint` (ruff check)
+  - Format: `just format` (ruff format)
+  - Type check: `just types` (pyright)
+  - Tests: `just test` (pytest)
+  - Secret scan: `just secrets` (gitleaks; requires local install or use Docker image `zricethezav/gitleaks`)
 - Docker image (Just):
   - Build: `just build latest`
   - Push to GHCR: `just push-gitdocker latest` (positional arg; do NOT use `tag=latest`)
+- CI: GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to main — gitleaks, ruff, pyright, pytest.
+  - Gitleaks allowlist: `.gitleaks.toml` (excludes `.env.example`, `docs/`).
 
 ## Coding Style & Naming Conventions
 - You must communicate in Russian; code comments and docstrings must stay in English.
