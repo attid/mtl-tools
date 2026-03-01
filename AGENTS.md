@@ -52,6 +52,9 @@
 - PRs: concise description, motivation, screenshots/log snippets when UI/log behavior changes; reference issues; note config or migration impacts.
 - Keep diffs focused; include follow‑ups in separate PRs.
 
+## Deployment
+- **After every `git push` to main, always run `just push-gitdocker latest`** to build and push the Docker image to GHCR. The production server pulls from GHCR, so without this step the deploy won't happen.
+
 ## Security & Configuration Tips
 - Never commit secrets. `.env` is ignored; keep tokens/DSNs there. Validate critical settings on startup.
 - Limit admin capabilities to configured chat/user IDs; avoid username‑based checks.
