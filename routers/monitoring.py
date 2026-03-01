@@ -21,14 +21,13 @@ Operational rules:
 from datetime import datetime
 from aiogram import Router, types, Bot
 from aiogram import F
-import re
 import asyncio
-from urllib.parse import quote, unquote
 from loguru import logger
 
 from other.config_reader import config
 from other.constants import MTLChats
 from other.gspread_tools import gs_close_support, gs_save_new_support
+from other.monitoring_contracts import is_helper_event, is_mmwb_pong, parse_helper_event
 from services.app_context import AppContext
 
 router = Router()
@@ -39,11 +38,7 @@ PING_TIMEOUT = 100  # seconds
 HELPER_DEDUP_KEY = "__helper_events_processed__"
 
 
-def _parse_kv_payload(text: str) -> dict[str, str]:
-    pairs = re.findall(r"([a-zA-Z_][a-zA-Z0-9_]*)=([^\s]+)", text)
-    return {k: v for k, v in pairs}
-
-@router.channel_post(F.text.regexp(r'^\s*#skynet'))
+@router.channel_post(F.text.regexp(r"^\s*#skynet"))
 async def handle_skynet_message(message: types.Message, app_context: AppContext):
     text = message.text or message.caption
     if not text:
@@ -52,71 +47,59 @@ async def handle_skynet_message(message: types.Message, app_context: AppContext)
         return
 
     # Check for #skynet #mmwb command=pong pattern
-    if re.search(r'#skynet\s+#mmwb\s+command=pong', text, re.IGNORECASE):
+    if is_mmwb_pong(text):
         app_context.bot_state_service.update_last_pong()
         logger.debug(f"Updated last pong response time: {app_context.bot_state_service.get_last_pong()}")
         return
 
-    if not re.search(r'#skynet\s+#helper\b', text, re.IGNORECASE):
+    if not is_helper_event(text):
         return
 
-    payload = _parse_kv_payload(text)
-    command = payload.get("command", "").lower()
-    url_raw = payload.get("url")
-    if command not in {"taken", "closed"}:
-        logger.warning("monitoring.helper: unknown command payload='{}'", text)
+    try:
+        event = parse_helper_event(text)
+    except (KeyError, ValueError) as exc:
+        logger.warning("monitoring.helper: invalid payload='{}' error={}", text, exc)
         return
-    if not url_raw:
-        logger.warning("monitoring.helper: missing url payload='{}'", text)
-        return
-    url = unquote(url_raw)
-    ack_url = quote(url, safe="")
 
-    dedup_key = f"{command}:{url}"
+    dedup_key = f"{event.command}:{event.url}"
     processed = app_context.bot_state_service.get_sync_state(HELPER_DEDUP_KEY, {})
     if not isinstance(processed, dict):
         processed = {}
     if dedup_key in processed:
         logger.debug("monitoring.helper: duplicate ignored key={}", dedup_key)
-        await message.answer(f"#helper #skynet command=ack status=duplicate op={command} url={ack_url}")
+        await message.answer(f"#helper #skynet command=ack status=duplicate op={event.command} url={event.ack_url}")
         return
 
     try:
-        if command == "taken":
-            user_id = int(payload["user_id"])
-            username = payload["username"]
-            agent_username = payload["agent_username"]
+        if event.command == "taken":
+            username = event.username
+            if username is None:
+                logger.warning("monitoring.helper: invalid taken payload without username payload='{}'", text)
+                return
             await gs_save_new_support(
-                user_id=user_id,
+                user_id=event.user_id,
                 username=username,
-                agent_username=agent_username,
-                url=url,
+                agent_username=event.agent_username,
+                url=event.url,
             )
             logger.info(
                 "monitoring.helper: taken processed user_id={} username={} agent_username={} url={}",
-                user_id,
+                event.user_id,
                 username,
-                agent_username,
-                url,
+                event.agent_username,
+                event.url,
             )
         else:
-            if payload.get("closed", "").lower() != "true":
-                logger.warning("monitoring.helper: closed command without closed=true payload='{}'", text)
-                return
-            _ = int(payload["user_id"])
-            _ = payload["agent_username"]
-            await gs_close_support(url=url)
-            logger.info("monitoring.helper: closed processed url={}", url)
-    except (KeyError, ValueError) as exc:
-        logger.warning("monitoring.helper: invalid payload='{}' error={}", text, exc)
-        return
+            await gs_close_support(url=event.url)
+            logger.info("monitoring.helper: closed processed url={}", event.url)
     except Exception as exc:
         logger.error("monitoring.helper: failed payload='{}' error={}", text, exc)
         return
 
     processed[dedup_key] = True
     app_context.bot_state_service.set_sync_state(HELPER_DEDUP_KEY, processed)
-    await message.answer(f"#helper #skynet command=ack status=ok op={command} url={ack_url}")
+    await message.answer(f"#helper #skynet command=ack status=ok op={event.command} url={event.ack_url}")
+
 
 async def check_ping_responses(bot: Bot, app_context: AppContext):
     if not app_context.bot_state_service:
@@ -125,10 +108,7 @@ async def check_ping_responses(bot: Bot, app_context: AppContext):
     while True:
         # Отправляем ping в канал
         try:
-            await bot.send_message(
-                chat_id=MTLChats.BotsChanel,
-                text="#mmwb #skynet command=ping"
-            )
+            await bot.send_message(chat_id=MTLChats.BotsChanel, text="#mmwb #skynet command=ping")
             app_context.bot_state_service.update_last_ping_sent()
             logger.debug("Sent ping message to channel")
         except Exception as e:
@@ -143,18 +123,21 @@ async def check_ping_responses(bot: Bot, app_context: AppContext):
             time_since_last = (datetime.now() - last_pong).total_seconds()
             if time_since_last > PING_TIMEOUT:
                 try:
-                    await bot.send_message(chat_id=MTLChats.ITolstov,
-                                           text=f"⚠️ MMWB No pong response for {int(time_since_last)//60} minutes!")
+                    await bot.send_message(
+                        chat_id=MTLChats.ITolstov,
+                        text=f"⚠️ MMWB No pong response for {int(time_since_last) // 60} minutes!",
+                    )
                 except Exception as e:
                     logger.error(f"Failed to notify admin : {e}")
+
 
 def register_handlers(dp, bot):
     if config.test_mode:
         return
     dp.include_router(router)
-    app_context = dp.get('app_context')
+    app_context = dp.get("app_context")
     if app_context:
         asyncio.create_task(check_ping_responses(bot, app_context))
     else:
-        logger.warning('app_context not available for monitoring router')
-    logger.info('router monitoring was loaded')
+        logger.warning("app_context not available for monitoring router")
+    logger.info("router monitoring was loaded")

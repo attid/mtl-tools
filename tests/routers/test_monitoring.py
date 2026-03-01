@@ -8,14 +8,16 @@ from routers.monitoring import HELPER_DEDUP_KEY, router as monitoring_router
 from other.constants import MTLChats
 from tests.conftest import RouterTestMiddleware
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router(router_app_context):
     yield
     if monitoring_router.parent_router:
-         monitoring_router._parent_router = None
+        monitoring_router._parent_router = None
     # Reset the bot_state_service last_pong
     router_app_context.bot_state_service.set_last_pong(None)
     router_app_context.bot_state_service.clear_sync_state(HELPER_DEDUP_KEY)
+
 
 @pytest.mark.asyncio
 async def test_monitoring_pong_update(mock_telegram, router_app_context):
@@ -31,9 +33,9 @@ async def test_monitoring_pong_update(mock_telegram, router_app_context):
         channel_post=types.Message(
             message_id=1,
             date=datetime.now(),
-            chat=types.Chat(id=chat_id, type='channel'),
-            text="#skynet #mmwb command=pong status=ok"
-        )
+            chat=types.Chat(id=chat_id, type="channel"),
+            text="#skynet #mmwb command=pong status=ok",
+        ),
     )
 
     # Pre-state - ensure no previous pong
@@ -63,7 +65,7 @@ async def test_monitoring_helper_taken(mock_telegram, router_app_context, monkey
         channel_post=types.Message(
             message_id=2,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=(
                 "#skynet #helper command=taken user_id=123 username=client1 "
                 "agent_username=agent1 url=https://t.me/c/2032873651/69621"
@@ -81,7 +83,15 @@ async def test_monitoring_helper_taken(mock_telegram, router_app_context, monkey
     )
     close_mock.assert_not_called()
     requests = mock_telegram.get_requests()
-    ack = next((r for r in requests if r["method"] == "sendMessage" and "#helper #skynet command=ack status=ok op=taken" in r["data"].get("text", "")), None)
+    ack = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and "#helper #skynet command=ack status=ok op=taken" in r["data"].get("text", "")
+        ),
+        None,
+    )
     assert ack is not None
 
 
@@ -101,7 +111,7 @@ async def test_monitoring_helper_closed(mock_telegram, router_app_context, monke
         channel_post=types.Message(
             message_id=3,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=(
                 "#skynet #helper command=closed user_id=123 agent_username=agent1 "
                 "url=https://t.me/c/2032873651/69621 closed=true"
@@ -114,7 +124,15 @@ async def test_monitoring_helper_closed(mock_telegram, router_app_context, monke
     close_mock.assert_awaited_once_with(url="https://t.me/c/2032873651/69621")
     save_mock.assert_not_called()
     requests = mock_telegram.get_requests()
-    ack = next((r for r in requests if r["method"] == "sendMessage" and "#helper #skynet command=ack status=ok op=closed" in r["data"].get("text", "")), None)
+    ack = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and "#helper #skynet command=ack status=ok op=closed" in r["data"].get("text", "")
+        ),
+        None,
+    )
     assert ack is not None
 
 
@@ -138,7 +156,7 @@ async def test_monitoring_helper_dedup_by_url(mock_telegram, router_app_context,
         channel_post=types.Message(
             message_id=4,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=text,
         ),
     )
@@ -147,7 +165,7 @@ async def test_monitoring_helper_dedup_by_url(mock_telegram, router_app_context,
         channel_post=types.Message(
             message_id=5,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=text,
         ),
     )
@@ -157,7 +175,15 @@ async def test_monitoring_helper_dedup_by_url(mock_telegram, router_app_context,
 
     assert save_mock.await_count == 1
     requests = mock_telegram.get_requests()
-    duplicate_ack = next((r for r in requests if r["method"] == "sendMessage" and "#helper #skynet command=ack status=duplicate op=taken" in r["data"].get("text", "")), None)
+    duplicate_ack = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and "#helper #skynet command=ack status=duplicate op=taken" in r["data"].get("text", "")
+        ),
+        None,
+    )
     assert duplicate_ack is not None
 
 
@@ -177,7 +203,7 @@ async def test_monitoring_helper_decodes_url_before_save(mock_telegram, router_a
         channel_post=types.Message(
             message_id=6,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=(
                 "#skynet #helper command=taken user_id=84131737 username=itolstov "
                 f"agent_username=itolstov url={encoded_url}"
@@ -195,7 +221,15 @@ async def test_monitoring_helper_decodes_url_before_save(mock_telegram, router_a
     )
 
     requests = mock_telegram.get_requests()
-    ack = next((r for r in requests if r["method"] == "sendMessage" and f"#helper #skynet command=ack status=ok op=taken url={encoded_url}" in r["data"].get("text", "")), None)
+    ack = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and f"#helper #skynet command=ack status=ok op=taken url={encoded_url}" in r["data"].get("text", "")
+        ),
+        None,
+    )
     assert ack is not None
 
 
@@ -214,7 +248,7 @@ async def test_monitoring_helper_wrong_direction_ignored(mock_telegram, router_a
         channel_post=types.Message(
             message_id=7,
             date=datetime.now(),
-            chat=types.Chat(id=MTLChats.BotsChanel, type='channel'),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
             text=(
                 "#helper #skynet command=taken user_id=123 username=client1 "
                 "agent_username=agent1 url=https%3A%2F%2Ft.me%2Fc%2F1466779498%2F25527"
@@ -225,5 +259,65 @@ async def test_monitoring_helper_wrong_direction_ignored(mock_telegram, router_a
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     save_mock.assert_not_called()
+    requests = mock_telegram.get_requests()
+    assert not any(r["method"] == "sendMessage" and "command=ack" in r["data"].get("text", "") for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_monitoring_helper_missing_url_no_ack(mock_telegram, router_app_context, monkeypatch):
+    dp = router_app_context.dispatcher
+    dp.channel_post.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(monitoring_router)
+
+    save_mock = AsyncMock()
+    close_mock = AsyncMock()
+    monkeypatch.setattr(monitoring_module, "gs_save_new_support", save_mock)
+    monkeypatch.setattr(monitoring_module, "gs_close_support", close_mock)
+
+    update = types.Update(
+        update_id=8,
+        channel_post=types.Message(
+            message_id=8,
+            date=datetime.now(),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
+            text="#skynet #helper command=taken user_id=123 username=client1 agent_username=agent1",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    save_mock.assert_not_called()
+    close_mock.assert_not_called()
+    requests = mock_telegram.get_requests()
+    assert not any(r["method"] == "sendMessage" and "command=ack" in r["data"].get("text", "") for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_monitoring_helper_closed_without_flag_no_ack(mock_telegram, router_app_context, monkeypatch):
+    dp = router_app_context.dispatcher
+    dp.channel_post.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(monitoring_router)
+
+    save_mock = AsyncMock()
+    close_mock = AsyncMock()
+    monkeypatch.setattr(monitoring_module, "gs_save_new_support", save_mock)
+    monkeypatch.setattr(monitoring_module, "gs_close_support", close_mock)
+
+    update = types.Update(
+        update_id=9,
+        channel_post=types.Message(
+            message_id=9,
+            date=datetime.now(),
+            chat=types.Chat(id=MTLChats.BotsChanel, type="channel"),
+            text=(
+                "#skynet #helper command=closed user_id=123 agent_username=agent1 url=https://t.me/c/2032873651/69621"
+            ),
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    save_mock.assert_not_called()
+    close_mock.assert_not_called()
     requests = mock_telegram.get_requests()
     assert not any(r["method"] == "sendMessage" and "command=ack" in r["data"].get("text", "") for r in requests)
