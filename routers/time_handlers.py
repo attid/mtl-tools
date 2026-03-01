@@ -21,7 +21,7 @@ from other.stellar import (
     cmd_send_by_list_id,
 )
 from other.stellar import get_balances, MTLAddresses
-from scripts.check_stellar import cmd_check_cron_transaction, cmd_check_grist, cmd_check_bot
+from scripts.check_stellar import cmd_check_grist, cmd_check_bot
 from other.constants import MTLChats
 from scripts.update_report import lite_report
 from services.database_service import DatabaseService
