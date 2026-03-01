@@ -870,6 +870,11 @@ class FakeFeatureFlagsService:
         "save_last_message_date",
         "join_request_captcha",
         "full_data",
+        "first_vote",
+        "need_decode",
+        "delete_income",
+        "entry_channel",
+        "notify_join",
     ]
 
     def __init__(self):

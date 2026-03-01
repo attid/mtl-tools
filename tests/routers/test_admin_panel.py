@@ -164,18 +164,32 @@ class TestChatMenuKb:
 
 
 class TestFeatureFlagsKb:
-    def test_all_features_present(self, router_app_context):
-        """Test all feature flags are shown."""
-        kb = feature_flags_kb(-100123, router_app_context.feature_flags)
-        # 13 features + 1 back button
-        assert len(kb.inline_keyboard) == 14
+    def test_all_features_for_regular_admin(self, router_app_context):
+        """Test skynet-only features are hidden from regular admins."""
+        kb = feature_flags_kb(-100123, router_app_context.feature_flags, is_skynet_admin=False)
+        # 14 total - 2 skynet-only (full_data, listen) = 12 features + 1 back = 13 rows
+        assert len(kb.inline_keyboard) == 13
+        all_text = " ".join(row[0].text for row in kb.inline_keyboard)
+        assert "Full Data" not in all_text
+        assert "Listen" not in all_text
+        assert "Notify Join" in all_text
+
+    def test_all_features_for_skynet_admin(self, router_app_context):
+        """Test skynet admins see all features including skynet-only."""
+        kb = feature_flags_kb(-100123, router_app_context.feature_flags, is_skynet_admin=True)
+        # 14 features + 1 back button = 15 rows
+        assert len(kb.inline_keyboard) == 15
+        all_text = " ".join(row[0].text for row in kb.inline_keyboard)
+        assert "Full Data" in all_text
+        assert "Listen" in all_text
+        assert "Notify Join" in all_text
 
     def test_feature_status_display(self, router_app_context):
         """Test feature status is displayed correctly."""
         chat_id = -100123
         router_app_context.feature_flags.enable(chat_id, "captcha")
 
-        kb = feature_flags_kb(chat_id, router_app_context.feature_flags)
+        kb = feature_flags_kb(chat_id, router_app_context.feature_flags, is_skynet_admin=True)
         # Find captcha row
         captcha_row = next(row for row in kb.inline_keyboard if "Captcha" in row[0].text)
         assert "🟢 Captcha" == captcha_row[0].text
@@ -508,6 +522,141 @@ async def test_cb_toggle_feature(mock_telegram, router_app_context):
     answer = next((r for r in requests if r["method"] == "answerCallbackQuery"), None)
     assert answer is not None
     assert "enabled" in answer["data"].get("text", "")
+
+
+@pytest.mark.asyncio
+async def test_cb_toggle_skynet_feature_blocked_for_regular_admin(mock_telegram, router_app_context):
+    """Test that regular admin cannot toggle skynet-only feature (full_data)."""
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_panel_router)
+
+    chat_id = -100999
+    _chat_titles[chat_id] = "Test Chat"
+
+    # User without skynet admin rights
+    callback_data = AdminCallback(action="toggle", chat_id=chat_id, param="full_data").pack()
+
+    update = types.Update(
+        update_id=1,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=12345, is_bot=False, first_name="User", username="regularuser"),
+            chat_instance="ci1",
+            message=types.Message(
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
+            ),
+            data=callback_data,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    # Feature should NOT be toggled
+    assert not router_app_context.feature_flags.is_enabled(chat_id, "full_data")
+
+    requests = mock_telegram.get_requests()
+    answer = next((r for r in requests if r["method"] == "answerCallbackQuery"), None)
+    assert answer is not None
+    assert "skynet admins" in answer["data"].get("text", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_cb_toggle_skynet_feature_allowed_for_skynet_admin(mock_telegram, router_app_context):
+    """Test that skynet admin can toggle skynet-only feature (full_data)."""
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_panel_router)
+
+    chat_id = -100999
+    _chat_titles[chat_id] = "Test Chat"
+
+    # Register user as skynet admin
+    router_app_context.admin_service.add_skynet_admin("@skyadmin")
+
+    callback_data = AdminCallback(action="toggle", chat_id=chat_id, param="full_data").pack()
+
+    update = types.Update(
+        update_id=1,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=12345, is_bot=False, first_name="SkyAdmin", username="skyadmin"),
+            chat_instance="ci1",
+            message=types.Message(
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
+            ),
+            data=callback_data,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    # Feature should be toggled
+    assert router_app_context.feature_flags.is_enabled(chat_id, "full_data")
+
+    requests = mock_telegram.get_requests()
+    answer = next((r for r in requests if r["method"] == "answerCallbackQuery"), None)
+    assert answer is not None
+    assert "enabled" in answer["data"].get("text", "")
+
+
+@pytest.mark.asyncio
+async def test_cb_toggle_notify_join_syncs_notification_service(mock_telegram, router_app_context):
+    """Test that toggling notify_join syncs with notification_service."""
+    dp = router_app_context.dispatcher
+    dp.callback_query.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_panel_router)
+
+    chat_id = -100999
+    _chat_titles[chat_id] = "Test Chat"
+
+    # Verify notification_service starts with no join notify
+    assert not router_app_context.notification_service.is_join_notify_enabled(chat_id)
+
+    # Enable notify_join via toggle
+    callback_data = AdminCallback(action="toggle", chat_id=chat_id, param="notify_join").pack()
+
+    update = types.Update(
+        update_id=1,
+        callback_query=types.CallbackQuery(
+            id="cb1",
+            from_user=types.User(id=12345, is_bot=False, first_name="User"),
+            chat_instance="ci1",
+            message=types.Message(
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
+            ),
+            data=callback_data,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    # Feature flag should be enabled
+    assert router_app_context.feature_flags.is_enabled(chat_id, "notify_join")
+    # Notification service should be synced
+    assert router_app_context.notification_service.is_join_notify_enabled(chat_id)
+
+    # Now toggle again to disable
+    callback_data = AdminCallback(action="toggle", chat_id=chat_id, param="notify_join").pack()
+
+    update = types.Update(
+        update_id=2,
+        callback_query=types.CallbackQuery(
+            id="cb2",
+            from_user=types.User(id=12345, is_bot=False, first_name="User"),
+            chat_instance="ci1",
+            message=types.Message(
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
+            ),
+            data=callback_data,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    # Both should be disabled
+    assert not router_app_context.feature_flags.is_enabled(chat_id, "notify_join")
+    assert not router_app_context.notification_service.is_join_notify_enabled(chat_id)
 
 
 @pytest.mark.asyncio

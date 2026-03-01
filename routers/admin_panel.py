@@ -22,7 +22,7 @@ from db.repositories import ConfigRepository
 from other.constants import BotValueTypes
 from services.command_registry_service import update_command_info
 from services.app_context import AppContext
-from services.feature_flags import FeatureFlagsService
+from services.feature_flags import FEATURE_TO_ENUM, FeatureFlagsService
 from services.telegram_utils import get_chat_info
 
 router = Router()
@@ -66,7 +66,11 @@ FEATURE_LABELS = {
     "need_decode": "Need Decode",
     "delete_income": "Delete Income",
     "entry_channel": "Entry Channel",
+    "notify_join": "Notify Join Request",
 }
+
+# Features that require skynet_admin to toggle (hidden from regular admins)
+SKYNET_ONLY_FEATURES: set[str] = {"full_data", "listen"}
 
 
 def get_feature_description(feature_key: str, app_context: AppContext) -> str:
@@ -159,6 +163,48 @@ async def get_chat_title(
     except (TelegramBadRequest, TelegramForbiddenError):
         mark_chat_inaccessible(chat_id, session)
         return None
+
+
+def _is_skynet_admin(user: User, app_context: AppContext) -> bool:
+    """Check if user is a skynet admin."""
+    if not app_context or not app_context.admin_service:
+        return False
+    username = user.username
+    if not username:
+        return False
+    return app_context.admin_service.is_skynet_admin(username)
+
+
+def _sync_feature_toggle(app_context: AppContext, feature: str, chat_id: int, enabled: bool) -> None:
+    """Sync feature toggle to specialized DI services that maintain their own state.
+
+    Some features have side-effects beyond the feature_flags boolean cache:
+    they maintain separate in-memory state in dedicated services (e.g.
+    NotificationService._notify_join dict). This function mirrors the logic
+    from multi_handler._sync_toggle_addition / _sync_toggle_removal.
+    """
+    enum_key = FEATURE_TO_ENUM.get(feature)
+    if enum_key is None:
+        return
+
+    if enabled:
+        if enum_key == BotValueTypes.FirstVote and app_context.voting_service:
+            app_context.voting_service.enable_first_vote(chat_id)
+        elif enum_key == BotValueTypes.NeedDecode and app_context.bot_state_service:
+            app_context.bot_state_service.mark_needs_decode(chat_id)
+        elif enum_key == BotValueTypes.NotifyJoin and app_context.notification_service:
+            app_context.notification_service.set_join_notify(chat_id, "1")
+        elif enum_key == BotValueTypes.DeleteIncome and app_context.config_service:
+            app_context.config_service.set_delete_income(chat_id, "1")
+    else:
+        if enum_key == BotValueTypes.FirstVote and app_context.voting_service:
+            app_context.voting_service.disable_first_vote(chat_id)
+        elif enum_key == BotValueTypes.NeedDecode and app_context.bot_state_service:
+            app_context.bot_state_service.clear_needs_decode(chat_id)
+        elif enum_key == BotValueTypes.NotifyJoin and app_context.notification_service:
+            app_context.notification_service.disable_join_notify(chat_id)
+        elif enum_key == BotValueTypes.DeleteIncome and app_context.config_service:
+            app_context.config_service.remove_delete_income(chat_id)
 
 
 def _format_admin_name(admin_user: User) -> str:
@@ -352,11 +398,19 @@ def chat_menu_kb(chat_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def feature_flags_kb(chat_id: int, feature_flags: FeatureFlagsService) -> InlineKeyboardMarkup:
-    """Build keyboard with feature toggle buttons."""
+def feature_flags_kb(
+    chat_id: int, feature_flags: FeatureFlagsService, is_skynet_admin: bool = False
+) -> InlineKeyboardMarkup:
+    """Build keyboard with feature toggle buttons.
+
+    Skynet-only features are hidden from regular admins.
+    """
     buttons = []
 
     for feature_key, label in FEATURE_LABELS.items():
+        if feature_key in SKYNET_ONLY_FEATURES and not is_skynet_admin:
+            continue
+
         is_enabled = feature_flags.is_enabled(chat_id, feature_key)
         status_icon = "🟢" if is_enabled else "🔴"
 
@@ -575,6 +629,7 @@ async def cb_show_feature_flags(
         return
 
     chat_id = callback_data.chat_id
+    skynet = _is_skynet_admin(query.from_user, app_context)
 
     title = await get_chat_title(chat_id, bot, session, app_context)
     if not title:
@@ -583,7 +638,8 @@ async def cb_show_feature_flags(
 
     with suppress(TelegramBadRequest):
         await query.message.edit_text(
-            f"Feature Flags: {title}", reply_markup=feature_flags_kb(chat_id, app_context.feature_flags)
+            f"Feature Flags: {title}",
+            reply_markup=feature_flags_kb(chat_id, app_context.feature_flags, is_skynet_admin=skynet),
         )
     await query.answer()
 
@@ -603,15 +659,36 @@ async def cb_toggle_feature(
     chat_id = callback_data.chat_id
     feature = callback_data.param
     feature_flags = app_context.feature_flags
+    skynet = _is_skynet_admin(query.from_user, app_context)
 
-    # Toggle the feature
-    new_state = feature_flags.toggle(chat_id, feature)
+    # Block skynet-only features for regular admins
+    if feature in SKYNET_ONLY_FEATURES and not skynet:
+        await query.answer("Only skynet admins can toggle this feature.", show_alert=True)
+        return
+
+    # Toggle the feature with DB persistence (persist=False because we
+    # write to DB ourselves via ConfigRepository, matching handle_command)
+    current = feature_flags.is_enabled(chat_id, feature)
+    new_state = not current
+    feature_flags.set_feature(chat_id, feature, new_state, persist=False)
+
+    # Persist to DB
+    enum_key = FEATURE_TO_ENUM.get(feature)
+    if enum_key is not None:
+        db_value = "1" if new_state else None
+        ConfigRepository(session).save_bot_value(chat_id, enum_key, db_value)
+
+    # Sync with specialized DI services for features that have side-effects
+    _sync_feature_toggle(app_context, feature, chat_id, new_state)
 
     title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
 
     # Update keyboard
     with suppress(TelegramBadRequest):
-        await query.message.edit_text(f"Feature Flags: {title}", reply_markup=feature_flags_kb(chat_id, feature_flags))
+        await query.message.edit_text(
+            f"Feature Flags: {title}",
+            reply_markup=feature_flags_kb(chat_id, feature_flags, is_skynet_admin=skynet),
+        )
 
     label = FEATURE_LABELS.get(feature, feature)
     status = "enabled" if new_state else "disabled"
