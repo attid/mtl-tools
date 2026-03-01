@@ -7,11 +7,11 @@
 - При конфликте reply + mention — приоритет mention (явный @username).
 
 ## План изменений
-1. [ ] `other/timedelta.py` — `parse_timedelta_from_message` должна пропускать аргументы начинающиеся с `@` при поиске duration.
-2. [ ] `routers/admin_core.py` — `cmd_mute`: извлечь @username из entities или аргументов, резолвить через `ChatsRepository.get_user_id()`. Приоритет: mention > reply. Reply остаётся fallback.
-3. [ ] `routers/admin_core.py` — новый хендлер `/unmute` (тоже поддержка mention + reply).
-4. [ ] Тесты в `tests/routers/test_admin_core.py` — покрыть сценарии: mute по reply, mute по mention, mute mention+reply (mention wins), unmute по reply, unmute по mention.
-5. [ ] Проверка: `just lint && just types && just test`.
+1. [x] `other/timedelta.py` — `parse_timedelta_from_message` должна пропускать аргументы начинающиеся с `@` при поиске duration.
+2. [x] `routers/admin_core.py` — `cmd_mute`: извлечь @username из entities или аргументов, резолвить через `ChatsRepository.get_user_id()`. Приоритет: mention > reply. Reply остаётся fallback.
+3. [x] `routers/admin_core.py` — новый хендлер `/unmute` (тоже поддержка mention + reply).
+4. [x] Тесты в `tests/routers/test_admin_core.py` — покрыть сценарии: mute по reply, mute по mention, mute mention+reply (mention wins), unmute по reply, unmute по mention.
+5. [x] Проверка: `just lint && just types && just test`.
 
 ## Риски и открытые вопросы
 - `ChatsRepository.get_user_id("@username")` требует что пользователь уже есть в `bot_users`. Если нет — вернём ошибку "User not found".
