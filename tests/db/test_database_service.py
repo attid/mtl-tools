@@ -1,6 +1,7 @@
 from services.database_service import DatabaseService
 from tests.fakes import FakeSession
 
+
 def _make_pool(session):
     class Pool:
         def __call__(self):
@@ -36,6 +37,7 @@ def test_save_bot_value_delegation(monkeypatch):
     value = "val"
 
     import asyncio
+
     asyncio.run(service.save_bot_value(chat_id, key, value))
 
     assert calls["session"] is session_instance
@@ -62,6 +64,7 @@ def test_load_bot_value_delegation(monkeypatch):
     monkeypatch.setattr("services.database_service.ConfigRepository", FakeConfigRepo)
 
     import asyncio
+
     result = asyncio.run(service.load_bot_value(1, 2))
 
     assert result == expected_value
@@ -88,6 +91,7 @@ def test_update_chat_info_delegation(monkeypatch):
     members = []
 
     import asyncio
+
     asyncio.run(service.update_chat_info(chat_id, members))
 
     assert calls["session"] is session_instance

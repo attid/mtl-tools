@@ -38,7 +38,7 @@ async def get_bim_list() -> list:
     addresses = []
     data = await wks.get_all_values()
     for record in data[2:]:
-        if record[20] and len(record[4]) == 56 and record[10] == 'TRUE' and float(float2str(record[17])) > 0.5:
+        if record[20] and len(record[4]) == 56 and record[10] == "TRUE" and float(float2str(record[17])) > 0.5:
             addresses.append(record[4])
 
     # check eurmtl
@@ -47,16 +47,14 @@ async def get_bim_list() -> list:
         # get balance
         balances = {}
         response = await http_session_manager.get_web_request(
-            'GET',
-            url=f'{config.horizon_url}/accounts/{address}',
-            return_type='json'
+            "GET", url=f"{config.horizon_url}/accounts/{address}", return_type="json"
         )
         rq = response.data if isinstance(response.data, dict) else {}
         if rq.get("balances"):
             for balance in rq["balances"]:
-                if balance["asset_type"] == 'credit_alphanum12':
+                if balance["asset_type"] == "credit_alphanum12":
                     balances[balance["asset_code"]] = balance["balance"]
-            has_eurmtl = 'EURMTL' in balances
+            has_eurmtl = "EURMTL" in balances
             result.append([address, has_eurmtl])
     return result
 
@@ -71,28 +69,26 @@ async def cmd_show_bim(session: Session) -> str:
     Returns:
         Formatted string with BIM statistics
     """
-    result = ''
+    result = ""
     bod_list = await get_bim_list()
     good = list(filter(lambda x: x[1], bod_list))
 
     total_sum = FinanceRepository(session).get_total_user_div()
 
-    result += f'Всего {len(bod_list)} участников'
-    result += f'\n{len(good)} участников c доступом к EURMTL'
-    result += f'\nЧерез систему за всю историю выплачено {round(total_sum, 2)} EURMTL'
+    result += f"Всего {len(bod_list)} участников"
+    result += f"\n{len(good)} участников c доступом к EURMTL"
+    result += f"\nЧерез систему за всю историю выплачено {round(total_sum, 2)} EURMTL"
 
     balances = {}
     response = await http_session_manager.get_web_request(
-        'GET',
-        url=f'{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}',
-        return_type='json'
+        "GET", url=f"{config.horizon_url}/accounts/{MTLAddresses.public_bod_eur}", return_type="json"
     )
     rq = response.data if isinstance(response.data, dict) else {}
     for balance in rq.get("balances", []):
-        if balance["asset_type"] == 'credit_alphanum12':
+        if balance["asset_type"] == "credit_alphanum12":
             balances[balance["asset_code"]] = balance["balance"]
 
-    result += f'\n\nСейчас к распределению {balances["EURMTL"]} EURMTL или по {int(float(balances["EURMTL"]) / len(good) * 100) / 100} на участника'
+    result += f"\n\nСейчас к распределению {balances['EURMTL']} EURMTL или по {int(float(balances['EURMTL']) / len(good) * 100) / 100} на участника"
     return result
 
 
@@ -108,26 +104,26 @@ async def get_cash_balance(chat_id: int) -> str:
     """
     total_cash = 0
     total_eurmtl = 0
-    line = '============================\n'
+    line = "============================\n"
     result = line
-    result += '|Кубышка |Наличных| EURMTL |\n'
+    result += "|Кубышка |Наличных| EURMTL |\n"
 
-    treasure_list = await grist_manager.load_table_data(MTLGrist.NOTIFY_TREASURY, sort='order')
+    treasure_list = await grist_manager.load_table_data(MTLGrist.NOTIFY_TREASURY, sort="order")
 
     section_cash = 0
     section_eurmtl = 0
 
     for treasure in treasure_list:
-        if len(treasure['account_id']) == 56:
-            if not treasure['enabled']:
+        if len(treasure["account_id"]) == 56:
+            if not treasure["enabled"]:
                 continue
-            assets = await get_balances(treasure['account_id'])
-            eurdebt = int(assets.get('EURDEBT', 0))
-            eurmtl_amount = int(assets.get('EURMTL', 0))
+            assets = await get_balances(treasure["account_id"])
+            eurdebt = int(assets.get("EURDEBT", 0))
+            eurmtl_amount = int(assets.get("EURMTL", 0))
             diff = eurdebt - eurmtl_amount
-            name = treasure['name'] if chat_id == MTLChats.GuarantorGroup else treasure['name'][0]
-            s_cash = f'{diff} '.rjust(8)
-            s_eurmtl = f'{eurmtl_amount} '.rjust(8)
+            name = treasure["name"] if chat_id == MTLChats.GuarantorGroup else treasure["name"][0]
+            s_cash = f"{diff} ".rjust(8)
+            s_eurmtl = f"{eurmtl_amount} ".rjust(8)
             result += f"|{name.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
             total_cash += diff
             total_eurmtl += eurmtl_amount
@@ -136,20 +132,20 @@ async def get_cash_balance(chat_id: int) -> str:
         else:
             # Add section subtotal before separator
             if section_cash > 0 or section_eurmtl > 0:
-                s_section_cash = f'{section_cash} '.rjust(8)
-                s_section_eurmtl = f'{section_eurmtl} '.rjust(8)
+                s_section_cash = f"{section_cash} ".rjust(8)
+                s_section_eurmtl = f"{section_eurmtl} ".rjust(8)
                 result += f"=========={s_section_cash}={s_section_eurmtl}=\n"
             section_cash = 0
             section_eurmtl = 0
 
     # Add subtotal for last section
     if section_cash > 0 or section_eurmtl > 0:
-        s_section_cash = f'{section_cash} '.rjust(8)
-        s_section_eurmtl = f'{section_eurmtl} '.rjust(8)
+        s_section_cash = f"{section_cash} ".rjust(8)
+        s_section_eurmtl = f"{section_eurmtl} ".rjust(8)
         result += f"=========={s_section_cash}={s_section_eurmtl}=\n"
 
-    s_cash = f'{total_cash} '.rjust(8)
-    s_eurmtl = f'{total_eurmtl} '.rjust(8)
+    s_cash = f"{total_cash} ".rjust(8)
+    s_eurmtl = f"{total_eurmtl} ".rjust(8)
     result += f"|{'Итого'.ljust(8)}|{s_cash}|{s_eurmtl}|\n"
 
     result += line
@@ -173,10 +169,10 @@ def get_donate_list(account: dict) -> list:
         account_id = account.get("account_id")
         for data_name in list(data):
             data_value = data[data_name]
-            if data_name[:10] == 'mtl_donate':
-                if data_name.find('=') > 6:
+            if data_name[:10] == "mtl_donate":
+                if data_name.find("=") > 6:
                     persent: str
-                    persent = data_name[data_name.find('=') + 1:]
+                    persent = data_name[data_name.find("=") + 1 :]
                     if isfloat(persent):
                         donate_data_value = decode_data_value(data_value)
                         donate_list.append([account_id, donate_data_value, persent])
@@ -196,16 +192,14 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
         List of data entries
     """
     result_data = []
-    if account_id == 'delegate':  # not used, doesn't work
+    if account_id == "delegate":  # not used, doesn't work
         pass
-    elif account_id == 'donate':
+    elif account_id == "donate":
         # get all donations
         result_data = await cmd_show_donates()
     else:
         response = await http_session_manager.get_web_request(
-            'GET',
-            url=f'{config.horizon_url}/accounts/{account_id}',
-            return_type='json'
+            "GET", url=f"{config.horizon_url}/accounts/{account_id}", return_type="json"
         )
         account_json = response.data if isinstance(response.data, dict) else {}
         if "data" in account_json:
@@ -216,7 +210,7 @@ async def cmd_show_data(account_id: str, filter_by: str = None, only_data: bool 
                     if only_data:
                         result_data.append(decode_data_value(data_value))
                     else:
-                        result_data.append(f'{data_name} => {decode_data_value(data_value)}')
+                        result_data.append(f"{data_name} => {decode_data_value(data_value)}")
     return result_data
 
 
@@ -235,8 +229,8 @@ async def cmd_show_donates(return_json: bool = False, return_table: bool = False
     account_list = []
 
     for account in accounts:
-        if account['data']:
-            account_list.append([account["account_id"], account['data']])
+        if account["data"]:
+            account_list.append([account["account_id"], account["data"]])
 
     # https://github.com/montelibero-org/mtl/blob/main/json/donation.json
     # "GBOZAJYX43ANOM66SZZFBDG7VZ2EGEOTIK5FGWRO54GLIZAKHTLSXXWM":
@@ -253,17 +247,19 @@ async def cmd_show_donates(return_json: bool = False, return_table: bool = False
             recipients = []
             for data_name in list(data):
                 data_value = data[data_name]
-                if data_name[:10] == 'mtl_donate':
-                    recipient = {"recipient": decode_data_value(data_value),
-                                 "percent": data_name[data_name.find('=') + 1:]}
+                if data_name[:10] == "mtl_donate":
+                    recipient = {
+                        "recipient": decode_data_value(data_value),
+                        "percent": data_name[data_name.find("=") + 1 :],
+                    }
                     recipients.append(recipient)
             if recipients:
                 donate_json[account[0]] = recipients
                 donate_data.append(f"{account[0]} ==>")
-                donate_table.append([account[0], '', ''])
+                donate_table.append([account[0], "", ""])
                 for recipient in recipients:
                     donate_data.append(f"          {recipient['percent']} ==> {recipient['recipient']}")
-                    donate_table.append(['', recipient['percent'], recipient['recipient']])
+                    donate_table.append(["", recipient["percent"], recipient["recipient"]])
                 donate_data.append("******")
 
     if return_json:
@@ -287,15 +283,15 @@ async def cmd_show_guards_list() -> list:
         data = account_json["data"]
         for data_name in list(data):
             data_value = data[data_name]
-            if data_name[:13] == 'bod_guarantor':
+            if data_name[:13] == "bod_guarantor":
                 guard = decode_data_value(data_value)
-                result_data.append([guard, '', ''])
+                result_data.append([guard, "", ""])
                 account_json2 = await stellar_get_account(guard)
                 if "data" in account_json2:
                     data2 = account_json2["data"]
                     for data_name_2 in list(data2):
                         data_value = data2[data_name_2]
-                        if data_name_2.find('bod') == 0:
-                            result_data.append(['', data_name_2, decode_data_value(data_value)])
-            result_data.append(['*', '*', '*'])
+                        if data_name_2.find("bod") == 0:
+                            result_data.append(["", data_name_2, decode_data_value(data_value)])
+            result_data.append(["*", "*", "*"])
     return result_data

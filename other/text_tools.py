@@ -1,7 +1,8 @@
 import re
 from loguru import logger
 
-def extract_url(msg: str, surl: str = 'eurmtl.me') -> str | None:
+
+def extract_url(msg: str, surl: str = "eurmtl.me") -> str | None:
     try:
         if surl:
             pattern = rf"https?://{surl}[^\s]+"

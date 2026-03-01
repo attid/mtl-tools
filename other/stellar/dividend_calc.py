@@ -16,6 +16,7 @@ from .balance_utils import stellar_get_holders
 @dataclass
 class DividendPayment:
     """Single dividend payment record."""
+
     address: str
     amount: Decimal
     asset: Asset
@@ -24,6 +25,7 @@ class DividendPayment:
 @dataclass
 class DividendCalculation:
     """Result of dividend calculation."""
+
     payments: list[DividendPayment]
     total_amount: Decimal
     holder_count: int
@@ -48,9 +50,9 @@ async def get_bim_list_from_gsheet(agcm) -> list[list]:
     data = await wks.get_all_values()
     for record in data[2:]:
         # Check column conditions for valid participant
-        if record[20] and len(record[4]) == 56 and record[10] == 'TRUE':
+        if record[20] and len(record[4]) == 56 and record[10] == "TRUE":
             try:
-                weight = float(record[17].replace(',', '.')) if record[17] else 0
+                weight = float(record[17].replace(",", ".")) if record[17] else 0
                 if weight > 0.5:
                     addresses.append(record[4])
             except (ValueError, IndexError):
@@ -62,16 +64,14 @@ async def get_bim_list_from_gsheet(agcm) -> list[list]:
         balances = {}
         try:
             response = await http_session_manager.get_web_request(
-                'GET',
-                url=f'{config.horizon_url}/accounts/{address}',
-                return_type='json'
+                "GET", url=f"{config.horizon_url}/accounts/{address}", return_type="json"
             )
             rq = response.data if isinstance(response.data, dict) else {}
             if rq.get("balances"):
                 for balance in rq["balances"]:
-                    if balance["asset_type"] == 'credit_alphanum12':
+                    if balance["asset_type"] == "credit_alphanum12":
                         balances[balance["asset_code"]] = balance["balance"]
-                has_eurmtl = 'EURMTL' in balances
+                has_eurmtl = "EURMTL" in balances
                 result.append([address, has_eurmtl])
         except Exception:
             result.append([address, False])
@@ -108,14 +108,15 @@ async def calculate_eurmtl_dividends(
             continue
 
         for balance in holder.get("balances", []):
-            if (balance.get("asset_code") == "EURMTL" and
-                balance.get("asset_issuer") == MTLAddresses.public_issuer):
+            if balance.get("asset_code") == "EURMTL" and balance.get("asset_issuer") == MTLAddresses.public_issuer:
                 bal = Decimal(balance["balance"])
                 if bal > Decimal("0"):
-                    eligible_holders.append({
-                        "address": address,
-                        "balance": bal,
-                    })
+                    eligible_holders.append(
+                        {
+                            "address": address,
+                            "balance": bal,
+                        }
+                    )
                 break
 
     total_balance = sum(h["balance"] for h in eligible_holders)
@@ -132,17 +133,16 @@ async def calculate_eurmtl_dividends(
     payments = []
     for holder in eligible_holders:
         share = holder["balance"] / total_balance
-        payment_amount = (total_amount * share).quantize(
-            Decimal("0.0000001"),
-            rounding=ROUND_DOWN
-        )
+        payment_amount = (total_amount * share).quantize(Decimal("0.0000001"), rounding=ROUND_DOWN)
 
         if payment_amount > Decimal("0"):
-            payments.append(DividendPayment(
-                address=holder["address"],
-                amount=payment_amount,
-                asset=MTLAssets.eurmtl_asset,
-            ))
+            payments.append(
+                DividendPayment(
+                    address=holder["address"],
+                    amount=payment_amount,
+                    asset=MTLAssets.eurmtl_asset,
+                )
+            )
 
     return DividendCalculation(
         payments=payments,
@@ -183,17 +183,16 @@ async def calculate_mtlap_dividends(
             continue
 
         share = weight / total_weight
-        payment_amount = (total_amount * share).quantize(
-            Decimal("0.0000001"),
-            rounding=ROUND_DOWN
-        )
+        payment_amount = (total_amount * share).quantize(Decimal("0.0000001"), rounding=ROUND_DOWN)
 
         if payment_amount > Decimal("0"):
-            payments.append(DividendPayment(
-                address=holder["address"],
-                amount=payment_amount,
-                asset=MTLAssets.eurmtl_asset,
-            ))
+            payments.append(
+                DividendPayment(
+                    address=holder["address"],
+                    amount=payment_amount,
+                    asset=MTLAssets.eurmtl_asset,
+                )
+            )
 
     return DividendCalculation(
         payments=payments,

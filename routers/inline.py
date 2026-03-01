@@ -19,11 +19,7 @@ def _get_commands_dict(app_context):
     # Convert CommandInfo objects to legacy format for compatibility
     commands = app_context.command_registry.get_all_commands()
     return {
-        name: {
-            'info': cmd.description,
-            'cmd_type': cmd.cmd_type,
-            'cmd_list': cmd.cmd_list[0] if cmd.cmd_list else ''
-        }
+        name: {"info": cmd.description, "cmd_type": cmd.cmd_type, "cmd_list": cmd.cmd_list[0] if cmd.cmd_list else ""}
         for name, cmd in commands.items()
     }
 
@@ -43,7 +39,7 @@ def _get_attr_list(app_context, attr_name: str):
     if not app_context:
         raise ValueError("app_context required")
     # For alert_me, use notification_service
-    if attr_name == 'alert_me':
+    if attr_name == "alert_me":
         if not app_context.notification_service:
             raise ValueError("app_context with notification_service required")
         return app_context.notification_service.get_all_alerts()
@@ -60,15 +56,15 @@ async def _resolve_chat_id(bot: Bot, identifier: str) -> int:
 
     # Try numeric ID first
     try:
-        if identifier.startswith('-100'):
+        if identifier.startswith("-100"):
             return int(identifier)
-        elif identifier.lstrip('-').isdigit():
-            return int(f'-100{identifier}')
+        elif identifier.lstrip("-").isdigit():
+            return int(f"-100{identifier}")
     except ValueError:
         pass
 
     # Try username (with or without @)
-    username = identifier.lstrip('@').lower()
+    username = identifier.lstrip("@").lower()
     if not username:
         return 0
 
@@ -107,7 +103,7 @@ async def inline_handler(
             # Try to resolve first word as chat identifier (number or @username)
             chat_id = await _resolve_chat_id(bot, query_arr[0])
             if chat_id != 0:
-                query_text = ' '.join(query_arr[1:]).upper()
+                query_text = " ".join(query_arr[1:]).upper()
 
         # Empty query means show all commands
         show_all = len(query_text.strip()) == 0
@@ -115,7 +111,7 @@ async def inline_handler(
         commands_dict = _get_commands_dict(app_context)
 
         for key, value in commands_dict.items():
-            if show_all or (query_text in key.upper()) or (query_text in value['info'].upper()):
+            if show_all or (query_text in key.upper()) or (query_text in value["info"].upper()):
                 ico = ""
                 if (value["cmd_type"] > 0) and (chat_id < 0):
                     attr_list = _get_attr_list(app_context, value["cmd_list"])
@@ -129,13 +125,17 @@ async def inline_handler(
                                 in_list = user_id in attr_list[chat_id]
                         ico = "🟢 " if in_list else "🔴 "
 
-                answers.append(InlineQueryResultArticle(
-                    id=str(len(answers)),
-                    title=ico + value['info'],
-                    description=key,
-                    input_message_content=InputTextMessageContent(message_text=key)
-                ))
-        return await inline_query.answer(answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz")
+                answers.append(
+                    InlineQueryResultArticle(
+                        id=str(len(answers)),
+                        title=ico + value["info"],
+                        description=key,
+                        input_message_content=InputTextMessageContent(message_text=key),
+                    )
+                )
+        return await inline_query.answer(
+            answers[:50], cache_time=60, switch_pm_text=switch_text, switch_pm_parameter="xz"
+        )
     except Exception as e:
         logger.exception(f"Error in inline_handler: {e}")
         return await inline_query.answer([], cache_time=60)
@@ -143,4 +143,4 @@ async def inline_handler(
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router inline was loaded')
+    logger.info("router inline was loaded")

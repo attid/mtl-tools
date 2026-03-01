@@ -12,6 +12,7 @@ class BotConfig:
 
     Encapsulates chat-level configuration with type-safe access.
     """
+
     chat_id: int
     settings: dict[str, Any] = field(default_factory=dict)
 

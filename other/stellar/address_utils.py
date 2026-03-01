@@ -8,8 +8,8 @@ from stellar_sdk.sep.federation import resolve_account_id_async
 
 
 # Regex patterns
-STELLAR_PUBLIC_KEY_PATTERN = re.compile(r'G[A-Za-z0-9]{55}')
-STELLAR_FEDERATION_ADDRESS_PATTERN = re.compile(r'[a-z0-9]+[\._]?[a-z0-9]+[*][a-z0-9\-]+[\.][a-z0-9\.]+')
+STELLAR_PUBLIC_KEY_PATTERN = re.compile(r"G[A-Za-z0-9]{55}")
+STELLAR_FEDERATION_ADDRESS_PATTERN = re.compile(r"[a-z0-9]+[\._]?[a-z0-9]+[*][a-z0-9\-]+[\.][a-z0-9\.]+")
 
 
 def find_stellar_public_key(text: str) -> Optional[str]:
@@ -54,7 +54,7 @@ async def resolve_account(address: str) -> Optional[str]:
     Returns:
         Stellar account ID or None if resolution fails
     """
-    if not address or '*' not in address:
+    if not address or "*" not in address:
         return None
 
     try:
@@ -79,12 +79,7 @@ def shorten_address(address: str) -> str:
     return f"{address[:4]}..{address[-4:]}"
 
 
-async def address_id_to_username(
-    key: str,
-    full_data: bool = False,
-    grist_manager=None,
-    global_data=None
-) -> str:
+async def address_id_to_username(key: str, full_data: bool = False, grist_manager=None, global_data=None) -> str:
     """
     Convert Stellar address to human-readable username.
 
@@ -106,7 +101,7 @@ async def address_id_to_username(
         return shorten_address(key)
 
     # Check global name list first (cache)
-    if global_data and hasattr(global_data, 'name_list'):
+    if global_data and hasattr(global_data, "name_list"):
         if key in global_data.name_list:
             return global_data.name_list[key]
 
@@ -115,46 +110,35 @@ async def address_id_to_username(
         try:
             # Check MTLA users
             from other.grist_tools import MTLGrist
-            user = await grist_manager.load_table_data(
-                MTLGrist.MTLA_USERS,
-                filter_dict={"Stellar": [key]}
-            )
+
+            user = await grist_manager.load_table_data(MTLGrist.MTLA_USERS, filter_dict={"Stellar": [key]})
             if user:
                 name = user[0]["Telegram"]
-                if global_data and hasattr(global_data, 'name_list'):
+                if global_data and hasattr(global_data, "name_list"):
                     global_data.name_list[key] = name
                 return name
 
             # Check EURMTL users
-            user = await grist_manager.load_table_data(
-                MTLGrist.EURMTL_users,
-                filter_dict={"account_id": [key]}
-            )
+            user = await grist_manager.load_table_data(MTLGrist.EURMTL_users, filter_dict={"account_id": [key]})
             if user:
                 name = user[0]["username"]
-                if global_data and hasattr(global_data, 'name_list'):
+                if global_data and hasattr(global_data, "name_list"):
                     global_data.name_list[key] = name
                 return name
 
             # Check EURMTL accounts
-            user = await grist_manager.load_table_data(
-                MTLGrist.EURMTL_accounts,
-                filter_dict={"account_id": [key]}
-            )
+            user = await grist_manager.load_table_data(MTLGrist.EURMTL_accounts, filter_dict={"account_id": [key]})
             if user:
                 name = user[0]["description"]
-                if global_data and hasattr(global_data, 'name_list'):
+                if global_data and hasattr(global_data, "name_list"):
                     global_data.name_list[key] = name
                 return name
 
             # Check EURMTL assets (issuer lookup)
-            user = await grist_manager.load_table_data(
-                MTLGrist.EURMTL_assets,
-                filter_dict={"issuer": [key]}
-            )
+            user = await grist_manager.load_table_data(MTLGrist.EURMTL_assets, filter_dict={"issuer": [key]})
             if user:
-                name = 'Issuer of ' + user[0]["code"]
-                if global_data and hasattr(global_data, 'name_list'):
+                name = "Issuer of " + user[0]["code"]
+                if global_data and hasattr(global_data, "name_list"):
                     global_data.name_list[key] = name
                 return name
         except Exception:

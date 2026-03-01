@@ -29,9 +29,9 @@ class HTTPSessionManager:
         async with self._lock:  # Блокируем доступ к сессии
             current_time = time.monotonic()
             if (
-                    self.session is None
-                    or self.session.closed
-                    or current_time - self.session_start_time > self.max_session_duration
+                self.session is None
+                or self.session.closed
+                or current_time - self.session_start_time > self.max_session_duration
             ):
                 if self.session and not self.session.closed:
                     await self.session.close()
@@ -47,13 +47,13 @@ class HTTPSessionManager:
                 logger.info("Сессия закрыта.")
 
     async def get_web_request(
-            self,
-            method: str,
-            url: str,
-            json: Optional[Dict[str, Any]] = None,
-            headers: Optional[Dict[str, str]] = None,
-            data: Optional[Union[Dict[str, Any], str]] = None,
-            return_type: Optional[str] = None,
+        self,
+        method: str,
+        url: str,
+        json: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[Union[Dict[str, Any], str]] = None,
+        return_type: Optional[str] = None,
     ) -> WebResponse:
         """
         Выполняет HTTP-запрос с использованием текущей сессии.
@@ -70,9 +70,7 @@ class HTTPSessionManager:
         start_time = time.monotonic()
 
         try:
-            async with session.request(
-                    method.upper(), url, json=json, headers=headers, data=data
-            ) as response:
+            async with session.request(method.upper(), url, json=json, headers=headers, data=data) as response:
                 content_type = response.headers.get("Content-Type", "")
                 elapsed_time = time.monotonic() - start_time
 
@@ -93,9 +91,7 @@ class HTTPSessionManager:
 
 
 async def get_debank_balance(
-        account_id: str,
-        chain: str = 'bsc',
-        session_manager: Optional[HTTPSessionManager] = None
+    account_id: str, chain: str = "bsc", session_manager: Optional[HTTPSessionManager] = None
 ) -> float:
     """
     Получает баланс аккаунта в USD через DeBank API.
@@ -110,25 +106,18 @@ async def get_debank_balance(
     if session_manager is None:
         session_manager = http_session_manager
 
-    url = (
-        "https://pro-openapi.debank.com/v1/user/chain_balance"
-        f"?id={account_id}"
-        f"&chain_id={chain}"
-    )
+    url = f"https://pro-openapi.debank.com/v1/user/chain_balance?id={account_id}&chain_id={chain}"
 
-    headers = {
-        'accept': 'application/json',
-        'AccessKey': config.debank.get_secret_value()
-    }
+    headers = {"accept": "application/json", "AccessKey": config.debank.get_secret_value()}
 
     try:
-        response = await session_manager.get_web_request('GET', url, headers=headers, return_type='json')
+        response = await session_manager.get_web_request("GET", url, headers=headers, return_type="json")
         if response.status == 200:
             if isinstance(response.data, dict):
-                return float(response.data.get('usd_value', 0.0))
+                return float(response.data.get("usd_value", 0.0))
             return 0.0
         else:
-            raise Exception(f'Ошибка запроса: Статус {response.status}')
+            raise Exception(f"Ошибка запроса: Статус {response.status}")
     except Exception as e:
         logger.error(f"Ошибка при получении баланса: {e}")
         raise
@@ -142,16 +131,12 @@ async def main():
     session_manager = HTTPSessionManager()
     try:
         # GET-запрос
-        response = await session_manager.get_web_request(
-            "GET", "https://example.com", return_type="json"
-        )
+        response = await session_manager.get_web_request("GET", "https://example.com", return_type="json")
         print(f"GET Response: {response}")
 
         # POST-запрос
         post_data = {"key": "value"}
-        response = await session_manager.get_web_request(
-            "POST", "https://example.com", json=post_data
-        )
+        response = await session_manager.get_web_request("POST", "https://example.com", json=post_data)
         print(f"POST Response: {response}")
 
     finally:
@@ -160,16 +145,16 @@ async def main():
 
 async def get_eurmtl_xdr(url):
     try:
-        url = 'https://eurmtl.me/remote/get_xdr/' + url.split('/')[-1]
-        response = await http_session_manager.get_web_request('GET', url=url)
+        url = "https://eurmtl.me/remote/get_xdr/" + url.split("/")[-1]
+        response = await http_session_manager.get_web_request("GET", url=url)
 
-        if 'xdr' in response.data:
-            return response.data['xdr']
+        if "xdr" in response.data:
+            return response.data["xdr"]
         else:
             return 'Invalid response format: missing "xdr" field.'
     except Exception as ex:
-        logger.info(['get_eurmtl_xdr', ex])
-        return 'An error occurred during the request.'
+        logger.info(["get_eurmtl_xdr", ex])
+        return "An error occurred during the request."
 
 
 if __name__ == "__main__":

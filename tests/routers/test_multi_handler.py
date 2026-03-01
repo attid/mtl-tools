@@ -6,15 +6,17 @@ from routers.multi_handler import router as multi_router, on_startup
 from tests.conftest import RouterTestMiddleware
 from other.constants import MTLChats
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router(router_app_context):
     yield
     if multi_router.parent_router:
-         multi_router._parent_router = None
+        multi_router._parent_router = None
     # Clean up DI services
     router_app_context.feature_flags._features.clear()
     router_app_context.admin_service._skynet_admins.clear()
     router_app_context.admin_service._topic_admins.clear()
+
 
 @pytest.mark.asyncio
 async def test_universal_command_toggle(mock_telegram, router_app_context):
@@ -24,28 +26,29 @@ async def test_universal_command_toggle(mock_telegram, router_app_context):
 
     # default mock_telegram admin is user_id=123456
     # Pre-add to list to test removal using DI service
-    router_app_context.feature_flags.enable(MTLChats.TestGroup, 'reply_only')
+    router_app_context.feature_flags.enable(MTLChats.TestGroup, "reply_only")
 
     update = types.Update(
         update_id=1,
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.TestGroup, type='supergroup'),
+            chat=types.Chat(id=MTLChats.TestGroup, type="supergroup"),
             from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
-            text="/set_reply_only"
-        )
+            text="/set_reply_only",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     # Verify removal using DI service
-    assert not router_app_context.feature_flags.is_enabled(MTLChats.TestGroup, 'reply_only')
+    assert not router_app_context.feature_flags.is_enabled(MTLChats.TestGroup, "reply_only")
     # ConfigRepository(session).save_bot_value is now called directly
     # So we just verify the response message
 
     requests = mock_telegram.get_requests()
     assert any("Removed" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_list_command_add(mock_telegram, router_app_context):
@@ -60,10 +63,10 @@ async def test_list_command_add(mock_telegram, router_app_context):
         message=types.Message(
             message_id=2,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.TestGroup, type='supergroup'),
+            chat=types.Chat(id=MTLChats.TestGroup, type="supergroup"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/add_skynet_admin @new_admin"
-        )
+            text="/add_skynet_admin @new_admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -74,6 +77,7 @@ async def test_list_command_add(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any("Added" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_topic_admin_management(mock_telegram, router_app_context):
@@ -98,11 +102,11 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
         message=types.Message(
             message_id=3,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', title="Group"),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group"),
             message_thread_id=thread_id,
             from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
-            text="/add_topic_admin @topicadmin"
-        )
+            text="/add_topic_admin @topicadmin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -116,6 +120,7 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any("Added at this thread" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
+
 @pytest.mark.asyncio
 async def test_on_startup_triggers_loads(monkeypatch):
     """Test that on_startup calls command_config_loads with app_context."""
@@ -128,7 +133,7 @@ async def test_on_startup_triggers_loads(monkeypatch):
 
     # Create fake dispatcher with app_context
     fake_app_context = object()  # Any truthy object
-    fake_dispatcher = {'app_context': fake_app_context}
+    fake_dispatcher = {"app_context": fake_app_context}
 
     # on_startup is async but command_config_loads is now sync
     await on_startup(fake_dispatcher)

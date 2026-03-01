@@ -4,13 +4,13 @@
 def float2str(f) -> str:
     """Convert float to string, removing trailing zeros."""
     if isinstance(f, str):
-        f = f.replace(',', '.')
+        f = f.replace(",", ".")
         f = float(f)
     s = "%.7f" % f
-    while len(s) > 1 and s[-1] in ('0', '.'):
+    while len(s) > 1 and s[-1] in ("0", "."):
         last = s[-1]
         s = s[0:-1]
-        if last == '.':
+        if last == ".":
             break
     return s
 

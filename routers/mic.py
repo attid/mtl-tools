@@ -42,7 +42,7 @@ def _extract_topic_from_text(text: str | None) -> str:
         return ""
     for line in text.splitlines():
         if line.startswith("Тема:"):
-            return line[len("Тема:"):].strip()
+            return line[len("Тема:") :].strip()
     return ""
 
 
@@ -55,7 +55,7 @@ def _extract_owner_label_from_button(message: Message) -> str | None:
         text = btn.text or ""
         prefix = "🔴 Взято:"
         if text.startswith(prefix):
-            return text[len(prefix):].strip() or None
+            return text[len(prefix) :].strip() or None
         return None
     except Exception:
         return None
@@ -74,9 +74,7 @@ def _render_text(topic: str, owner_label: str | None) -> str:
 
 def _render_keyboard_free() -> InlineKeyboardMarkup:
     cb = MicCallbackData(action="take", owner_id=0).pack()
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🟢 Взять", callback_data=cb)]]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🟢 Взять", callback_data=cb)]])
 
 
 def _render_keyboard_taken(owner_id: int, owner_label: str) -> InlineKeyboardMarkup:
@@ -85,9 +83,7 @@ def _render_keyboard_taken(owner_id: int, owner_label: str) -> InlineKeyboardMar
     if len(label) > 32:
         label = label[:29] + "..."
     cb = MicCallbackData(action="release", owner_id=int(owner_id)).pack()
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=f"🔴 Взято: {label}", callback_data=cb)]]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"🔴 Взято: {label}", callback_data=cb)]])
 
 
 _locks: dict[tuple[int, int, int], asyncio.Lock] = {}
@@ -131,7 +127,9 @@ async def cb_mic(callback: CallbackQuery, callback_data: MicCallbackData, bot: B
         if state is None:
             # Best-effort recovery from the message itself (after restart).
             topic = _extract_topic_from_text(callback.message.text) or ""
-            owner_id = int(callback_data.owner_id) if callback_data.action == "release" and callback_data.owner_id else None
+            owner_id = (
+                int(callback_data.owner_id) if callback_data.action == "release" and callback_data.owner_id else None
+            )
             owner_label = _extract_owner_label_from_button(callback.message)
             state = _MicSessionState(topic=topic, owner_id=owner_id, owner_label=owner_label)
             _sessions[key] = state

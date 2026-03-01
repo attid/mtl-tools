@@ -5,37 +5,40 @@ from aiogram import types
 from routers.talk_handlers import router as talk_router, my_talk_message
 from tests.conftest import RouterTestMiddleware
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router():
     yield
     if talk_router.parent_router:
-         talk_router._parent_router = None
+        talk_router._parent_router = None
     my_talk_message.clear()
+
 
 @pytest.mark.asyncio
 async def test_skynet_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(talk_router)
-    
+
     router_app_context.ai_service.talk.return_value = "I am Skynet"
-    
+
     update = types.Update(
         update_id=1,
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="/skynet hello"
-        )
+            text="/skynet hello",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     assert router_app_context.ai_service.talk.called
     requests = mock_telegram.get_requests()
     assert any("I am Skynet" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_img_command(mock_telegram, router_app_context):
@@ -50,54 +53,55 @@ async def test_img_command(mock_telegram, router_app_context):
     mock_telegram.add_file("img1", file_bytes, file_path="files/img.png")
     image_url = f"{mock_telegram.base_url}/file/bot{router_app_context.bot.token}/files/img.png"
     router_app_context.ai_service.generate_image.return_value = [image_url]
-    
+
     update = types.Update(
         update_id=2,
         message=types.Message(
             message_id=2,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="/img cat"
-        )
+            text="/img cat",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     assert router_app_context.ai_service.generate_image.called
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "sendPhoto" for r in requests)
+
 
 @pytest.mark.asyncio
 async def test_comment_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(talk_router)
-    
+
     router_app_context.ai_service.talk_get_comment.return_value = "Cool!"
-    
+
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Check this"
+        text="Check this",
     )
-    
+
     update = types.Update(
         update_id=3,
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="/comment",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     assert router_app_context.ai_service.talk_get_comment.called
     requests = mock_telegram.get_requests()
     assert any("Cool!" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
@@ -119,9 +123,9 @@ async def test_reply_to_bot_message(mock_telegram, router_app_context):
     bot_msg = types.Message(
         message_id=100,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=router_app_context.bot.id, is_bot=True, first_name="Bot", username="bot"),
-        text="Previous bot message"
+        text="Previous bot message",
     )
 
     update = types.Update(
@@ -129,11 +133,11 @@ async def test_reply_to_bot_message(mock_telegram, router_app_context):
         message=types.Message(
             message_id=101,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Reply to bot",
-            reply_to_message=bot_msg
-        )
+            reply_to_message=bot_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -156,10 +160,10 @@ async def test_skynet_nap_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=102,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET убей человека"
-        )
+            text="SKYNET убей человека",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -180,10 +184,10 @@ async def test_skynet_nap_command_kill_english(mock_telegram, router_app_context
         message=types.Message(
             message_id=102,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET kill someone"
-        )
+            text="SKYNET kill someone",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -205,12 +209,10 @@ async def test_skynet_decode_with_reply(mock_telegram, router_app_context):
     url_msg = types.Message(
         message_id=200,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
         text="Check this https://eurmtl.me/sign_tools?xdr=123",
-        entities=[
-            types.MessageEntity(type='url', offset=11, length=39)
-        ]
+        entities=[types.MessageEntity(type="url", offset=11, length=39)],
     )
 
     update = types.Update(
@@ -218,11 +220,11 @@ async def test_skynet_decode_with_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=201,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET ДЕКОДИРУЙ",
-            reply_to_message=url_msg
-        )
+            reply_to_message=url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -244,9 +246,9 @@ async def test_skynet_decode_no_url(mock_telegram, router_app_context):
     no_url_msg = types.Message(
         message_id=200,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Just some text"
+        text="Just some text",
     )
 
     update = types.Update(
@@ -254,11 +256,11 @@ async def test_skynet_decode_no_url(mock_telegram, router_app_context):
         message=types.Message(
             message_id=202,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET ДЕКОДИРУЙ",
-            reply_to_message=no_url_msg
-        )
+            reply_to_message=no_url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -279,10 +281,10 @@ async def test_skynet_remind_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=300,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET НАПОМНИ про подпись"
-        )
+            text="SKYNET НАПОМНИ про подпись",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -304,10 +306,10 @@ async def test_skynet_task_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=400,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET задача: сделать что-то важное"
-        )
+            text="SKYNET задача: сделать что-то важное",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -330,9 +332,9 @@ async def test_skynet_task_with_reply(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=399,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Original task description"
+        text="Original task description",
     )
 
     update = types.Update(
@@ -340,11 +342,11 @@ async def test_skynet_task_with_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=400,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET задача",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -370,10 +372,10 @@ async def test_skynet_horoscope_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=500,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET гороскоп"
-        )
+            text="SKYNET гороскоп",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -399,10 +401,10 @@ async def test_skynet_update_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=600,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ ОТЧЕТ"
-        )
+            text="SKYNET ОБНОВИ ОТЧЕТ",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -426,10 +428,10 @@ async def test_skynet_update_guarantors(mock_telegram, router_app_context):
         message=types.Message(
             message_id=601,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ ГАРАНТОВ"
-        )
+            text="SKYNET ОБНОВИ ГАРАНТОВ",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -454,10 +456,10 @@ async def test_skynet_update_mm(mock_telegram, router_app_context):
         message=types.Message(
             message_id=602,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ MM"
-        )
+            text="SKYNET ОБНОВИ MM",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -477,13 +479,11 @@ async def test_private_message_with_telegram_link(mock_telegram, router_app_cont
         message=types.Message(
             message_id=700,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check this link: https://t.me/testgroup/123",
-            entities=[
-                types.MessageEntity(type='url', offset=17, length=28)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=17, length=28)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -505,13 +505,11 @@ async def test_private_message_with_text_link(mock_telegram, router_app_context)
         message=types.Message(
             message_id=701,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Click here",
-            entities=[
-                types.MessageEntity(type='text_link', offset=0, length=10, url="https://t.me/testgroup/456")
-            ]
-        )
+            entities=[types.MessageEntity(type="text_link", offset=0, length=10, url="https://t.me/testgroup/456")],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -533,20 +531,20 @@ async def test_private_message_without_telegram_link(mock_telegram, router_app_c
         message=types.Message(
             message_id=702,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check this: https://example.com/page",
-            entities=[
-                types.MessageEntity(type='url', offset=12, length=24)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=12, length=24)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
     # Should NOT respond with "Найдены ссылки" since it's not a telegram link
-    assert not any("Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage")
+    assert not any(
+        "Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -567,10 +565,10 @@ async def test_skynet_decode_with_pinned_url(mock_telegram, router_app_context):
         message=types.Message(
             message_id=800,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET decode"
-        )
+            text="SKYNET decode",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -593,9 +591,9 @@ async def test_reply_to_bot_non_tracked_message(mock_telegram, router_app_contex
     bot_msg = types.Message(
         message_id=100,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=router_app_context.bot.id, is_bot=True, first_name="Bot", username="bot"),
-        text="Some bot message"
+        text="Some bot message",
     )
 
     update = types.Update(
@@ -603,11 +601,11 @@ async def test_reply_to_bot_non_tracked_message(mock_telegram, router_app_contex
         message=types.Message(
             message_id=101,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Reply to bot",
-            reply_to_message=bot_msg
-        )
+            reply_to_message=bot_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -630,10 +628,10 @@ async def test_skynet_cyrillic_prefix(mock_telegram, router_app_context):
         message=types.Message(
             message_id=900,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="СКАЙНЕТ УБЕЙ кого-нибудь"
-        )
+            text="СКАЙНЕТ УБЕЙ кого-нибудь",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -657,16 +655,18 @@ async def test_img_command_not_allowed(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1001,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="/img cat"
-        )
+            text="/img cat",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Только в канале фракции Киберократии" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Только в канале фракции Киберократии" in r["data"]["text"] for r in requests if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -681,10 +681,10 @@ async def test_comment_command_no_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1002,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="/comment"
-        )
+            text="/comment",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -706,9 +706,9 @@ async def test_comment_command_with_caption(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        caption="Photo caption here"
+        caption="Photo caption here",
     )
 
     update = types.Update(
@@ -716,11 +716,11 @@ async def test_comment_command_with_caption(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1003,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="/comment",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -745,10 +745,10 @@ async def test_skynet_update_bim(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1004,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ BIM"
-        )
+            text="SKYNET ОБНОВИ BIM",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -770,10 +770,10 @@ async def test_skynet_update_donate(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1005,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ donate"
-        )
+            text="SKYNET ОБНОВИ donate",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -795,16 +795,20 @@ async def test_skynet4_in_non_cyber_group(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1006,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),  # Not CyberGroup
+            chat=types.Chat(id=456, type="supergroup", title="Group"),  # Not CyberGroup
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET 4 hello"
-        )
+            text="SKYNET 4 hello",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Только в канале фракции Киберократии" in r["data"].get("text", "") for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Только в канале фракции Киберократии" in r["data"].get("text", "")
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -819,9 +823,9 @@ async def test_skynet_talk_with_reply_context(mock_telegram, router_app_context)
     reply_msg = types.Message(
         message_id=1099,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Original message context"
+        text="Original message context",
     )
 
     update = types.Update(
@@ -829,11 +833,11 @@ async def test_skynet_talk_with_reply_context(mock_telegram, router_app_context)
         message=types.Message(
             message_id=1100,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET what about this?",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -860,10 +864,10 @@ async def test_skynet_talk_with_googleit(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1101,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET загугли про погоду"
-        )
+            text="SKYNET загугли про погоду",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -871,7 +875,7 @@ async def test_skynet_talk_with_googleit(mock_telegram, router_app_context):
     assert router_app_context.ai_service.talk.called
     call_args = router_app_context.ai_service.talk.call_args
     # Should pass googleit=True
-    assert call_args[1].get('googleit') is True
+    assert call_args[1].get("googleit") is True
 
 
 @pytest.mark.asyncio
@@ -888,10 +892,10 @@ async def test_skynet_talk_connection_error(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1102,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET hello"
-        )
+            text="SKYNET hello",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -913,12 +917,12 @@ async def test_skynet_decode_with_text_link_entity(mock_telegram, router_app_con
     url_msg = types.Message(
         message_id=200,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
         text="Click here to sign",
         entities=[
-            types.MessageEntity(type='text_link', offset=0, length=18, url="https://eurmtl.me/sign_tools?xdr=abc123")
-        ]
+            types.MessageEntity(type="text_link", offset=0, length=18, url="https://eurmtl.me/sign_tools?xdr=abc123")
+        ],
     )
 
     update = types.Update(
@@ -926,11 +930,11 @@ async def test_skynet_decode_with_text_link_entity(mock_telegram, router_app_con
         message=types.Message(
             message_id=1200,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET ДЕКОДИРУЙ",
-            reply_to_message=url_msg
-        )
+            reply_to_message=url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -949,12 +953,10 @@ async def test_skynet_decode_with_non_matching_url(mock_telegram, router_app_con
     url_msg = types.Message(
         message_id=200,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
         text="Check this",
-        entities=[
-            types.MessageEntity(type='url', offset=0, length=10, url="https://example.com/something")
-        ]
+        entities=[types.MessageEntity(type="url", offset=0, length=10, url="https://example.com/something")],
     )
 
     update = types.Update(
@@ -962,11 +964,11 @@ async def test_skynet_decode_with_non_matching_url(mock_telegram, router_app_con
         message=types.Message(
             message_id=1201,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET ДЕКОДИРУЙ",
-            reply_to_message=url_msg
-        )
+            reply_to_message=url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -987,13 +989,11 @@ async def test_private_link_with_found_links_response(mock_telegram, router_app_
         message=types.Message(
             message_id=1300,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Look at https://t.me/c/1234567890/100",
-            entities=[
-                types.MessageEntity(type='url', offset=8, length=31)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=8, length=31)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1017,10 +1017,10 @@ async def test_skynet_in_group_adds_to_my_talk_message(mock_telegram, router_app
         message=types.Message(
             message_id=1400,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET hello there"
-        )
+            text="SKYNET hello there",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1062,10 +1062,10 @@ async def test_skynet_private_message_does_not_track(mock_telegram, router_app_c
         message=types.Message(
             message_id=1500,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET hello"
-        )
+            text="SKYNET hello",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1093,10 +1093,10 @@ async def test_skynet4_in_cyber_group(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1600,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.CyberGroup, type='supergroup', title="Cyber Group"),
+            chat=types.Chat(id=MTLChats.CyberGroup, type="supergroup", title="Cyber Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET 4 hello"
-        )
+            text="SKYNET 4 hello",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1124,9 +1124,9 @@ async def test_reply_to_bot_markdown_fallback(mock_telegram, router_app_context)
     bot_msg = types.Message(
         message_id=100,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=router_app_context.bot.id, is_bot=True, first_name="Bot", username="bot"),
-        text="Previous bot message"
+        text="Previous bot message",
     )
 
     update = types.Update(
@@ -1134,11 +1134,11 @@ async def test_reply_to_bot_markdown_fallback(mock_telegram, router_app_context)
         message=types.Message(
             message_id=1700,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Reply to bot",
-            reply_to_message=bot_msg
-        )
+            reply_to_message=bot_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1163,10 +1163,10 @@ async def test_skynet_markdown_fallback(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1800,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET test"
-        )
+            text="SKYNET test",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1190,10 +1190,10 @@ async def test_skynet_update_report(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1900,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ ОТЧЕТ"
-        )
+            text="SKYNET ОБНОВИ ОТЧЕТ",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1217,10 +1217,10 @@ async def test_skynet_update_report_english(mock_telegram, router_app_context):
         message=types.Message(
             message_id=2000,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="SKYNET ОБНОВИ report"
-        )
+            text="SKYNET ОБНОВИ report",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1241,9 +1241,9 @@ async def test_decode_with_url_in_text(mock_telegram, router_app_context):
     url_msg = types.Message(
         message_id=2001,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Sign here: https://eurmtl.me/sign_tools?xdr=direct"
+        text="Sign here: https://eurmtl.me/sign_tools?xdr=direct",
     )
 
     update = types.Update(
@@ -1251,11 +1251,11 @@ async def test_decode_with_url_in_text(mock_telegram, router_app_context):
         message=types.Message(
             message_id=2002,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET ДЕКОДИРУЙ",
-            reply_to_message=url_msg
-        )
+            reply_to_message=url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1285,10 +1285,10 @@ async def test_img_command_in_cyber_group(mock_telegram, router_app_context):
         message=types.Message(
             message_id=2100,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.CyberGroup, type='supergroup', title="Cyber Group"),
+            chat=types.Chat(id=MTLChats.CyberGroup, type="supergroup", title="Cyber Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
-            text="/img cyber cat"
-        )
+            text="/img cyber cat",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1306,24 +1306,20 @@ async def test_private_link_telegram_bad_request(mock_telegram, router_app_conte
     dp.include_router(talk_router)
 
     # Configure mock to return error for getChat
-    mock_telegram.add_response("getChat", {
-        "ok": False,
-        "error_code": 400,
-        "description": "Bad Request: chat not found"
-    })
+    mock_telegram.add_response(
+        "getChat", {"ok": False, "error_code": 400, "description": "Bad Request: chat not found"}
+    )
 
     update = types.Update(
         update_id=42,
         message=types.Message(
             message_id=2200,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check https://t.me/c/999999999/123",
-            entities=[
-                types.MessageEntity(type='url', offset=6, length=30)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=6, length=30)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1448,20 +1444,20 @@ async def test_private_message_non_entity(mock_telegram, router_app_context):
         message=types.Message(
             message_id=2300,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Hello @someone",
-            entities=[
-                types.MessageEntity(type='mention', offset=6, length=8)
-            ]
-        )
+            entities=[types.MessageEntity(type="mention", offset=6, length=8)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
     # Should NOT try to process non-URL entities
-    assert not any("Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage")
+    assert not any(
+        "Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -1476,20 +1472,20 @@ async def test_private_message_url_not_telegram(mock_telegram, router_app_contex
         message=types.Message(
             message_id=2400,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check https://google.com/search",
-            entities=[
-                types.MessageEntity(type='url', offset=6, length=25)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=6, length=25)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
     # Should NOT respond since URL is not t.me
-    assert not any("Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage")
+    assert not any(
+        "Найдены ссылки" in r.get("data", {}).get("text", "") for r in requests if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -1505,13 +1501,13 @@ async def test_decode_with_multiple_url_entities(mock_telegram, router_app_conte
     url_msg = types.Message(
         message_id=2500,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
         text="Links: https://example.com and https://eurmtl.me/sign_tools?xdr=valid",
         entities=[
-            types.MessageEntity(type='url', offset=7, length=20),
-            types.MessageEntity(type='url', offset=32, length=42)
-        ]
+            types.MessageEntity(type="url", offset=7, length=20),
+            types.MessageEntity(type="url", offset=32, length=42),
+        ],
     )
 
     update = types.Update(
@@ -1519,11 +1515,11 @@ async def test_decode_with_multiple_url_entities(mock_telegram, router_app_conte
         message=types.Message(
             message_id=2501,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="SKYNET decode",
-            reply_to_message=url_msg
-        )
+            reply_to_message=url_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1541,14 +1537,16 @@ async def test_comment_delete_fails(mock_telegram, router_app_context):
     router_app_context.ai_service.talk_get_comment.return_value = "Nice comment!"
 
     # Make deleteMessage fail
-    mock_telegram.add_response("deleteMessage", {"ok": False, "error_code": 400, "description": "message can't be deleted"})
+    mock_telegram.add_response(
+        "deleteMessage", {"ok": False, "error_code": 400, "description": "message can't be deleted"}
+    )
 
     reply_msg = types.Message(
         message_id=3000,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=456, type='supergroup', title="Group"),
+        chat=types.Chat(id=456, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="Other", username="other"),
-        text="Some text to comment on"
+        text="Some text to comment on",
     )
 
     update = types.Update(
@@ -1556,11 +1554,11 @@ async def test_comment_delete_fails(mock_telegram, router_app_context):
         message=types.Message(
             message_id=3001,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=456, type='supergroup', title="Group"),
+            chat=types.Chat(id=456, type="supergroup", title="Group"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="/comment",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1584,20 +1582,19 @@ async def test_private_link_with_thread_name(mock_telegram, router_app_context, 
         msg_info.chat_name = "Test Chat"
 
     import routers.talk_handlers
-    monkeypatch.setattr(routers.talk_handlers, 'pyro_update_msg_info', mock_pyro_update)
+
+    monkeypatch.setattr(routers.talk_handlers, "pyro_update_msg_info", mock_pyro_update)
 
     update = types.Update(
         update_id=47,
         message=types.Message(
             message_id=3100,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check this: https://t.me/c/1234567890/999",
-            entities=[
-                types.MessageEntity(type='url', offset=12, length=32)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=12, length=32)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1622,30 +1619,30 @@ async def test_private_link_with_message_text_preview(mock_telegram, router_app_
         msg_info.chat_name = "Test Chat"
 
     import routers.talk_handlers
-    monkeypatch.setattr(routers.talk_handlers, 'pyro_update_msg_info', mock_pyro_update)
+
+    monkeypatch.setattr(routers.talk_handlers, "pyro_update_msg_info", mock_pyro_update)
 
     # Mock miniapps.create_uuid_page
     from unittest.mock import Mock
+
     mock_page = Mock()
     mock_page.url = "https://telegra.ph/preview-123"
 
     async def mock_create_page(msg_info):
         return mock_page
 
-    monkeypatch.setattr(routers.talk_handlers.miniapps, 'create_uuid_page', mock_create_page)
+    monkeypatch.setattr(routers.talk_handlers.miniapps, "create_uuid_page", mock_create_page)
 
     update = types.Update(
         update_id=48,
         message=types.Message(
             message_id=3200,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='private'),
+            chat=types.Chat(id=123, type="private"),
             from_user=types.User(id=123, is_bot=False, first_name="User", username="user"),
             text="Check this: https://t.me/c/1234567890/888",
-            entities=[
-                types.MessageEntity(type='url', offset=12, length=32)
-            ]
-        )
+            entities=[types.MessageEntity(type="url", offset=12, length=32)],
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)

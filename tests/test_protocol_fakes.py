@@ -1,5 +1,6 @@
 # tests/test_protocol_fakes.py
 """Tests for protocol-compatible fake implementations."""
+
 import pytest
 from decimal import Decimal
 from stellar_sdk import Asset

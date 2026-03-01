@@ -3,9 +3,7 @@ from typing import List, Optional, Tuple, cast
 from sqlalchemy import select, func, and_, desc, cast as sql_cast, Float, Date
 
 from db.repositories.base import BaseRepository
-from shared.infrastructure.database.models import (
-    TPayments, TDivList, TTransaction, TWatchList, TLedgers, TOperations
-)
+from shared.infrastructure.database.models import TPayments, TDivList, TTransaction, TWatchList, TLedgers, TOperations
 
 
 class FinanceRepository(BaseRepository):
@@ -20,39 +18,29 @@ class FinanceRepository(BaseRepository):
         return result if result is not None else 0.0
 
     def get_div_list(self, list_id: int) -> Optional[TDivList]:
-        return self.session.execute(
-            select(TDivList).where(TDivList.id == list_id)
-        ).scalar_one_or_none()
+        return self.session.execute(select(TDivList).where(TDivList.id == list_id)).scalar_one_or_none()
 
     def get_payments(self, list_id: int, pack_count: int) -> List[TPayments]:
         result = self.session.execute(
-            select(TPayments).where(
-                and_(TPayments.was_packed == 0, TPayments.id_div_list == list_id)
-            ).limit(pack_count)
+            select(TPayments).where(and_(TPayments.was_packed == 0, TPayments.id_div_list == list_id)).limit(pack_count)
         )
         return cast(List[TPayments], result.scalars().all())
 
     def count_unpacked_payments(self, list_id: int) -> int:
         result = self.session.execute(
-            select(func.count()).where(
-                and_(TPayments.was_packed == 0, TPayments.id_div_list == list_id)
-            )
+            select(func.count()).where(and_(TPayments.was_packed == 0, TPayments.id_div_list == list_id))
         ).scalar()
         return result if result is not None else 0
 
     def count_unsent_transactions(self, list_id: int) -> int:
         result = self.session.execute(
-            select(func.count()).where(
-                and_(TTransaction.was_send == 0, TTransaction.id_div_list == list_id)
-            )
+            select(func.count()).where(and_(TTransaction.was_send == 0, TTransaction.id_div_list == list_id))
         ).scalar()
         return result if result is not None else 0
 
     def load_transactions(self, list_id: int) -> List[TTransaction]:
         result = self.session.execute(
-            select(TTransaction).where(
-                and_(TTransaction.was_send == 0, TTransaction.id_div_list == list_id)
-            )
+            select(TTransaction).where(and_(TTransaction.was_send == 0, TTransaction.id_div_list == list_id))
         )
         return cast(List[TTransaction], result.scalars().all())
 
@@ -69,15 +57,11 @@ class FinanceRepository(BaseRepository):
             self.session.add(new_entry)
 
     def get_first_100_ledgers(self) -> List[TLedgers]:
-        result = self.session.execute(
-            select(TLedgers).order_by(TLedgers.ledger).limit(100)
-        )
+        result = self.session.execute(select(TLedgers).order_by(TLedgers.ledger).limit(100))
         return cast(List[TLedgers], result.scalars().all())
 
     def get_ledger(self, ledger_id: int) -> Optional[TLedgers]:
-        return self.session.execute(
-            select(TLedgers).where(TLedgers.ledger == ledger_id)
-        ).scalar_one_or_none()
+        return self.session.execute(select(TLedgers).where(TLedgers.ledger == ledger_id)).scalar_one_or_none()
 
     def get_ledger_count(self) -> int:
         result = self.session.execute(select(func.count()).select_from(TLedgers))
@@ -88,14 +72,14 @@ class FinanceRepository(BaseRepository):
 
         base_query = (
             select(TOperations)
-            .where(TOperations.operation != 'trustline_created')
+            .where(TOperations.operation != "trustline_created")
             .where(
-                (TOperations.code1 == token) & (sql_cast(TOperations.amount1, Float) > amount) |
-                (TOperations.code2 == token) & (sql_cast(TOperations.amount2, Float) > amount)
+                (TOperations.code1 == token) & (sql_cast(TOperations.amount1, Float) > amount)
+                | (TOperations.code2 == token) & (sql_cast(TOperations.amount2, Float) > amount)
             )
         )
 
-        if last_id == '-1':
+        if last_id == "-1":
             stmt = base_query.order_by(desc(TOperations.id)).limit(1)
         else:
             stmt = base_query.where(TOperations.id > last_id).order_by(TOperations.id).limit(10)
@@ -105,30 +89,29 @@ class FinanceRepository(BaseRepository):
 
     def get_operations(self, last_id: Optional[str] = None, limit: int = 3000) -> List[TOperations]:
         if last_id is None:
-            last_record = self.session.execute(
-                select(TOperations).order_by(desc(TOperations.dt))
-            ).scalar()
+            last_record = self.session.execute(select(TOperations).order_by(desc(TOperations.dt))).scalar()
             return [last_record] if last_record else []
 
-        stmt = (
-            select(TOperations)
-            .where(TOperations.id > last_id)
-            .order_by(TOperations.id)
-            .limit(limit)
-        )
+        stmt = select(TOperations).where(TOperations.id > last_id).order_by(TOperations.id).limit(limit)
         result = self.session.execute(stmt)
         return cast(List[TOperations], result.scalars().all())
 
-    def get_last_trade_operation(self, asset_code: str = 'MTL', minimal_sum: float = 0) -> float:
+    def get_last_trade_operation(self, asset_code: str = "MTL", minimal_sum: float = 0) -> float:
         stmt = (
             select(TOperations)
             .where(
-                (TOperations.operation == 'trade') &
-                (
-                        and_((TOperations.code1 == asset_code), (TOperations.code2 == 'EURMTL'),
-                             (sql_cast(TOperations.amount1, Float) > minimal_sum)) |
-                        and_((TOperations.code1 == 'EURMTL'), (TOperations.code2 == asset_code),
-                             (sql_cast(TOperations.amount2, Float) > minimal_sum))
+                (TOperations.operation == "trade")
+                & (
+                    and_(
+                        (TOperations.code1 == asset_code),
+                        (TOperations.code2 == "EURMTL"),
+                        (sql_cast(TOperations.amount1, Float) > minimal_sum),
+                    )
+                    | and_(
+                        (TOperations.code1 == "EURMTL"),
+                        (TOperations.code2 == asset_code),
+                        (sql_cast(TOperations.amount2, Float) > minimal_sum),
+                    )
                 )
             )
             .order_by(desc(TOperations.dt))

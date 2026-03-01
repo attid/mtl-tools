@@ -3,15 +3,16 @@ import os
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-start_path = os.path.dirname(os.path.dirname(__file__)) + '/'
-dotenv_path = os.path.join(start_path, '.env')
+start_path = os.path.dirname(os.path.dirname(__file__)) + "/"
+dotenv_path = os.path.join(start_path, ".env")
+
 
 class Settings(BaseSettings):
     bot_token: SecretStr
     test_token: SecretStr
     base_fee: int
     redis_url: str
-    #firebird_url: str
+    # firebird_url: str
     postgres_url: str
     openai_key: SecretStr
     openrouter_key: SecretStr | None = None
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     horizon_url: str
     stellar_testnet: bool = False
     coinmarketcap: SecretStr
-    #mongodb_url: str
+    # mongodb_url: str
     pyro_api_id: int = 0
     pyro_api_hash: SecretStr | None = None
     grist_token: str
@@ -40,16 +41,16 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=dotenv_path,
-        env_file_encoding='utf-8',
-        extra='allow',
+        env_file_encoding="utf-8",
+        extra="allow",
         case_sensitive=False,
-        secrets_dir='/run/secrets',
+        secrets_dir="/run/secrets",
     )
 
 
 config: Settings = Settings()  # type: ignore[call-arg]
 
-if os.getenv('ENVIRONMENT', 'test') == 'production':
+if os.getenv("ENVIRONMENT", "test") == "production":
     config.test_mode = False
 else:
     config.test_mode = True

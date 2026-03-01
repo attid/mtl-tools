@@ -12,8 +12,12 @@ from stellar_sdk import Asset
 
 from other.aiogram_tools import HasRegex
 from other.constants import MTLChats
-from other.grist_tools import (AirdropConfigItem, grist_check_airdrop_records,
-                               grist_load_airdrop_configs, grist_log_airdrop_payment)
+from other.grist_tools import (
+    AirdropConfigItem,
+    grist_check_airdrop_records,
+    grist_load_airdrop_configs,
+    grist_log_airdrop_payment,
+)
 from other.stellar import get_balances, send_payment_async
 
 router = Router()
@@ -48,32 +52,36 @@ def build_request_keyboard(message_id: int, configs: list[AirdropConfigItem]) ->
     rows = []
     for config_item in configs:
         label = f"Отправить {config_item.amount} {config_item.asset_code}"
-        rows.append([InlineKeyboardButton(
-            text=label,
-            callback_data=AirdropCallbackData(
-                action="send",
-                message_id=message_id,
-                config_id=config_item.record_id,
-            ).pack(),
-        )])
-    rows.append([InlineKeyboardButton(
-        text="Убрать кнопки",
-        callback_data=AirdropCallbackData(
-            action="remove",
-            message_id=message_id,
-            config_id=0,
-        ).pack()
-    )])
-    return InlineKeyboardMarkup(
-        inline_keyboard=rows
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=AirdropCallbackData(
+                        action="send",
+                        message_id=message_id,
+                        config_id=config_item.record_id,
+                    ).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Убрать кнопки",
+                callback_data=AirdropCallbackData(
+                    action="remove",
+                    message_id=message_id,
+                    config_id=0,
+                ).pack(),
+            )
+        ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_confirmation_keyboard(username: Optional[str]) -> InlineKeyboardMarkup:
     label = username or "admin"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=f"✅ {label}", callback_data="👀")]]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"✅ {label}", callback_data="👀")]])
 
 
 async def build_trustline_checks(stellar_address: str, stellar_service=None) -> list[str]:
@@ -98,7 +106,9 @@ async def build_trustline_checks(stellar_address: str, stellar_service=None) -> 
     return checks
 
 
-async def check_source_balance(source_address: str, asset_code: str, amount: str, stellar_service=None) -> tuple[bool, str]:
+async def check_source_balance(
+    source_address: str, asset_code: str, amount: str, stellar_service=None
+) -> tuple[bool, str]:
     try:
         if stellar_service:
             balances = await stellar_service.get_balances(source_address)
@@ -120,8 +130,7 @@ async def check_source_balance(source_address: str, asset_code: str, amount: str
     balance_value = float(balances_map[asset_code])
     if balance_value < needed_amount:
         return False, (
-            f"Недостаточно средств на источнике: баланс {balance_value} {asset_code}, "
-            f"нужно {amount} {asset_code}"
+            f"Недостаточно средств на источнике: баланс {balance_value} {asset_code}, нужно {amount} {asset_code}"
         )
 
     return True, ""
@@ -137,8 +146,9 @@ def build_airdrop_asset(config_item: AirdropConfigItem) -> Asset:
     return Asset(asset_code, asset_issuer)
 
 
-async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int,
-                                  request_data: dict, config_item: AirdropConfigItem, app_context=None):
+async def process_airdrop_payment(
+    callback: types.CallbackQuery, message_id: int, request_data: dict, config_item: AirdropConfigItem, app_context=None
+):
     try:
         asset = build_airdrop_asset(config_item)
     except ValueError as exc:
@@ -151,7 +161,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
         AIRDROP_SOURCE_ADDRESS,
         config_item.asset_code,
         config_item.amount,
-        app_context.stellar_service if app_context else None
+        app_context.stellar_service if app_context else None,
     )
     if not balance_ok:
         if callback.message:
@@ -188,7 +198,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
                 nickname=request_data["username"],
                 tx_hash=tx_hash,
                 amount=float(config_item.amount),
-                currency=config_item.asset_code
+                currency=config_item.asset_code,
             )
         else:
             await grist_log_airdrop_payment(
@@ -197,7 +207,7 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
                 nickname=request_data["username"],
                 tx_hash=tx_hash,
                 amount=float(config_item.amount),
-                currency=config_item.asset_code
+                currency=config_item.asset_code,
             )
     except Exception as exc:
         logger.error(f"Не удалось записать аирдроп в Grist: {exc}")
@@ -216,14 +226,14 @@ async def process_airdrop_payment(callback: types.CallbackQuery, message_id: int
             )
 
 
-@router.message(HasRegex((r'#ID\d+', r'G[A-Z0-9]{50,}')))
+@router.message(HasRegex((r"#ID\d+", r"G[A-Z0-9]{50,}")))
 async def handle_address_messages(message: types.Message, app_context=None):
-    html_text = message.html_text or message.text or ''
-    plain_text = message.text or ''
-    id_matches = list(re.finditer(r'#ID(\d+)', html_text))
+    html_text = message.html_text or message.text or ""
+    plain_text = message.text or ""
+    id_matches = list(re.finditer(r"#ID(\d+)", html_text))
     match_id = id_matches[-1] if id_matches else None
-    match_stellar = re.search(r'(G[A-Z0-9]{50,})', plain_text)
-    username_match = re.search(r'\|[^|]*\|\s*(@\S+)', plain_text)
+    match_stellar = re.search(r"(G[A-Z0-9]{50,})", plain_text)
+    username_match = re.search(r"\|[^|]*\|\s*(@\S+)", plain_text)
 
     if not (match_id and match_stellar):
         return
@@ -232,10 +242,12 @@ async def handle_address_messages(message: types.Message, app_context=None):
     tg_id = int(user_id)
     username = username_match.group(1) if username_match else None
     stellar_address = match_stellar.group(1)
-    username_display = html.escape(username) if username else 'Отсутствует'
+    username_display = html.escape(username) if username else "Отсутствует"
 
     results = []
-    trustline_checks = await build_trustline_checks(stellar_address, app_context.stellar_service if app_context else None)
+    trustline_checks = await build_trustline_checks(
+        stellar_address, app_context.stellar_service if app_context else None
+    )
     results.extend(trustline_checks)
     chat_list = (
         (MTLChats.MonteliberoChanel, "канал Montelibero ru"),
@@ -277,7 +289,7 @@ async def handle_address_messages(message: types.Message, app_context=None):
         "",
     ]
 
-    output_message = '\n'.join(header_lines + results)
+    output_message = "\n".join(header_lines + results)
     sent_message = await message.answer(output_message, parse_mode="HTML", disable_web_page_preview=True)
 
     keyboard = build_request_keyboard(sent_message.message_id, configs)
@@ -323,10 +335,10 @@ async def handle_airdrop_callback(callback: types.CallbackQuery, callback_data: 
 
 
 def register_handlers(dp, bot):
-    #if config.test_mode:
+    # if config.test_mode:
     dp.include_router(router)
-    logger.info('router airdrops was loaded')
+    logger.info("router airdrops was loaded")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("GCQVCSHGR6446QVM3HUCLFFCUFEIK2ALTNMBAIXP57CVRNG5VL3RZJZ2")

@@ -18,13 +18,14 @@ def make_session_pool(session):
 
     return Pool()
 
+
 @pytest.mark.asyncio
 async def test_cmd_send_message_1m(mock_telegram, router_app_context, monkeypatch):
     bot = router_app_context.bot
-    
+
     mock_session = FakeSession()
     mock_pool = make_session_pool(mock_session)
-    
+
     class Record:
         update_id = 0
         text = "Scheduled msg"
@@ -35,7 +36,7 @@ async def test_cmd_send_message_1m(mock_telegram, router_app_context, monkeypatc
         button_json = "{}"
 
     mock_record = Record()
-    
+
     class FakeMessageRepository:
         def __init__(self, session):
             self.session = session
@@ -54,12 +55,13 @@ async def test_cmd_send_message_1m(mock_telegram, router_app_context, monkeypatc
     assert mock_record.was_send == 1
     assert mock_session.committed is True
 
+
 @pytest.mark.asyncio
 async def test_time_clear(mock_telegram, router_app_context, monkeypatch):
     bot = router_app_context.bot
-    
+
     mock_chats = [{"chat_id": 12345}]
-    
+
     mock_load = FakeAsyncMethod(return_value=mock_chats)
     mock_remove = FakeAsyncMethod(return_value=5)
     mock_sleep = FakeAsyncMethod()
@@ -70,10 +72,7 @@ async def test_time_clear(mock_telegram, router_app_context, monkeypatch):
 
     await time_handlers.time_clear(bot)
 
-    mock_load.assert_awaited_once_with(
-        MTLGrist.CONFIG_auto_clean,
-        filter_dict={"enabled": [True]}
-    )
+    mock_load.assert_awaited_once_with(MTLGrist.CONFIG_auto_clean, filter_dict={"enabled": [True]})
     mock_remove.assert_awaited_once_with(12345)
     mock_sleep.assert_awaited_once()
 
@@ -108,7 +107,10 @@ async def test_time_usdm_daily_sends_summary(mock_telegram, router_app_context, 
 
     mock_send_by_list.assert_awaited_once()
     requests = mock_telegram.get_requests()
-    msg_req = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.USDMMGroup)), None)
+    msg_req = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.USDMMGroup)),
+        None,
+    )
     assert msg_req is not None
     text = msg_req["data"]["text"]
     assert "Start div pays №452." in text
@@ -189,7 +191,9 @@ async def test_time_usdm_daily_gives_up_after_many_errors(mock_telegram, router_
     assert mock_send_by_list.call_count == 20
     assert mock_sleep.call_count == 20
     requests = mock_telegram.get_requests()
-    assert not any(r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.USDMMGroup) for r in requests)
+    assert not any(
+        r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.USDMMGroup) for r in requests
+    )
 
 
 @pytest.mark.asyncio

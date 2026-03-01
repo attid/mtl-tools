@@ -8,15 +8,31 @@ from typing import Any, cast
 from aiogram import Router, Bot, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.filters import (Command, ChatMemberUpdatedFilter, IS_NOT_MEMBER, IS_MEMBER, PROMOTED_TRANSITION, MEMBER,
-                             ADMINISTRATOR)
+from aiogram.filters import (
+    Command,
+    ChatMemberUpdatedFilter,
+    IS_NOT_MEMBER,
+    IS_MEMBER,
+    PROMOTED_TRANSITION,
+    MEMBER,
+    ADMINISTRATOR,
+)
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions,
-                           ChatMemberUpdated, ChatMemberMember, ChatJoinRequest)
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ChatPermissions,
+    ChatMemberUpdated,
+    ChatMemberMember,
+    ChatJoinRequest,
+)
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from db.repositories import MessageRepository
+
 # from routers.multi_handler import check_membership, enforce_entry_channel
 from routers.moderation import UnbanCallbackData
 from start import add_bot_users
@@ -82,24 +98,25 @@ def build_ban_message(user, chat, reason: str, actor=None) -> str:
     if actor and actor.id != user.id:
         actor_username = f"@{actor.username}" if actor.username else "—"
         actor_name = actor.full_name or "—"
-        parts.append(
-            f"Кем: {actor.mention_html()} (id={actor.id}, username={actor_username}, name={actor_name})"
-        )
+        parts.append(f"Кем: {actor.mention_html()} (id={actor.id}, username={actor_username}, name={actor_name})")
 
     return "\n".join(parts)
 
 
 emoji_pairs = [
     ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫️", "⚪️", "🟤"],  # Круги
-    ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "⬛️", "⬜️", "🟫"]  # Квадраты
+    ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪", "⬛️", "⬜️", "🟫"],  # Квадраты
 ]
 
-dal = ("🔴🟤",  # 1 9  # 0 8
-       "🟠🟢",  # 2 4   # 1 3
-       "🔵🟣")  # 5 6   # 4 5
+dal = (
+    "🔴🟤",  # 1 9  # 0 8
+    "🟠🟢",  # 2 4   # 1 3
+    "🔵🟣",
+)  # 5 6   # 4 5
 
 
 # первый и последний; второй и четвертый; пятый и шестой; для дальтоников сильно похожи
+
 
 def create_emoji_captcha_keyboard(user_id, required_num):
     random_indices = random.sample(range(9), 6)
@@ -115,17 +132,13 @@ def create_emoji_captcha_keyboard(user_id, required_num):
         if index != required_num:
             num += 1
         button = InlineKeyboardButton(
-            text=square,
-            callback_data=EmojiCaptchaCallbackData(user_id=user_id, square=square, num=num).pack()
+            text=square, callback_data=EmojiCaptchaCallbackData(user_id=user_id, square=square, num=num).pack()
         )
         buttons.append(button)
 
     random.shuffle(buttons)
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        buttons[:3],
-        buttons[3:]
-    ])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons[:3], buttons[3:]])
 
     return keyboard
 
@@ -154,13 +167,14 @@ async def cmd_delete_welcome(
     if has_welcome:
         config_service.remove_welcome_message(message.chat.id, session)
 
-    msg = await message.reply('Removed')
+    msg = await message.reply("Removed")
     await utils_service.sleep_and_delete(msg, 60)
     await utils_service.sleep_and_delete(message, 60)
 
 
-@update_command_info("/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2,
-                     "welcome_messages")
+@update_command_info(
+    "/set_welcome", "Установить сообщение приветствия при входе. Шаблон на имя $$USER$$", 2, "welcome_messages"
+)
 @router.message(Command(commands=["set_welcome"]))
 async def cmd_set_welcome(
     message: Message,
@@ -184,7 +198,7 @@ async def cmd_set_welcome(
         welcome_text = welcome_html[13:]
 
         config_service.set_welcome_message(message.chat.id, welcome_text, session)
-        msg = await message.reply('Added')
+        msg = await message.reply("Added")
         await utils_service.sleep_and_delete(msg, 60)
     else:
         await cmd_delete_welcome(message, session, app_context=app_context, skyuser=skyuser)
@@ -215,10 +229,10 @@ async def cmd_set_welcome_button(
         text = (message.text or "")[19:].strip()
 
         config_service.set_welcome_button(message.chat.id, text, session)
-        msg = await message.reply('Added')
+        msg = await message.reply("Added")
         await utils_service.sleep_and_delete(msg, 60)
     else:
-        msg = await message.reply('need more words')
+        msg = await message.reply("need more words")
         await utils_service.sleep_and_delete(msg, 60)
 
     await utils_service.sleep_and_delete(message, 60)
@@ -226,11 +240,13 @@ async def cmd_set_welcome_button(
 
 @update_command_info("/stop_exchange", "Остановить ботов обмена. Только для админов")
 @router.message(Command(commands=["stop_exchange"]))
-async def cmd_stop_exchange(message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None):
+async def cmd_stop_exchange(
+    message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None
+):
     is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     if not app_context or not app_context.stellar_service:
@@ -239,28 +255,35 @@ async def cmd_stop_exchange(message: Message, session: Session, app_context: Any
     ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, 1)
     await stellar_service.stop_all_exchange()
 
-    await message.reply('Was stop')
+    await message.reply("Was stop")
 
 
 @update_command_info("/start_exchange", "Запустить ботов обмена. Только для админов")
 @router.message(Command(commands=["start_exchange"]))
-async def cmd_start_exchange(message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None):
+async def cmd_start_exchange(
+    message: Message, session: Session, app_context: Any = None, skyuser: SkyUser | None = None
+):
     is_admin_user = skyuser.is_skynet_admin() if skyuser else False
 
     if not is_admin_user:
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     ConfigRepository(session).save_bot_value(0, BotValueTypes.StopExchange, None)
-    await message.reply('Was start')
+    await message.reply("Was start")
 
 
-bad_names = ['ЧВК ВАГНЕР', 'ЧВК ВАГНЕР']
+bad_names = ["ЧВК ВАГНЕР", "ЧВК ВАГНЕР"]
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
 async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, app_context: Any = None):
-    if not app_context or not app_context.antispam_service or not app_context.config_service or not app_context.group_service:
+    if (
+        not app_context
+        or not app_context.antispam_service
+        or not app_context.config_service
+        or not app_context.group_service
+    ):
         raise ValueError("app_context with antispam_service, config_service and group_service required")
     antispam_service = cast(Any, app_context.antispam_service)
     config_service = cast(Any, app_context.config_service)
@@ -275,14 +298,11 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
     if is_spam1:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         reason = f'<a href="https://cas.chat/query?u={new_user_id}">CAS ban</a>'
-        await bot.send_message(MTLChats.SpamGroup,
-                               build_ban_message(
-                                   event.new_chat_member.user,
-                                   event.chat,
-                                   reason,
-                                   actor=event.from_user
-                               ),
-                               disable_web_page_preview=True)
+        await bot.send_message(
+            MTLChats.SpamGroup,
+            build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
+            disable_web_page_preview=True,
+        )
         return
 
     is_spam2 = await antispam_service.lols_check_spammer(new_user_id)
@@ -290,39 +310,34 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
     if is_spam2:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
         reason = f'<a href="https://lols.bot/?u={new_user_id}">LOLS base</a>'
-        await bot.send_message(MTLChats.SpamGroup,
-                               build_ban_message(
-                                   event.new_chat_member.user,
-                                   event.chat,
-                                   reason,
-                                   actor=event.from_user
-                               ),
-                               disable_web_page_preview=True)
+        await bot.send_message(
+            MTLChats.SpamGroup,
+            build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
+            disable_web_page_preview=True,
+        )
         return
 
     if event.new_chat_member.user.full_name in bad_names:
         await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
-        reason = f'за использование запрещенного никнейма: {event.new_chat_member.user.full_name}'
-        await bot.send_message(MTLChats.SpamGroup,
-                               build_ban_message(
-                                   event.new_chat_member.user,
-                                   event.chat,
-                                   reason,
-                                   actor=event.from_user
-                               ))
+        reason = f"за использование запрещенного никнейма: {event.new_chat_member.user.full_name}"
+        await bot.send_message(
+            MTLChats.SpamGroup, build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user)
+        )
         return
 
-    required_channel = config_service.load_value(chat_id, 'entry_channel')
+    required_channel = config_service.load_value(chat_id, "entry_channel")
 
     if required_channel:
         membership_ok, _ = await group_service.enforce_entry_channel(bot, chat_id, new_user_id, required_channel)
         if not membership_ok:
             return
 
-    member = GroupMember(user_id=event.new_chat_member.user.id,
-                         username=event.new_chat_member.user.username,
-                         full_name=event.new_chat_member.user.full_name,
-                         is_admin=False)
+    member = GroupMember(
+        user_id=event.new_chat_member.user.id,
+        username=event.new_chat_member.user.username,
+        full_name=event.new_chat_member.user.full_name,
+        is_admin=False,
+    )
 
     ChatsRepository(session).add_user_to_chat(chat_id, member)
     user = ChatsRepository(session).get_user_by_id(event.new_chat_member.user.id)
@@ -333,49 +348,60 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
     if user_type_now == SpamStatus.BAD:
         with suppress(TelegramBadRequest):
             await bot.ban_chat_member(chat_id, event.new_chat_member.user.id)
-        kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='unban',
-                                 callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
-                                                                 chat_id=chat_id).pack())
-        ]])
+        kb_unban = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="unban",
+                        callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id, chat_id=chat_id).pack(),
+                    )
+                ]
+            ]
+        )
         # await bot.send_message(chat_id, f'{username} was banned', reply_markup=kb_unban)
         reason = "SpamStatus.BAD (db)"
-        await bot.send_message(MTLChats.SpamGroup,
-                               build_ban_message(
-                                   event.new_chat_member.user,
-                                   event.chat,
-                                   reason,
-                                   actor=event.from_user
-                               ),
-                               reply_markup=kb_unban)
+        await bot.send_message(
+            MTLChats.SpamGroup,
+            build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
+            reply_markup=kb_unban,
+        )
 
     welcome_msg = config_service.get_welcome_message(chat_id)
 
     if welcome_msg:
         if event.new_chat_member.user:
-            msg = welcome_msg if welcome_msg else 'Hi new user'
-            msg = msg.replace('$$USER$$', username)
+            msg = welcome_msg if welcome_msg else "Hi new user"
+            msg = msg.replace("$$USER$$", username)
 
             kb_captcha = None
-            captcha_enabled = feature_flags.is_enabled(chat_id, 'captcha') if feature_flags else False
+            captcha_enabled = feature_flags.is_enabled(chat_id, "captcha") if feature_flags else False
 
             if captcha_enabled:
                 btn_msg = config_service.get_welcome_button(chat_id) or "I'm not bot"
 
-                kb_captcha = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text=btn_msg,
-                                         callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack())
-                ]])
+                kb_captcha = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=btn_msg,
+                                callback_data=CaptchaCallbackData(answer=event.new_chat_member.user.id).pack(),
+                            )
+                        ]
+                    ]
+                )
                 random_color = random.randint(0, 8)
-                if msg.find('$$COLOR$$') > 0:
-                    msg = msg.replace('$$COLOR$$', emoji_pairs[0][random_color])
+                if msg.find("$$COLOR$$") > 0:
+                    msg = msg.replace("$$COLOR$$", emoji_pairs[0][random_color])
                     kb_captcha = create_emoji_captcha_keyboard(event.new_chat_member.user.id, random_color)
 
                 try:
-                    await bot.restrict_chat_member(chat_id, event.new_chat_member.user.id,
-                                              permissions=ChatPermissions(can_send_messages=False,
-                                                                          can_send_media_messages=False,
-                                                                          can_send_other_messages=False))
+                    await bot.restrict_chat_member(
+                        chat_id,
+                        event.new_chat_member.user.id,
+                        permissions=ChatPermissions(
+                            can_send_messages=False, can_send_media_messages=False, can_send_other_messages=False
+                        ),
+                    )
                     logger.info(
                         "moderation_artifact action=restrict_captcha chat_id={} user_id={} actor_id={}",
                         chat_id,
@@ -383,26 +409,29 @@ async def new_chat_member(event: ChatMemberUpdated, session: Session, bot: Bot, 
                         event.from_user.id if event.from_user else "system",
                     )
                 except Exception as e:
-                    MessageRepository(session).send_admin_message(f'new_chat_member error {type(e)} {event.chat.model_dump_json()}')
+                    MessageRepository(session).send_admin_message(
+                        f"new_chat_member error {type(e)} {event.chat.model_dump_json()}"
+                    )
 
-            answer = await bot.send_message(chat_id, msg, parse_mode=ParseMode.HTML,
-                                            disable_web_page_preview=True,
-                                            reply_markup=kb_captcha)
+            answer = await bot.send_message(
+                chat_id, msg, parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=kb_captcha
+            )
             if utils_service:
                 await utils_service.sleep_and_delete(answer)
 
-    auto_all_enabled = feature_flags.is_enabled(chat_id, 'auto_all') if feature_flags else False
+    auto_all_enabled = feature_flags.is_enabled(chat_id, "auto_all") if feature_flags else False
 
     if auto_all_enabled:
         config_repo = ConfigRepository(session)
-        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, '[]')
+        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, "[]")
         members = json.loads(json_str) if json_str else []
 
         if event.new_chat_member.user.username:
-            members.append('@' + event.new_chat_member.user.username)
+            members.append("@" + event.new_chat_member.user.username)
         else:
-            await bot.send_message(chat_id,
-                                   f'{event.new_chat_member.user.full_name} dont have username cant add to /all')
+            await bot.send_message(
+                chat_id, f"{event.new_chat_member.user.full_name} dont have username cant add to /all"
+            )
 
         config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
@@ -423,15 +452,15 @@ async def left_chat_member(
 
     ChatsRepository(session).remove_user_from_chat(chat_id, event.new_chat_member.user.id)
 
-    auto_all_enabled = feature_flags.is_enabled(chat_id, 'auto_all')
+    auto_all_enabled = feature_flags.is_enabled(chat_id, "auto_all")
 
     if auto_all_enabled:
         config_repo = ConfigRepository(session)
-        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, '[]')
+        json_str = config_repo.load_bot_value(chat_id, BotValueTypes.All, "[]")
         members = json.loads(json_str) if json_str else []
 
         if event.from_user.username:
-            username = '@' + event.from_user.username
+            username = "@" + event.from_user.username
             if username in members:
                 members.remove(username)
             config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
@@ -441,7 +470,8 @@ async def left_chat_member(
 
         if is_admin_user:
             logger.info(
-                f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}")
+                f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}"
+            )
 
             c1, _ = await group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
             c2, _ = await group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
@@ -452,31 +482,38 @@ async def left_chat_member(
                 return
 
             add_bot_users(session, event.old_chat_member.user.id, None, 2)
-            kb_unban = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text='unban',
-                                     callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id,
-                                                                     chat_id=chat_id).pack())
-            ]])
+            kb_unban = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="unban",
+                            callback_data=UnbanCallbackData(
+                                user_id=event.new_chat_member.user.id, chat_id=chat_id
+                            ).pack(),
+                        )
+                    ]
+                ]
+            )
             reason = "Kicked by admin"
-            await bot.send_message(MTLChats.SpamGroup,
-                                   build_ban_message(
-                                       event.new_chat_member.user,
-                                       event.chat,
-                                       reason,
-                                       actor=event.from_user
-                                   ),
-                                   reply_markup=kb_unban)
+            await bot.send_message(
+                MTLChats.SpamGroup,
+                build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
+                reply_markup=kb_unban,
+            )
 
 
 def contains_emoji(s: str) -> bool:
-    emoji_pattern = re.compile("["
-                               u"\U0001F600-\U0001F64F"  # emoticons
-                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                               u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                               u"\U00002702-\U000027B0"
-                               u"\U000024C2-\U0001F251"
-                               "]+", flags=re.UNICODE)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001f600-\U0001f64f"  # emoticons
+        "\U0001f300-\U0001f5ff"  # symbols & pictographs
+        "\U0001f680-\U0001f6ff"  # transport & map symbols
+        "\U0001f1e0-\U0001f1ff"  # flags (iOS)
+        "\U00002702-\U000027b0"
+        "\U000024c2-\U0001f251"
+        "]+",
+        flags=re.UNICODE,
+    )
     return bool(emoji_pattern.search(s))
 
 
@@ -512,8 +549,12 @@ async def cq_captcha(query: CallbackQuery, callback_data: CaptchaCallbackData, b
         await query.answer("Thanks !", show_alert=True)
         chat = await bot.get_chat(query.message.chat.id)
         permissions = chat.permissions or ChatPermissions(can_send_messages=True)
-        await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
-                                       until_date=datetime.timedelta(seconds=65))
+        await bot.restrict_chat_member(
+            query.message.chat.id,
+            query.from_user.id,
+            permissions=permissions,
+            until_date=datetime.timedelta(seconds=65),
+        )
         logger.info(
             "moderation_artifact action=restrict_release chat_id={} user_id={} source=captcha_v1",
             query.message.chat.id,
@@ -535,8 +576,12 @@ async def cq_emoji_captcha(query: CallbackQuery, callback_data: EmojiCaptchaCall
             await query.answer("Thanks !", show_alert=True)
             chat = await bot.get_chat(query.message.chat.id)
             permissions = chat.permissions or ChatPermissions(can_send_messages=True)
-            await bot.restrict_chat_member(query.message.chat.id, query.from_user.id, permissions=permissions,
-                                           until_date=datetime.timedelta(seconds=65))
+            await bot.restrict_chat_member(
+                query.message.chat.id,
+                query.from_user.id,
+                permissions=permissions,
+                until_date=datetime.timedelta(seconds=65),
+            )
             logger.info(
                 "moderation_artifact action=restrict_release chat_id={} user_id={} source=captcha_v2",
                 query.message.chat.id,
@@ -567,14 +612,16 @@ async def cmd_recaptcha(
         return None
 
     if len((message.text or "").split()) < 2:
-        msg = await message.reply('need more words')
+        msg = await message.reply("need more words")
         await utils_service.sleep_and_delete(msg)
         return None
 
-    await message.answer(' '.join((message.text or "").split(' ')[1:]), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text='Get Captcha',
-                             callback_data='ReCaptcha')
-    ]]))
+    await message.answer(
+        " ".join((message.text or "").split(" ")[1:]),
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Get Captcha", callback_data="ReCaptcha")]]
+        ),
+    )
     await message.delete()
     return None
 
@@ -584,12 +631,18 @@ async def cq_recaptcha(query: CallbackQuery, session: Session, bot: Bot, app_con
     if not isinstance(query.message, Message):
         await query.answer("Message not accessible", show_alert=True)
         return
-    await new_chat_member(ChatMemberUpdated(chat=query.message.chat,
-                                            from_user=query.from_user,
-                                            new_chat_member=ChatMemberMember(user=query.from_user),
-                                            old_chat_member=ChatMemberMember(user=query.from_user),
-                                            date=query.message.date
-                                            ), session, bot, app_context=app_context)
+    await new_chat_member(
+        ChatMemberUpdated(
+            chat=query.message.chat,
+            from_user=query.from_user,
+            new_chat_member=ChatMemberMember(user=query.from_user),
+            old_chat_member=ChatMemberMember(user=query.from_user),
+            date=query.message.date,
+        ),
+        session,
+        bot,
+        app_context=app_context,
+    )
     await query.answer()
 
 
@@ -603,6 +656,7 @@ async def cmd_update_admin(event: ChatMemberUpdated, session: Session, bot: Bot,
 
     # Chat is accessible if we received this update - remove from inaccessible list
     from routers.admin_panel import unmark_chat_accessible
+
     unmark_chat_accessible(chat_id, session)
 
     members = await event.chat.get_administrators()
@@ -626,46 +680,56 @@ async def handle_chat_join_request(chat_join_request: ChatJoinRequest, bot: Bot,
     if info_chat_id:
         username = get_username_link(chat_join_request.from_user)
 
-        kb_join = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Принять",
-                                 callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id,
-                                                                can_join=True).pack()),
-            InlineKeyboardButton(text="Отказать",
-                                 callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id,
-                                                                can_join=False).pack())
-        ]])
+        kb_join = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Принять",
+                        callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id, can_join=True).pack(),
+                    ),
+                    InlineKeyboardButton(
+                        text="Отказать",
+                        callback_data=JoinCallbackData(user_id=user_id, chat_id=chat_id, can_join=False).pack(),
+                    ),
+                ]
+            ]
+        )
 
         if len(str(info_chat_id)) > 5:
             await bot.send_message(
                 info_chat_id,
-                f"Новый участник {username} хочет присоединиться к чату \"{chat_join_request.chat.title}\". "
+                f'Новый участник {username} хочет присоединиться к чату "{chat_join_request.chat.title}". '
                 f"Требуется подтверждение.",
-                reply_markup=kb_join
+                reply_markup=kb_join,
             )
         else:
             await bot.send_message(
                 chat_id,
                 f"Новый участник {username} хочет присоединиться к чату. Требуется подтверждение.",
-                reply_markup=kb_join
+                reply_markup=kb_join,
             )
 
-        join_request_captcha_enabled = feature_flags.is_enabled(chat_id, 'join_request_captcha')
+        join_request_captcha_enabled = feature_flags.is_enabled(chat_id, "join_request_captcha")
 
         if join_request_captcha_enabled:
             with suppress(TelegramBadRequest, TelegramForbiddenError):
-                edit_button_url = f'https://t.me/myMTLbot/JoinCaptcha?startapp={chat_id}'
+                edit_button_url = f"https://t.me/myMTLbot/JoinCaptcha?startapp={chat_id}"
 
                 # Создаем клавиатуру с кнопками
-                reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text='Start Captcha v1', url=edit_button_url + '_1')],
-                    [InlineKeyboardButton(text='Start Captcha v2', url=edit_button_url + '_2')]
-                ])
-                await bot.send_message(chat_id=chat_join_request.user_chat_id,
-                                       text=f"К сожалению из-за натиска ботов в чат добавляются только "
-                                            f"те кто прошел проверку. \n\n"
-                                            f"Для того чтоб зайти в чат '{chat_join_request.chat.title}' вам "
-                                            f"надо нажать на одну из кнопок ниже и подтвердить что вы человек. ",
-                                       reply_markup=reply_markup)
+                reply_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="Start Captcha v1", url=edit_button_url + "_1")],
+                        [InlineKeyboardButton(text="Start Captcha v2", url=edit_button_url + "_2")],
+                    ]
+                )
+                await bot.send_message(
+                    chat_id=chat_join_request.user_chat_id,
+                    text=f"К сожалению из-за натиска ботов в чат добавляются только "
+                    f"те кто прошел проверку. \n\n"
+                    f"Для того чтоб зайти в чат '{chat_join_request.chat.title}' вам "
+                    f"надо нажать на одну из кнопок ниже и подтвердить что вы человек. ",
+                    reply_markup=reply_markup,
+                )
 
     # Optional: Auto-approve join request
     # await bot.approve_chat_join_request(chat_id, user_id)
@@ -693,7 +757,9 @@ async def cq_join(
         if isinstance(query.message, Message):
             await query.message.edit_reply_markup(
                 reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text=f"✅ {query.from_user.username}", callback_data="👀")]]))
+                    inline_keyboard=[[InlineKeyboardButton(text=f"✅ {query.from_user.username}", callback_data="👀")]]
+                )
+            )
 
     else:
         await bot.decline_chat_join_request(callback_data.chat_id, callback_data.user_id)
@@ -701,15 +767,17 @@ async def cq_join(
         if isinstance(query.message, Message):
             await query.message.edit_reply_markup(
                 reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]))
+                    inline_keyboard=[[InlineKeyboardButton(text=f"❌ {query.from_user.username}", callback_data="👀")]]
+                )
+            )
 
     # await query.answer("Ready !", show_alert=True)
 
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router welcome was loaded')
+    logger.info("router welcome was loaded")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(create_emoji_captcha_keyboard(1, 0))

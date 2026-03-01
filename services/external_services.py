@@ -28,27 +28,29 @@ def _log_moderation_action(
         result,
     )
 
+
 class GristService:
     async def load_table_data(self, table_id):
         return await grist_manager.load_table_data(table_id)
-    
+
     async def patch_data(self, table_id, data):
         return await grist_manager.patch_data(table_id, data)
 
-
-
     async def post_data(self, table, json_data):
         from other.grist_tools import grist_manager
+
         return await grist_manager.post_data(table, json_data)
 
     async def fetch_data(self, table, filter_dict=None):
         from other.grist_tools import grist_manager
+
         return await grist_manager.fetch_data(table, filter_dict)
+
 
 class GSpreadService:
     async def get_all_mtlap(self):
         return await gs_get_all_mtlap()
-    
+
     async def get_update_mtlap_skynet_row(self, results):
         return await gs_get_update_mtlap_skynet_row(results)
 
@@ -57,36 +59,46 @@ class GSpreadService:
 
     async def check_bim(self, user_id_or_name):
         from other.gspread_tools import gs_check_bim
+
         return await gs_check_bim(user_id_or_name)
 
     async def copy_a_table(self, title):
         from other.gspread_tools import gs_copy_a_table
+
         return await gs_copy_a_table(title)
 
     async def update_a_table_first(self, google_id, question, options, votes):
         from other.gspread_tools import gs_update_a_table_first
+
         return await gs_update_a_table_first(google_id, question, options, votes)
 
     async def update_a_table_vote(self, google_id, address, options):
         from other.gspread_tools import gs_update_a_table_vote
+
         return await gs_update_a_table_vote(google_id, address, options)
 
     async def check_vote_table(self, google_id):
         from other.gspread_tools import gs_check_vote_table
+
         return await gs_check_vote_table(google_id)
 
     async def check_credentials(self):
         from other.gspread_tools import gs_check_credentials
+
         return await gs_check_credentials()
 
+
 class WebService:
-    async def get(self, url, return_type='json'):
+    async def get(self, url, return_type="json"):
         from other.web_tools import http_session_manager
-        return await http_session_manager.get_web_request('GET', url=url, return_type=return_type)
+
+        return await http_session_manager.get_web_request("GET", url=url, return_type=return_type)
+
 
 class MtlService:
     async def check_consul_mtla_chats(self, bot):
         return await check_consul_mtla_chats(bot)
+
 
 class StellarService:
     async def get_balances(self, address, return_signers=False):
@@ -97,102 +109,127 @@ class StellarService:
 
     async def check_fee(self):
         from other.stellar import cmd_check_fee
+
         return await cmd_check_fee()
 
     async def check_url_xdr(self, url, full_data=False):
         from other.stellar import check_url_xdr
+
         return await check_url_xdr(url, full_data=full_data)
 
     async def decode_xdr(self, xdr, full_data=False):
         from other.stellar import decode_xdr
+
         return await decode_xdr(xdr, full_data=full_data)
 
     async def show_bim(self, session):
         from other.stellar import cmd_show_bim
+
         return await cmd_show_bim(session)
 
     async def get_cash_balance(self, chat_id):
         from other.stellar import get_cash_balance
+
         return await get_cash_balance(chat_id)
 
     def create_list(self, session, name, type_id):
         from other.stellar import cmd_create_list
+
         return cmd_create_list(session, name, type_id)
 
     async def calc_bim_pays(self, session, list_id):
         from other.stellar import cmd_calc_bim_pays
+
         return await cmd_calc_bim_pays(session, list_id)
 
     def gen_xdr(self, session, list_id):
         from other.stellar import cmd_gen_xdr
+
         return cmd_gen_xdr(session, list_id)
 
     async def send_by_list_id(self, session, list_id):
         from other.stellar import cmd_send_by_list_id
+
         return await cmd_send_by_list_id(session, list_id)
 
     async def calc_divs(self, session, div_list_id, donate_list_id):
         from other.stellar import cmd_calc_divs
+
         return await cmd_calc_divs(session, div_list_id, donate_list_id)
 
     async def calc_sats_divs(self, session, div_list_id):
         from other.stellar import cmd_calc_sats_divs
+
         return await cmd_calc_sats_divs(session, div_list_id)
 
     async def get_new_vote_all_mtl(self, address):
         from other.stellar import cmd_get_new_vote_all_mtl
+
         return await cmd_get_new_vote_all_mtl(address)
 
     async def get_btcmtl_xdr(self, amount, address, memo):
         from other.stellar import get_btcmtl_xdr
+
         return await get_btcmtl_xdr(amount, address, memo)
 
     async def show_data(self, key):
         from other.stellar import cmd_show_data
+
         return await cmd_show_data(key)
 
     async def get_damircoin_xdr(self, amount):
         from other.stellar import get_damircoin_xdr
+
         return await get_damircoin_xdr(amount)
 
     async def calc_usdm_divs(self, session, list_id):
         from other.stellar import cmd_calc_usdm_divs
+
         return await cmd_calc_usdm_divs(session, list_id)
 
     async def get_toc_xdr(self, amount):
         from other.stellar import get_toc_xdr
+
         return await get_toc_xdr(amount)
 
     def find_public_key(self, text):
         from other.stellar import find_stellar_public_key
+
         return find_stellar_public_key(text)
 
     async def check_mtlap(self, key):
         from other.stellar import check_mtlap
+
         return await check_mtlap(key)
 
     async def get_agora_xdr(self):
         from other.stellar import get_agora_xdr
+
         return await get_agora_xdr()
 
     async def get_chicago_xdr(self):
         from other.stellar import get_chicago_xdr
+
         return await get_chicago_xdr()
 
     async def calc_usdm_usdm_divs(self, session, div_list_id, test_sum, test_for_address):
         from other.stellar import cmd_calc_usdm_usdm_divs
+
         return await cmd_calc_usdm_usdm_divs(session, div_list_id, test_sum, test_for_address)
 
     async def async_submit(self, xdr):
         from other.stellar import stellar_async_submit
+
         return await stellar_async_submit(xdr)
 
     def sign(self, xdr):
         from other.stellar import stellar_sign
+
         return stellar_sign(xdr)
 
     async def build_swap_xdr(self, source_address, send_asset, send_amount, receive_asset, receive_amount):
         from other.stellar import build_swap_xdr
+
         return await build_swap_xdr(
             source_address=source_address,
             send_asset=send_asset,
@@ -203,19 +240,24 @@ class StellarService:
 
     async def calc_usdm_daily(self, session, list_id):
         from other.stellar import cmd_calc_usdm_daily
+
         return await cmd_calc_usdm_daily(session, list_id)
-        
+
     async def stop_all_exchange(self):
         from other.stellar import stellar_stop_all_exchange
+
         return await stellar_stop_all_exchange()
 
     async def get_mtlap_votes(self):
         from other.stellar import get_mtlap_votes
+
         return await get_mtlap_votes()
 
     async def address_id_to_username(self, address, full_data=False):
         from other.stellar import address_id_to_username
+
         return await address_id_to_username(address, full_data=full_data)
+
 
 class AirdropService:
     async def check_records(self, tg_id, public_key):
@@ -227,72 +269,90 @@ class AirdropService:
     async def load_configs(self):
         return await grist_load_airdrop_configs()
 
+
 class ReportService:
     async def update_fest(self, session):
         from scripts.update_report import update_fest
+
         return await update_fest(session)
 
     async def update_airdrop(self):
         from scripts.update_report import update_airdrop
+
         return await update_airdrop()
 
     async def update_guarantors_report(self):
         from scripts.update_report import update_guarantors_report
+
         return await update_guarantors_report()
 
     async def update_main_report(self, session):
         from scripts.update_report import update_main_report
+
         return await update_main_report(session)
 
     async def update_donate_report(self, session):
         from scripts.update_report import update_donate_report
+
         return await update_donate_report(session)
 
     async def update_mmwb_report(self, session):
         from scripts.update_report import update_mmwb_report
+
         return await update_mmwb_report(session)
 
     async def update_bim_data(self, session):
         from scripts.update_report import update_bdm_report
+
         return await update_bdm_report()
+
 
 class AntispamService:
     async def check_spam(self, message, session=None):
         from other.antispam_logic import check_spam
+
         return await check_spam(message, session)
 
     async def combo_check_spammer(self, message):
         from other.spam_cheker import combo_check_spammer
+
         return await combo_check_spammer(message)
-    
+
     async def lols_check_spammer(self, message):
         from other.spam_cheker import lols_check_spammer
+
         return await lols_check_spammer(message)
 
-    async def delete_and_log_spam(self, message, session=None, rules_name='spam'):
+    async def delete_and_log_spam(self, message, session=None, rules_name="spam"):
         from other.antispam_logic import delete_and_log_spam
+
         return await delete_and_log_spam(message, session, rules_name)
-    
+
     async def set_vote(self, message):
         from other.antispam_logic import set_vote
+
         return await set_vote(message)
+
 
 class PollService:
     def save_poll(self, session, chat_id, message_id, poll_data):
         from db.repositories import ConfigRepository
         import json
+
         ConfigRepository(session).save_bot_value(chat_id, -1 * message_id, json.dumps(poll_data))
 
     def load_poll(self, session, chat_id, message_id):
         from db.repositories import ConfigRepository
         import json
         from routers.polls import empty_poll
+
         return json.loads(ConfigRepository(session).load_bot_value(chat_id, -1 * message_id, empty_poll))
 
     def save_mtla_poll(self, session, poll_id, poll_data):
         from db.repositories import ConfigRepository
         from other.constants import MTLChats
         import json
+
         ConfigRepository(session).save_bot_value(MTLChats.MTLA_Poll, int(poll_id), json.dumps(poll_data))
 
     def load_mtla_poll(self, session, poll_id):
@@ -300,16 +360,15 @@ class PollService:
         from other.constants import MTLChats
         import json
         from routers.polls import empty_poll
+
         return json.loads(ConfigRepository(session).load_bot_value(MTLChats.MTLA_Poll, int(poll_id), empty_poll))
-
-
-
 
 
 class ModerationService:
     async def ban_user(self, session, chat_id, user_id, bot, revoke_messages=True):
         from aiogram.exceptions import TelegramBadRequest
         from start import add_bot_users
+
         _log_moderation_action(
             action="ban",
             actor_id=None,
@@ -348,6 +407,7 @@ class ModerationService:
     async def unban_user(self, session, chat_id, user_id, bot):
         from aiogram.exceptions import TelegramBadRequest
         from start import add_bot_users
+
         _log_moderation_action(
             action="unban",
             actor_id=None,
@@ -389,6 +449,7 @@ class ModerationService:
     def check_user_status(self, session, user_id):
         from db.repositories import ChatsRepository
         from shared.domain.user import SpamStatus
+
         user = ChatsRepository(session).get_user_by_id(user_id)
         if user:
             try:
@@ -399,33 +460,40 @@ class ModerationService:
 
     def get_user_id(self, session, username):
         from db.repositories import ChatsRepository
+
         return ChatsRepository(session).get_user_id(username)
 
     def add_bot_user(self, session, user_id, username, user_type):
         from start import add_bot_users
+
         add_bot_users(session, user_id, username, user_type)
+
 
 class AIService:
     async def generate_image(self, text):
         from other.open_ai_tools import generate_image
+
         return await generate_image(text)
 
     async def talk(self, chat_id, text, gpt4=False, googleit=False):
         from other.open_ai_tools import talk
+
         return await talk(chat_id, text, gpt_maxi=gpt4, googleit=googleit)
 
     async def talk_get_comment(self, chat_id, text):
         from other.open_ai_tools import talk_get_comment
+
         return await talk_get_comment(chat_id, text)
 
     async def add_task_to_google(self, msg):
         from other.open_ai_tools import add_task_to_google
+
         return await add_task_to_google(msg)
 
     def get_horoscope(self):
         from other.open_ai_tools import get_horoscope
-        return get_horoscope()
 
+        return get_horoscope()
 
 
 class TalkService:
@@ -433,18 +501,22 @@ class TalkService:
         self.bot = bot
 
     async def answer_notify_message(self, message, app_context):
-        if (message.reply_to_message.from_user.id == self.bot.id
-                and message.reply_to_message.reply_markup
-                and message.reply_to_message.external_reply
-                and app_context.notification_service.get_message_notify_config(message.reply_to_message.external_reply.chat.id)):
-            info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(':')
-            if len(info) > 2 and info[0] == 'Reply':
+        if (
+            message.reply_to_message.from_user.id == self.bot.id
+            and message.reply_to_message.reply_markup
+            and message.reply_to_message.external_reply
+            and app_context.notification_service.get_message_notify_config(
+                message.reply_to_message.external_reply.chat.id
+            )
+        ):
+            info = message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.split(":")
+            if len(info) > 2 and info[0] == "Reply":
                 msg = await message.copy_to(chat_id=int(info[2]), reply_to_message_id=int(info[1]))
                 if message.chat.username:
                     await self.bot.send_message(
                         chat_id=int(info[2]),
-                        text=f'Ответ из чата @{message.chat.username}',
-                        reply_to_message_id=msg.message_id
+                        text=f"Ответ из чата @{message.chat.username}",
+                        reply_to_message_id=msg.message_id,
                     )
 
     async def remind(self, message, session, app_context, skyuser=None):
@@ -452,41 +524,47 @@ class TalkService:
         from other.constants import BotValueTypes
         from other.stellar import cmd_alarm_url, send_by_list
         from other.text_tools import extract_url
+
         if message.reply_to_message and message.reply_to_message.forward_from_chat:
             url = extract_url(message.reply_to_message.text)
             if not url:
                 await message.reply("Ссылка не найдена")
                 return
             alarm_list = await cmd_alarm_url(url)
-            msg = alarm_list + '\nСмотрите топик / Look at the topic message'
+            msg = alarm_list + "\nСмотрите топик / Look at the topic message"
             await message.reply(text=msg)
-            if alarm_list.find('@') != -1:
+            if alarm_list.find("@") != -1:
                 if skyuser and skyuser.is_skynet_admin():
                     all_users = alarm_list.split()
-                    url = f'https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}'
+                    url = f"https://t.me/c/1649743884/{message.reply_to_message.forward_from_message_id}"
                     await send_by_list(bot=self.bot, all_users=all_users, message=message, url=url, session=session)
         else:
             repo = ConfigRepository(session)
             msg_id = repo.load_bot_value(message.chat.id, BotValueTypes.PinnedId)
             pinned_url = repo.load_bot_value(message.chat.id, BotValueTypes.PinnedUrl)
-            msg = (pinned_url or '') + '\nСмотрите закреп / Look at the pinned message'
-            await self.bot.send_message(message.chat.id, msg, reply_to_message_id=msg_id,
-                                    message_thread_id=message.message_thread_id)
+            msg = (pinned_url or "") + "\nСмотрите закреп / Look at the pinned message"
+            await self.bot.send_message(
+                message.chat.id, msg, reply_to_message_id=msg_id, message_thread_id=message.message_thread_id
+            )
+
 
 class GroupService:
     async def get_members(self, chat_id):
         from other.pyro_tools import get_group_members
+
         return await get_group_members(chat_id)
 
     async def remove_deleted_users(self, chat_id):
         from other.pyro_tools import remove_deleted_users
+
         return await remove_deleted_users(chat_id)
 
     async def enforce_entry_channel(self, bot, chat_id, user_id, required_channel):
         from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
         import asyncio
+
         is_member, _ = await self.check_membership(bot, required_channel, user_id)
-            
+
         if is_member:
             return True, False
 
@@ -522,14 +600,15 @@ class GroupService:
                 source_handler="services.external_services.GroupService.enforce_entry_channel",
                 result="failed",
             )
-            logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
+            logger.warning(f"enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}")
             return False, False
 
     async def run_entry_channel_check(self, bot, chat_id, app_context):
         import asyncio
-        required_channel = app_context.config_service.load_value(chat_id, 'entry_channel')
+
+        required_channel = app_context.config_service.load_value(chat_id, "entry_channel")
         if not required_channel:
-            raise ValueError('entry_channel setting is not enabled for this chat')
+            raise ValueError("entry_channel setting is not enabled for this chat")
 
         members = await self.get_members(chat_id)
 
@@ -542,7 +621,9 @@ class GroupService:
 
             checked_count += 1
 
-            membership_ok, action_applied = await self.enforce_entry_channel(bot, chat_id, member.user_id, required_channel)
+            membership_ok, action_applied = await self.enforce_entry_channel(
+                bot, chat_id, member.user_id, required_channel
+            )
             if membership_ok:
                 await asyncio.sleep(0.1)
                 continue
@@ -556,21 +637,23 @@ class GroupService:
 
     async def check_membership(self, bot, chat_id, user_id):
         from other.group_tools import check_membership
-        return await check_membership(bot, chat_id, user_id)
 
+        return await check_membership(bot, chat_id, user_id)
 
 
 class UtilsService:
     async def sleep_and_delete(self, message, seconds=None):
         from other.aiogram_tools import cmd_sleep_and_delete
+
         if seconds is None:
             seconds = 3 * 60
         return await cmd_sleep_and_delete(message, sleep_time=seconds)
-        
+
     async def multi_reply(self, message, text):
         from other.aiogram_tools import multi_reply
+
         return await multi_reply(message, text)
-        
+
     ## async def is_admin(self, message, chat_id=None):
     ##     from other.aiogram_tools import is_admin
     ##     return await is_admin(message, chat_id=chat_id)
@@ -578,14 +661,17 @@ class UtilsService:
     ##
     async def multi_answer(self, message, text):
         from other.aiogram_tools import multi_answer
+
         return await multi_answer(message, text)
 
     async def answer_text_file(self, message, text, filename=None):
         from other.aiogram_tools import answer_text_file
+
         return await answer_text_file(message, text, filename=cast(Any, filename))
 
     def add_text(self, lines, num_line, text):
         from other.aiogram_tools import add_text
+
         return add_text(lines, num_line, text)
 
     ## def is_skynet_admin(self, message, app_context=None):
@@ -597,8 +683,10 @@ class UtilsService:
 
     def get_username_link(self, user):
         from other.aiogram_tools import get_username_link
+
         return get_username_link(user)
 
     async def parse_timedelta_from_message(self, message):
         from other.timedelta import parse_timedelta_from_message
+
         return await parse_timedelta_from_message(message)

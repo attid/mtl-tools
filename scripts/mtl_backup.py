@@ -13,8 +13,9 @@ from other.stellar import stellar_get_holders, MTLAssets
 
 
 def save_account(account: str):
-    rq = requests.get(f'{config.horizon_url}/accounts/{account}')
+    rq = requests.get(f"{config.horizon_url}/accounts/{account}")
     import os
+
     if not os.path.exists("backup"):
         os.makedirs("backup")
     with open(f"backup/{account}.json", "w") as fp:
@@ -40,6 +41,7 @@ async def save_assets(assets: list):
     # Сохраняем данные в файл с уникальным идентификатором
     d = datetime.now().day % 5
     import os
+
     backup_dir = f"{start_path}/backup"
     if not os.path.exists(backup_dir):
         os.makedirs(backup_dir)
@@ -50,12 +52,14 @@ async def save_assets(assets: list):
         json.dump(accounts, fp, indent=2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("Start", datetime.now())
-    asyncio.run(save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset]))
+    asyncio.run(
+        save_assets([MTLAssets.mtl_asset, MTLAssets.mtlap_asset, MTLAssets.mtlrect_asset, MTLAssets.eurmtl_asset])
+    )
     print("End", datetime.now())
-    #Start 2024-03-25 13:27:57.126788
+    # Start 2024-03-25 13:27:57.126788
     #  End 2024-03-25 13:28:48.953880
 
-    #Start 2024-03-25 13:29:17.809484
+    # Start 2024-03-25 13:29:17.809484
     #  End 2024-03-25 13:30:26.712109

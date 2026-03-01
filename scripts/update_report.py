@@ -16,13 +16,22 @@ from other.config_reader import start_path, config
 from other.constants import MTLChats
 from other.gspread_tools import gs_copy_sheets_with_style, agcm
 from other.stellar import (
-    stellar_get_issuer_assets, get_balances, stellar_get_offers,
-    MTLAddresses, get_asset_swap_spread, MTLAssets,
-    resolve_account, stellar_get_holders,
-    stellar_get_transactions, get_pool_balances,
-    cmd_show_guards_list, cmd_show_donates,
-    cmd_gen_mtl_vote_list, decode_data_value,
-    stellar_add_mtl_holders_info, stellar_get_trade_cost,
+    stellar_get_issuer_assets,
+    get_balances,
+    stellar_get_offers,
+    MTLAddresses,
+    get_asset_swap_spread,
+    MTLAssets,
+    resolve_account,
+    stellar_get_holders,
+    stellar_get_transactions,
+    get_pool_balances,
+    cmd_show_guards_list,
+    cmd_show_donates,
+    cmd_gen_mtl_vote_list,
+    decode_data_value,
+    stellar_add_mtl_holders_info,
+    stellar_get_trade_cost,
 )
 
 from other.web_tools import get_debank_balance
@@ -31,6 +40,7 @@ from loguru import logger
 from other.loguru_tools import safe_catch_async
 
 # https://docs.gspread.org/en/latest/
+
 
 def parse_sheet_number(value: object) -> Optional[float]:
     """Parse a numeric value from a Google Sheets cell."""
@@ -43,20 +53,20 @@ def parse_sheet_number(value: object) -> Optional[float]:
         return None
 
     # Normalize common minus signs and negatives in parentheses.
-    text = text.replace('\u2212', '-').replace('\u2014', '-').replace('\u2013', '-')
-    if text.startswith('(') and text.endswith(')'):
+    text = text.replace("\u2212", "-").replace("\u2014", "-").replace("\u2013", "-")
+    if text.startswith("(") and text.endswith(")"):
         text = f"-{text[1:-1]}"
 
     # Remove whitespace (including non-breaking/skinny spaces) and non-numeric symbols.
-    text = text.replace('\u00a0', '').replace('\u2009', '').replace('\u202f', '').replace(' ', '')
-    text = re.sub(r'[^0-9,.\-+]', '', text)
+    text = text.replace("\u00a0", "").replace("\u2009", "").replace("\u202f", "").replace(" ", "")
+    text = re.sub(r"[^0-9,.\-+]", "", text)
 
-    if ',' in text and '.' in text:
-        text = text.replace(',', '')
+    if "," in text and "." in text:
+        text = text.replace(",", "")
     else:
-        text = text.replace(',', '.')
+        text = text.replace(",", ".")
 
-    if not re.fullmatch(r'[+-]?\d+(?:\.\d+)?', text):
+    if not re.fullmatch(r"[+-]?\d+(?:\.\d+)?", text):
         return None
     try:
         return float(text)
@@ -72,7 +82,7 @@ async def check_eurmtl_b13_negative(session: Session, ss: Optional[Any] = None) 
         ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
 
     wks_eurmtl = await ss.worksheet("eurmtl_report")
-    cell_b13 = await wks_eurmtl.acell('B13')
+    cell_b13 = await wks_eurmtl.acell("B13")
     b13_value = parse_sheet_number(cell_b13.value)
     if b13_value is None:
         logger.warning("B13 value не удалось распарсить: {raw!r}", raw=cell_b13.value)
@@ -80,9 +90,7 @@ async def check_eurmtl_b13_negative(session: Session, ss: Optional[Any] = None) 
 
     if b13_value < 0:
         MessageRepository(session).add_message(
-            MTLChats.SignGroup,
-            f"⚠️ Сумма отрицательная: {b13_value}",
-            topic_id=59548
+            MTLChats.SignGroup, f"⚠️ Сумма отрицательная: {b13_value}", topic_id=59548
         )
     return b13_value
 
@@ -97,36 +105,37 @@ async def update_main_report(session: Session):
 
     # update data
     # usd
-    rq = requests.get(f'http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR')
-    await wks.update(range_name='D3', values=[[float(rq.json()['quotes']['USDEUR'])]])
+    rq = requests.get(f"http://api.currencylayer.com/live?access_key={config.currencylayer_id}&format=1&currencies=EUR")
+    await wks.update(range_name="D3", values=[[float(rq.json()["quotes"]["USDEUR"])]])
 
     # BTC,XLM,ETH,XRP
-    rq = requests.get(f'http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH,XRP')
-    await wks.update(range_name='D4', values=[[float(rq.json()['rates']['BTC'])]])
-    await wks.update(range_name='D5', values=[[float(rq.json()['rates']['XLM'])]])
-    await wks.update(range_name='D20', values=[[float(rq.json()['rates']['ETH'])]])
-    await wks.update(range_name='D21', values=[[float(rq.json()['rates']['XRP'])]])
+    rq = requests.get(f"http://api.coinlayer.com/api/live?access_key={config.coinlayer_id}&symbols=BTC,XLM,ETH,XRP")
+    await wks.update(range_name="D4", values=[[float(rq.json()["rates"]["BTC"])]])
+    await wks.update(range_name="D5", values=[[float(rq.json()["rates"]["XLM"])]])
+    await wks.update(range_name="D20", values=[[float(rq.json()["rates"]["ETH"])]])
+    await wks.update(range_name="D21", values=[[float(rq.json()["rates"]["XRP"])]])
 
     # aum
     s = requests.get(
-        'https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR').text
-    s = s[s.find('"offers":'):]
+        "https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR"
+    ).text
+    s = s[s.find('"offers":') :]
     # print(s)
-    s = s[s.find('"price": "') + 10:]
-    s = s[:s.find('"')]
-    await wks.update(range_name='D6', values=[[float(s)]])
+    s = s[s.find('"price": "') + 10 :]
+    s = s[: s.find('"')]
+    await wks.update(range_name="D6", values=[[float(s)]])
 
     # defi
-    defi_balance = await get_debank_balance('0x0358d265874b5cf002d1801949f1cee3b08fa2e9')
-    await wks.update(range_name='D8', values=[[int(defi_balance)]])
+    defi_balance = await get_debank_balance("0x0358d265874b5cf002d1801949f1cee3b08fa2e9")
+    await wks.update(range_name="D8", values=[[int(defi_balance)]])
     # sentry_sdk.capture_message(f'debank error - {debank}')
-    defi_balance = await get_debank_balance('0xDb36745AA3601E2f12b07db58fF8d91946850a36')
-    await wks.update(range_name='D11', values=[[int(defi_balance)]])
+    defi_balance = await get_debank_balance("0xDb36745AA3601E2f12b07db58fF8d91946850a36")
+    await wks.update(range_name="D11", values=[[int(defi_balance)]])
 
-    addresses = await wks.get_values('A2:A')
+    addresses = await wks.get_values("A2:A")
     for address in addresses:
         if address and address[0] and len(address[0]) == 56:
-            sheet_name = f'{address[0][:4]}..{address[0][-4:]}'
+            sheet_name = f"{address[0][:4]}..{address[0][-4:]}"
             try:
                 address_sheet = await ss.worksheet(sheet_name)
             except WorksheetNotFound:
@@ -134,7 +143,7 @@ async def update_main_report(session: Session):
 
             assets, data = await get_balances(address[0], return_data=True)
 
-            update_data = [['DATA']]
+            update_data = [["DATA"]]
             for key in data:
                 decoded_value = decode_data_value(data[key])
                 try:
@@ -142,44 +151,61 @@ async def update_main_report(session: Session):
                 except ValueError:
                     pass
                 update_data.append([key, decoded_value])
-            await address_sheet.update(range_name='C1', values=update_data)
+            await address_sheet.update(range_name="C1", values=update_data)
 
-            update_data = [['ASSETS']]
+            update_data = [["ASSETS"]]
             for key in assets:
                 update_data.append([key, float(assets.get(key, 0))])
-            await address_sheet.update(range_name='A1', values=update_data)
+            await address_sheet.update(range_name="A1", values=update_data)
 
             assets = await stellar_get_issuer_assets(address[0])
-            update_data = [['ISSUER', 'AMOUNT', 'COST']]
+            update_data = [["ISSUER", "AMOUNT", "COST"]]
             for key in assets:
-                update_data.append([key, float(assets.get(key, 0)),
-                                    await stellar_get_trade_cost(Asset(code=key, issuer=address[0]))])
-            await address_sheet.update(range_name='E1', values=update_data)
+                update_data.append(
+                    [key, float(assets.get(key, 0)), await stellar_get_trade_cost(Asset(code=key, issuer=address[0]))]
+                )
+            await address_sheet.update(range_name="E1", values=update_data)
 
             pools = await get_pool_balances(address[0])
-            update_data = [['POOLS', 'SHARES', 'AMOUNT1', 'AMOUNT2']]
+            update_data = [["POOLS", "SHARES", "AMOUNT1", "AMOUNT2"]]
             for pool in pools:
                 # [{'pool_id': '1b492b669959d3f082b5fb7dcc847d43371fd1f586209899603b93ac1a39b7f8', 'name': 'MTL-EURMTL', 'shares': 761437.8395765, 'token1_amount': 348606.2247324, 'token2_amount': 1685938.1857397}]
                 update_data.append(
-                    [pool['name'], float(pool['shares']), float(pool['token1_amount']), float(pool['token2_amount'])])
-            await address_sheet.update(range_name='H1', values=update_data)
+                    [pool["name"], float(pool["shares"]), float(pool["token1_amount"]), float(pool["token2_amount"])]
+                )
+            await address_sheet.update(range_name="H1", values=update_data)
 
-    await wks.update(range_name='D15', values=[[datetime.now().strftime('%d.%m.%Y %H:%M:%S')]])
+    await wks.update(range_name="D15", values=[[datetime.now().strftime("%d.%m.%Y %H:%M:%S")]])
 
     await asyncio.sleep(5)
-    await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                            "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc", "report", None)
-    await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                            "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report", None)
-    await asyncio.to_thread(gs_copy_sheets_with_style, "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
-                            "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")
+    await asyncio.to_thread(
+        gs_copy_sheets_with_style,
+        "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+        "1v2s2kQfciWJbzENOy4lHNx-UYX61Uctdqf1rE-2NFWc",
+        "report",
+        None,
+    )
+    await asyncio.to_thread(
+        gs_copy_sheets_with_style,
+        "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+        "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c",
+        "usdm_report",
+        None,
+    )
+    await asyncio.to_thread(
+        gs_copy_sheets_with_style,
+        "1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
+        "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec",
+        "report",
+        "B_TBL",
+    )
 
     await update_main_report_additional(session=session)
 
     # Проверка B13 на отрицательное значение
     await check_eurmtl_b13_negative(session=session, ss=ss)
 
-    logger.info(f'Main report all done {datetime.now()}')
+    logger.info(f"Main report all done {datetime.now()}")
 
 
 @safe_catch_async
@@ -190,20 +216,20 @@ async def update_main_report_additional(session: Session):
     wks_monitoring = await ss.worksheet("MONITORING")
 
     # Проверка значения в первой ячейке столбца D
-    value_cell = await wks_all.acell('D1')
+    value_cell = await wks_all.acell("D1")
     if value_cell.value != "Value":
         raise ValueError("Ожидалось 'Value' в ячейке D1")
 
     # add data
     statistic = calculate_statistics()
-    await wks_all.update(range_name='D19:D21', values=[[statistic['EURMTL']],
-                                     [statistic['SATSMTL']],
-                                     [statistic['USDM']]])
+    await wks_all.update(
+        range_name="D19:D21", values=[[statistic["EURMTL"]], [statistic["SATSMTL"]], [statistic["USDM"]]]
+    )
 
-    await wks_all.update(range_name='D24', values=[[statistic['Median']]])
-    await wks_all.update(range_name='D25', values=[[statistic['EURMTL_NONE_ZERO']]])
-    await wks_all.update(range_name='D28', values=[[statistic['MTL_MTLRECT']]])
-    await wks_all.update(range_name='D41', values=[[statistic['MTLAP']]])
+    await wks_all.update(range_name="D24", values=[[statistic["Median"]]])
+    await wks_all.update(range_name="D25", values=[[statistic["EURMTL_NONE_ZERO"]]])
+    await wks_all.update(range_name="D28", values=[[statistic["MTL_MTLRECT"]]])
+    await wks_all.update(range_name="D41", values=[[statistic["MTLAP"]]])
 
     # Получение данных из столбца D
     column_d_values = await wks_all.col_values(4)
@@ -220,7 +246,7 @@ async def update_main_report_additional(session: Session):
     row_update = [current_date] + column_d_values[1:]
 
     # Обновление данных за один запрос
-    await wks_monitoring.update(range_name=f'A{last_row}', values=[row_update], value_input_option='USER_ENTERED')
+    await wks_monitoring.update(range_name=f"A{last_row}", values=[row_update], value_input_option="USER_ENTERED")
 
 
 def calculate_statistics():
@@ -272,7 +298,7 @@ def calculate_statistics():
         "MTL_MTLRECT": mtl_mtlrect_count,
         "Median": median_mtl_mtlrect,
         "MTLAP": mtlap_count - 1,
-        "EURMTL_NONE_ZERO": eurmtl_none_zero_count
+        "EURMTL_NONE_ZERO": eurmtl_none_zero_count,
     }
 
 
@@ -283,13 +309,13 @@ async def update_fire(session: Session):
     wks = await ss.worksheet("IND_ALL")
 
     # Получаем все значения из столбцов B и D
-    column_B = await wks.get('B1:B100')
-    column_D = await wks.get('D1:D100')
+    column_B = await wks.get("B1:B100")
+    column_D = await wks.get("D1:D100")
 
     # Ищем строку 'book value of 1 token' в столбце B
     for i, row in enumerate(column_B):
         for cell in row:
-            if cell == 'Share Market Price':
+            if cell == "Share Market Price":
                 # Нашли нужную строку, получаем соответствующее значение из столбца D
                 cost_fire = column_D[i][0]
                 break
@@ -297,11 +323,11 @@ async def update_fire(session: Session):
             continue
         break
     else:
-        MessageRepository(session).send_admin_message('bad fire value')
-        raise Exception('bad fire value')
+        MessageRepository(session).send_admin_message("bad fire value")
+        raise Exception("bad fire value")
 
-    logger.info(f'cost_fire {cost_fire}')
-    cost_fire = float(cost_fire.replace(',', '.')) * 0.8
+    logger.info(f"cost_fire {cost_fire}")
+    cost_fire = float(cost_fire.replace(",", ".")) * 0.8
     # check_fire removed (unused/undefined)
 
 
@@ -325,16 +351,16 @@ async def update_guarantors_report():
         if account["id"] in address_list:
             pass
         else:
-            balances = account['balances']
-            found = list(filter(lambda x: x.get('asset_code') and x.get('asset_code') == 'EURDEBT', balances))
-            if float(found[0]['balance']) > 1:
+            balances = account["balances"]
+            found = list(filter(lambda x: x.get("asset_code") and x.get("asset_code") == "EURDEBT", balances))
+            if float(found[0]["balance"]) > 1:
                 address_list.append(account["id"])
 
     if len(address_list) > len_address_list:
         update_list = []
         for account in address_list:
             update_list.append([account])
-        await wks.update(range_name='B3', values=update_list)
+        await wks.update(range_name="B3", values=update_list)
 
     date_list = await wks.col_values(4)
     date_list.pop(0)
@@ -343,21 +369,21 @@ async def update_guarantors_report():
     update_list = []
 
     for idx, address in enumerate(address_list):
-        eur_sum = ''
-        debt_sum = ''
+        eur_sum = ""
+        debt_sum = ""
         if idx == len(date_list):
-            date_list.append('')
+            date_list.append("")
         if address and (len(address) == 56):
             # print(val)
             # get balance
             balances = await get_balances(address)
-            eur_sum = round(float(balances.get('EURMTL', 0)))
-            debt_sum = float(balances.get('EURDEBT', 0))
-        dt_google = ''  # if dt == '' else (
+            eur_sum = round(float(balances.get("EURMTL", 0)))
+            debt_sum = float(balances.get("EURDEBT", 0))
+        dt_google = ""  # if dt == '' else (
         # datetime.strptime(dt, '%d.%m.%Y') - datetime(1899, 12, 30)).days
         update_list.append([dt_google, eur_sum, debt_sum])
 
-    await wks.update(range_name='E3', values=update_list)
+    await wks.update(range_name="E3", values=update_list)
 
     # rects
     address_list = await wks.col_values(3)
@@ -367,15 +393,15 @@ async def update_guarantors_report():
     for address in address_list:
         if len(address) == 56:
             balances = await get_balances(address)
-            update_list.append([balances.get('MTLRECT', 0)])
+            update_list.append([balances.get("MTLRECT", 0)])
         else:
-            update_list.append(['=['])
+            update_list.append(["=["])
 
-    await wks.update(range_name='H3', values=update_list)
+    await wks.update(range_name="H3", values=update_list)
 
-    await wks.update(range_name='B2', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
+    await wks.update(range_name="B2", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
 
-    logger.info(f'report Guarantors all done {now}')
+    logger.info(f"report Guarantors all done {now}")
 
 
 @safe_catch_async
@@ -394,16 +420,19 @@ async def update_top_holders_report(session: Session):
 
     update_data = []
     for account in vote_list:
-        update_data.append([account.account_id,
-                            account.balance_mtl,
-                            account.balance_rect,
-                            account.balance_delegated,
-                            account.balance,
-                            account.votes,
-                            account.calculated_votes
-                            ])
+        update_data.append(
+            [
+                account.account_id,
+                account.balance_mtl,
+                account.balance_rect,
+                account.balance_delegated,
+                account.balance,
+                account.votes,
+                account.calculated_votes,
+            ]
+        )
 
-    await wks.update(range_name='B2', values=update_data)
+    await wks.update(range_name="B2", values=update_data)
 
     update_data = []
     for key in delegate_list:
@@ -412,19 +441,19 @@ async def update_top_holders_report(session: Session):
     for _ in range(1, 5):
         update_data.append(["", ""])
 
-    await wks_d.update(range_name='A2', values=update_data)
+    await wks_d.update(range_name="A2", values=update_data)
 
-    await wks.update(range_name='I1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
+    await wks.update(range_name="I1", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
 
-    records = await wks.get_values('I2:I21')
-    gd_link = 'https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156'
+    records = await wks.get_values("I2:I21")
+    gd_link = "https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156"
     for record in records:
-        if record[0] != '0':
+        if record[0] != "0":
             text = f'You need update votes <a href="{gd_link}">more info</a>'
             MessageRepository(session).add_message(MTLChats.SignGroup, text, use_alarm=1, topic_id=59558)
             break
 
-    logger.info(f'report topholders all done {now}')
+    logger.info(f"report topholders all done {now}")
 
 
 @safe_catch_async
@@ -444,10 +473,10 @@ async def update_bdm_report():
         if len(bdm[2]) == 56:
             bdm.append(await resolve_account(bdm[2]))
 
-    await wks.update(range_name='A2', values=bdm_list)
-    await wks.update(range_name='G1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
+    await wks.update(range_name="A2", values=bdm_list)
+    await wks.update(range_name="G1", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
 
-    logger.info(f'update bdm_report all done {now}')
+    logger.info(f"update bdm_report all done {now}")
 
 
 async def update_mmwb_report(session: Session):
@@ -459,74 +488,87 @@ async def update_mmwb_report(session: Session):
     wks = await ss.worksheet("DATA")
 
     # check structure
-    records = await wks.get_values('O1')
-    if records != [['Баланс %']]:
+    records = await wks.get_values("O1")
+    if records != [["Баланс %"]]:
         # print(records)
-        raise Exception('wrong structure')
-    records = await wks.get_values('B2:B6')
-    if records[0][0] != 'GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT':
+        raise Exception("wrong structure")
+    records = await wks.get_values("B2:B6")
+    if records[0][0] != "GDEMWIXGF3QQE7CJIOKWWMJAXAWGINJRR6DOOOSNO3C4UQGPDOA3OBOT":
         # print(records)
-        raise Exception('wrong structure')
+        raise Exception("wrong structure")
 
     # update data EURMTL	USDM	USDC	XLM BTC*
     update_data = []
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_xlm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_xlm)
     costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.xlm_asset)
-    update_data.append([balances.get('EURMTL', 0), None, None,
-                        balances.get('XLM', 0), None, len(offers), costs[2]])
+    update_data.append([balances.get("EURMTL", 0), None, None, balances.get("XLM", 0), None, len(offers), costs[2]])
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_usdm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_usdm)
     costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.usdm_asset)
-    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), balances.get('USDC', 0),
-                        None, None, len(offers), costs[2]])
+    update_data.append(
+        [balances.get("EURMTL", 0), balances.get("USDM", 0), balances.get("USDC", 0), None, None, len(offers), costs[2]]
+    )
     balances = await get_balances(MTLAddresses.public_exchange_usdm_sats)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_sats)
     costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.satsmtl_asset)
-    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), None,
-                        None, balances.get('SATSMTL', 0), len(offers), costs[2]])
+    update_data.append(
+        [
+            balances.get("EURMTL", 0),
+            balances.get("USDM", 0),
+            None,
+            None,
+            balances.get("SATSMTL", 0),
+            len(offers),
+            costs[2],
+        ]
+    )
     balances = await get_balances(MTLAddresses.public_exchange_usdm_mtlfarm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_mtlfarm)
     costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.mtlfarm_asset)
-    update_data.append([balances.get('EURMTL', 0), balances.get('USDM', 0), None,
-                        None, balances.get('MTLFARM', 0), len(offers), costs[2]])
+    update_data.append(
+        [
+            balances.get("EURMTL", 0),
+            balances.get("USDM", 0),
+            None,
+            None,
+            balances.get("MTLFARM", 0),
+            len(offers),
+            costs[2],
+        ]
+    )
     balances = await get_balances(MTLAddresses.public_exchange_usdm_xlm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_xlm)
     costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.xlm_asset)
-    update_data.append([None, balances.get('USDM', 0), None,
-                        balances.get('XLM', 0), None, len(offers), costs[2]])
+    update_data.append([None, balances.get("USDM", 0), None, balances.get("XLM", 0), None, len(offers), costs[2]])
     balances = await get_balances(MTLAddresses.public_exchange_usdm_usdc)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_usdm_usdc)
     costs = await get_asset_swap_spread(MTLAssets.usdm_asset, MTLAssets.usdc_asset)
-    update_data.append([None, balances.get('USDM', 0), balances.get('USDC', 0),
-                        None, None, len(offers), costs[2]])
+    update_data.append([None, balances.get("USDM", 0), balances.get("USDC", 0), None, None, len(offers), costs[2]])
 
     balances = await get_balances(MTLAddresses.public_exchange_eurmtl_eurc)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_eurmtl_eurc)
     costs = await get_asset_swap_spread(MTLAssets.eurmtl_asset, MTLAssets.eurc_asset)
-    update_data.append([balances.get('EURMTL', 0), None, balances.get('EURC', 0),
-                        None, None, len(offers), costs[2]])
+    update_data.append([balances.get("EURMTL", 0), None, balances.get("EURC", 0), None, None, len(offers), costs[2]])
 
     balances = await get_balances(MTLAddresses.public_exchange_mtl_xlm)
     offers = await stellar_get_offers(MTLAddresses.public_exchange_mtl_xlm)
     costs = await get_asset_swap_spread(MTLAssets.mtl_asset, MTLAssets.xlm_asset)
-    update_data.append([balances.get('MTL', 0), None, None,
-                        balances.get('XLM', 0), None, len(offers), costs[2]])
+    update_data.append([balances.get("MTL", 0), None, None, balances.get("XLM", 0), None, len(offers), costs[2]])
 
     balances = await get_balances(MTLAddresses.public_fire)
-    update_data.append([balances.get('EURMTL', 0), None, None,
-                        None, balances.get('MTL', 0)])
+    update_data.append([balances.get("EURMTL", 0), None, None, None, balances.get("MTL", 0)])
 
-    await wks.update(range_name='E2', values=update_data)
+    await wks.update(range_name="E2", values=update_data)
 
-    records = await wks.get_values('O2:O6')
+    records = await wks.get_values("O2:O6")
     for record in records:
-        value = float(record[0].replace(',', '.'))
+        value = float(record[0].replace(",", "."))
         if value < 0.2 or value > 0.8:
-            MessageRepository(session).send_admin_message(f'update_mmwb_report balance error {value}')
+            MessageRepository(session).send_admin_message(f"update_mmwb_report balance error {value}")
 
-    await wks.update(range_name='Q1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
-    logger.info(f'update mmwb_report all done {now}')
+    await wks.update(range_name="Q1", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
+    logger.info(f"update mmwb_report all done {now}")
 
 
 def my_float(s):
@@ -560,21 +602,25 @@ async def update_airdrop():
 
     for idx in range(start_pos, max_length):
         if len(address_list) > idx:  # if address more that federal
-            if (len(address_list[idx]) < 10) and (len(fed_address_list) >= idx) and (
-                    len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count('*') > 0):
+            if (
+                (len(address_list[idx]) < 10)
+                and (len(fed_address_list) >= idx)
+                and (len(fed_address_list[idx]) > 5)
+                and (fed_address_list[idx].count("*") > 0)
+            ):
                 try:
                     # print(address_list[idx], fed_address_list[idx])
                     address = await resolve_stellar_address_async(fed_address_list[idx], client=client)
                     # print(address.account_id)
-                    await wks.update(range_name=f'D{idx + 1}', values=[[address.account_id]])
+                    await wks.update(range_name=f"D{idx + 1}", values=[[address.account_id]])
                 except Exception:
-                    logger.info('Resolving error', address_list[idx], fed_address_list[idx])
+                    logger.info("Resolving error", address_list[idx], fed_address_list[idx])
         else:  # if federal more that address
-            if (len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count('*') > 0):
+            if (len(fed_address_list[idx]) > 5) and (fed_address_list[idx].count("*") > 0):
                 # print(fed_address_list[idx], '***')
                 address = await resolve_stellar_address_async(fed_address_list[idx], client=client)
                 # print(address.account_id)
-                await wks.update(range_name=f'D{idx + 1}', values=[[address.account_id]])
+                await wks.update(range_name=f"D{idx + 1}", values=[[address.account_id]])
 
     address_list = await wks.col_values(4)
     address_list.pop(0)
@@ -583,30 +629,30 @@ async def update_airdrop():
     start_pos = start_pos if start_pos > 3 else 3
 
     for idx, address in enumerate(address_list[start_pos:]):
-        mtl_sum = ''
-        eurmtl_sum = ''
-        xlm_sum = ''
-        sats_sum = ''
+        mtl_sum = ""
+        eurmtl_sum = ""
+        xlm_sum = ""
+        sats_sum = ""
         if address and (len(address) == 56):
             # print(val)
             # get balance
             balance_dic: dict = await get_balances(address)
             if balance_dic:
-                mtl_sum = my_float(balance_dic.get('MTL', ''))
-                eurmtl_sum = my_float(balance_dic.get('EURMTL', ''))
-                xlm_sum = my_float(balance_dic.get('XLM', ''))
-                sats_sum = my_float(balance_dic.get('SATSMTL', ''))
+                mtl_sum = my_float(balance_dic.get("MTL", ""))
+                eurmtl_sum = my_float(balance_dic.get("EURMTL", ""))
+                xlm_sum = my_float(balance_dic.get("XLM", ""))
+                sats_sum = my_float(balance_dic.get("SATSMTL", ""))
             else:
-                mtl_sum, eurmtl_sum, xlm_sum, sats_sum = 'D', 'D', 'D', 'D'
+                mtl_sum, eurmtl_sum, xlm_sum, sats_sum = "D", "D", "D", "D"
 
         update_list.append([xlm_sum, eurmtl_sum, mtl_sum, sats_sum])
 
     # print(update_list)
-    await wks.update(range_name=f'K{start_pos + 3}', values=update_list)
-    await wks.update(range_name='O2', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
+    await wks.update(range_name=f"K{start_pos + 3}", values=update_list)
+    await wks.update(range_name="O2", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
     await client.close()
 
-    logger.info(f'report 3 all done {now}')
+    logger.info(f"report 3 all done {now}")
 
 
 async def update_donate_report(session: Session):
@@ -685,13 +731,13 @@ async def update_donates_new():
 
     update_list = await cmd_show_donates(return_table=True)
 
-    await wks.update(range_name='A2', values=update_list)
-    await wks.update(range_name='E1', values=[[now.strftime('%d.%m.%Y %H:%M:%S')]])
-    update_list.append(['', '', ''])
-    update_list.append(['', '', ''])
-    update_list.append(['', '', ''])
+    await wks.update(range_name="A2", values=update_list)
+    await wks.update(range_name="E1", values=[[now.strftime("%d.%m.%Y %H:%M:%S")]])
+    update_list.append(["", "", ""])
+    update_list.append(["", "", ""])
+    update_list.append(["", "", ""])
 
-    logger.info(f'new done {now}')
+    logger.info(f"new done {now}")
 
 
 async def update_export(session: Session):
@@ -707,23 +753,38 @@ async def update_export(session: Session):
     update_list = []
 
     # print(update_list)
-    last_row = (await wks.find('LAST', in_column=1)).row
-    last_id = (await wks.get_values(f'A{last_row - 1}'))[0][0]
+    last_row = (await wks.find("LAST", in_column=1)).row
+    last_id = (await wks.get_values(f"A{last_row - 1}"))[0][0]
 
     list_operation = FinanceRepository(session).get_operations(last_id)
-    
+
     for record in list_operation:
         update_list.append(
-            [record.id, record.dt.strftime('%d.%m.%Y %H:%M:%S'), record.operation,
-             float(record.amount1) if record.amount1 else None, record.code1,
-             float(cast(float, record.amount2)) if record.amount2 else None, record.code2,
-             record.from_account, record.for_account, None, None, record.ledger])
+            [
+                record.id,
+                record.dt.strftime("%d.%m.%Y %H:%M:%S"),
+                record.operation,
+                float(record.amount1) if record.amount1 else None,
+                record.code1,
+                float(cast(float, record.amount2)) if record.amount2 else None,
+                record.code2,
+                record.from_account,
+                record.for_account,
+                None,
+                None,
+                record.ledger,
+            ]
+        )
 
-    update_list.append(['LAST', ])
-    await wks.update(range_name=f'A{last_row}', values=update_list, value_input_option='USER_ENTERED')
+    update_list.append(
+        [
+            "LAST",
+        ]
+    )
+    await wks.update(range_name=f"A{last_row}", values=update_list, value_input_option="USER_ENTERED")
     # await wks.update('H1', now.strftime('%d.%m.%Y %H:%M:%S'))
 
-    logger.info(f'export all done {now}')
+    logger.info(f"export all done {now}")
 
 
 async def update_fest(session: Session):
@@ -732,8 +793,8 @@ async def update_fest(session: Session):
     ss = await agc.open_by_key("1m4NcL3Dqo1UnF4LEGjNO6ZYxSnhykN1HT_2Uts8HpaU")
     # get date
     wks = await ss.worksheet("config")
-    date_1 = datetime.strptime((await wks.get_values('B1'))[0][0], '%d.%m.%Y')
-    date_2 = datetime.strptime((await wks.get_values('B2'))[0][0], '%d.%m.%Y')
+    date_1 = datetime.strptime((await wks.get_values("B1"))[0][0], "%d.%m.%Y")
+    date_2 = datetime.strptime((await wks.get_values("B2"))[0][0], "%d.%m.%Y")
 
     wks = await ss.worksheet("data")
 
@@ -755,21 +816,24 @@ async def update_fest(session: Session):
             # total_amount = sum(transaction.amount for transaction in transactions if transaction)
             total_amount = 0
             for transaction in transactions:
-                if (transaction.get('asset_code') == MTLAssets.eurmtl_asset.code
-                        and transaction.get('asset_issuer') == MTLAssets.eurmtl_asset.issuer
-                        and transaction.get('type') == 'payment' and transaction.get('to') == address):
-                    total_amount += float(transaction['amount'])
+                if (
+                    transaction.get("asset_code") == MTLAssets.eurmtl_asset.code
+                    and transaction.get("asset_issuer") == MTLAssets.eurmtl_asset.issuer
+                    and transaction.get("type") == "payment"
+                    and transaction.get("to") == address
+                ):
+                    total_amount += float(transaction["amount"])
 
             update_list.append([total_amount])
         else:
             update_list.append([0])
 
     # Обновление таблицы
-    await wks.update(range_name='E2', values=update_list, value_input_option='USER_ENTERED')
+    await wks.update(range_name="E2", values=update_list, value_input_option="USER_ENTERED")
 
     wks = await ss.worksheet("config")
-    await wks.update(range_name='B4', values=[[datetime.now().strftime('%d.%m.%Y %H:%M:%S')]])
-    logger.info('update_fest completed successfully')
+    await wks.update(range_name="B4", values=[[datetime.now().strftime("%d.%m.%Y %H:%M:%S")]])
+    logger.info("update_fest completed successfully")
 
 
 async def main_report():

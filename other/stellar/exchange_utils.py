@@ -23,18 +23,12 @@ async def stellar_get_offers(account_id: str) -> list[dict]:
     Returns:
         List of offer dicts
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         call = await server.offers().for_account(account_id).limit(200).call()
-        return call['_embedded']['records']
+        return call["_embedded"]["records"]
 
 
-async def stellar_get_orders_sum(
-    address: str,
-    selling_asset: Asset,
-    buying_asset: Asset
-) -> float:
+async def stellar_get_orders_sum(address: str, selling_asset: Asset, buying_asset: Asset) -> float:
     """
     Calculate total order amount for asset pair.
 
@@ -50,31 +44,29 @@ async def stellar_get_orders_sum(
     total_amount = 0.0
 
     for order in orders:
-        selling = order.get('selling', {})
-        buying = order.get('buying', {})
+        selling = order.get("selling", {})
+        buying = order.get("buying", {})
 
         # Check if this order matches the asset pair
         selling_matches = (
-            selling.get('asset_type') == selling_asset.type and
-            selling.get('asset_code') == selling_asset.code and
-            selling.get('asset_issuer') == selling_asset.issuer
+            selling.get("asset_type") == selling_asset.type
+            and selling.get("asset_code") == selling_asset.code
+            and selling.get("asset_issuer") == selling_asset.issuer
         )
         buying_matches = (
-            buying.get('asset_type') == buying_asset.type and
-            buying.get('asset_code') == buying_asset.code and
-            buying.get('asset_issuer') == buying_asset.issuer
+            buying.get("asset_type") == buying_asset.type
+            and buying.get("asset_code") == buying_asset.code
+            and buying.get("asset_issuer") == buying_asset.issuer
         )
 
         if selling_matches and buying_matches:
-            total_amount += float(order['amount'])
+            total_amount += float(order["amount"])
 
     return total_amount
 
 
 async def get_asset_swap_spread(
-    selling_asset: Asset,
-    buying_asset: Asset,
-    amount: float = 1
+    selling_asset: Asset, buying_asset: Asset, amount: float = 1
 ) -> tuple[float, float, float]:
     """
     Get spread information for asset pair.
@@ -87,32 +79,32 @@ async def get_asset_swap_spread(
     Returns:
         Tuple of (destination_amount_sell_to_buy, source_amount_buy_to_sell, average)
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         # Calculate amount received when selling
-        sell_to_buy = await server.strict_send_paths(
-            source_asset=selling_asset,
-            source_amount=str(amount),
-            destination=[buying_asset]
-        ).limit(1).call()
+        sell_to_buy = (
+            await server.strict_send_paths(
+                source_asset=selling_asset, source_amount=str(amount), destination=[buying_asset]
+            )
+            .limit(1)
+            .call()
+        )
 
         destination_amount_sell_to_buy = 0.0
-        if sell_to_buy['_embedded']['records']:
-            destination_amount_sell_to_buy = float(
-                sell_to_buy['_embedded']['records'][0]['destination_amount']
-            )
+        if sell_to_buy["_embedded"]["records"]:
+            destination_amount_sell_to_buy = float(sell_to_buy["_embedded"]["records"][0]["destination_amount"])
 
         # Calculate amount needed for reverse swap
-        buy_to_sell = await server.strict_send_paths(
-            source_asset=buying_asset,
-            source_amount=str(1 / amount),
-            destination=[selling_asset]
-        ).limit(1).call()
+        buy_to_sell = (
+            await server.strict_send_paths(
+                source_asset=buying_asset, source_amount=str(1 / amount), destination=[selling_asset]
+            )
+            .limit(1)
+            .call()
+        )
 
         source_amount_buy_to_sell = 0.0
-        if buy_to_sell['_embedded']['records']:
-            dest_amount = float(buy_to_sell['_embedded']['records'][0]['destination_amount'])
+        if buy_to_sell["_embedded"]["records"]:
+            dest_amount = float(buy_to_sell["_embedded"]["records"][0]["destination_amount"])
             if dest_amount > 0:
                 source_amount_buy_to_sell = 1 / dest_amount
 
@@ -124,11 +116,7 @@ async def get_asset_swap_spread(
         return destination_amount_sell_to_buy, source_amount_buy_to_sell, average
 
 
-async def stellar_get_receive_path(
-    send_asset: Asset,
-    send_sum: str,
-    receive_asset: Asset
-) -> list[Asset]:
+async def stellar_get_receive_path(send_asset: Asset, send_sum: str, receive_asset: Asset) -> list[Asset]:
     """
     Find optimal path for strict send swap.
 
@@ -141,24 +129,20 @@ async def stellar_get_receive_path(
         List of intermediate path assets (empty if direct)
     """
     try:
-        async with ServerAsync(
-            horizon_url=config.horizon_url, client=AiohttpClient()
-        ) as server:
-            call_result = await server.strict_send_paths(
-                send_asset, send_sum, [receive_asset]
-            ).call()
+        async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
+            call_result = await server.strict_send_paths(send_asset, send_sum, [receive_asset]).call()
 
-        if len(call_result['_embedded']['records']) > 0:
-            path_records = call_result['_embedded']['records'][0]['path']
+        if len(call_result["_embedded"]["records"]) > 0:
+            path_records = call_result["_embedded"]["records"][0]["path"]
             if len(path_records) == 0:
                 return []
 
             result = []
             for record in path_records:
-                if record['asset_type'] == 'native':
+                if record["asset_type"] == "native":
                     result.append(MTLAssets.xlm_asset)
                 else:
-                    result.append(Asset(record['asset_code'], record['asset_issuer']))
+                    result.append(Asset(record["asset_code"], record["asset_issuer"]))
             return result
         else:
             return []
@@ -188,15 +172,11 @@ async def build_swap_xdr(
     Returns:
         Unsigned transaction XDR
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         source_account = await server.load_account(source_address)
 
     transaction = TransactionBuilder(
-        source_account=source_account,
-        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-        base_fee=config.base_fee
+        source_account=source_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=config.base_fee
     )
     transaction.set_timeout(60 * 60 * 24 * 7)
 
@@ -204,12 +184,7 @@ async def build_swap_xdr(
         path = await stellar_get_receive_path(send_asset, send_amount, receive_asset)
 
     transaction.append_path_payment_strict_send_op(
-        source_address,
-        send_asset,
-        send_amount,
-        receive_asset,
-        receive_amount,
-        path
+        source_address, send_asset, send_amount, receive_asset, receive_amount, path
     )
 
     full_transaction = transaction.build()
@@ -230,36 +205,26 @@ async def build_cancel_offers_xdr(
     Returns:
         Transaction XDR or None if no offers
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         root_account = await server.load_account(public_key)
         call = await server.offers().for_account(public_key).limit(200).call()
 
     transaction = TransactionBuilder(
-        source_account=root_account,
-        network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-        base_fee=config.base_fee
+        source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=config.base_fee
     )
     transaction.set_timeout(60 * 60 * 24 * 7)
 
-    for record in call['_embedded']['records']:
-        selling = record['selling']
-        buying = record['buying']
+    for record in call["_embedded"]["records"]:
+        selling = record["selling"]
+        buying = record["buying"]
 
         transaction.append_manage_sell_offer_op(
-            selling=Asset(
-                selling.get('asset_code', 'XLM'),
-                selling.get('asset_issuer')
-            ),
-            buying=Asset(
-                buying.get('asset_code', 'XLM'),
-                buying.get('asset_issuer')
-            ),
-            amount='0',
-            price=Price(record['price_r']['n'], record['price_r']['d']),
-            offer_id=int(record['id']),
-            source=public_key
+            selling=Asset(selling.get("asset_code", "XLM"), selling.get("asset_issuer")),
+            buying=Asset(buying.get("asset_code", "XLM"), buying.get("asset_issuer")),
+            amount="0",
+            price=Price(record["price_r"]["n"], record["price_r"]["d"]),
+            offer_id=int(record["id"]),
+            source=public_key,
         )
 
     if transaction.operations:
@@ -282,36 +247,26 @@ async def stellar_remove_orders(public_key: str, xdr: Optional[str] = None) -> O
     """
     from .xdr_utils import stellar_get_transaction_builder
 
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         if xdr:
             transaction = stellar_get_transaction_builder(xdr)
         else:
             root_account = await server.load_account(public_key)
             transaction = TransactionBuilder(
-                source_account=root_account,
-                network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-                base_fee=BASE_FEE
+                source_account=root_account, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE, base_fee=BASE_FEE
             )
             transaction.set_timeout(60 * 60 * 24 * 7)
 
         call = await server.offers().for_account(public_key).limit(200).call()
 
-    for record in call['_embedded']['records']:
+    for record in call["_embedded"]["records"]:
         transaction.append_manage_sell_offer_op(
-            selling=Asset(
-                record['selling'].get('asset_code', 'XLM'),
-                record['selling'].get('asset_issuer')
-            ),
-            buying=Asset(
-                record['buying'].get('asset_code', 'XLM'),
-                record['buying'].get('asset_issuer')
-            ),
-            amount='0',
-            price=Price(record['price_r']['n'], record['price_r']['d']),
-            offer_id=int(record['id']),
-            source=public_key
+            selling=Asset(record["selling"].get("asset_code", "XLM"), record["selling"].get("asset_issuer")),
+            buying=Asset(record["buying"].get("asset_code", "XLM"), record["buying"].get("asset_issuer")),
+            amount="0",
+            price=Price(record["price_r"]["n"], record["price_r"]["d"]),
+            offer_id=int(record["id"]),
+            source=public_key,
         )
 
     if transaction.operations:
@@ -349,27 +304,25 @@ async def stellar_get_trade_cost(asset: Asset) -> float:
         float: Average trade price or 0 if no trades found
     """
     try:
-        async with ServerAsync(
-            horizon_url=config.horizon_url, client=AiohttpClient()
-        ) as server:
+        async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
             # Get last 100 trades for the asset pair
-            trades = await server.trades().for_asset_pair(
-                asset, MTLAssets.eurmtl_asset
-            ).limit(100).order(desc=True).call()
+            trades = (
+                await server.trades().for_asset_pair(asset, MTLAssets.eurmtl_asset).limit(100).order(desc=True).call()
+            )
 
-            if not trades['_embedded']['records']:
+            if not trades["_embedded"]["records"]:
                 return 0
 
             total_price = 0
             trade_count = 0
 
             # Calculate average price from trades
-            for trade in trades['_embedded']['records']:
+            for trade in trades["_embedded"]["records"]:
                 # Check which asset is base/counter to calculate correct price
-                if trade['base_asset_code'] == asset.code:
-                    price = float(trade['price']['n']) / float(trade['price']['d'])
+                if trade["base_asset_code"] == asset.code:
+                    price = float(trade["price"]["n"]) / float(trade["price"]["d"])
                 else:
-                    price = float(trade['price']['d']) / float(trade['price']['n'])
+                    price = float(trade["price"]["d"]) / float(trade["price"]["n"])
 
                 total_price += price
                 trade_count += 1

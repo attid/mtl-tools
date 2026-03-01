@@ -22,7 +22,7 @@ class DatabaseService:
             repo.save_bot_value(chat_id, chat_key, chat_value)
             session.commit()
 
-    async def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum], default_value: Any = '') -> Any:
+    async def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum], default_value: Any = "") -> Any:
         return await asyncio.to_thread(self._load_bot_value_sync, chat_id, chat_key, default_value)
 
     def _load_bot_value_sync(self, chat_id, chat_key, default_value):
@@ -55,7 +55,9 @@ class DatabaseService:
             repo.update_dict_value(chat_id, chat_key, dict_key, dict_value)
             session.commit()
 
-    async def get_dict_value(self, chat_id: int, chat_key: Union[int, Enum], dict_key: str, default_value: Any = None) -> Any:
+    async def get_dict_value(
+        self, chat_id: int, chat_key: Union[int, Enum], dict_key: str, default_value: Any = None
+    ) -> Any:
         return await asyncio.to_thread(self._get_dict_value_sync, chat_id, chat_key, dict_key, default_value)
 
     def _get_dict_value_sync(self, chat_id, chat_key, dict_key, default_value):
@@ -168,7 +170,7 @@ class DatabaseService:
                     title=cast(Optional[str], chat.title),
                     created_at=cast(Any, chat.created_at),
                     last_updated=cast(Any, chat.last_updated),
-                    admins=cast(List[int], admins_raw or [])
+                    admins=cast(List[int], admins_raw or []),
                 )
             return None
 

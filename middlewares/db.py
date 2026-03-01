@@ -10,10 +10,10 @@ class DbSessionMiddleware(BaseMiddleware):
         self.session_pool = session_pool
 
     async def __call__(
-            self,
-            handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-            event: TelegramObject,
-            data: Dict[str, Any],
+        self,
+        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: Dict[str, Any],
     ) -> Any:
         with self.session_pool() as session:
             data["session"] = session

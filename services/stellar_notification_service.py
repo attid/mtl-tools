@@ -205,9 +205,7 @@ class StellarNotificationService:
             if message:
                 logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
                 await self._send_to_telegram(
-                    chat_id=destination["chat_id"],
-                    topic_id=destination.get("topic_id"),
-                    message=message
+                    chat_id=destination["chat_id"], topic_id=destination.get("topic_id"), message=message
                 )
 
     def _make_dedup_key(
@@ -292,11 +290,11 @@ class StellarNotificationService:
             if not tr_details:
                 return
 
-            link = f'https://viewer.eurmtl.me/transaction/{tx_hash}'
+            link = f"https://viewer.eurmtl.me/transaction/{tx_hash}"
             tr_details.insert(0, f'(<a href="{link}">expert link</a>)')
             tr_details.insert(0, "Получены новые транзакции")
 
-            msg = '\n'.join(tr_details)
+            msg = "\n".join(tr_details)
             if len(msg) > 4096:
                 msg = "Слишком много операций показаны первые . . . \n" + msg[:4000]
 
@@ -327,7 +325,7 @@ class StellarNotificationService:
         op_id = op.get("id", "")
 
         # Build operation link
-        link = f'https://viewer.eurmtl.me/operation/{op_id}'
+        link = f"https://viewer.eurmtl.me/operation/{op_id}"
 
         # Get account info
         source_account = op.get("source_account") or op.get("from") or op.get("account") or ""
@@ -339,18 +337,18 @@ class StellarNotificationService:
             asset = self._get_asset_code(op.get("asset", {}))
             msg = (
                 f'<a href="{link}">Операция</a> payment\n'
-                f'От: {shorten_address(source_account)}\n'
-                f'Кому: {shorten_address(dest_account)}\n'
-                f'Сумма: {amount} {asset}'
+                f"От: {shorten_address(source_account)}\n"
+                f"Кому: {shorten_address(dest_account)}\n"
+                f"Сумма: {amount} {asset}"
             )
 
         elif op_type == "create_account":
             amount = float2str(op.get("amount", 0))
             msg = (
                 f'<a href="{link}">Операция</a> create_account\n'
-                f'От: {shorten_address(source_account)}\n'
-                f'Новый аккаунт: {shorten_address(dest_account)}\n'
-                f'Начальный баланс: {amount} XLM'
+                f"От: {shorten_address(source_account)}\n"
+                f"Новый аккаунт: {shorten_address(dest_account)}\n"
+                f"Начальный баланс: {amount} XLM"
             )
 
         elif op_type in ("path_payment_strict_send", "path_payment_strict_receive"):
@@ -360,10 +358,10 @@ class StellarNotificationService:
             recv_asset = self._get_asset_code(op.get("asset", {}))
             msg = (
                 f'<a href="{link}">Операция</a> {op_type}\n'
-                f'От: {shorten_address(source_account)}\n'
-                f'Кому: {shorten_address(dest_account)}\n'
-                f'Отправлено: {sent_amount} {sent_asset}\n'
-                f'Получено: {recv_amount} {recv_asset}'
+                f"От: {shorten_address(source_account)}\n"
+                f"Кому: {shorten_address(dest_account)}\n"
+                f"Отправлено: {sent_amount} {sent_asset}\n"
+                f"Получено: {recv_amount} {recv_asset}"
             )
 
         elif op_type in ("manage_sell_offer", "manage_buy_offer"):
@@ -374,10 +372,10 @@ class StellarNotificationService:
             offer_id = op.get("offer_id") or op.get("created_offer_id", 0)
             msg = (
                 f'<a href="{link}">Операция</a> {op_type}\n'
-                f'Аккаунт: {shorten_address(source_account)}\n'
-                f'Продажа: {amount} {selling}\n'
-                f'Покупка: {buying} по цене {price}\n'
-                f'Offer ID: {offer_id}'
+                f"Аккаунт: {shorten_address(source_account)}\n"
+                f"Продажа: {amount} {selling}\n"
+                f"Покупка: {buying} по цене {price}\n"
+                f"Offer ID: {offer_id}"
             )
 
         elif op_type == "change_trust":
@@ -385,9 +383,9 @@ class StellarNotificationService:
             limit = op.get("limit", "")
             msg = (
                 f'<a href="{link}">Операция</a> change_trust\n'
-                f'Аккаунт: {shorten_address(source_account)}\n'
-                f'Токен: {asset}\n'
-                f'Лимит: {limit}'
+                f"Аккаунт: {shorten_address(source_account)}\n"
+                f"Токен: {asset}\n"
+                f"Лимит: {limit}"
             )
 
         elif op_type == "set_trustline_flags":
@@ -395,17 +393,14 @@ class StellarNotificationService:
             asset = self._get_asset_code(op.get("asset", {}))
             msg = (
                 f'<a href="{link}">Операция</a> set_trustline_flags\n'
-                f'Issuer: {shorten_address(source_account)}\n'
-                f'Trustor: {shorten_address(trustor)}\n'
-                f'Токен: {asset}'
+                f"Issuer: {shorten_address(source_account)}\n"
+                f"Trustor: {shorten_address(trustor)}\n"
+                f"Токен: {asset}"
             )
 
         else:
             # Generic format for other operation types
-            msg = (
-                f'<a href="{link}">Операция</a> {op_type}\n'
-                f'Аккаунт: {shorten_address(source_account)}'
-            )
+            msg = f'<a href="{link}">Операция</a> {op_type}\nАккаунт: {shorten_address(source_account)}'
 
         # Add memo if present
         memo_data = tx.get("memo", {})
@@ -422,7 +417,7 @@ class StellarNotificationService:
                         memo_text = "(binary data)"
                 else:
                     memo_text = str(memo_value)
-                msg += f'\nMemo: {memo_text}'
+                msg += f"\nMemo: {memo_text}"
 
         return msg
 
@@ -461,6 +456,7 @@ class StellarNotificationService:
         async with self._nonce_lock:
             if self._nonce == 0:
                 import time
+
                 self._nonce = int(time.time() * 1000)
             self._nonce += 1
             return self._nonce
@@ -718,7 +714,9 @@ class StellarNotificationService:
                     if existing_op_types != [1]:
                         # Recreate subscription with payment-only filter
                         old_sub_id = current_sub_map[resource_key]
-                        logger.info(f"Recreating asset subscription {asset_code}: operation_types {existing_op_types} -> [1]")
+                        logger.info(
+                            f"Recreating asset subscription {asset_code}: operation_types {existing_op_types} -> [1]"
+                        )
                         await self.unsubscribe(old_sub_id)
                         await asyncio.sleep(0.1)
                         sub_id = await self.subscribe_token(asset_code, asset_issuer)
@@ -790,9 +788,7 @@ class StellarNotificationService:
                         }
                     await asyncio.sleep(0.1)  # Rate limiting
 
-            logger.info(
-                f"Subscription sync completed: {len(self.subscriptions_map)} active subscriptions"
-            )
+            logger.info(f"Subscription sync completed: {len(self.subscriptions_map)} active subscriptions")
 
         except Exception as e:
             logger.exception(f"Subscription sync failed: {e}")

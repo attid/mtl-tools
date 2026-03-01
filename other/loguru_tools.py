@@ -3,7 +3,7 @@ from typing import TypeVar, Callable
 from functools import wraps
 from loguru import logger
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def safe_catch(func: Callable[..., T]) -> Callable[..., T]:

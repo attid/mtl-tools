@@ -1,5 +1,6 @@
 # tests/shared/domain/test_domain_models.py
 """Tests for Payment, Dividend, and BotConfig domain models."""
+
 import pytest
 from decimal import Decimal
 
@@ -15,12 +16,7 @@ class TestPayment:
         assert payment.is_pending is True
 
     def test_payment_is_completed(self):
-        payment = Payment(
-            id=1,
-            user_key="GADDR",
-            amount=Decimal("100"),
-            status=PaymentStatus.CONFIRMED
-        )
+        payment = Payment(id=1, user_key="GADDR", amount=Decimal("100"), status=PaymentStatus.CONFIRMED)
         assert payment.is_completed is True
         assert payment.is_pending is False
 
@@ -47,11 +43,7 @@ class TestPayment:
 
 class TestDividend:
     def test_dividend_creation(self):
-        div = Dividend(
-            address="GADDR",
-            amount=Decimal("50.5"),
-            asset_code="EURMTL"
-        )
+        div = Dividend(address="GADDR", amount=Decimal("50.5"), asset_code="EURMTL")
         assert div.address == "GADDR"
         assert div.amount == Decimal("50.5")
         assert div.share_percent == Decimal("0")
@@ -79,11 +71,13 @@ class TestDividendList:
         assert div_list.is_empty is False
 
     def test_dividend_list_filter_by_min_amount(self):
-        div_list = DividendList(dividends=[
-            Dividend("GADDR1", Decimal("100"), "EURMTL"),
-            Dividend("GADDR2", Decimal("50"), "EURMTL"),
-            Dividend("GADDR3", Decimal("10"), "EURMTL"),
-        ])
+        div_list = DividendList(
+            dividends=[
+                Dividend("GADDR1", Decimal("100"), "EURMTL"),
+                Dividend("GADDR2", Decimal("50"), "EURMTL"),
+                Dividend("GADDR3", Decimal("10"), "EURMTL"),
+            ]
+        )
 
         filtered = div_list.filter_by_min_amount(Decimal("50"))
 
@@ -91,10 +85,12 @@ class TestDividendList:
         assert div_list.holder_count == 3  # original unchanged
 
     def test_dividend_list_get_dividend_for(self):
-        div_list = DividendList(dividends=[
-            Dividend("GADDR1", Decimal("100"), "EURMTL"),
-            Dividend("GADDR2", Decimal("50"), "EURMTL"),
-        ])
+        div_list = DividendList(
+            dividends=[
+                Dividend("GADDR1", Decimal("100"), "EURMTL"),
+                Dividend("GADDR2", Decimal("50"), "EURMTL"),
+            ]
+        )
 
         found = div_list.get_dividend_for("GADDR1")
         not_found = div_list.get_dividend_for("GADDR3")
@@ -104,10 +100,12 @@ class TestDividendList:
         assert not_found is None
 
     def test_dividend_list_remove(self):
-        div_list = DividendList(dividends=[
-            Dividend("GADDR1", Decimal("100"), "EURMTL"),
-            Dividend("GADDR2", Decimal("50"), "EURMTL"),
-        ])
+        div_list = DividendList(
+            dividends=[
+                Dividend("GADDR1", Decimal("100"), "EURMTL"),
+                Dividend("GADDR2", Decimal("50"), "EURMTL"),
+            ]
+        )
 
         removed = div_list.remove_dividend("GADDR1")
         not_removed = div_list.remove_dividend("GADDR3")
@@ -142,12 +140,15 @@ class TestBotConfig:
         assert config.has("captcha") is False
 
     def test_config_typed_accessors(self):
-        config = BotConfig(chat_id=100, settings={
-            "captcha": True,
-            "moderate": False,
-            "welcome_message": "Hello!",
-            "entry_channel": -1001234567890,
-        })
+        config = BotConfig(
+            chat_id=100,
+            settings={
+                "captcha": True,
+                "moderate": False,
+                "welcome_message": "Hello!",
+                "entry_channel": -1001234567890,
+            },
+        )
 
         assert config.captcha_enabled is True
         assert config.moderate_enabled is False
@@ -156,10 +157,13 @@ class TestBotConfig:
         assert config.no_first_link is False  # default
 
     def test_config_keys(self):
-        config = BotConfig(chat_id=100, settings={
-            "captcha": True,
-            "moderate": True,
-        })
+        config = BotConfig(
+            chat_id=100,
+            settings={
+                "captcha": True,
+                "moderate": True,
+            },
+        )
 
         keys = config.keys()
         assert "captcha" in keys

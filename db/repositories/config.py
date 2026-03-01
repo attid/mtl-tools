@@ -19,17 +19,13 @@ class ConfigRepository(BaseRepository):
         chat_key_name = chat_key.name if isinstance(chat_key, Enum) else None
 
         if chat_value is None:
-            stmt = delete(BotConfig).where(
-                and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value)
-            )
+            stmt = delete(BotConfig).where(and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value))
             self.session.execute(stmt)
         else:
             prepared_value = self._prepare_chat_value(chat_value)
-            
+
             existing_record = self.session.execute(
-                select(BotConfig).where(
-                    and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value)
-                )
+                select(BotConfig).where(and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value))
             ).scalar_one_or_none()
 
             if existing_record:
@@ -37,25 +33,20 @@ class ConfigRepository(BaseRepository):
                 existing_record.chat_value = prepared_value
             else:
                 new_record = BotConfig(
-                    chat_id=chat_id,
-                    chat_key=chat_key_value,
-                    chat_key_name=chat_key_name,
-                    chat_value=prepared_value
+                    chat_id=chat_id, chat_key=chat_key_value, chat_key_name=chat_key_name, chat_value=prepared_value
                 )
                 self.session.add(new_record)
 
-    def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = '') -> Any:
+    def load_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = "") -> Any:
         if isinstance(chat_key, int):
             chat_key_value = chat_key
         elif isinstance(chat_key, Enum):
             chat_key_value = chat_key.value
         else:
             chat_key_value = chat_key
-        
+
         record = self.session.execute(
-            select(BotConfig).where(
-                and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value)
-            )
+            select(BotConfig).where(and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value))
         ).scalar_one_or_none()
 
         if record and record.chat_value is not None:
@@ -63,7 +54,7 @@ class ConfigRepository(BaseRepository):
             val = record.chat_value
             if isinstance(val, dict) and "value" in val and len(val) == 1:
                 return val["value"]
-            
+
             if isinstance(val, (dict, list)):
                 try:
                     return json.dumps(val)
@@ -82,23 +73,23 @@ class ConfigRepository(BaseRepository):
                     except json.JSONDecodeError:
                         pass
             return val
-            
+
         return default_value
 
     def get_chat_ids_by_key(self, chat_key: Union[int, Enum, str]) -> List[int]:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
-        
-        result = self.session.execute(
-            select(BotConfig.chat_id).where(BotConfig.chat_key == chat_key_value)
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
         )
+
+        result = self.session.execute(select(BotConfig.chat_id).where(BotConfig.chat_key == chat_key_value))
         return [row[0] for row in result.fetchall()]
 
     def get_chat_dict_by_key(self, chat_key: Union[int, Enum, str], return_json: bool = False) -> Dict[int, Any]:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
-        
-        records = self.session.execute(
-            select(BotConfig).where(BotConfig.chat_key == chat_key_value)
-        ).scalars().all()
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        )
+
+        records = self.session.execute(select(BotConfig).where(BotConfig.chat_key == chat_key_value)).scalars().all()
 
         result_dict = {}
         for record in records:
@@ -107,21 +98,25 @@ class ConfigRepository(BaseRepository):
                     try:
                         result_dict[record.chat_id] = json.loads(record.chat_value)
                     except json.JSONDecodeError:
-                         result_dict[record.chat_id] = record.chat_value
+                        result_dict[record.chat_id] = record.chat_value
                 else:
-                     if isinstance(record.chat_value, dict) and "value" in record.chat_value and len(record.chat_value) == 1:
-                         result_dict[record.chat_id] = record.chat_value["value"]
-                     else:
-                         result_dict[record.chat_id] = record.chat_value
+                    if (
+                        isinstance(record.chat_value, dict)
+                        and "value" in record.chat_value
+                        and len(record.chat_value) == 1
+                    ):
+                        result_dict[record.chat_id] = record.chat_value["value"]
+                    else:
+                        result_dict[record.chat_id] = record.chat_value
         return result_dict
 
     def update_dict_value(self, chat_id: int, chat_key: Union[int, Enum, str], dict_key: str, dict_value: Any) -> None:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
-        
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        )
+
         record = self.session.execute(
-            select(BotConfig).where(
-                and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value)
-            )
+            select(BotConfig).where(and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value))
         ).scalar_one_or_none()
 
         if record:
@@ -133,59 +128,55 @@ class ConfigRepository(BaseRepository):
                 except json.JSONDecodeError:
                     record.chat_value = {"value": record.chat_value}
             elif isinstance(record.chat_value, dict) and "value" in record.chat_value and len(record.chat_value) == 1:
-                 # If it's a simple dict wrapper, reset to empty dict to start filling keys
-                 # This logic mirrors mongo.py but it's a bit aggressive if we want to keep "value"
-                 # but mongo.py did: record.chat_value = {}
-                 record.chat_value = {}
+                # If it's a simple dict wrapper, reset to empty dict to start filling keys
+                # This logic mirrors mongo.py but it's a bit aggressive if we want to keep "value"
+                # but mongo.py did: record.chat_value = {}
+                record.chat_value = {}
 
             # Ensure it's a dict before assignment (JSONB field in model comes as dict/list/str/int/bool in python)
             if not isinstance(record.chat_value, dict):
-                 record.chat_value = {"original_value": record.chat_value}
+                record.chat_value = {"original_value": record.chat_value}
 
             # We need to re-assign or mutate. For JSONB mutation tracking in SA, it's safer to re-assign or use flag_modified
-            # But usually assigning to a key works if it's a mutable dict in session identity map. 
+            # But usually assigning to a key works if it's a mutable dict in session identity map.
             # However, for JSONB updates to persist, sometimes a copy is needed or flag_modified.
             # Let's clone it to be safe.
             new_val = dict(record.chat_value)
             new_val[dict_key] = dict_value
             record.chat_value = new_val
         else:
-            new_record = BotConfig(
-                chat_id=chat_id,
-                chat_key=chat_key_value,
-                chat_value={dict_key: dict_value}
-            )
+            new_record = BotConfig(chat_id=chat_id, chat_key=chat_key_value, chat_value={dict_key: dict_value})
             self.session.add(new_record)
 
-    def get_dict_value(self, chat_id: int, chat_key: Union[int, Enum, str], dict_key: str, default_value: Any = None) -> Any:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+    def get_dict_value(
+        self, chat_id: int, chat_key: Union[int, Enum, str], dict_key: str, default_value: Any = None
+    ) -> Any:
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        )
 
         record = self.session.execute(
-            select(BotConfig).where(
-                and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value)
-            )
+            select(BotConfig).where(and_(BotConfig.chat_id == chat_id, BotConfig.chat_key == chat_key_value))
         ).scalar_one_or_none()
 
         if record and record.chat_value is not None:
-             chat_data = record.chat_value
-             if isinstance(chat_data, str):
-                 try:
-                     chat_data = json.loads(chat_data)
-                 except json.JSONDecodeError:
-                     chat_data = {"value": chat_data}
-             
-             if isinstance(chat_data, dict):
-                 # mongo.py logic: if one key "value" and we ask for something else, return default
-                 if "value" in chat_data and len(chat_data) == 1 and dict_key != "value":
-                     return default_value
-                 return chat_data.get(dict_key, default_value)
-             
+            chat_data = record.chat_value
+            if isinstance(chat_data, str):
+                try:
+                    chat_data = json.loads(chat_data)
+                except json.JSONDecodeError:
+                    chat_data = {"value": chat_data}
+
+            if isinstance(chat_data, dict):
+                # mongo.py logic: if one key "value" and we ask for something else, return default
+                if "value" in chat_data and len(chat_data) == 1 and dict_key != "value":
+                    return default_value
+                return chat_data.get(dict_key, default_value)
+
         return default_value
 
     def save_kv_value(self, kv_key: str, kv_value: Any) -> None:
-        record = self.session.execute(
-            select(KVStore).where(KVStore.kv_key == kv_key)
-        ).scalar_one_or_none()
+        record = self.session.execute(select(KVStore).where(KVStore.kv_key == kv_key)).scalar_one_or_none()
 
         if record:
             record.kv_value = kv_value
@@ -194,18 +185,18 @@ class ConfigRepository(BaseRepository):
             self.session.add(new_record)
 
     def load_kv_value(self, kv_key: str, default_value: Any = None) -> Any:
-        record = self.session.execute(
-            select(KVStore).where(KVStore.kv_key == kv_key)
-        ).scalar_one_or_none()
+        record = self.session.execute(select(KVStore).where(KVStore.kv_key == kv_key)).scalar_one_or_none()
         return record.kv_value if record else default_value
 
     # Legacy BotTable support
     def save_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], chat_value: Any) -> None:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        )
         record = self.session.execute(
             select(BotTable).where(and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key_value))
         ).scalar_one_or_none()
-        
+
         if chat_value is None:
             if record:
                 self.session.delete(record)
@@ -216,12 +207,12 @@ class ConfigRepository(BaseRepository):
             else:
                 record.chat_value = str(chat_value)
 
-    def load_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = '') -> Any:
-        chat_key_value = chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+    def load_legacy_bot_value(self, chat_id: int, chat_key: Union[int, Enum, str], default_value: Any = "") -> Any:
+        chat_key_value = (
+            chat_key if isinstance(chat_key, int) else (chat_key.value if isinstance(chat_key, Enum) else chat_key)
+        )
         record = self.session.execute(
-            select(BotTable.chat_value).where(
-                and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key_value)
-            )
+            select(BotTable.chat_value).where(and_(BotTable.chat_id == chat_id, BotTable.chat_key == chat_key_value))
         ).scalar_one_or_none()
         return record if record is not None else default_value
 
@@ -242,8 +233,12 @@ class ConfigRepository(BaseRepository):
                                 parsed = json.loads(parsed)
                             except json.JSONDecodeError:
                                 pass
-                    
-                    if isinstance(parsed, dict) and set(parsed.keys()) == {"value"} and isinstance(parsed["value"], str):
+
+                    if (
+                        isinstance(parsed, dict)
+                        and set(parsed.keys()) == {"value"}
+                        and isinstance(parsed["value"], str)
+                    ):
                         try:
                             parsed = json.loads(parsed["value"])
                         except json.JSONDecodeError:

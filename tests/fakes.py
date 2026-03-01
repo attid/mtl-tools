@@ -96,6 +96,7 @@ class FakeSyncMethod:
 
 class FakeBotConfig:
     """Fake BotConfig model for testing."""
+
     def __init__(self, chat_id, chat_key, chat_value, chat_key_name=None):
         self.chat_id = chat_id
         self.chat_key = chat_key
@@ -105,6 +106,7 @@ class FakeBotConfig:
 
 class FakeBotUsers:
     """Fake BotUsers model for testing."""
+
     def __init__(self, user_id, user_name=None, user_type=0):
         self.user_id = user_id
         self.user_name = user_name
@@ -113,6 +115,7 @@ class FakeBotUsers:
 
 class FakeChat:
     """Fake Chat model for testing."""
+
     def __init__(self, chat_id, admins=None, metadata_=None):
         self.chat_id = chat_id
         self.admins = admins or []
@@ -123,6 +126,7 @@ class FakeChat:
 
 class FakeChatMember:
     """Fake ChatMember model for testing."""
+
     def __init__(self, chat_id, user_id, metadata_=None):
         self.chat_id = chat_id
         self.user_id = user_id
@@ -133,6 +137,7 @@ class FakeChatMember:
 
 class FakeResult:
     """Smart fake result that can return configured data."""
+
     def __init__(self, data=None):
         self._data = data
 
@@ -166,6 +171,7 @@ class FakeSession:
     Smart fake session that stores data in memory and supports
     ConfigRepository and ChatsRepository operations.
     """
+
     def __init__(self):
         self.committed = False
         self.rolled_back = False
@@ -223,19 +229,19 @@ class FakeSession:
             key = (obj.chat_id, obj.user_id)
             self._chat_members[key] = obj
         # Handle real SQLAlchemy models by duck-typing
-        elif hasattr(obj, '__tablename__'):
+        elif hasattr(obj, "__tablename__"):
             table = obj.__tablename__
-            if table == 'bot_config':
-                fake = FakeBotConfig(obj.chat_id, obj.chat_key, obj.chat_value, getattr(obj, 'chat_key_name', None))
+            if table == "bot_config":
+                fake = FakeBotConfig(obj.chat_id, obj.chat_key, obj.chat_value, getattr(obj, "chat_key_name", None))
                 self._bot_configs[(obj.chat_id, obj.chat_key)] = fake
-            elif table == 'bot_users':
+            elif table == "bot_users":
                 fake = FakeBotUsers(obj.user_id, obj.user_name, obj.user_type)
                 self._bot_users[obj.user_id] = fake
-            elif table == 'chats':
-                fake = FakeChat(obj.chat_id, getattr(obj, 'admins', []), getattr(obj, 'metadata_', {}))
+            elif table == "chats":
+                fake = FakeChat(obj.chat_id, getattr(obj, "admins", []), getattr(obj, "metadata_", {}))
                 self._chats[obj.chat_id] = fake
-            elif table == 'chat_members':
-                fake = FakeChatMember(obj.chat_id, obj.user_id, getattr(obj, 'metadata_', {}))
+            elif table == "chat_members":
+                fake = FakeChatMember(obj.chat_id, obj.user_id, getattr(obj, "metadata_", {}))
                 self._chat_members[(obj.chat_id, obj.user_id)] = fake
 
     def execute(self, statement, *args, **kwargs):
@@ -244,26 +250,26 @@ class FakeSession:
         stmt_str = str(statement)
 
         # Handle DELETE statements
-        if 'DELETE' in stmt_str.upper():
+        if "DELETE" in stmt_str.upper():
             return FakeResult(None)
 
         # Extract bound parameters from SQLAlchemy statement
         params = self._extract_bound_params(statement)
 
         # Handle SELECT on BotConfig
-        if 'bot_config' in stmt_str.lower():
+        if "bot_config" in stmt_str.lower():
             return self._handle_bot_config_query(statement, stmt_str, params)
 
         # Handle SELECT on BotUsers
-        if 'bot_users' in stmt_str.lower():
+        if "bot_users" in stmt_str.lower():
             return self._handle_bot_users_query(statement, stmt_str, params)
 
         # Handle SELECT on chats
-        if 'chats' in stmt_str.lower() and 'chat_members' not in stmt_str.lower():
+        if "chats" in stmt_str.lower() and "chat_members" not in stmt_str.lower():
             return self._handle_chats_query(statement, stmt_str, params)
 
         # Handle SELECT on chat_members
-        if 'chat_members' in stmt_str.lower():
+        if "chat_members" in stmt_str.lower():
             return self._handle_chat_members_query(statement, stmt_str, params)
 
         return FakeResult(None)
@@ -273,15 +279,15 @@ class FakeSession:
         params = {}
         try:
             # Try to compile the statement and get parameters
-            if hasattr(statement, 'compile'):
+            if hasattr(statement, "compile"):
                 compiled = statement.compile()
-                if hasattr(compiled, 'params'):
+                if hasattr(compiled, "params"):
                     params = dict(compiled.params)
         except Exception:
             pass
 
         # Also try to extract from whereclause directly
-        if hasattr(statement, 'whereclause') and statement.whereclause is not None:
+        if hasattr(statement, "whereclause") and statement.whereclause is not None:
             self._extract_params_from_clause(statement.whereclause, params)
 
         return params
@@ -290,26 +296,26 @@ class FakeSession:
         """Recursively extract parameters from SQLAlchemy clause."""
         try:
             # Handle BinaryExpression (e.g., column == value)
-            if hasattr(clause, 'left') and hasattr(clause, 'right'):
+            if hasattr(clause, "left") and hasattr(clause, "right"):
                 left = clause.left
                 right = clause.right
 
                 # Get column name
                 col_name = None
-                if hasattr(left, 'key'):
+                if hasattr(left, "key"):
                     col_name = left.key
-                elif hasattr(left, 'name'):
+                elif hasattr(left, "name"):
                     col_name = left.name
 
                 # Get value
                 if col_name:
-                    if hasattr(right, 'value'):
+                    if hasattr(right, "value"):
                         params[col_name] = right.value
-                    elif hasattr(right, 'effective_value'):
+                    elif hasattr(right, "effective_value"):
                         params[col_name] = right.effective_value
 
             # Handle AND clauses
-            if hasattr(clause, 'clauses'):
+            if hasattr(clause, "clauses"):
                 for sub_clause in clause.clauses:
                     self._extract_params_from_clause(sub_clause, params)
         except Exception:
@@ -317,8 +323,8 @@ class FakeSession:
 
     def _handle_bot_config_query(self, statement, stmt_str, params):
         """Handle queries to bot_config table."""
-        chat_id = params.get('chat_id')
-        chat_key = params.get('chat_key')
+        chat_id = params.get("chat_id")
+        chat_key = params.get("chat_key")
 
         if chat_id is not None and chat_key is not None:
             # Specific lookup
@@ -334,7 +340,7 @@ class FakeSession:
 
     def _handle_bot_users_query(self, statement, stmt_str, params):
         """Handle queries to bot_users table."""
-        user_id = params.get('user_id')
+        user_id = params.get("user_id")
         if user_id is not None:
             user = self._bot_users.get(user_id)
             return FakeResult(user)
@@ -342,7 +348,7 @@ class FakeSession:
 
     def _handle_chats_query(self, statement, stmt_str, params):
         """Handle queries to chats table."""
-        chat_id = params.get('chat_id')
+        chat_id = params.get("chat_id")
         if chat_id is not None:
             chat = self._chats.get(chat_id)
             return FakeResult(chat)
@@ -350,8 +356,8 @@ class FakeSession:
 
     def _handle_chat_members_query(self, statement, stmt_str, params):
         """Handle queries to chat_members table."""
-        chat_id = params.get('chat_id')
-        user_id = params.get('user_id')
+        chat_id = params.get("chat_id")
+        user_id = params.get("user_id")
 
         if chat_id is not None and user_id is not None:
             member = self._chat_members.get((chat_id, user_id))
@@ -368,6 +374,7 @@ class FakeSession:
     def set_bot_config(self, chat_id, chat_key, chat_value):
         """Helper for tests to set config values."""
         from enum import Enum
+
         if isinstance(chat_key, Enum):
             chat_key = chat_key.value
         self._bot_configs[(chat_id, chat_key)] = FakeBotConfig(chat_id, chat_key, chat_value)
@@ -379,6 +386,7 @@ class FakeSession:
     def get_bot_config(self, chat_id, chat_key):
         """Helper for tests to verify config values."""
         from enum import Enum
+
         if isinstance(chat_key, Enum):
             chat_key = chat_key.value
         config = self._bot_configs.get((chat_id, chat_key))
@@ -508,7 +516,7 @@ class FakeConfigService:
 
     async def _add_user_to_chat(self, chat_id, member):
         # member can be a GroupMember object or just a user_id
-        user_id = getattr(member, 'user_id', member) if hasattr(member, 'user_id') else member
+        user_id = getattr(member, "user_id", member) if hasattr(member, "user_id") else member
         self._chat_lists.setdefault(chat_id, set()).add(user_id)
         return True
 
@@ -606,6 +614,7 @@ class FakeAntispamService:
 
 class FakePollServiceMethod:
     """Wrapper to track method calls with .called property and optional return_value override."""
+
     def __init__(self, impl):
         self._impl = impl
         self._calls = []
@@ -667,6 +676,7 @@ class FakePollService:
 
 class FakeGSpreadWorksheet:
     """Fake worksheet for gspread tests."""
+
     def __init__(self, data=None):
         self._data = data or []
         self._updated_ranges = []
@@ -681,6 +691,7 @@ class FakeGSpreadWorksheet:
 
 class FakeGSpreadSpreadsheet:
     """Fake spreadsheet for gspread tests."""
+
     def __init__(self, worksheets=None):
         self._worksheets = worksheets or {"List": FakeGSpreadWorksheet()}
 
@@ -690,6 +701,7 @@ class FakeGSpreadSpreadsheet:
 
 class FakeAgcClient:
     """Fake async gspread client."""
+
     def __init__(self):
         self._spreadsheets = {}
 
@@ -795,18 +807,21 @@ class FakeModerationService:
 
     async def _ban_user(self, session, chat_id, user_id, bot, revoke_messages=True):
         from shared.domain.user import SpamStatus
+
         await bot.ban_chat_member(chat_id, user_id, revoke_messages=revoke_messages)
         self._user_status[user_id] = SpamStatus.BAD
         return True
 
     async def _unban_user(self, session, chat_id, user_id, bot):
         from shared.domain.user import SpamStatus
+
         await bot.unban_chat_member(chat_id, user_id)
         self._user_status[user_id] = SpamStatus.NEW
         return True
 
     def check_user_status(self, session, user_id):
         from shared.domain.user import SpamStatus
+
         return self._user_status.get(user_id, SpamStatus.NEW)
 
     def get_user_id(self, session, username):
@@ -838,9 +853,15 @@ class FakeFeatureFlagsService:
     """Fake implementation of FeatureFlagsService for testing."""
 
     FEATURE_KEYS = [
-        "captcha", "moderate", "no_first_link", "reply_only",
-        "listen", "auto_all", "save_last_message_date",
-        "join_request_captcha", "full_data",
+        "captcha",
+        "moderate",
+        "no_first_link",
+        "reply_only",
+        "listen",
+        "auto_all",
+        "save_last_message_date",
+        "join_request_captcha",
+        "full_data",
     ]
 
     def __init__(self):
@@ -874,10 +895,7 @@ class FakeFeatureFlagsService:
         """Get all chat IDs with feature enabled."""
         if feature not in self.FEATURE_KEYS:
             return []
-        return [
-            chat_id for chat_id, features in self._features.items()
-            if features.get(feature, False)
-        ]
+        return [chat_id for chat_id, features in self._features.items() if features.get(feature, False)]
 
     def get_feature_list(self, feature):
         """Alias for get_chats_with_feature."""
@@ -1051,8 +1069,10 @@ class FakeNotificationService:
 
 class FakeLock:
     """Fake lock for testing (context manager that does nothing)."""
+
     def __enter__(self):
         return self
+
     def __exit__(self, *args):
         pass
 
@@ -1075,13 +1095,13 @@ class FakeAdminService:
     def is_skynet_admin(self, username: str) -> bool:
         if not username:
             return False
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         return normalized.lower() in [u.lower() for u in self._skynet_admins]
 
     def is_skynet_img_user(self, username: str) -> bool:
         if not username:
             return False
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         return normalized.lower() in [u.lower() for u in self._skynet_img]
 
     def set_skynet_admins(self, usernames: list[str]) -> None:
@@ -1091,12 +1111,12 @@ class FakeAdminService:
         self._skynet_img = usernames.copy()
 
     def add_skynet_admin(self, username: str) -> None:
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         if normalized not in self._skynet_admins:
             self._skynet_admins.append(normalized)
 
     def add_skynet_img_user(self, username: str) -> None:
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         if normalized not in self._skynet_img:
             self._skynet_img.append(normalized)
 
@@ -1133,14 +1153,14 @@ class FakeAdminService:
         if not username:
             return False
         key = self._topic_key(chat_id, thread_id)
-        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
         return normalized in self._topic_admins.get(key, [])
 
     def is_topic_admin_by_key(self, topic_key: str, username: str) -> bool:
         """Check if username is topic admin using pre-computed key."""
         if not username:
             return False
-        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
         return normalized in self._topic_admins.get(topic_key, [])
 
     def get_topic_admins(self, chat_id: int, thread_id: int) -> list[str]:
@@ -1152,7 +1172,7 @@ class FakeAdminService:
         self._topic_admins[key] = admin_usernames.copy()
 
     def add_topic_admin(self, chat_id: int, thread_id: int, username: str) -> None:
-        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
         key = self._topic_key(chat_id, thread_id)
         if key not in self._topic_admins:
             self._topic_admins[key] = []
@@ -1243,16 +1263,19 @@ class FakeSpamStatusService:
 
     def __init__(self):
         from shared.domain.user import SpamStatus
+
         self._cache: dict = {}  # user_id -> SpamStatus
         self._name_cache: dict = {}
         self.SpamStatus = SpamStatus
 
     def get_status(self, user_id: int):
         from shared.domain.user import SpamStatus
+
         return self._cache.get(user_id, SpamStatus.NEW)
 
     def get_user(self, user_id: int):
         from shared.domain.user import User
+
         status = self.get_status(user_id)
         return User(user_id=user_id, spam_status=status)
 
@@ -1261,26 +1284,32 @@ class FakeSpamStatusService:
 
     def is_good(self, user_id: int) -> bool:
         from shared.domain.user import SpamStatus
+
         return self.get_status(user_id) == SpamStatus.GOOD
 
     def is_bad(self, user_id: int) -> bool:
         from shared.domain.user import SpamStatus
+
         return self.get_status(user_id) == SpamStatus.BAD
 
     def is_new(self, user_id: int) -> bool:
         from shared.domain.user import SpamStatus
+
         return self.get_status(user_id) == SpamStatus.NEW
 
     def mark_good(self, user_id: int) -> None:
         from shared.domain.user import SpamStatus
+
         self.set_status(user_id, SpamStatus.GOOD)
 
     def mark_bad(self, user_id: int) -> None:
         from shared.domain.user import SpamStatus
+
         self.set_status(user_id, SpamStatus.BAD)
 
     def mark_new(self, user_id: int) -> None:
         from shared.domain.user import SpamStatus
+
         self.set_status(user_id, SpamStatus.NEW)
 
     def clear_cache(self) -> None:
@@ -1291,6 +1320,7 @@ class FakeSpamStatusService:
 
     def preload_statuses(self, statuses: dict) -> None:
         from shared.domain.user import SpamStatus
+
         for user_id, status in statuses.items():
             self._cache[user_id] = SpamStatus(status)
 
@@ -1316,6 +1346,7 @@ class FakeCommandRegistryService:
 
     def __init__(self):
         from services.command_registry_service import CommandInfo
+
         self._commands: dict = {}
         self._CommandInfo = CommandInfo
 
@@ -1346,10 +1377,7 @@ class FakeCommandRegistryService:
 
     def get_commands_by_type(self, cmd_type) -> list:
         """Get commands filtered by type."""
-        return [
-            cmd for cmd in self._commands.values()
-            if cmd.cmd_type == cmd_type and not cmd.hidden
-        ]
+        return [cmd for cmd in self._commands.values() if cmd.cmd_type == cmd_type and not cmd.hidden]
 
     def get_visible_commands(self) -> list:
         """Get all non-hidden commands."""
@@ -1402,22 +1430,14 @@ class FakeDatabaseService:
     async def upsert_chat_info(self, chat_id: int, title, username) -> None:
         """Create or update chat with title and username."""
         from db.repositories import ChatDTO
-        self._chats[chat_id] = ChatDTO(
-            chat_id=chat_id,
-            title=title,
-            username=username,
-            admins=[]
-        )
+
+        self._chats[chat_id] = ChatDTO(chat_id=chat_id, title=title, username=username, admins=[])
 
     def set_chat(self, chat_id: int, title: str, username: str = None):
         """Test helper to set up chat data."""
         from db.repositories import ChatDTO
-        self._chats[chat_id] = ChatDTO(
-            chat_id=chat_id,
-            title=title,
-            username=username,
-            admins=[]
-        )
+
+        self._chats[chat_id] = ChatDTO(chat_id=chat_id, title=title, username=username, admins=[])
 
 
 class TestAppContext:
@@ -1463,6 +1483,7 @@ class TestAppContext:
 # Protocol-compatible fake implementations for clean architecture
 # ============================================================================
 
+
 class FakeStellarSDK:
     """
     Fake implementation of IStellarSDK Protocol for testing.
@@ -1501,6 +1522,7 @@ class FakeStellarSDK:
     # Test helpers
     def set_balance(self, address: str, asset: str, amount):
         from decimal import Decimal
+
         if address not in self._balances:
             self._balances[address] = {}
         self._balances[address][asset] = Decimal(str(amount))
@@ -1548,6 +1570,7 @@ class FakeConfigRepositoryProtocol:
     def _normalize_key(self, chat_key):
         """Convert Enum to its value, like real ConfigRepository."""
         from enum import Enum
+
         if isinstance(chat_key, Enum):
             return chat_key.value
         return chat_key
@@ -1584,7 +1607,7 @@ class FakeChatsRepositoryProtocol:
 
     def get_user_id(self, username: str):
         for uid, user in self.users.items():
-            if getattr(user, 'username', None) == username:
+            if getattr(user, "username", None) == username:
                 return uid
         return None
 
@@ -1593,7 +1616,7 @@ class FakeChatsRepositoryProtocol:
 
     def save_user_type(self, user_id: int, user_type: int):
         if user_id not in self.users:
-            self.users[user_id] = type('User', (), {'user_type': user_type, 'user_id': user_id})()
+            self.users[user_id] = type("User", (), {"user_type": user_type, "user_id": user_id})()
         else:
             self.users[user_id].user_type = user_type
         return True

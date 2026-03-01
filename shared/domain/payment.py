@@ -10,6 +10,7 @@ from datetime import datetime
 
 class PaymentStatus(Enum):
     """Payment processing status."""
+
     PENDING = "pending"
     PACKED = "packed"
     SUBMITTED = "submitted"
@@ -24,6 +25,7 @@ class Payment:
 
     Immutable value object for payment data.
     """
+
     id: int
     user_key: str
     amount: Decimal

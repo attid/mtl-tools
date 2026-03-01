@@ -7,28 +7,28 @@ from other.constants import MTLChats
 from other.pyro_tools import GroupMember
 import datetime
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router():
     """Ensure router is detached after each test."""
     yield
     if admin_router.parent_router:
-         admin_router._parent_router = None
+        admin_router._parent_router = None
+
 
 def setup_is_admin(mock_server, user_id, is_admin=True):
     if is_admin:
         result_obj = {
             "status": "creator",
             "user": {"id": user_id, "is_bot": False, "username": "testuser", "first_name": "Test"},
-            "is_anonymous": False
+            "is_anonymous": False,
         }
         result = [result_obj]
     else:
         result = []
 
-    mock_server.add_response("getChatAdministrators", {
-        "ok": True,
-        "result": result
-    })
+    mock_server.add_response("getChatAdministrators", {"ok": True, "result": result})
+
 
 @pytest.mark.asyncio
 async def test_ro_command(mock_telegram, router_app_context):
@@ -42,9 +42,9 @@ async def test_ro_command(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-        text="Spam"
+        text="Spam",
     )
 
     update = types.Update(
@@ -52,11 +52,11 @@ async def test_ro_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="!ro 10m",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -67,6 +67,7 @@ async def test_ro_command(mock_telegram, router_app_context):
     assert req is not None
     assert int(req["data"]["user_id"]) == 789
 
+
 @pytest.mark.asyncio
 async def test_topic_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
@@ -76,25 +77,28 @@ async def test_topic_command(mock_telegram, router_app_context):
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock createForumTopic response
-    mock_telegram.add_response("createForumTopic", {
-        "ok": True,
-        "result": {
-            "message_thread_id": 123,
-            "name": "NewTopic",
-            "icon_color": 7322096,
-            "icon_custom_emoji_id": "🔵"
-        }
-    })
+    mock_telegram.add_response(
+        "createForumTopic",
+        {
+            "ok": True,
+            "result": {
+                "message_thread_id": 123,
+                "name": "NewTopic",
+                "icon_color": 7322096,
+                "icon_custom_emoji_id": "🔵",
+            },
+        },
+    )
 
     update = types.Update(
         update_id=2,
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Forum", is_forum=True),
+            chat=types.Chat(id=123, type="supergroup", title="Forum", is_forum=True),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/topic 🔵 NewTopic"
-        )
+            text="/topic 🔵 NewTopic",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -105,6 +109,7 @@ async def test_topic_command(mock_telegram, router_app_context):
     assert req is not None
     assert req["data"]["name"] == "NewTopic"
     assert req["data"]["icon_custom_emoji_id"] == "🔵"
+
 
 @pytest.mark.asyncio
 async def test_mute_command(mock_telegram, router_app_context):
@@ -118,17 +123,17 @@ async def test_mute_command(mock_telegram, router_app_context):
 
     # Set up topic admins using the admin_service (DI pattern)
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     # Fake mongo config is provided in conftest
 
     reply_msg = types.Message(
         message_id=10,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
         message_thread_id=thread_id,
         from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-        text="Bad msg"
+        text="Bad msg",
     )
 
     update = types.Update(
@@ -136,12 +141,12 @@ async def test_mute_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/mute 1h",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -149,6 +154,7 @@ async def test_mute_command(mock_telegram, router_app_context):
     # Verify mute logic: Check admin_service.topic_mute updated (DI pattern)
     mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
     assert 789 in mutes
+
 
 @pytest.mark.asyncio
 async def test_all_command(mock_telegram, router_app_context):
@@ -159,7 +165,7 @@ async def test_all_command(mock_telegram, router_app_context):
     # Mock Group Service
     router_app_context.group_service.get_members.return_value = [
         GroupMember(user_id=1, username="user1", full_name="User One", is_admin=False),
-        GroupMember(user_id=2, username=None, full_name="User Two", is_admin=False)
+        GroupMember(user_id=2, username=None, full_name="User Two", is_admin=False),
     ]
 
     update = types.Update(
@@ -167,10 +173,10 @@ async def test_all_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=30,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/all"
-        )
+            text="/all",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -179,6 +185,7 @@ async def test_all_command(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "@user1" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_check_entry_channel_not_admin(mock_telegram, router_app_context):
@@ -193,10 +200,10 @@ async def test_check_entry_channel_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=31,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/check_entry_channel"
-        )
+            text="/check_entry_channel",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -205,6 +212,7 @@ async def test_check_entry_channel_not_admin(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not admin" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_delete_dead_members_invalid_format(mock_telegram, router_app_context):
@@ -219,10 +227,10 @@ async def test_delete_dead_members_invalid_format(mock_telegram, router_app_cont
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members"
-        )
+            text="/delete_dead_members",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -232,6 +240,7 @@ async def test_delete_dead_members_invalid_format(mock_telegram, router_app_cont
     assert req is not None
     assert "Please provide a chat ID" in req["data"]["text"]
 
+
 @pytest.mark.asyncio
 async def test_show_mutes_no_admins(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
@@ -239,18 +248,18 @@ async def test_show_mutes_no_admins(mock_telegram, router_app_context):
     dp.include_router(admin_router)
 
     # Enable moderation via feature flags
-    router_app_context.feature_flags.enable(123, 'moderate')
+    router_app_context.feature_flags.enable(123, "moderate")
 
     update = types.Update(
         update_id=8,
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', is_forum=True),
+            chat=types.Chat(id=123, type="supergroup", is_forum=True),
             message_thread_id=1,
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -259,6 +268,7 @@ async def test_show_mutes_no_admins(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Local admins not set yet" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_message_reaction_no_action(router_app_context):
@@ -273,7 +283,7 @@ async def test_message_reaction_no_action(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
-            self.chat = types.Chat(id=123, type='supergroup', title="Group")
+            self.chat = types.Chat(id=123, type="supergroup", title="Group")
             self.message_thread_id = None
             self.reply_to_message = None
             self._replies = []
@@ -286,20 +296,21 @@ async def test_message_reaction_no_action(router_app_context):
     await message_reaction_handler(reaction_update, bot, session, app_context)
     # Assert nothing bad happened
 
+
 @pytest.mark.asyncio
 async def test_on_my_chat_member_added(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     user = types.User(id=999, is_bot=False, first_name="User", username="user")
     update_event = types.ChatMemberUpdated(
         chat=chat,
         from_user=user,
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberLeft(user=user),
-        new_chat_member=types.ChatMemberMember(user=user)
+        new_chat_member=types.ChatMemberMember(user=user),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -309,6 +320,7 @@ async def test_on_my_chat_member_added(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Thanks for adding me" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_on_migrate(mock_telegram, router_app_context):
@@ -321,11 +333,11 @@ async def test_on_migrate(mock_telegram, router_app_context):
         message=types.Message(
             message_id=35,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='group', title="Group"),
+            chat=types.Chat(id=123, type="group", title="Group"),
             migrate_to_chat_id=-100123,
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="migrate"
-        )
+            text="migrate",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -334,6 +346,7 @@ async def test_on_migrate(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "migrated" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_send_me_not_admin(mock_telegram, router_app_context):
@@ -348,10 +361,10 @@ async def test_send_me_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/send_me"
-        )
+            text="/send_me",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -360,6 +373,7 @@ async def test_send_me_not_admin(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not admin" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_alert_me_add(mock_telegram, router_app_context):
@@ -374,10 +388,10 @@ async def test_alert_me_add(mock_telegram, router_app_context):
         message=types.Message(
             message_id=37,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/alert_me"
-        )
+            text="/alert_me",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -388,6 +402,7 @@ async def test_alert_me_add(mock_telegram, router_app_context):
 
     # Verify sleep_and_delete called
     assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
+
 
 @pytest.mark.asyncio
 async def test_calc_requires_reply(mock_telegram, router_app_context):
@@ -400,10 +415,10 @@ async def test_calc_requires_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=38,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/calc"
-        )
+            text="/calc",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -412,6 +427,7 @@ async def test_calc_requires_reply(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "must be used in reply" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_web_pin_in_group(mock_telegram, router_app_context):
@@ -424,10 +440,10 @@ async def test_web_pin_in_group(mock_telegram, router_app_context):
         message=types.Message(
             message_id=39,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/web_pin hello"
-        )
+            text="/web_pin hello",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -435,6 +451,7 @@ async def test_web_pin_in_group(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "editMessageReplyMarkup"), None)
     assert req is not None
+
 
 @pytest.mark.asyncio
 async def test_show_all_topic_admin_not_admin(mock_telegram, router_app_context):
@@ -449,10 +466,10 @@ async def test_show_all_topic_admin_not_admin(mock_telegram, router_app_context)
         message=types.Message(
             message_id=40,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_all_topic_admin"
-        )
+            text="/show_all_topic_admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -461,6 +478,7 @@ async def test_show_all_topic_admin_not_admin(mock_telegram, router_app_context)
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not an admin" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_get_users_csv_usage(mock_telegram, router_app_context):
@@ -473,10 +491,10 @@ async def test_get_users_csv_usage(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv"
-        )
+            text="/get_users_csv",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -491,6 +509,7 @@ async def test_get_users_csv_usage(mock_telegram, router_app_context):
 # Additional tests for improved coverage
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_ro_command_not_admin(mock_telegram, router_app_context):
     """Test !ro command when user is not admin."""
@@ -503,9 +522,9 @@ async def test_ro_command_not_admin(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-        text="Spam"
+        text="Spam",
     )
 
     update = types.Update(
@@ -513,11 +532,11 @@ async def test_ro_command_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
             text="!ro 10m",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -542,10 +561,10 @@ async def test_ro_command_no_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="!ro 10m"
-        )
+            text="!ro 10m",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -568,9 +587,9 @@ async def test_ro_command_user_without_username(mock_telegram, router_app_contex
     reply_msg = types.Message(
         message_id=5,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="BadUser"),  # No username
-        text="Spam"
+        text="Spam",
     )
 
     update = types.Update(
@@ -578,11 +597,11 @@ async def test_ro_command_user_without_username(mock_telegram, router_app_contex
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="!ro 10m",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -607,10 +626,10 @@ async def test_topic_command_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Forum", is_forum=True),
+            chat=types.Chat(id=123, type="supergroup", title="Forum", is_forum=True),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/topic test NewTopic"
-        )
+            text="/topic test NewTopic",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -635,10 +654,10 @@ async def test_topic_command_not_forum(mock_telegram, router_app_context):
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group", is_forum=False),
+            chat=types.Chat(id=123, type="supergroup", title="Group", is_forum=False),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/topic test NewTopic"
-        )
+            text="/topic test NewTopic",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -663,10 +682,10 @@ async def test_topic_command_incorrect_format(mock_telegram, router_app_context)
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Forum", is_forum=True),
+            chat=types.Chat(id=123, type="supergroup", title="Forum", is_forum=True),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/topic onlyemoji"  # Missing topic name
-        )
+            text="/topic onlyemoji",  # Missing topic name
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -686,7 +705,7 @@ async def test_all_command_with_bot_user(mock_telegram, router_app_context):
 
     router_app_context.group_service.get_members.return_value = [
         GroupMember(user_id=1, username="user1", full_name="User One", is_admin=False, is_bot=False),
-        GroupMember(user_id=2, username="bot_user", full_name="Bot User", is_admin=False, is_bot=True)
+        GroupMember(user_id=2, username="bot_user", full_name="Bot User", is_admin=False, is_bot=True),
     ]
 
     update = types.Update(
@@ -694,10 +713,10 @@ async def test_all_command_with_bot_user(mock_telegram, router_app_context):
         message=types.Message(
             message_id=30,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/all"
-        )
+            text="/all",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -723,10 +742,10 @@ async def test_delete_dead_members_not_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/delete_dead_members -1001234567890"
-        )
+            text="/delete_dead_members -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -751,10 +770,10 @@ async def test_delete_dead_members_invalid_chat_id_format(mock_telegram, router_
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members 12345"  # Invalid format
-        )
+            text="/delete_dead_members 12345",  # Invalid format
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -783,10 +802,10 @@ async def test_delete_dead_members_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members -1001234567890"
-        )
+            text="/delete_dead_members -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -809,15 +828,15 @@ async def test_mute_command_not_local_admin(mock_telegram, router_app_context):
 
     # Set up topic admins but NOT including the requesting user
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@other_admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     reply_msg = types.Message(
         message_id=10,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
         message_thread_id=thread_id,
         from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-        text="Bad msg"
+        text="Bad msg",
     )
 
     update = types.Update(
@@ -825,12 +844,12 @@ async def test_mute_command_not_local_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
             text="/mute 1h",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -852,18 +871,18 @@ async def test_mute_command_no_reply(mock_telegram, router_app_context):
     thread_id = 5
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     update = types.Update(
         update_id=3,
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/mute 1h"
-        )
+            text="/mute 1h",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -886,15 +905,15 @@ async def test_mute_command_channel_sender(mock_telegram, router_app_context):
     chat_thread_key = f"{chat_id}-{thread_id}"
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     reply_msg = types.Message(
         message_id=10,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
         message_thread_id=thread_id,
-        sender_chat=types.Chat(id=-1001111111111, type='channel', title="Channel Name"),
-        text="Channel message"
+        sender_chat=types.Chat(id=-1001111111111, type="channel", title="Channel Name"),
+        text="Channel message",
     )
 
     update = types.Update(
@@ -902,12 +921,12 @@ async def test_mute_command_channel_sender(mock_telegram, router_app_context):
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/mute 1h",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -927,18 +946,18 @@ async def test_show_mutes_not_local_admin(mock_telegram, router_app_context):
     thread_id = 1
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@other_admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     update = types.Update(
         update_id=8,
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -961,7 +980,7 @@ async def test_show_mutes_with_active_mutes(mock_telegram, router_app_context):
     chat_thread_key = f"{chat_id}-{thread_id}"
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     # Set an active mute (1 hour from now)
     future_time = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
@@ -972,11 +991,11 @@ async def test_show_mutes_with_active_mutes(mock_telegram, router_app_context):
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -998,18 +1017,18 @@ async def test_show_mutes_no_mutes(mock_telegram, router_app_context):
     thread_id = 1
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     update = types.Update(
         update_id=8,
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1032,7 +1051,7 @@ async def test_show_mutes_expired_mutes(mock_telegram, router_app_context):
     chat_thread_key = f"{chat_id}-{thread_id}"
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     # Set an expired mute (1 hour ago)
     past_time = (datetime.datetime.now() - datetime.timedelta(hours=1)).isoformat()
@@ -1043,11 +1062,11 @@ async def test_show_mutes_expired_mutes(mock_telegram, router_app_context):
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1065,14 +1084,14 @@ async def test_on_my_chat_member_left(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
     update_event = types.ChatMemberUpdated(
         chat=chat,
         from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberMember(user=bot_user),
-        new_chat_member=types.ChatMemberLeft(user=bot_user)
+        new_chat_member=types.ChatMemberLeft(user=bot_user),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1087,7 +1106,7 @@ async def test_on_my_chat_member_made_admin(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
     update_event = types.ChatMemberUpdated(
         chat=chat,
@@ -1107,8 +1126,8 @@ async def test_on_my_chat_member_made_admin(mock_telegram, router_app_context):
             can_invite_users=True,
             can_post_stories=False,
             can_edit_stories=False,
-            can_delete_stories=False
-        )
+            can_delete_stories=False,
+        ),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1127,7 +1146,7 @@ async def test_on_my_chat_member_restricted(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
     update_event = types.ChatMemberUpdated(
         chat=chat,
@@ -1151,8 +1170,8 @@ async def test_on_my_chat_member_restricted(mock_telegram, router_app_context):
             can_send_other_messages=False,
             can_add_web_page_previews=False,
             can_manage_topics=False,
-            until_date=datetime.datetime.now()
-        )
+            until_date=datetime.datetime.now(),
+        ),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1167,14 +1186,14 @@ async def test_on_my_chat_member_kicked(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
     update_event = types.ChatMemberUpdated(
         chat=chat,
         from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberMember(user=bot_user),
-        new_chat_member=types.ChatMemberBanned(user=bot_user, until_date=datetime.datetime.now())
+        new_chat_member=types.ChatMemberBanned(user=bot_user, until_date=datetime.datetime.now()),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1196,10 +1215,10 @@ async def test_send_me_no_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/send_me"
-        )
+            text="/send_me",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1222,9 +1241,9 @@ async def test_send_me_with_text_reply(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=35,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
-        text="Important message"
+        text="Important message",
     )
 
     update = types.Update(
@@ -1232,11 +1251,11 @@ async def test_send_me_with_text_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/send_me",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1260,12 +1279,10 @@ async def test_send_me_with_photo_reply(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=35,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
-        photo=[
-            types.PhotoSize(file_id="photo123", file_unique_id="photo_unique", width=100, height=100)
-        ],
-        caption="Photo caption"
+        photo=[types.PhotoSize(file_id="photo123", file_unique_id="photo_unique", width=100, height=100)],
+        caption="Photo caption",
     )
 
     update = types.Update(
@@ -1273,11 +1290,11 @@ async def test_send_me_with_photo_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/send_me",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1298,30 +1315,33 @@ async def test_send_me_with_video_reply(mock_telegram, router_app_context):
     setup_is_admin(mock_telegram, 999, True)
 
     # Add sendVideo response to mock server
-    mock_telegram.add_response("sendVideo", {
-        "ok": True,
-        "result": {
-            "message_id": 100,
-            "date": 1234567890,
-            "chat": {"id": 999, "type": "private"},
-            "video": {
-                "file_id": "video123",
-                "file_unique_id": "video_unique",
-                "width": 640,
-                "height": 480,
-                "duration": 30
+    mock_telegram.add_response(
+        "sendVideo",
+        {
+            "ok": True,
+            "result": {
+                "message_id": 100,
+                "date": 1234567890,
+                "chat": {"id": 999, "type": "private"},
+                "video": {
+                    "file_id": "video123",
+                    "file_unique_id": "video_unique",
+                    "width": 640,
+                    "height": 480,
+                    "duration": 30,
+                },
+                "caption": "Video caption",
             },
-            "caption": "Video caption"
-        }
-    })
+        },
+    )
 
     reply_msg = types.Message(
         message_id=35,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
         video=types.Video(file_id="video123", file_unique_id="video_unique", width=640, height=480, duration=30),
-        caption="Video caption"
+        caption="Video caption",
     )
 
     update = types.Update(
@@ -1329,11 +1349,11 @@ async def test_send_me_with_video_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/send_me",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1356,9 +1376,9 @@ async def test_send_me_short_command(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=35,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
-        text="Important message"
+        text="Important message",
     )
 
     update = types.Update(
@@ -1366,11 +1386,11 @@ async def test_send_me_short_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/s",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1396,10 +1416,10 @@ async def test_alert_me_remove(mock_telegram, router_app_context):
         message=types.Message(
             message_id=37,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/alert_me"
-        )
+            text="/alert_me",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1419,9 +1439,9 @@ async def test_calc_with_reply(mock_telegram, router_app_context):
     reply_msg = types.Message(
         message_id=30,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
-        text="Original message"
+        text="Original message",
     )
 
     update = types.Update(
@@ -1429,11 +1449,11 @@ async def test_calc_with_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=50,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
             text="/calc",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1456,10 +1476,10 @@ async def test_web_pin_no_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=39,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/web_pin"
-        )
+            text="/web_pin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1488,10 +1508,10 @@ async def test_show_all_topic_admin_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=40,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_all_topic_admin"
-        )
+            text="/show_all_topic_admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1516,10 +1536,10 @@ async def test_show_all_topic_admin_no_admins(mock_telegram, router_app_context)
         message=types.Message(
             message_id=40,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_all_topic_admin"
-        )
+            text="/show_all_topic_admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1542,10 +1562,10 @@ async def test_get_users_csv_invalid_format(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv 12345"  # Invalid format
-        )
+            text="/get_users_csv 12345",  # Invalid format
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1566,7 +1586,7 @@ async def test_get_users_csv_success(mock_telegram, router_app_context):
     # Mock get_members to return some users
     router_app_context.group_service.get_members.return_value = [
         GroupMember(user_id=1, username="user1", full_name="User One", is_admin=True, is_bot=False),
-        GroupMember(user_id=2, username=None, full_name="User Two", is_admin=False, is_bot=False)
+        GroupMember(user_id=2, username=None, full_name="User Two", is_admin=False, is_bot=False),
     ]
 
     update = types.Update(
@@ -1574,10 +1594,10 @@ async def test_get_users_csv_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1600,10 +1620,10 @@ async def test_get_users_csv_wrong_chat(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=999999, type='supergroup', title="Other Group"),  # Not MTLIDGroup
+            chat=types.Chat(id=999999, type="supergroup", title="Other Group"),  # Not MTLIDGroup
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1633,15 +1653,15 @@ async def test_message_reaction_mute_emoji(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]  # 10m mute emoji
-            self.chat = types.Chat(id=chat_id, type='supergroup', title="Group")
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
             self.message_thread_id = thread_id
             self.from_user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
             self.reply_to_message = types.Message(
                 message_id=10,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type='supergroup'),
+                chat=types.Chat(id=chat_id, type="supergroup"),
                 from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message"
+                text="Bad message",
             )
             # parse_timedelta_from_message needs message.text - simulate reaction message
             self.text = "reaction"  # Default - will use 15 minutes
@@ -1674,15 +1694,15 @@ async def test_message_reaction_no_topic_admins(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
-            self.chat = types.Chat(id=chat_id, type='supergroup', title="Group")
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
             self.message_thread_id = thread_id
             self.from_user = types.User(id=999, is_bot=False, first_name="User", username="user")
             self.reply_to_message = types.Message(
                 message_id=10,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type='supergroup'),
+                chat=types.Chat(id=chat_id, type="supergroup"),
                 from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message"
+                text="Bad message",
             )
             self._replies = []
 
@@ -1714,15 +1734,15 @@ async def test_message_reaction_not_topic_admin(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
-            self.chat = types.Chat(id=chat_id, type='supergroup', title="Group")
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
             self.message_thread_id = thread_id
             self.from_user = types.User(id=999, is_bot=False, first_name="User", username="notadmin")
             self.reply_to_message = types.Message(
                 message_id=10,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type='supergroup'),
+                chat=types.Chat(id=chat_id, type="supergroup"),
                 from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message"
+                text="Bad message",
             )
             self._replies = []
 
@@ -1743,14 +1763,14 @@ async def test_on_my_chat_member_same_status(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
     update_event = types.ChatMemberUpdated(
         chat=chat,
         from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberMember(user=bot_user),
-        new_chat_member=types.ChatMemberMember(user=bot_user)  # Same status
+        new_chat_member=types.ChatMemberMember(user=bot_user),  # Same status
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1769,14 +1789,14 @@ async def test_on_my_chat_member_added_private_chat(mock_telegram, router_app_co
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
-    chat = types.Chat(id=123, type='private')  # Private chat
+    chat = types.Chat(id=123, type="private")  # Private chat
     user = types.User(id=999, is_bot=False, first_name="User", username="user")
     update_event = types.ChatMemberUpdated(
         chat=chat,
         from_user=user,
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberLeft(user=user),
-        new_chat_member=types.ChatMemberMember(user=user)
+        new_chat_member=types.ChatMemberMember(user=user),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -1784,13 +1804,17 @@ async def test_on_my_chat_member_added_private_chat(mock_telegram, router_app_co
 
     requests = mock_telegram.get_requests()
     # No "Thanks for adding me" in private chat
-    req = next((r for r in requests if r["method"] == "sendMessage" and "Thanks for adding me" in r["data"].get("text", "")), None)
+    req = next(
+        (r for r in requests if r["method"] == "sendMessage" and "Thanks for adding me" in r["data"].get("text", "")),
+        None,
+    )
     assert req is None
 
 
 # ============================================================================
 # Additional tests for edge cases and error handling
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_topic_command_bad_request_chat_not_modified(mock_telegram, router_app_context):
@@ -1802,21 +1826,19 @@ async def test_topic_command_bad_request_chat_not_modified(mock_telegram, router
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock createForumTopic to return error
-    mock_telegram.add_response("createForumTopic", {
-        "ok": False,
-        "error_code": 400,
-        "description": "Bad Request: CHAT_NOT_MODIFIED"
-    })
+    mock_telegram.add_response(
+        "createForumTopic", {"ok": False, "error_code": 400, "description": "Bad Request: CHAT_NOT_MODIFIED"}
+    )
 
     update = types.Update(
         update_id=2,
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Forum", is_forum=True),
+            chat=types.Chat(id=123, type="supergroup", title="Forum", is_forum=True),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/topic test NewTopic"
-        )
+            text="/topic test NewTopic",
+        ),
     )
 
     # The test may raise an exception or handle it depending on implementation
@@ -1831,6 +1853,7 @@ async def test_topic_command_bad_request_chat_not_modified(mock_telegram, router
 async def test_check_entry_channel_success(mock_telegram, router_app_context):
     """Test /check_entry_channel successful execution."""
     from unittest.mock import AsyncMock, patch
+
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -1838,7 +1861,7 @@ async def test_check_entry_channel_success(mock_telegram, router_app_context):
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock run_entry_channel_check to return success
-    with patch('routers.admin_core.run_entry_channel_check', new_callable=AsyncMock) as mock_check:
+    with patch("routers.admin_core.run_entry_channel_check", new_callable=AsyncMock) as mock_check:
         mock_check.return_value = (10, 2)  # checked_count, action_count
 
         update = types.Update(
@@ -1846,10 +1869,10 @@ async def test_check_entry_channel_success(mock_telegram, router_app_context):
             message=types.Message(
                 message_id=31,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=123, type='supergroup', title="Group"),
+                chat=types.Chat(id=123, type="supergroup", title="Group"),
                 from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-                text="/check_entry_channel"
-            )
+                text="/check_entry_channel",
+            ),
         )
 
         await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1865,6 +1888,7 @@ async def test_check_entry_channel_success(mock_telegram, router_app_context):
 async def test_check_entry_channel_not_configured(mock_telegram, router_app_context):
     """Test /check_entry_channel when entry channel not configured."""
     from unittest.mock import AsyncMock, patch
+
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -1872,7 +1896,7 @@ async def test_check_entry_channel_not_configured(mock_telegram, router_app_cont
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock run_entry_channel_check to raise ValueError
-    with patch('routers.admin_core.run_entry_channel_check', new_callable=AsyncMock) as mock_check:
+    with patch("routers.admin_core.run_entry_channel_check", new_callable=AsyncMock) as mock_check:
         mock_check.side_effect = ValueError("Entry channel not configured")
 
         update = types.Update(
@@ -1880,10 +1904,10 @@ async def test_check_entry_channel_not_configured(mock_telegram, router_app_cont
             message=types.Message(
                 message_id=31,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=123, type='supergroup', title="Group"),
+                chat=types.Chat(id=123, type="supergroup", title="Group"),
                 from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-                text="/check_entry_channel"
-            )
+                text="/check_entry_channel",
+            ),
         )
 
         await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1903,24 +1927,27 @@ async def test_delete_dead_members_username_format(mock_telegram, router_app_con
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock get_chat to return a valid chat
-    mock_telegram.add_response("getChat", {
-        "ok": True,
-        "result": {
-            "id": -1001234567890,
-            "type": "supergroup",
-            "title": "Test Group",
-            "accent_color_id": 0,
-            "max_reaction_count": 0,
-            "permissions": {"can_send_messages": True},
-            "accepted_gift_types": {
-                "unlimited_gifts": True,
-                "limited_gifts": False,
-                "unique_gifts": False,
-                "premium_subscription": False,
-                "gifts_from_channels": False
-            }
-        }
-    })
+    mock_telegram.add_response(
+        "getChat",
+        {
+            "ok": True,
+            "result": {
+                "id": -1001234567890,
+                "type": "supergroup",
+                "title": "Test Group",
+                "accent_color_id": 0,
+                "max_reaction_count": 0,
+                "permissions": {"can_send_messages": True},
+                "accepted_gift_types": {
+                    "unlimited_gifts": True,
+                    "limited_gifts": False,
+                    "unique_gifts": False,
+                    "premium_subscription": False,
+                    "gifts_from_channels": False,
+                },
+            },
+        },
+    )
 
     # Mock remove_deleted_users
     router_app_context.group_service.remove_deleted_users = AsyncMock(return_value=3)
@@ -1930,10 +1957,10 @@ async def test_delete_dead_members_username_format(mock_telegram, router_app_con
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members @testgroup"
-        )
+            text="/delete_dead_members @testgroup",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1954,21 +1981,19 @@ async def test_delete_dead_members_username_not_found(mock_telegram, router_app_
     setup_is_admin(mock_telegram, 999, True)
 
     # Mock get_chat to return error
-    mock_telegram.add_response("getChat", {
-        "ok": False,
-        "error_code": 400,
-        "description": "Bad Request: chat not found"
-    })
+    mock_telegram.add_response(
+        "getChat", {"ok": False, "error_code": 400, "description": "Bad Request: chat not found"}
+    )
 
     update = types.Update(
         update_id=7,
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members @nonexistent"
-        )
+            text="/delete_dead_members @nonexistent",
+        ),
     )
 
     try:
@@ -1994,17 +2019,19 @@ async def test_delete_dead_members_not_admin_of_target(mock_telegram, router_app
         if method == "getChatAdministrators":
             # First call - admin of source chat (123)
             # Second call - not admin of target chat
-            if not hasattr(admin_response_side_effect, 'calls'):
+            if not hasattr(admin_response_side_effect, "calls"):
                 admin_response_side_effect.calls = 0
             admin_response_side_effect.calls += 1
             if admin_response_side_effect.calls == 1:
                 return {
                     "ok": True,
-                    "result": [{
-                        "status": "creator",
-                        "user": {"id": 999, "is_bot": False, "username": "admin", "first_name": "Admin"},
-                        "is_anonymous": False
-                    }]
+                    "result": [
+                        {
+                            "status": "creator",
+                            "user": {"id": 999, "is_bot": False, "username": "admin", "first_name": "Admin"},
+                            "is_anonymous": False,
+                        }
+                    ],
                 }
             else:
                 return {"ok": True, "result": []}
@@ -2018,10 +2045,10 @@ async def test_delete_dead_members_not_admin_of_target(mock_telegram, router_app
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members -1001234567890"
-        )
+            text="/delete_dead_members -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2052,10 +2079,10 @@ async def test_delete_dead_members_remove_error(mock_telegram, router_app_contex
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members -1001234567890"
-        )
+            text="/delete_dead_members -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2074,23 +2101,20 @@ async def test_get_users_csv_bot_not_member(mock_telegram, router_app_context):
     dp.include_router(admin_router)
 
     # Mock getChatMember to return LEFT status for bot
-    mock_telegram.add_response("getChatMember", {
-        "ok": True,
-        "result": {
-            "user": {"id": 123456, "is_bot": True, "first_name": "TestBot"},
-            "status": "left"
-        }
-    })
+    mock_telegram.add_response(
+        "getChatMember",
+        {"ok": True, "result": {"user": {"id": 123456, "is_bot": True, "first_name": "TestBot"}, "status": "left"}},
+    )
 
     update = types.Update(
         update_id=17,
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2108,21 +2132,19 @@ async def test_get_users_csv_bot_check_error(mock_telegram, router_app_context):
     dp.include_router(admin_router)
 
     # Mock getChatMember to return error
-    mock_telegram.add_response("getChatMember", {
-        "ok": False,
-        "error_code": 400,
-        "description": "Bad Request: chat not found"
-    })
+    mock_telegram.add_response(
+        "getChatMember", {"ok": False, "error_code": 400, "description": "Bad Request: chat not found"}
+    )
 
     update = types.Update(
         update_id=17,
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     try:
@@ -2153,16 +2175,19 @@ async def test_get_users_csv_get_members_error(mock_telegram, router_app_context
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    req = next((r for r in requests if r["method"] == "sendMessage" and "Failed to get group members" in r["data"]["text"]), None)
+    req = next(
+        (r for r in requests if r["method"] == "sendMessage" and "Failed to get group members" in r["data"]["text"]),
+        None,
+    )
     assert req is not None
 
 
@@ -2177,16 +2202,16 @@ async def test_mute_command_reply_to_forum_topic(mock_telegram, router_app_conte
     thread_id = 5
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     # Reply to a forum topic created message
     reply_msg = types.Message(
         message_id=10,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
         message_thread_id=thread_id,
         from_user=types.User(id=789, is_bot=False, first_name="User", username="user"),
-        forum_topic_created=types.ForumTopicCreated(name="Topic", icon_color=0)
+        forum_topic_created=types.ForumTopicCreated(name="Topic", icon_color=0),
     )
 
     update = types.Update(
@@ -2194,12 +2219,12 @@ async def test_mute_command_reply_to_forum_topic(mock_telegram, router_app_conte
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
             text="/mute 1h",
-            reply_to_message=reply_msg
-        )
+            reply_to_message=reply_msg,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2208,8 +2233,6 @@ async def test_mute_command_reply_to_forum_topic(mock_telegram, router_app_conte
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "reply message" in req["data"]["text"]
-
-
 
 
 @pytest.mark.asyncio
@@ -2224,7 +2247,7 @@ async def test_show_mutes_invalid_mute_data(mock_telegram, router_app_context):
     chat_thread_key = f"{chat_id}-{thread_id}"
 
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
-    router_app_context.feature_flags.enable(chat_id, 'moderate')
+    router_app_context.feature_flags.enable(chat_id, "moderate")
 
     # Set up invalid mute data (missing end_time key)
     router_app_context.admin_service._topic_mute[chat_thread_key] = {
@@ -2236,11 +2259,11 @@ async def test_show_mutes_invalid_mute_data(mock_telegram, router_app_context):
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', is_forum=True),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
             message_thread_id=thread_id,
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/show_mute"
-        )
+            text="/show_mute",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2260,23 +2283,20 @@ async def test_get_users_csv_user_not_member(mock_telegram, router_app_context):
     dp.include_router(admin_router)
 
     # Mock getChatMember to return left status with proper format for ChatMemberLeft
-    mock_telegram.add_response("getChatMember", {
-        "ok": True,
-        "result": {
-            "user": {"id": 999, "is_bot": False, "first_name": "User"},
-            "status": "left"
-        }
-    })
+    mock_telegram.add_response(
+        "getChatMember",
+        {"ok": True, "result": {"user": {"id": 999, "is_bot": False, "first_name": "User"}, "status": "left"}},
+    )
 
     update = types.Update(
         update_id=17,
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2303,7 +2323,7 @@ async def test_message_reaction_no_reply(router_app_context):
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
-            self.chat = types.Chat(id=chat_id, type='supergroup', title="Group")
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
             self.message_thread_id = thread_id
             self.from_user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
             self.reply_to_message = None  # No reply
@@ -2340,10 +2360,10 @@ async def test_delete_dead_members_complete_flow(mock_telegram, router_app_conte
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/delete_dead_members -1001234567890"
-        )
+            text="/delete_dead_members -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2363,7 +2383,7 @@ async def test_on_my_chat_member_other_status(mock_telegram, router_app_context)
     dp.include_router(admin_router)
 
     # Create a custom status scenario - using an unusual transition
-    chat = types.Chat(id=123, type='supergroup', title="Group")
+    chat = types.Chat(id=123, type="supergroup", title="Group")
     bot_user = types.User(id=123456, is_bot=True, first_name="TestBot", username="test_bot")
 
     # Testing status change from administrator to member (demotion)
@@ -2384,9 +2404,9 @@ async def test_on_my_chat_member_other_status(mock_telegram, router_app_context)
             can_invite_users=True,
             can_post_stories=False,
             can_edit_stories=False,
-            can_delete_stories=False
+            can_delete_stories=False,
         ),
-        new_chat_member=types.ChatMemberMember(user=bot_user)
+        new_chat_member=types.ChatMemberMember(user=bot_user),
     )
     update = types.Update(update_id=10, my_chat_member=update_event)
 
@@ -2410,7 +2430,7 @@ async def test_get_users_csv_full_success(mock_telegram, router_app_context):
     router_app_context.group_service.get_members.return_value = [
         GroupMember(user_id=1, username="user1", full_name="User One", is_admin=True, is_bot=False),
         GroupMember(user_id=2, username=None, full_name="User Two", is_admin=False, is_bot=False),
-        GroupMember(user_id=3, username="bot", full_name="Bot", is_admin=False, is_bot=True)
+        GroupMember(user_id=3, username="bot", full_name="Bot", is_admin=False, is_bot=True),
     ]
 
     update = types.Update(
@@ -2418,10 +2438,10 @@ async def test_get_users_csv_full_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2443,21 +2463,19 @@ async def test_get_users_csv_user_check_bad_request(mock_telegram, router_app_co
     dp.include_router(admin_router)
 
     # Mock getChatMember to return error (bad request)
-    mock_telegram.add_response("getChatMember", {
-        "ok": False,
-        "error_code": 400,
-        "description": "Bad Request: user not found"
-    })
+    mock_telegram.add_response(
+        "getChatMember", {"ok": False, "error_code": 400, "description": "Bad Request: user not found"}
+    )
 
     update = types.Update(
         update_id=17,
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+            chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_users_csv -1001234567890"
-        )
+            text="/get_users_csv -1001234567890",
+        ),
     )
 
     try:
@@ -2470,11 +2488,13 @@ async def test_get_users_csv_user_check_bad_request(mock_telegram, router_app_co
 async def test_get_users_csv_user_check_generic_error(mock_telegram, router_app_context):
     """Test /get_users_csv when user membership check raises generic exception."""
     from unittest.mock import patch
+
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
 
     call_count = [0]
+
     async def mock_get_chat_member(chat_id, user_id):
         call_count[0] += 1
         if call_count[0] == 1:
@@ -2483,16 +2503,16 @@ async def test_get_users_csv_user_check_generic_error(mock_telegram, router_app_
         # Second call - user check fails
         raise RuntimeError("Network error")
 
-    with patch.object(router_app_context.bot, 'get_chat_member', side_effect=mock_get_chat_member):
+    with patch.object(router_app_context.bot, "get_chat_member", side_effect=mock_get_chat_member):
         update = types.Update(
             update_id=17,
             message=types.Message(
                 message_id=41,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+                chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
                 from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-                text="/get_users_csv -1001234567890"
-            )
+                text="/get_users_csv -1001234567890",
+            ),
         )
 
         await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2507,6 +2527,7 @@ async def test_get_users_csv_user_check_generic_error(mock_telegram, router_app_
 async def test_get_users_csv_bot_check_generic_error(mock_telegram, router_app_context):
     """Test /get_users_csv when bot membership check raises generic exception."""
     from unittest.mock import patch
+
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -2514,16 +2535,16 @@ async def test_get_users_csv_bot_check_generic_error(mock_telegram, router_app_c
     async def mock_get_chat_member(chat_id, user_id):
         raise RuntimeError("Network error checking bot")
 
-    with patch.object(router_app_context.bot, 'get_chat_member', side_effect=mock_get_chat_member):
+    with patch.object(router_app_context.bot, "get_chat_member", side_effect=mock_get_chat_member):
         update = types.Update(
             update_id=17,
             message=types.Message(
                 message_id=41,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=MTLChats.MTLIDGroup, type='supergroup', title="Group"),
+                chat=types.Chat(id=MTLChats.MTLIDGroup, type="supergroup", title="Group"),
                 from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-                text="/get_users_csv -1001234567890"
-            )
+                text="/get_users_csv -1001234567890",
+            ),
         )
 
         await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -2537,6 +2558,7 @@ async def test_get_users_csv_bot_check_generic_error(mock_telegram, router_app_c
 async def test_delete_dead_members_not_admin_of_both_chats(mock_telegram, router_app_context):
     """Test /delete_dead_members when admin of source but not target chat."""
     from unittest.mock import patch
+
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -2547,24 +2569,23 @@ async def test_delete_dead_members_not_admin_of_both_chats(mock_telegram, router
         call_count[0] += 1
         if call_count[0] == 1 or chat_id == 123:
             # First call - admin of source chat
-            return [types.ChatMemberOwner(
-                user=types.User(id=999, is_bot=False, first_name="Admin"),
-                is_anonymous=False
-            )]
+            return [
+                types.ChatMemberOwner(user=types.User(id=999, is_bot=False, first_name="Admin"), is_anonymous=False)
+            ]
         else:
             # Second call - not admin of target chat
             return []
 
-    with patch.object(router_app_context.bot, 'get_chat_administrators', side_effect=mock_get_chat_administrators):
+    with patch.object(router_app_context.bot, "get_chat_administrators", side_effect=mock_get_chat_administrators):
         update = types.Update(
             update_id=7,
             message=types.Message(
                 message_id=32,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=123, type='supergroup', title="Group"),
+                chat=types.Chat(id=123, type="supergroup", title="Group"),
                 from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-                text="/delete_dead_members -1001234567890"
-            )
+                text="/delete_dead_members -1001234567890",
+            ),
         )
 
         await dp.feed_update(bot=router_app_context.bot, update=update)

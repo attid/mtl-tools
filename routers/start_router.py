@@ -1,5 +1,5 @@
 from aiogram import Router, Bot, F
-import re # Add re import for regex operations
+import re  # Add re import for regex operations
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -72,12 +72,10 @@ async def cmd_emoji(message: Message, state: FSMContext, session: Session, bot: 
     if args[0] == "all":
         await message.answer(f"Доступные эмодзи:\n{' '.join(ALL_EMOJI)}")
     elif args[0].startswith("https://t.me/"):
-        chat_id, message_id = map(int, args[0].split('/')[-2:])
+        chat_id, message_id = map(int, args[0].split("/")[-2:])
         emoji = args[1] if len(args) > 1 and args[1] in ALL_EMOJI else "👀"
         await bot.set_message_reaction(
-            chat_id=f"-100{chat_id}",
-            message_id=message_id,
-            reaction=[ReactionTypeEmoji(emoji=emoji)]
+            chat_id=f"-100{chat_id}", message_id=message_id, reaction=[ReactionTypeEmoji(emoji=emoji)]
         )
         await message.answer(f"Реакция {emoji} добавлена к сообщению.")
     else:
@@ -86,11 +84,11 @@ async def cmd_emoji(message: Message, state: FSMContext, session: Session, bot: 
 
 @router.message(Command(commands=["save"]))
 async def cmd_save(message: Message):
-    logger.info(f'{message.model_dump_json(indent=2)}')
+    logger.info(f"{message.model_dump_json(indent=2)}")
     if message.from_user and message.from_user.id == MTLChats.ITolstov:
         await message.answer("Готово")
     else:
-        await message.answer('Saved')
+        await message.answer("Saved")
 
 
 @update_command_info("/links", "показать полезные ссылки")
@@ -102,22 +100,29 @@ async def cmd_links(message: Message):
 @update_command_info("/show_id", "Показать ID чата")
 @router.message(Command(commands=["show_id"]))
 async def cmd_show_id(message: Message):
-    await message.answer(f"chat_id = {message.chat.id} message_thread_id = {message.message_thread_id} " +
-                         f"is_topic_message  = {message.is_topic_message}")
+    await message.answer(
+        f"chat_id = {message.chat.id} message_thread_id = {message.message_thread_id} "
+        + f"is_topic_message  = {message.is_topic_message}"
+    )
 
 
 @router.message(Command(commands=["me"]))
 async def cmd_me(message: Message, bot: Bot):
-    msg = ' '.join((message.text or '').split(' ')[1:])
+    msg = " ".join((message.text or "").split(" ")[1:])
     username = message.from_user.username if message.from_user and message.from_user.username else "user"
-    msg = f'<i><b>{username}</b> {msg}</i>'
-    await bot.send_message(chat_id=message.chat.id, text=msg, parse_mode=ParseMode.HTML,
-                           reply_to_message_id=message.reply_to_message.message_id if message.reply_to_message else None,
-                           message_thread_id=None if message.reply_to_message else message.message_thread_id)
+    msg = f"<i><b>{username}</b> {msg}</i>"
+    await bot.send_message(
+        chat_id=message.chat.id,
+        text=msg,
+        parse_mode=ParseMode.HTML,
+        reply_to_message_id=message.reply_to_message.message_id if message.reply_to_message else None,
+        message_thread_id=None if message.reply_to_message else message.message_thread_id,
+    )
     try:
         await message.delete()
     except Exception:
         pass
+
 
 @update_command_info("/link", "показать ссылки на Stellar адреса из сообщения")
 @router.message(Command(commands=["link"]))
@@ -133,7 +138,7 @@ async def cmd_link(message: Message, bot: Bot):
         return
 
     # Find Stellar addresses (56 characters, starting with G)
-    stellar_addresses = re.findall(r'\b(G[A-Z0-9]{55})\b', replied_message_text)
+    stellar_addresses = re.findall(r"\b(G[A-Z0-9]{55})\b", replied_message_text)
 
     if not stellar_addresses:
         await message.reply("Stellar адреса не найдены в сообщении.")
@@ -153,18 +158,16 @@ async def cmd_link(message: Message, bot: Bot):
         )
     if response_parts:
         full_response = "\n\n".join(response_parts)
-        await message.reply(
-            full_response,
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )
+        await message.reply(full_response, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     else:
         # This case should ideally not be reached if stellar_addresses is not empty,
         # but as a fallback.
         await message.reply("Не удалось сформировать ответ для найденных адресов.")
 
+
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router start_router was loaded')
+    logger.info("router start_router was loaded")
+
 
 cast(Any, register_handlers).priority = 10

@@ -18,20 +18,22 @@ openai_key = config.openai_key.get_secret_value()
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 # client = OpenAI(api_key=openai_key)
-aclient = AsyncOpenAI(api_key=openai_key,
-                      base_url="https://openrouter.ai/api/v1",
-                      )
+aclient = AsyncOpenAI(
+    api_key=openai_key,
+    base_url="https://openrouter.ai/api/v1",
+)
 
 extra_headers = {
-    "HTTP-Referer": 'https://montelibero.org',  # Optional, for including your app on openrouter.ai rankings.
-    "X-Title": 'Montelibero Bot',  # Optional. Shows in rankings on openrouter.ai.
+    "HTTP-Referer": "https://montelibero.org",  # Optional, for including your app on openrouter.ai rankings.
+    "X-Title": "Montelibero Bot",  # Optional. Shows in rankings on openrouter.ai.
 }
 
 
 # https://dialogflow.cloud.google.com/#/editAgent/mtl-skynet-hldy/
 
+
 async def save_to_redis(chat_id, msg, is_answer=False):
-    data_name = f'{chat_id}:{round(datetime.now().timestamp())}'
+    data_name = f"{chat_id}:{round(datetime.now().timestamp())}"
     j = {"content": msg}
     if is_answer:
         j["role"] = "assistant"
@@ -71,7 +73,7 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
 
 
 async def load_from_redis(chat_id):
-    keys = await redis.keys(f'{chat_id}:*')
+    keys = await redis.keys(f"{chat_id}:*")
     messages = []
 
     for key in keys:
@@ -99,7 +101,7 @@ async def load_from_redis(chat_id):
 
 
 async def delete_last_redis(chat_id):
-    keys = await redis.keys(f'{chat_id}:*')
+    keys = await redis.keys(f"{chat_id}:*")
 
     if not keys:  # проверяем, есть ли ключи
         return
@@ -114,24 +116,32 @@ async def delete_last_redis(chat_id):
 async def talk(chat_id, msg, gpt_maxi=False, googleit=False):
     await save_to_redis(chat_id, msg)
     if gpt_maxi:
-        msg = (f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
-               f"Для форматирования используй ТОЛЬКО Telegram Markdown: "
-               f"*жирный*, _курсив_, `код`, ```блок кода```. "
-               f"НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку.\n\n{msg}")
+        msg = (
+            f"Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
+            f"Для форматирования используй ТОЛЬКО Telegram Markdown: "
+            f"*жирный*, _курсив_, `код`, ```блок кода```. "
+            f"НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку.\n\n{msg}"
+        )
         msg = await talk_open_ai_async(msg=msg, gpt_maxi=True, googleit=googleit)
     else:
         msg_data = await load_from_redis(chat_id)
-        msg_data.insert(0, {"role": "system", "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
-            "Для форматирования используй ТОЛЬКО Telegram Markdown:\n"
-            "*жирный*, _курсив_, `код`, ```блок кода```\n"
-            "НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку."})
+        msg_data.insert(
+            0,
+            {
+                "role": "system",
+                "content": "Тебя зовут Скайнет. Ты должна отвечать в женском роде.\n"
+                "Для форматирования используй ТОЛЬКО Telegram Markdown:\n"
+                "*жирный*, _курсив_, `код`, ```блок кода```\n"
+                "НЕ используй HTML-теги, [], () для ссылок, #, ## для заголовков и другую разметку.",
+            },
+        )
         msg = await talk_open_ai_async(msg_data=msg_data, googleit=googleit)
     if msg:
         await save_to_redis(chat_id, msg, is_answer=True)
         return msg
     else:
         await delete_last_redis(chat_id)
-        return '=( connection error, retry again )='
+        return "=( connection error, retry again )="
 
 
 async def talk_open_ai_list_models(name_filter):
@@ -153,11 +163,13 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt_maxi=F
             messages[0]["name"] = user_name
     try:
         if gpt_maxi:
-            chat_completion_resp = await aclient.chat.completions.create(model="openai/gpt-5", messages=messages,
-                                                                         extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(
+                model="openai/gpt-5", messages=messages, extra_headers=extra_headers
+            )
         else:
-            chat_completion_resp = await aclient.chat.completions.create(model=f"openai/gpt-5-mini{addons}", messages=messages,
-                                                                         extra_headers=extra_headers)
+            chat_completion_resp = await aclient.chat.completions.create(
+                model=f"openai/gpt-5-mini{addons}", messages=messages, extra_headers=extra_headers
+            )
 
         return chat_completion_resp.choices[0].message.content
     except Exception as e:
@@ -166,9 +178,13 @@ async def talk_open_ai_async(msg=None, msg_data=None, user_name=None, gpt_maxi=F
 
 
 async def talk_get_comment(chat_id, article):
-    messages = [{"role": "system",
-                 "content": "Напиши комментарий к статье, ты сторонник либертарианства. Комментарий должен быть прикольный, дружественный, не более 300 символов. Не указывай, что это комментарий или анализируй его. Напиши комментарий сразу, без введения или заключения. Не используй кавычки в ответе. Не используй хештеги # в комментариях !"},
-                {"role": "user", "content": article}]
+    messages = [
+        {
+            "role": "system",
+            "content": "Напиши комментарий к статье, ты сторонник либертарианства. Комментарий должен быть прикольный, дружественный, не более 300 символов. Не указывай, что это комментарий или анализируй его. Напиши комментарий сразу, без введения или заключения. Не используй кавычки в ответе. Не используй хештеги # в комментариях !",
+        },
+        {"role": "user", "content": article},
+    ]
     await save_to_redis(chat_id, article)
     msg = await talk_open_ai_async(msg_data=messages)
     if msg:
@@ -176,60 +192,96 @@ async def talk_get_comment(chat_id, article):
         return msg
     else:
         await delete_last_redis(chat_id)
-        return '=( connection error, retry again )='
+        return "=( connection error, retry again )="
 
 
 gor = (
     ("Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"),
-    ("Расположение звезд ", "Расположение планет ", "Марс ", "Венера ", "Луна ", "Млечный путь ", "Астральные карта ",
-     "Юпитер ", "Плутон ", "Сатурн ",),
-    ("говорит вам ", "советует вам ", "предлагает вам ", "предрекает вам ", "благоволит вас ", "рекомендует вам ",
-     "очень рекомендует вам ", "намекает вам ", "требует от вас ",),
-    ("выпить пива", "напиться в хлам", "выпить никшечко", "выпить нефильтрованного никшечко", "выпить темного никшечко",
-     "выпыть хугардена", "сегодня не пить =(", "хорошо приглядывать за орешками", "выпить чего по крепче",
-     "пить сегодня с хорошей закуской", "поберечь печень", "нагрузить печень", "выпить ракии", "выпить дуньки",
-     "выпить лозы", "выпить каспии", "сообразить на троих",)
+    (
+        "Расположение звезд ",
+        "Расположение планет ",
+        "Марс ",
+        "Венера ",
+        "Луна ",
+        "Млечный путь ",
+        "Астральные карта ",
+        "Юпитер ",
+        "Плутон ",
+        "Сатурн ",
+    ),
+    (
+        "говорит вам ",
+        "советует вам ",
+        "предлагает вам ",
+        "предрекает вам ",
+        "благоволит вас ",
+        "рекомендует вам ",
+        "очень рекомендует вам ",
+        "намекает вам ",
+        "требует от вас ",
+    ),
+    (
+        "выпить пива",
+        "напиться в хлам",
+        "выпить никшечко",
+        "выпить нефильтрованного никшечко",
+        "выпить темного никшечко",
+        "выпыть хугардена",
+        "сегодня не пить =(",
+        "хорошо приглядывать за орешками",
+        "выпить чего по крепче",
+        "пить сегодня с хорошей закуской",
+        "поберечь печень",
+        "нагрузить печень",
+        "выпить ракии",
+        "выпить дуньки",
+        "выпить лозы",
+        "выпить каспии",
+        "сообразить на троих",
+    ),
 )
 
 lang_dict = {}
 
 
 def get_horoscope() -> list:
-    if date.today() == lang_dict.get('horoscope_date'):
-        return lang_dict.get('horoscope', ['Ошибка при получении =('])
+    if date.today() == lang_dict.get("horoscope_date"):
+        return lang_dict.get("horoscope", ["Ошибка при получении =("])
     else:
         today_dic = [""]
         s3 = ""
-        lang_dict['horoscope_date'] = date.today()
+        lang_dict["horoscope_date"] = date.today()
         horoscope = ["Гороскоп на сегодня"]
         for s in gor[0]:
-            horoscope.append(f'**{s}**')
+            horoscope.append(f"**{s}**")
             while s3 in today_dic:
                 s3 = random.choice(gor[3])
             today_dic.append(s3)
 
-            g = (random.choice(gor[1]) + random.choice(gor[2]) + s3)
+            g = random.choice(gor[1]) + random.choice(gor[2]) + s3
             while g in horoscope:
-                g = (random.choice(gor[1]) + random.choice(gor[2]) + s3)
+                g = random.choice(gor[1]) + random.choice(gor[2]) + s3
             horoscope.append(g)
 
         horoscope.append("")
         horoscope.append("Желаю всем хорошего дня! 🍺🍺🍺")
-        lang_dict['horoscope'] = horoscope
+        lang_dict["horoscope"] = horoscope
         return horoscope
 
 
 async def talk_check_spam(article):
     messages = [
-        {"role": "system",
-         "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. "
-                    "Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. "
-                    "т.е. предлагают ли что-то купить, или предложение заработка или написать в личку по непонятному вопросу. "
-                    "Если говорят что-то про черногорию, Будву, Бар, Подгорицу или EURMTL то это не спам "
-                    "Если хотят обменять деньги и вежливо обращаются без ссылок и зазывания в ЛС то тоже не спам."
-                    "Предоставьте свой ответ в виде JSON с ключом 'spam_probability' и значением вероятности в процентах, "
-                    "например, {\"spam_probability\": 70}."},
-        {"role": "user", "content": article}
+        {
+            "role": "system",
+            "content": "Вы являетесь виртуальным ассистентом, специализирующимся на выявлении спама в объявлениях. "
+            "Ваша задача - проанализировать предоставленные объявления и определить, являются ли они спамом. "
+            "т.е. предлагают ли что-то купить, или предложение заработка или написать в личку по непонятному вопросу. "
+            "Если говорят что-то про черногорию, Будву, Бар, Подгорицу или EURMTL то это не спам "
+            "Если хотят обменять деньги и вежливо обращаются без ссылок и зазывания в ЛС то тоже не спам."
+            "Предоставьте свой ответ в виде JSON с ключом 'spam_probability' и значением вероятности в процентах, "
+            'например, {"spam_probability": 70}.',
+        },
+        {"role": "user", "content": article},
     ]
 
     msg = None
@@ -240,8 +292,8 @@ async def talk_check_spam(article):
         try:
             # Попытка преобразовать строку в JSON
             result = json.loads(msg)
-            if 'spam_probability' in result:
-                return int(result['spam_probability'])
+            if "spam_probability" in result:
+                return int(result["spam_probability"])
             else:
                 msg = None  # Перезапуск цикла, если ключ не найден
         except json.JSONDecodeError:
@@ -287,11 +339,9 @@ async def add_task_to_google(msg):
             },
         }
     ]
-    response = await aclient.chat.completions.create(model=model,
-                                                     messages=messages,
-                                                     extra_headers=extra_headers,
-                                                     functions=functions,
-                                                     function_call="auto")
+    response = await aclient.chat.completions.create(
+        model=model, messages=messages, extra_headers=extra_headers, functions=functions, function_call="auto"
+    )
     response_message = response.choices[0].message
 
     # Step 2: check if GPT wanted to call a function
@@ -322,34 +372,32 @@ async def add_task_to_google(msg):
                 "content": function_response,
             }
         )  # extend conversation with function response
-        messages.append({
-            "role": "system",
-            "content": "Пожалуйста, избегайте использования ссылок в вашем ответе."
-        })
-        second_response = await aclient.chat.completions.create(model=model,
-                                                                extra_headers=extra_headers,
-                                                                messages=messages)  # get a new response from GPT where it can see the function response
+        messages.append({"role": "system", "content": "Пожалуйста, избегайте использования ссылок в вашем ответе."})
+        second_response = await aclient.chat.completions.create(
+            model=model, extra_headers=extra_headers, messages=messages
+        )  # get a new response from GPT where it can see the function response
         return second_response.choices[0].message.content
 
 
 async def talk_get_summary(article):
-    messages = [{"role": "system",
-                 "content": "Вы являетесь виртуальным ассистентом, специализирующимся на анализе текстов. Ваша задача - проанализировать предоставленный текст чата и предоставить краткий обзор его содержания."},
-                {"role": "user", "content": article}]
+    messages = [
+        {
+            "role": "system",
+            "content": "Вы являетесь виртуальным ассистентом, специализирующимся на анализе текстов. Ваша задача - проанализировать предоставленный текст чата и предоставить краткий обзор его содержания.",
+        },
+        {"role": "user", "content": article},
+    ]
     msg = None
     while msg is None:
         msg = await talk_open_ai_async(msg_data=messages, gpt_maxi=True)
         if not msg:
-            logger.info('msg is None')
+            logger.info("msg is None")
             await asyncio.sleep(3)
     return msg
 
 
 async def generate_image_old(prompt, model="openai/gpt-4.1", n=1):
-    response = await aclient.images.generate(prompt=prompt,
-                                             n=n,
-                                             model=model,
-                                             extra_headers=extra_headers)
+    response = await aclient.images.generate(prompt=prompt, n=n, model=model, extra_headers=extra_headers)
     print(response)
 
     # Это вернет список URL изображений
@@ -362,20 +410,13 @@ async def generate_image(prompt, model="openai/gpt-4.1", n=1):
         "Authorization": f"Bearer {openai_key}",
         "HTTP-Referer": "https://montelibero.org",
         "X-Title": "Montelibero Bot",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     payload = {
         "model": model,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt}
-                ]
-            }
-        ],
-        "modalities": ["text", "image"]
+        "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        "modalities": ["text", "image"],
     }
 
     async with httpx.AsyncClient() as client:
@@ -384,14 +425,12 @@ async def generate_image(prompt, model="openai/gpt-4.1", n=1):
         print(resp.text)
 
 
-
-
 if __name__ == "__main__":
     pass
     # asyncio.run(talk_open_ai_list_models('openai'))
     # exit()
 
-    a = asyncio.run(generate_image('нарисуй красную панда'))
+    a = asyncio.run(generate_image("нарисуй красную панда"))
     print(a)
 
     # text = 'добавь задачу что надо покрасить забор, испольнитель Егор, постановщик Владимир'
@@ -408,6 +447,6 @@ if __name__ == "__main__":
     #  '''
     #     a = (asyncio.run(talk_check_spam(article)))
     #     print(type(a), a)
-    #print(asyncio.run(talk(0, 'кто такой Виктор Корб', googleit=True)))
+    # print(asyncio.run(talk(0, 'кто такой Виктор Корб', googleit=True)))
     # asyncio.run(asyncio.sleep(50))
     # print(asyncio.run(talk_open_ai_async('Расскажи сказку про колобка на 10000 знаков', b16k=True)))

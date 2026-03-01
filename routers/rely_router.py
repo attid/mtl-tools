@@ -27,14 +27,14 @@ from services.command_registry_service import update_command_info
 
 router = Router()
 
-RELY_DEAL_CHAT_ID = -1003363491610 # rely
-#RELY_DEAL_CHAT_ID = -1001767165598 #test group
+RELY_DEAL_CHAT_ID = -1003363491610  # rely
+# RELY_DEAL_CHAT_ID = -1001767165598 #test group
 
 GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
 GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
 
 
-@update_command_info('/deal', 'Добавить участника в сделку RELY (реплаем на сообщение)')
+@update_command_info("/deal", "Добавить участника в сделку RELY (реплаем на сообщение)")
 @router.message(
     Command(commands=["deal"]),
     F.reply_to_message,
@@ -107,10 +107,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
 
     try:
         deal, participant_entry = await deal_service.process_deal_entry(
-            message_url=message_url,
-            tg_username=tg_username,
-            tg_user_id=tg_user_id,
-            amount=amount
+            message_url=message_url, tg_username=tg_username, tg_user_id=tg_user_id, amount=amount
         )
         await message.react([types.ReactionTypeEmoji(emoji="✍️")])
         logger.info(f"Deal {deal.id} processed for user @{tg_username} with amount {amount}")
@@ -127,7 +124,7 @@ async def deal_command(message: types.Message, command: CommandObject, bot: Bot)
         await deal_service.send_error_notification(e, message)
 
 
-@update_command_info('/resolve', 'Закрыть сделку RELY (можно реплаем на сообщение сделки)')
+@update_command_info("/resolve", "Закрыть сделку RELY (можно реплаем на сообщение сделки)")
 @router.message(
     Command(commands=["resolve"]),
     F.text,
@@ -153,8 +150,8 @@ async def resolve_command(message: types.Message, command: CommandObject, bot: B
     # Extract additional text
     additional_text = None
     if command.args:
-        split_message = message.md_text.strip().split(' ')
-        additional_text = ' '.join(split_message[1:])
+        split_message = message.md_text.strip().split(" ")
+        additional_text = " ".join(split_message[1:])
 
     # Get the URL of the current /resolve message
     resolve_message_url = message.get_url()
@@ -178,7 +175,7 @@ async def resolve_command(message: types.Message, command: CommandObject, bot: B
             user_display=user_display,
             replied_message_url=replied_message_url,
             resolve_message_url=resolve_message_url,
-            additional_text=additional_text
+            additional_text=additional_text,
         )
         # Set reaction on success
         try:
@@ -197,6 +194,7 @@ class ArgumentParsingError(Exception):
     This is raised when the user provides invalid input to the /deal command,
     such as non-numeric values or amounts that don't meet the minimum threshold.
     """
+
     pass
 
 
@@ -237,6 +235,7 @@ class RepositoryError(Exception):
     This serves as the parent class for all errors that occur during
     interactions with the Grist database.
     """
+
     pass
 
 
@@ -247,6 +246,7 @@ class DealIsCheckedError(RepositoryError):
     Once a deal is checked/closed, no further modifications (adding participants,
     changing amounts) are allowed.
     """
+
     pass
 
 
@@ -256,6 +256,7 @@ class DealCreationError(RepositoryError):
 
     This may occur due to API errors, network issues, or database constraints.
     """
+
     pass
 
 
@@ -266,6 +267,7 @@ class DealRetrievalError(RepositoryError):
     This may occur when attempting to fetch a newly created deal or
     when the Grist API returns unexpected data.
     """
+
     pass
 
 
@@ -275,6 +277,7 @@ class ParticipantEntryError(RepositoryError):
 
     This includes duplicate entry attempts, creation failures, or retrieval issues.
     """
+
     pass
 
 
@@ -284,6 +287,7 @@ class HolderCreationError(RepositoryError):
 
     This may occur due to API errors, network issues, or database constraints.
     """
+
     pass
 
 
@@ -294,6 +298,7 @@ class HolderRetrievalError(RepositoryError):
     This may occur when attempting to fetch a newly created holder or
     when the Grist API returns unexpected data.
     """
+
     pass
 
 
@@ -306,6 +311,7 @@ class Holder:
         tg_username: Telegram username (or 'id_{user_id}' if username not available)
         id: Unique identifier in the Grist Holders table
     """
+
     tg_username: str
     id: int
 
@@ -320,6 +326,7 @@ class Deal:
         id: Unique identifier in the Grist Deals table
         checked: Whether the deal has been closed/finalized (prevents further modifications)
     """
+
     url: str
     id: int
     checked: bool = False
@@ -336,6 +343,7 @@ class DealParticipantEntry:
         amount: Contribution amount as a Decimal
         id: Unique identifier in the Grist Conditions table (None until persisted)
     """
+
     deal_id: int
     holder_id: int
     amount: Decimal
@@ -392,10 +400,7 @@ class GristDealRepository:
         Raises:
             DealRetrievalError: If the Grist API call fails
         """
-        record_data = await grist_manager.load_table_data(
-            self._table_config,
-            filter_dict={"Message": [message_url]}
-        )
+        record_data = await grist_manager.load_table_data(self._table_config, filter_dict={"Message": [message_url]})
         if record_data is None:
             raise DealRetrievalError("Failed to load deal data from Grist.")
         if record_data:
@@ -419,16 +424,7 @@ class GristDealRepository:
         """
         try:
             await grist_manager.post_data(
-                table=self._table_config,
-                json_data={
-                    "records": [
-                        {
-                            "fields": {
-                                "Message": message_url
-                            }
-                        }
-                    ]
-                }
+                table=self._table_config, json_data={"records": [{"fields": {"Message": message_url}}]}
             )
         except Exception as e:
             raise DealCreationError(f"Failed to create deal in Grist: {e}") from e
@@ -478,18 +474,18 @@ class GristHolderRepository:
         """
         holder_record = await self._get_holder_record_by_telegram_id(tg_user_id)
         if not holder_record:
-            cleaned_username = tg_username.strip().strip('@').lower()
+            cleaned_username = tg_username.strip().strip("@").lower()
             holder_record = await self._get_holder_record_by_username(cleaned_username)
 
         if holder_record:
             updates = {}
             if str(holder_record.get("TGID")) != str(tg_user_id):
                 updates["TGID"] = tg_user_id
-            
+
             new_telegram_handle = f"@{tg_username}"
             if holder_record.get("Telegram") != new_telegram_handle:
                 updates["Telegram"] = new_telegram_handle
-            
+
             if updates:
                 await self._update_holder_record(holder_record["id"], updates)
 
@@ -500,10 +496,7 @@ class GristHolderRepository:
 
     async def _get_holder_record_by_telegram_id(self, tg_user_id: int) -> Optional[dict]:
         """Retrieve a holder record from Grist by their Telegram ID."""
-        records = await grist_manager.fetch_data(
-            self._table_config,
-            filter_dict={"TGID": [tg_user_id]}
-        )
+        records = await grist_manager.fetch_data(self._table_config, filter_dict={"TGID": [tg_user_id]})
         if records is None:
             logger.info("Failed to load holder data from Grist by TGID.")
             return None
@@ -511,10 +504,7 @@ class GristHolderRepository:
 
     async def _get_holder_record_by_username(self, tg_username: str) -> Optional[dict]:
         """Retrieve a holder record from Grist by their Telegram username."""
-        records = await grist_manager.fetch_data(
-            self._table_config,
-            filter_dict={"Lowercase": [tg_username]}
-        )
+        records = await grist_manager.fetch_data(self._table_config, filter_dict={"Lowercase": [tg_username]})
         if records is None:
             logger.info("Failed to load holder data from Grist by username.")
             return None
@@ -524,8 +514,7 @@ class GristHolderRepository:
         """Update a holder record in Grist."""
         try:
             await grist_manager.patch_data(
-                table=self._table_config,
-                json_data={"records": [{"id": record_id, "fields": fields}]}
+                table=self._table_config, json_data={"records": [{"id": record_id, "fields": fields}]}
             )
         except Exception as e:
             raise HolderCreationError(f"Failed to update holder record {record_id} in Grist: {e}") from e
@@ -535,16 +524,7 @@ class GristHolderRepository:
         try:
             await grist_manager.post_data(
                 table=self._table_config,
-                json_data={
-                    "records": [
-                        {
-                            "fields": {
-                                "Telegram": f"@{tg_username}",
-                                "TGID": tg_user_id
-                            }
-                        }
-                    ]
-                }
+                json_data={"records": [{"fields": {"Telegram": f"@{tg_username}", "TGID": tg_user_id}}]},
             )
         except Exception as e:
             raise HolderCreationError(f"Failed to create holder in Grist: {e}") from e
@@ -592,7 +572,7 @@ class GristDealParticipantRepository:
                 filter_dict={
                     "Deal": [deal_id],
                     "Participant": [holder_id],
-                }
+                },
             )
         except Exception as e:
             raise ParticipantEntryError(f"Failed to fetch participant entry from Grist: {e}") from e
@@ -604,7 +584,7 @@ class GristDealParticipantRepository:
             id=record["id"],
             deal_id=record["Deal"],
             holder_id=record["Participant"],
-            amount=Decimal(str(record["Amount"]))
+            amount=Decimal(str(record["Amount"])),
         )
 
     async def add_participant_entry(self, deal_id: int, holder_id: int, amount: Decimal) -> DealParticipantEntry:
@@ -639,10 +619,7 @@ class GristDealParticipantRepository:
             ]
         }
         try:
-            await grist_manager.post_data(
-                table=self._table_config,
-                json_data=json_data
-            )
+            await grist_manager.post_data(table=self._table_config, json_data=json_data)
         except Exception as e:
             raise ParticipantEntryError(f"Failed to add participant entry in Grist: {e}") from e
 
@@ -661,8 +638,13 @@ class DealService:
     participant management, and notifications.
     """
 
-    def __init__(self, deal_repo: GristDealRepository, participant_repo: GristDealParticipantRepository,
-                 holder_repo: GristHolderRepository, bot: Bot):
+    def __init__(
+        self,
+        deal_repo: GristDealRepository,
+        participant_repo: GristDealParticipantRepository,
+        holder_repo: GristHolderRepository,
+        bot: Bot,
+    ):
         """
         Initialize the DealService with required repositories and bot.
 
@@ -703,7 +685,11 @@ class DealService:
         if message.from_user:
             user_info = f"User: @{message.from_user.username} (ID: {message.from_user.id})"
         error_info = f"Error: {error}"
-        context_info = f"Original message: {message.reply_to_message.get_url()}" if message.reply_to_message else "No reply message."
+        context_info = (
+            f"Original message: {message.reply_to_message.get_url()}"
+            if message.reply_to_message
+            else "No reply message."
+        )
 
         text = f"⚠️ Ошибка при обработке сделки ⚠️\n\n{user_info}\n{context_info}\n\n{error_info}"
         try:
@@ -712,8 +698,9 @@ class DealService:
         except Exception as e:
             logger.error(f"Не удалось отправить уведомление об ошибке: {e}")
 
-    async def process_deal_entry(self, message_url: str, tg_username: str, tg_user_id: int, amount: Decimal) -> tuple[
-        Deal, DealParticipantEntry]:
+    async def process_deal_entry(
+        self, message_url: str, tg_username: str, tg_user_id: int, amount: Decimal
+    ) -> tuple[Deal, DealParticipantEntry]:
         """
         Process a new deal entry from a participant.
 
@@ -759,9 +746,7 @@ class DealService:
         holder = await self._holder_repo.get_or_create_holder(tg_username, tg_user_id)
 
         participant_entry = await self._participant_repo.add_participant_entry(
-            deal_id=deal.id,
-            holder_id=holder.id,
-            amount=amount
+            deal_id=deal.id, holder_id=holder.id, amount=amount
         )
         return deal, participant_entry
 
@@ -770,7 +755,7 @@ class DealService:
         user_display: str,
         replied_message_url: Optional[str],
         resolve_message_url: str,
-        additional_text: Optional[str]
+        additional_text: Optional[str],
     ):
         """
         Process a resolve request for closing a deal.
@@ -813,10 +798,7 @@ class DealService:
         # Send notification to operator chat
         try:
             await self._bot.send_message(
-                RELY_DEAL_CHAT_ID, 
-                notification_text, 
-                parse_mode="MarkdownV2",
-                disable_web_page_preview=True
+                RELY_DEAL_CHAT_ID, notification_text, parse_mode="MarkdownV2", disable_web_page_preview=True
             )
             logger.info(f"Resolve notification sent for deal {deal_identifier} by {user_display}")
         except Exception as e:

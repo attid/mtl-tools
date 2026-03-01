@@ -56,5 +56,6 @@ async def parse_timedelta_from_message(
     else:
         return datetime.timedelta(minutes=15)
 
+
 if __name__ == "__main__":
-    print(parse_timedelta('10s'))
+    print(parse_timedelta("10s"))

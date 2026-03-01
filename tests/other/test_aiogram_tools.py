@@ -3,6 +3,7 @@ import asyncio
 from other.aiogram_tools import cmd_sleep_and_delete_task
 from tests.fakes import FakeAsyncMethod
 
+
 @pytest.mark.asyncio
 async def test_cmd_sleep_and_delete_task_none_sleep_time():
     message = type("Msg", (), {})()
@@ -21,6 +22,7 @@ async def test_cmd_sleep_and_delete_task_none_sleep_time():
 
     assert calls == [0]
     message.delete.assert_awaited_once()
+
 
 @pytest.mark.asyncio
 async def test_cmd_sleep_and_delete_task_valid_sleep_time():

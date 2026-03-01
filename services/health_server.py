@@ -28,9 +28,7 @@ async def health_handler(request: web.Request) -> web.Response:
     return web.json_response({"status": "healthy", "last_ping_age": age})
 
 
-async def start_health_server(
-    bot_state: BotStateService, port: int = 8080
-) -> web.AppRunner:
+async def start_health_server(bot_state: BotStateService, port: int = 8080) -> web.AppRunner:
     app = web.Application()
     app["bot_state"] = bot_state
     app.router.add_get("/health", health_handler)

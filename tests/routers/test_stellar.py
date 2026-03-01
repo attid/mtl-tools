@@ -7,88 +7,93 @@ from tests.conftest import RouterTestMiddleware
 from tests.fakes import FakeWebResponse
 from other.constants import MTLChats
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router():
     yield
     if stellar_router.parent_router:
-         stellar_router._parent_router = None
+        stellar_router._parent_router = None
     pass
+
 
 @pytest.mark.asyncio
 async def test_fee_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     router_app_context.stellar_service.check_fee.return_value = "100-200 stroops"
-    
+
     update = types.Update(
         update_id=1,
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/fee"
-        )
+            text="/fee",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "100-200 stroops" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_decode_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     router_app_context.stellar_service.decode_xdr.return_value = ["Decoded", "XDR"]
-    
+
     update = types.Update(
         update_id=2,
         message=types.Message(
             message_id=2,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/decode AAAA..."
-        )
+            text="/decode AAAA...",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     assert any("Decoded" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_show_bim_command(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     router_app_context.stellar_service.show_bim.return_value = "BIM Info"
-    
+
     update = types.Update(
         update_id=3,
         message=types.Message(
             message_id=3,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_bim"
-        )
+            text="/show_bim",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "BIM Info" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_do_council(mock_telegram, router_app_context):
@@ -96,41 +101,41 @@ async def test_do_council(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     balances = [
-        {'EURMTL': 6, 'LABR': 0.2},
-        {'LABR': 2},
+        {"EURMTL": 6, "LABR": 0.2},
+        {"LABR": 2},
     ]
     router_app_context.stellar_service.get_balances.side_effect = lambda *args, **kwargs: balances.pop(0)
-    router_app_context.web_service.get.return_value = FakeWebResponse({
-        "distribution": {"GABC...": 10},
-        "xdr": "AAAA..."
-    })
+    router_app_context.web_service.get.return_value = FakeWebResponse(
+        {"distribution": {"GABC...": 10}, "xdr": "AAAA..."}
+    )
     router_app_context.stellar_service.build_swap_xdr.return_value = "SWAP_XDR"
     router_app_context.stellar_service.sign.return_value = "SIGNED_XDR"
     router_app_context.stellar_service.async_submit.return_value = None
-    
+
     update = types.Update(
         update_id=4,
         message=types.Message(
             message_id=4,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_council"
-        )
+            text="/do_council",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     # Check messages
     texts = [r["data"]["text"] for r in requests if r["method"] == "sendMessage"]
     assert any("Distribution" in t for t in texts)
     assert any("Work done" in t for t in texts)
-    
+
     assert router_app_context.stellar_service.build_swap_xdr.called
     assert router_app_context.stellar_service.async_submit.called
+
 
 @pytest.mark.asyncio
 async def test_update_airdrops(mock_telegram, router_app_context):
@@ -138,52 +143,54 @@ async def test_update_airdrops(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     router_app_context.report_service.update_airdrop.return_value = None
-    
+
     update = types.Update(
         update_id=5,
         message=types.Message(
             message_id=5,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/update_airdrops"
-        )
+            text="/update_airdrops",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     assert router_app_context.report_service.update_airdrop.called
     requests = mock_telegram.get_requests()
     texts = [r["data"]["text"] for r in requests if r["method"] == "sendMessage"]
     assert any("Обновление завершено" in t for t in texts)
+
 
 @pytest.mark.asyncio
 async def test_check_bim(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
-    
+
     router_app_context.gspread_service.check_bim.return_value = "Check Result"
-    
+
     update = types.Update(
         update_id=6,
         message=types.Message(
             message_id=6,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/check_bim"
-        )
+            text="/check_bim",
+        ),
     )
-    
+
     await dp.feed_update(bot=router_app_context.bot, update=update)
-    
+
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Check Result" in req["data"]["text"]
+
 
 @pytest.mark.asyncio
 async def test_check_mtlap(mock_telegram, router_app_context):
@@ -200,10 +207,10 @@ async def test_check_mtlap(mock_telegram, router_app_context):
         message=types.Message(
             message_id=7,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/check_mtlap GABC..."
-        )
+            text="/check_mtlap GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -217,6 +224,7 @@ async def test_check_mtlap(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for decode command with URL
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_decode_command_with_url(mock_telegram, router_app_context):
@@ -232,10 +240,10 @@ async def test_decode_command_with_url(mock_telegram, router_app_context):
         message=types.Message(
             message_id=8,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/decode https://eurmtl.me/sign_tools?xdr=AAAA"
-        )
+            text="/decode https://eurmtl.me/sign_tools?xdr=AAAA",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -258,10 +266,10 @@ async def test_decode_command_error(mock_telegram, router_app_context):
         message=types.Message(
             message_id=9,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/decode INVALID_XDR"
-        )
+            text="/decode INVALID_XDR",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -273,6 +281,7 @@ async def test_decode_command_error(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for balance command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_show_balance_command(mock_telegram, router_app_context):
@@ -288,10 +297,10 @@ async def test_show_balance_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=10,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/balance"
-        )
+            text="/balance",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -306,6 +315,7 @@ async def test_show_balance_command(mock_telegram, router_app_context):
 # Tests for do_council command - non-admin rejection
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_council_non_admin_rejected(mock_telegram, router_app_context):
     """Test /do_council rejects non-admin users"""
@@ -318,10 +328,10 @@ async def test_do_council_non_admin_rejected(mock_telegram, router_app_context):
         message=types.Message(
             message_id=11,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_council"
-        )
+            text="/do_council",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -338,29 +348,33 @@ async def test_do_council_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 0, 'LABR': 1}  # Low balance
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 0, "LABR": 1}  # Low balance
 
     update = types.Update(
         update_id=12,
         message=types.Message(
             message_id=12,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_council"
-        )
+            text="/do_council",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low balance" in r["data"]["text"] or "can`t pay" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low balance" in r["data"]["text"] or "can`t pay" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 # ============================================================================
 # Tests for do_bim command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_do_bim_non_admin_rejected(mock_telegram, router_app_context):
@@ -374,10 +388,10 @@ async def test_do_bim_non_admin_rejected(mock_telegram, router_app_context):
         message=types.Message(
             message_id=13,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_bim"
-        )
+            text="/do_bim",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -394,24 +408,27 @@ async def test_do_bim_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 5}  # Low balance
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 5}  # Low balance
 
     update = types.Update(
         update_id=14,
         message=types.Message(
             message_id=14,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_bim"
-        )
+            text="/do_bim",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low balance" in r["data"]["text"] or "can`t pay BIM" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low balance" in r["data"]["text"] or "can`t pay BIM" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -422,7 +439,7 @@ async def test_do_bim_success(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 100}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_bim_pays.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
@@ -433,10 +450,10 @@ async def test_do_bim_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=15,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_bim"
-        )
+            text="/do_bim",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -452,6 +469,7 @@ async def test_do_bim_success(mock_telegram, router_app_context):
 # Tests for do_resend command
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_resend_non_admin_rejected(mock_telegram, router_app_context):
     """Test /do_resend rejects non-admin users"""
@@ -464,10 +482,10 @@ async def test_do_resend_non_admin_rejected(mock_telegram, router_app_context):
         message=types.Message(
             message_id=16,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_resend 123"
-        )
+            text="/do_resend 123",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -491,10 +509,10 @@ async def test_do_resend_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=17,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_resend 123"
-        )
+            text="/do_resend 123",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -509,6 +527,7 @@ async def test_do_resend_success(mock_telegram, router_app_context):
 # Tests for do_all command
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_all_non_admin_rejected(mock_telegram, router_app_context):
     """Test /do_all rejects non-admin users"""
@@ -521,10 +540,10 @@ async def test_do_all_non_admin_rejected(mock_telegram, router_app_context):
         message=types.Message(
             message_id=18,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_all"
-        )
+            text="/do_all",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -536,6 +555,7 @@ async def test_do_all_non_admin_rejected(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for do_div command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_do_div_non_admin_rejected(mock_telegram, router_app_context):
@@ -549,10 +569,10 @@ async def test_do_div_non_admin_rejected(mock_telegram, router_app_context):
         message=types.Message(
             message_id=19,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_div"
-        )
+            text="/do_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -569,24 +589,27 @@ async def test_do_div_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 5}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 5}
 
     update = types.Update(
         update_id=20,
         message=types.Message(
             message_id=20,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_div"
-        )
+            text="/do_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -597,7 +620,7 @@ async def test_do_div_success(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 100}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_divs.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
@@ -608,10 +631,10 @@ async def test_do_div_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=21,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_div"
-        )
+            text="/do_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -627,6 +650,7 @@ async def test_do_div_success(mock_telegram, router_app_context):
 # Tests for do_sats_div command
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_sats_div_non_admin_rejected(mock_telegram, router_app_context):
     """Test /do_sats_div rejects non-admin users"""
@@ -639,10 +663,10 @@ async def test_do_sats_div_non_admin_rejected(mock_telegram, router_app_context)
         message=types.Message(
             message_id=22,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_sats_div"
-        )
+            text="/do_sats_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -659,24 +683,27 @@ async def test_do_sats_div_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'SATSMTL': 50}
+    router_app_context.stellar_service.get_balances.return_value = {"SATSMTL": 50}
 
     update = types.Update(
         update_id=23,
         message=types.Message(
             message_id=23,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_sats_div"
-        )
+            text="/do_sats_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low sats balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low sats balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -687,7 +714,7 @@ async def test_do_sats_div_success(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'SATSMTL': 1000}
+    router_app_context.stellar_service.get_balances.return_value = {"SATSMTL": 1000}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_sats_divs.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
@@ -698,10 +725,10 @@ async def test_do_sats_div_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=24,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_sats_div"
-        )
+            text="/do_sats_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -713,6 +740,7 @@ async def test_do_sats_div_success(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for do_usdm_div command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_do_usdm_div_non_admin_rejected(mock_telegram, router_app_context):
@@ -726,10 +754,10 @@ async def test_do_usdm_div_non_admin_rejected(mock_telegram, router_app_context)
         message=types.Message(
             message_id=25,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_usdm_div"
-        )
+            text="/do_usdm_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -746,24 +774,27 @@ async def test_do_usdm_div_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'USDM': 5}
+    router_app_context.stellar_service.get_balances.return_value = {"USDM": 5}
 
     update = types.Update(
         update_id=26,
         message=types.Message(
             message_id=26,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_usdm_div"
-        )
+            text="/do_usdm_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low usdm balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low usdm balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 @pytest.mark.asyncio
@@ -774,7 +805,7 @@ async def test_do_usdm_div_success(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'USDM': 100}
+    router_app_context.stellar_service.get_balances.return_value = {"USDM": 100}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_usdm_divs.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
@@ -785,10 +816,10 @@ async def test_do_usdm_div_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=27,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_usdm_div"
-        )
+            text="/do_usdm_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -800,6 +831,7 @@ async def test_do_usdm_div_success(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for do_usdm_usdm_div_daily command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_do_usdm_usdm_div_non_admin_rejected(mock_telegram, router_app_context):
@@ -813,10 +845,10 @@ async def test_do_usdm_usdm_div_non_admin_rejected(mock_telegram, router_app_con
         message=types.Message(
             message_id=28,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/do_usdm_usdm_div_daily"
-        )
+            text="/do_usdm_usdm_div_daily",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -833,29 +865,33 @@ async def test_do_usdm_usdm_div_low_balance(mock_telegram, router_app_context):
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'USDM': 50}
+    router_app_context.stellar_service.get_balances.return_value = {"USDM": 50}
 
     update = types.Update(
         update_id=29,
         message=types.Message(
             message_id=29,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_usdm_usdm_div_daily"
-        )
+            text="/do_usdm_usdm_div_daily",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    assert any("Low usdm balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
-               for r in requests if r["method"] == "sendMessage")
+    assert any(
+        "Low usdm balance" in r["data"]["text"] or "can`t pay divs" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
 
 
 # ============================================================================
 # Tests for do_usdm_usdm_div_test command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_do_usdm_usdm_div_test_wrong_chat(mock_telegram, router_app_context):
@@ -869,10 +905,10 @@ async def test_do_usdm_usdm_div_test_wrong_chat(mock_telegram, router_app_contex
         message=types.Message(
             message_id=30,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/do_usdm_usdm_div_test"
-        )
+            text="/do_usdm_usdm_div_test",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -888,19 +924,17 @@ async def test_do_usdm_usdm_div_test_correct_chat(mock_telegram, router_app_cont
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.calc_usdm_usdm_divs.return_value = [
-        ["GCLQ...", 1000.0, 5.97, 5.97, 0]
-    ]
+    router_app_context.stellar_service.calc_usdm_usdm_divs.return_value = [["GCLQ...", 1000.0, 5.97, 5.97, 0]]
 
     update = types.Update(
         update_id=31,
         message=types.Message(
             message_id=31,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.USDMMGroup, type='supergroup', title="USDM Group"),
+            chat=types.Chat(id=MTLChats.USDMMGroup, type="supergroup", title="USDM Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/do_usdm_usdm_div_test 1000"
-        )
+            text="/do_usdm_usdm_div_test 1000",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -914,6 +948,7 @@ async def test_do_usdm_usdm_div_test_correct_chat(mock_telegram, router_app_cont
 # ============================================================================
 # Tests for get_vote_fund_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_vote_fund_xdr_with_arg(mock_telegram, router_app_context):
@@ -929,10 +964,10 @@ async def test_get_vote_fund_xdr_with_arg(mock_telegram, router_app_context):
         message=types.Message(
             message_id=32,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_vote_fund_xdr GABC..."
-        )
+            text="/get_vote_fund_xdr GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -957,10 +992,10 @@ async def test_get_vote_fund_xdr_no_arg(mock_telegram, router_app_context):
         message=types.Message(
             message_id=33,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_vote_fund_xdr"
-        )
+            text="/get_vote_fund_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -973,6 +1008,7 @@ async def test_get_vote_fund_xdr_no_arg(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for get_btcmtl_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_btcmtl_xdr_with_args(mock_telegram, router_app_context):
@@ -989,10 +1025,10 @@ async def test_get_btcmtl_xdr_with_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=34,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_btcmtl_xdr 0.001 GABC..."
-        )
+            text="/get_btcmtl_xdr 0.001 GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1015,10 +1051,10 @@ async def test_get_btcmtl_xdr_no_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=35,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_btcmtl_xdr"
-        )
+            text="/get_btcmtl_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1031,6 +1067,7 @@ async def test_get_btcmtl_xdr_no_args(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for get_damircoin_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_damircoin_xdr_with_args(mock_telegram, router_app_context):
@@ -1047,10 +1084,10 @@ async def test_get_damircoin_xdr_with_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=36,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_damircoin_xdr 123"
-        )
+            text="/get_damircoin_xdr 123",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1073,10 +1110,10 @@ async def test_get_damircoin_xdr_no_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=37,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_damircoin_xdr"
-        )
+            text="/get_damircoin_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1089,6 +1126,7 @@ async def test_get_damircoin_xdr_no_args(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for get_agora_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_agora_xdr(mock_telegram, router_app_context):
@@ -1105,10 +1143,10 @@ async def test_get_agora_xdr(mock_telegram, router_app_context):
         message=types.Message(
             message_id=38,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_agora_xdr"
-        )
+            text="/get_agora_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1122,6 +1160,7 @@ async def test_get_agora_xdr(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for get_chicago_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_chicago_xdr(mock_telegram, router_app_context):
@@ -1138,10 +1177,10 @@ async def test_get_chicago_xdr(mock_telegram, router_app_context):
         message=types.Message(
             message_id=39,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_chicago_xdr"
-        )
+            text="/get_chicago_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1155,6 +1194,7 @@ async def test_get_chicago_xdr(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for get_toc_xdr command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_toc_xdr_with_args(mock_telegram, router_app_context):
@@ -1171,10 +1211,10 @@ async def test_get_toc_xdr_with_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=40,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_toc_xdr 123"
-        )
+            text="/get_toc_xdr 123",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1197,10 +1237,10 @@ async def test_get_toc_xdr_no_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=41,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_toc_xdr"
-        )
+            text="/get_toc_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1214,6 +1254,7 @@ async def test_get_toc_xdr_no_args(mock_telegram, router_app_context):
 # Tests for update_airdrops command - non-admin
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_update_airdrops_non_admin_rejected(mock_telegram, router_app_context):
     """Test /update_airdrops rejects non-admin users"""
@@ -1226,10 +1267,10 @@ async def test_update_airdrops_non_admin_rejected(mock_telegram, router_app_cont
         message=types.Message(
             message_id=42,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/update_airdrops"
-        )
+            text="/update_airdrops",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1241,6 +1282,7 @@ async def test_update_airdrops_non_admin_rejected(mock_telegram, router_app_cont
 # ============================================================================
 # Tests for update_fest command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_update_fest(mock_telegram, router_app_context):
@@ -1256,10 +1298,10 @@ async def test_update_fest(mock_telegram, router_app_context):
         message=types.Message(
             message_id=43,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/update_fest"
-        )
+            text="/update_fest",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1273,6 +1315,7 @@ async def test_update_fest(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for show_data command
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_show_data_with_address(mock_telegram, router_app_context):
@@ -1288,10 +1331,10 @@ async def test_show_data_with_address(mock_telegram, router_app_context):
         message=types.Message(
             message_id=44,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_data GABC..."
-        )
+            text="/show_data GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1316,10 +1359,10 @@ async def test_show_data_not_found(mock_telegram, router_app_context):
         message=types.Message(
             message_id=45,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_data GABC..."
-        )
+            text="/show_data GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1341,10 +1384,10 @@ async def test_show_data_no_args(mock_telegram, router_app_context):
         message=types.Message(
             message_id=46,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/show_data"
-        )
+            text="/show_data",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1357,6 +1400,7 @@ async def test_show_data_no_args(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for check_bim command - admin with username arg
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_check_bim_with_username_admin(mock_telegram, router_app_context):
@@ -1373,10 +1417,10 @@ async def test_check_bim_with_username_admin(mock_telegram, router_app_context):
         message=types.Message(
             message_id=47,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/check_bim @someuser"
-        )
+            text="/check_bim @someuser",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1398,10 +1442,10 @@ async def test_check_bim_with_username_non_admin_rejected(mock_telegram, router_
         message=types.Message(
             message_id=48,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/check_bim @someuser"
-        )
+            text="/check_bim @someuser",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1413,6 +1457,7 @@ async def test_check_bim_with_username_non_admin_rejected(mock_telegram, router_
 # ============================================================================
 # Tests for check_mtlap command - edge cases
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_check_mtlap_non_admin_rejected(mock_telegram, router_app_context):
@@ -1426,10 +1471,10 @@ async def test_check_mtlap_non_admin_rejected(mock_telegram, router_app_context)
         message=types.Message(
             message_id=49,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/check_mtlap GABC..."
-        )
+            text="/check_mtlap GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1453,10 +1498,10 @@ async def test_check_mtlap_no_key_found(mock_telegram, router_app_context):
         message=types.Message(
             message_id=50,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/check_mtlap"
-        )
+            text="/check_mtlap",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1470,6 +1515,7 @@ async def test_check_mtlap_no_key_found(mock_telegram, router_app_context):
 # Tests for update_bim1 command
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_update_bim1_non_admin_rejected(mock_telegram, router_app_context):
     """Test /update_bim1 rejects non-admin users"""
@@ -1482,10 +1528,10 @@ async def test_update_bim1_non_admin_rejected(mock_telegram, router_app_context)
         message=types.Message(
             message_id=51,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
-            text="/update_bim1"
-        )
+            text="/update_bim1",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1498,6 +1544,7 @@ async def test_update_bim1_non_admin_rejected(mock_telegram, router_app_context)
 # Tests for do_usdm_usdm_div_daily success case
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_usdm_usdm_div_daily_success(mock_telegram, router_app_context):
     """Test /do_usdm_usdm_div_daily successful execution"""
@@ -1506,7 +1553,7 @@ async def test_do_usdm_usdm_div_daily_success(mock_telegram, router_app_context)
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'USDM': 500}
+    router_app_context.stellar_service.get_balances.return_value = {"USDM": 500}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_usdm_daily.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
@@ -1517,10 +1564,10 @@ async def test_do_usdm_usdm_div_daily_success(mock_telegram, router_app_context)
         message=types.Message(
             message_id=52,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_usdm_usdm_div_daily"
-        )
+            text="/do_usdm_usdm_div_daily",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1532,6 +1579,7 @@ async def test_do_usdm_usdm_div_daily_success(mock_telegram, router_app_context)
 # ============================================================================
 # Tests for large XDR handling (file response)
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_vote_fund_xdr_large_xdr(mock_telegram, router_app_context):
@@ -1549,10 +1597,10 @@ async def test_get_vote_fund_xdr_large_xdr(mock_telegram, router_app_context):
         message=types.Message(
             message_id=53,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_vote_fund_xdr GABC..."
-        )
+            text="/get_vote_fund_xdr GABC...",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1566,6 +1614,7 @@ async def test_get_vote_fund_xdr_large_xdr(mock_telegram, router_app_context):
 # Tests for do_all success case
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_all_success(mock_telegram, router_app_context):
     """Test /do_all calls div, sats_div, show_bim, and do_bim"""
@@ -1575,7 +1624,7 @@ async def test_do_all_success(mock_telegram, router_app_context):
     dp.include_router(stellar_router)
 
     # Setup all required returns for the combined command
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100, 'SATSMTL': 1000}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 100, "SATSMTL": 1000}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_divs.return_value = [("addr1", 10)]
     router_app_context.stellar_service.calc_sats_divs.return_value = [("addr1", 10)]
@@ -1589,10 +1638,10 @@ async def test_do_all_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=54,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_all"
-        )
+            text="/do_all",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1604,6 +1653,7 @@ async def test_do_all_success(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for chicago XDR with large response
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_chicago_xdr_large(mock_telegram, router_app_context):
@@ -1621,10 +1671,10 @@ async def test_get_chicago_xdr_large(mock_telegram, router_app_context):
         message=types.Message(
             message_id=55,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_chicago_xdr"
-        )
+            text="/get_chicago_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1639,6 +1689,7 @@ async def test_get_chicago_xdr_large(mock_telegram, router_app_context):
 # Tests for update_bim1 success case
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_update_bim1_success(mock_telegram, router_app_context):
     """Test /update_bim1 successful execution"""
@@ -1650,12 +1701,14 @@ async def test_update_bim1_success(mock_telegram, router_app_context):
     dp.include_router(stellar_router)
 
     # Setup fake worksheet with test data
-    worksheet = FakeGSpreadWorksheet(data=[
-        ["Header1", "Header2", "Header3", "TelegramID"],
-        ["Row1", "Data", "More", ""],
-        ["Row2", "Data", "More", "12345"],
-        ["Row3", "Data", "More", "67890"],
-    ])
+    worksheet = FakeGSpreadWorksheet(
+        data=[
+            ["Header1", "Header2", "Header3", "TelegramID"],
+            ["Row1", "Data", "More", ""],
+            ["Row2", "Data", "More", "12345"],
+            ["Row3", "Data", "More", "67890"],
+        ]
+    )
     spreadsheet = FakeGSpreadSpreadsheet({"List": worksheet})
     router_app_context.gspread_service._agc_client.set_spreadsheet("MTL_BIM_register", spreadsheet)
 
@@ -1664,10 +1717,10 @@ async def test_update_bim1_success(mock_telegram, router_app_context):
         message=types.Message(
             message_id=56,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/update_bim1"
-        )
+            text="/update_bim1",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1681,6 +1734,7 @@ async def test_update_bim1_success(mock_telegram, router_app_context):
 # Tests for check_mtlap with reply message
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
     """Test /check_mtlap extracts key from reply message"""
@@ -1691,6 +1745,7 @@ async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
 
     # First call returns None (no key in main message), second returns key from reply
     call_count = [0]
+
     def find_key_side_effect(text):
         call_count[0] += 1
         if call_count[0] == 1:
@@ -1703,9 +1758,9 @@ async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
     reply_message = types.Message(
         message_id=100,
         date=datetime.datetime.now(),
-        chat=types.Chat(id=123, type='supergroup', title="Group"),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
         from_user=types.User(id=888, is_bot=False, first_name="Other"),
-        text="Here is a key: GFOUND..."
+        text="Here is a key: GFOUND...",
     )
 
     update = types.Update(
@@ -1713,11 +1768,11 @@ async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
         message=types.Message(
             message_id=57,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
             text="/check_mtlap",
-            reply_to_message=reply_message
-        )
+            reply_to_message=reply_message,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1730,6 +1785,7 @@ async def test_check_mtlap_with_reply(mock_telegram, router_app_context):
 # ============================================================================
 # Tests for register_handlers function
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_register_handlers():
@@ -1751,6 +1807,7 @@ async def test_register_handlers():
 # Tests for exception handling in transaction sending loops
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_do_bim_with_send_error_recovery(mock_telegram, router_app_context):
     """Test /do_bim recovers from send errors"""
@@ -1759,32 +1816,33 @@ async def test_do_bim_with_send_error_recovery(mock_telegram, router_app_context
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 100}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_bim_pays.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
 
     # First call raises, second succeeds
     call_count = [0]
+
     async def send_side_effect(*args, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
             raise Exception("Network error")
         return 0
 
-    router_app_context.stellar_service.send_by_list_id = type(
-        router_app_context.stellar_service.send_by_list_id
-    )(return_value=0, side_effect=send_side_effect)
+    router_app_context.stellar_service.send_by_list_id = type(router_app_context.stellar_service.send_by_list_id)(
+        return_value=0, side_effect=send_side_effect
+    )
 
     update = types.Update(
         update_id=59,
         message=types.Message(
             message_id=59,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_bim"
-        )
+            text="/do_bim",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1803,32 +1861,33 @@ async def test_do_div_with_send_error_recovery(mock_telegram, router_app_context
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(stellar_router)
 
-    router_app_context.stellar_service.get_balances.return_value = {'EURMTL': 100}
+    router_app_context.stellar_service.get_balances.return_value = {"EURMTL": 100}
     router_app_context.stellar_service.create_list.return_value = 1
     router_app_context.stellar_service.calc_divs.return_value = [("addr1", 10)]
     router_app_context.stellar_service.gen_xdr.return_value = 0
 
     # First call raises, subsequent succeed
     call_count = [0]
+
     async def send_side_effect(*args, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
             raise Exception("Network error")
         return 0
 
-    router_app_context.stellar_service.send_by_list_id = type(
-        router_app_context.stellar_service.send_by_list_id
-    )(return_value=0, side_effect=send_side_effect)
+    router_app_context.stellar_service.send_by_list_id = type(router_app_context.stellar_service.send_by_list_id)(
+        return_value=0, side_effect=send_side_effect
+    )
 
     update = types.Update(
         update_id=60,
         message=types.Message(
             message_id=60,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_div"
-        )
+            text="/do_div",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1849,25 +1908,26 @@ async def test_do_resend_with_send_error_recovery(mock_telegram, router_app_cont
 
     # First call raises, second succeeds
     call_count = [0]
+
     async def send_side_effect(*args, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
             raise Exception("Network error")
         return 0
 
-    router_app_context.stellar_service.send_by_list_id = type(
-        router_app_context.stellar_service.send_by_list_id
-    )(return_value=0, side_effect=send_side_effect)
+    router_app_context.stellar_service.send_by_list_id = type(router_app_context.stellar_service.send_by_list_id)(
+        return_value=0, side_effect=send_side_effect
+    )
 
     update = types.Update(
         update_id=61,
         message=types.Message(
             message_id=61,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=MTLChats.ITolstov, is_bot=False, first_name="Admin", username="admin"),
-            text="/do_resend 123"
-        )
+            text="/do_resend 123",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -1880,6 +1940,7 @@ async def test_do_resend_with_send_error_recovery(mock_telegram, router_app_cont
 # ============================================================================
 # Tests for short XDR path in get_vote_fund_xdr
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_get_vote_fund_xdr_short_xdr_no_arg(mock_telegram, router_app_context):
@@ -1897,10 +1958,10 @@ async def test_get_vote_fund_xdr_short_xdr_no_arg(mock_telegram, router_app_cont
         message=types.Message(
             message_id=62,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=123, type='supergroup', title="Group"),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
-            text="/get_vote_fund_xdr"
-        )
+            text="/get_vote_fund_xdr",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)

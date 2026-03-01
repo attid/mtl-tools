@@ -20,8 +20,9 @@ from db.repositories import FinanceRepository
 from shared.infrastructure.database.models import TOperations
 
 
-async def cmd_check_new_transaction(ignore_operation: List,
-                                    account_id=MTLAddresses.public_issuer, cash=None, chat_id=None):
+async def cmd_check_new_transaction(
+    ignore_operation: List, account_id=MTLAddresses.public_issuer, cash=None, chat_id=None
+):
     """
     Check for new transactions on a Stellar account and decode them.
 
@@ -74,7 +75,7 @@ async def cmd_check_new_transaction(ignore_operation: List,
             try:
                 tr = await decode_xdr(transaction["envelope_xdr"], ignore_operation=ignore_operation)
                 if tr and 0 < len(tr) < 90:
-                    link = f'https://viewer.eurmtl.me/transaction/{transaction["hash"]}'
+                    link = f"https://viewer.eurmtl.me/transaction/{transaction['hash']}"
                     try:
                         tr_details = await decode_xdr(transaction["envelope_xdr"])
                         if tr_details:
@@ -85,25 +86,22 @@ async def cmd_check_new_transaction(ignore_operation: List,
                             f"Error decoding XDR details for transaction {transaction['paging_token']}: {ex}"
                         )
                         # Add basic info if detailed decoding fails
-                        result.append([f'(<a href="{link}">expert link</a>)', 'Error decoding transaction details'])
+                        result.append([f'(<a href="{link}">expert link</a>)', "Error decoding transaction details"])
             except Exception as ex:
-                logger.opt(exception=True).error(
-                    f"Error processing transaction {transaction['paging_token']}: {ex}"
-                )
+                logger.opt(exception=True).error(f"Error processing transaction {transaction['paging_token']}: {ex}")
                 continue
 
         await app_context.db_service.save_kv_value(account_id + chat_id, last_id)
 
     except Exception as ex:
-        logger.opt(exception=True).error(
-            f"Error in cmd_check_new_transaction for account {account_id}: {ex}"
-        )
+        logger.opt(exception=True).error(f"Error in cmd_check_new_transaction for account {account_id}: {ex}")
 
     return result
 
 
-async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_sum: int = -1,
-                                          filter_operation=None, filter_asset=None, chat_id=None):
+async def cmd_check_new_asset_transaction(
+    session: Session, asset: str, filter_sum: int = -1, filter_operation=None, filter_asset=None, chat_id=None
+):
     """
     Check for new transactions involving a specific asset.
 
@@ -124,7 +122,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         if filter_operation is None:
             filter_operation = []
         result = []
-        asset_name = asset.split('-')[0]
+        asset_name = asset.split("-")[0]
 
         # Get last processed effect ID from database
         last_id = await app_context.db_service.load_kv_value(asset + chat_id)
@@ -132,7 +130,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         # If no last_id, save current one and exit
         if last_id is None:
             # Get data to determine current max_id
-            data = FinanceRepository(session).get_new_effects_for_token(asset_name, '-1', filter_sum)
+            data = FinanceRepository(session).get_new_effects_for_token(asset_name, "-1", filter_sum)
             if data:
                 # Save last effect ID as initial last_id
                 await app_context.db_service.save_kv_value(asset + chat_id, data[-1].id)
@@ -159,9 +157,7 @@ async def cmd_check_new_asset_transaction(session: Session, asset: str, filter_s
         return result
 
     except Exception as ex:
-        logger.opt(exception=True).error(
-            f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}"
-        )
+        logger.opt(exception=True).error(f"Error in cmd_check_new_asset_transaction for asset {asset}: {ex}")
         return []
 
 
@@ -176,12 +172,16 @@ async def _decode_db_effect(row: TOperations):
         Formatted string describing the operation
     """
     try:
-        result = f'<a href="https://viewer.eurmtl.me/operation/{row.id.split("-")[0]}">' \
-                 f'Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n'
-        if row.operation == 'trade':
-            result += f'  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n'
+        result = (
+            f'<a href="https://viewer.eurmtl.me/operation/{row.id.split("-")[0]}">'
+            f"Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n"
+        )
+        if row.operation == "trade":
+            result += (
+                f"  {row.operation}  {float2str(row.amount1)} {row.code1} for {float2str(row.amount2)} {row.code2} \n"
+            )
         else:
-            result += f'  {row.operation} for {float2str(row.amount1)} {row.code1} \n'
+            result += f"  {row.operation} for {float2str(row.amount1)} {row.code1} \n"
         return result
     except Exception as ex:
         logger.opt(exception=True).error(f"Error in _decode_db_effect for operation {row.id}: {ex}")
@@ -199,10 +199,9 @@ def cmd_check_last_operation(address: str, filter_operation=None) -> datetime:
     Returns:
         datetime of the last operation
     """
-    operations = Server(horizon_url=get_horizon_url()).operations().for_account(address).order().limit(
-        1).call()
-    op = operations['_embedded']['records'][0]
-    dt = datetime.strptime(op["created_at"], '%Y-%m-%dT%H:%M:%SZ')
+    operations = Server(horizon_url=get_horizon_url()).operations().for_account(address).order().limit(1).call()
+    op = operations["_embedded"]["records"][0]
+    dt = datetime.strptime(op["created_at"], "%Y-%m-%dT%H:%M:%SZ")
     return dt
 
 
@@ -217,9 +216,8 @@ def get_memo_by_op(op: str):
         Memo text or 'None' if no memo
     """
     operation = Server(horizon_url=get_horizon_url()).operations().operation(op).call()
-    transaction = Server(horizon_url=get_horizon_url()).transactions().transaction(
-        operation['transaction_hash']).call()
-    return transaction.get('memo', 'None')
+    transaction = Server(horizon_url=get_horizon_url()).transactions().transaction(operation["transaction_hash"]).call()
+    return transaction.get("memo", "None")
 
 
 async def stellar_get_transactions(address, start_range, end_range):
@@ -242,7 +240,7 @@ async def stellar_get_transactions(address, start_range, end_range):
         while page_records["_embedded"]["records"]:
             # Check each transaction against date range
             for record in page_records["_embedded"]["records"]:
-                tx_date = datetime.strptime(record['created_at'], "%Y-%m-%dT%H:%M:%SZ")
+                tx_date = datetime.strptime(record["created_at"], "%Y-%m-%dT%H:%M:%SZ")
                 if tx_date < start_range:
                     # If transaction date is before start range, stop fetching
                     return transactions

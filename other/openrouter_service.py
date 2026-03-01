@@ -7,9 +7,8 @@ from openrouter import OpenRouter
 from other.config_reader import config
 from other.openrouter_reactions import build_messages, normalize_label
 
-#OPENROUTER_MODEL = "google/gemini-3-flash-preview"
+# OPENROUTER_MODEL = "google/gemini-3-flash-preview"
 OPENROUTER_MODEL = "openai/gpt-oss-120b"
-
 
 
 async def classify_message(text: str, timeout_sec: float = 10.0) -> Optional[str]:
@@ -17,9 +16,7 @@ async def classify_message(text: str, timeout_sec: float = 10.0) -> Optional[str
         return None
     messages = build_messages(text)
     try:
-        async with OpenRouter(
-            api_key=config.openrouter_key.get_secret_value()
-        ) as client:
+        async with OpenRouter(api_key=config.openrouter_key.get_secret_value()) as client:
             response = await asyncio.wait_for(
                 client.chat.send_async(
                     model=OPENROUTER_MODEL,

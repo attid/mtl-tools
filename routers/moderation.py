@@ -25,7 +25,12 @@ class UnbanCallbackData(CallbackData, prefix="unban"):
 
 @router.message(Command(commands=["ban", "sban"]))
 async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: AppContext, skyuser: SkyUser):
-    if not app_context or not app_context.utils_service or not app_context.feature_flags or not app_context.moderation_service:
+    if (
+        not app_context
+        or not app_context.utils_service
+        or not app_context.feature_flags
+        or not app_context.moderation_service
+    ):
         raise ValueError("app_context with utils_service, feature_flags, and moderation_service required")
     utils_service = cast(Any, app_context.utils_service)
     feature_flags = cast(Any, app_context.feature_flags)
@@ -51,12 +56,11 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
             await utils_service.sleep_and_delete(reply_message, 5)
 
             msg = await reply_message.forward(chat_id=MTLChats.SpamGroup)
-            spam_check = feature_flags.is_enabled(message.chat.id, 'no_first_link')
+            spam_check = feature_flags.is_enabled(message.chat.id, "no_first_link")
             chat_title = message.chat.title or str(message.chat.id)
             chat_link = message.get_url()
             chat_url = html.link(chat_title, chat_link) if chat_link else chat_title
-            await msg.reply(f"Was banned by {actor_username} in {chat_url} chat.\n"
-                            f"Spam check: {spam_check}")
+            await msg.reply(f"Was banned by {actor_username} in {chat_url} chat.\nSpam check: {spam_check}")
         elif len(command_text.split()) > 1 and skynet_admin:
             try:
                 user_id = moderation_service.get_user_id(session, command_text.split()[1])
@@ -77,9 +81,10 @@ async def cmd_ban(message: Message, session: Session, bot: Bot, app_context: App
 
         msg = await message.answer(f"User (ID: {user_id}) has been banned.")
         if reply_message is None:
-            await bot.send_message(chat_id=MTLChats.SpamGroup,
-                                   text=f"User (ID: {user_id}) has been banned by "
-                                        f"{actor_username} in {message.chat.title} chat.")
+            await bot.send_message(
+                chat_id=MTLChats.SpamGroup,
+                text=f"User (ID: {user_id}) has been banned by {actor_username} in {message.chat.title} chat.",
+            )
 
         # If the command is sban, delete the messages quickly
         tm = 2 if command_text.startswith("/sban") else 10
@@ -101,7 +106,7 @@ async def cmd_unban(message: Message, session: Session, bot: Bot, app_context: A
     if len(command_text.split()) > 1:
         try:
             param = command_text.split()[1]
-            if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
+            if param.isdigit() or (param.startswith("-") and param[1:].isdigit()):
                 user_id = int(param)
             else:
                 user_id = moderation_service.get_user_id(session, param)
@@ -140,7 +145,7 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
     if len(command_text.split()) > 1:
         param = command_text.split()[1]
         try:
-            if param.isdigit() or (param.startswith('-') and param[1:].isdigit()):
+            if param.isdigit() or (param.startswith("-") and param[1:].isdigit()):
                 user_id = int(param)
             else:
                 user_id = moderation_service.get_user_id(session, param)
@@ -166,7 +171,14 @@ async def cmd_test_id(message: Message, session: Session, bot: Bot, app_context:
 
 
 @router.callback_query(UnbanCallbackData.filter())
-async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_data: UnbanCallbackData, app_context: AppContext, skyuser: SkyUser):
+async def cmd_q_unban(
+    call: CallbackQuery,
+    session: Session,
+    bot: Bot,
+    callback_data: UnbanCallbackData,
+    app_context: AppContext,
+    skyuser: SkyUser,
+):
     if not app_context or not app_context.moderation_service:
         raise ValueError("app_context with moderation_service required")
     moderation_service = cast(Any, app_context.moderation_service)
@@ -197,4 +209,4 @@ async def cmd_q_unban(call: CallbackQuery, session: Session, bot: Bot, callback_
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router moderation was loaded')
+    logger.info("router moderation was loaded")

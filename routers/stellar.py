@@ -40,15 +40,15 @@ async def cmd_decode(message: Message, app_context=None):
         parts = (message.text or "").split()
         xdr_str = parts[1]
         full_data = ctx.config_service.is_full_data(message.chat.id)
-        
-        if (message.text or "").find('eurmtl.me') > -1:
+
+        if (message.text or "").find("eurmtl.me") > -1:
             msg = await ctx.stellar_service.check_url_xdr(xdr_str, full_data=full_data)
         else:
             msg = await ctx.stellar_service.decode_xdr(xdr_str, full_data=full_data)
-        msg = '\n'.join(msg)
+        msg = "\n".join(msg)
         await ctx.utils_service.multi_reply(message, msg)
     except Exception as e:
-        await message.reply('Параметр не распознан. Надо xdr или ссылку на тулзу')
+        await message.reply("Параметр не распознан. Надо xdr или ссылку на тулзу")
         logger.error(e)
 
 
@@ -70,21 +70,22 @@ async def cmd_show_balance(message: Message, app_context=None):
     ctx = cast(Any, app_context)
     result = await ctx.stellar_service.get_cash_balance(message.chat.id)
     from other.img_tools import create_image_with_text
+
     create_image_with_text(result, image_size=(550, 600))
-    await message.answer_photo(FSInputFile(start_path + '/data/output_image.png'))
+    await message.answer_photo(FSInputFile(start_path + "/data/output_image.png"))
 
 
 @router.message(Command(commands=["do_council"]))
 async def cmd_do_council(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
 
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_council)
-    eurmtl_balance = float(balance.get('EURMTL', 0) or 0)
+    eurmtl_balance = float(balance.get("EURMTL", 0) or 0)
     if eurmtl_balance > 5:
         swap_xdr = await ctx.stellar_service.build_swap_xdr(
             source_address=MTLAddresses.public_council,
@@ -97,22 +98,22 @@ async def cmd_do_council(message: Message, session: Session, app_context=None, s
         await ctx.stellar_service.async_submit(signed_swap)
         balance = await ctx.stellar_service.get_balances(MTLAddresses.public_council)
 
-    labr_balance = float(balance.get('LABR', 0) or 0)
+    labr_balance = float(balance.get("LABR", 0) or 0)
     if labr_balance <= 1:
-        await message.reply(f'Low balance at {MTLAddresses.public_council} can`t pay')
+        await message.reply(f"Low balance at {MTLAddresses.public_council} can`t pay")
         return
     url = "https://labrdistributiontx-e62teamaya-lm.a.run.app/?address=" + MTLAddresses.public_council
 
-    response = await ctx.web_service.get(url, return_type='json')
+    response = await ctx.web_service.get(url, return_type="json")
 
     distribution_message = "Distribution:\n"
     for address, amount in response.data["distribution"].items():
-        shortened_address = address[:4] + '..' + address[-4:]
+        shortened_address = address[:4] + ".." + address[-4:]
         distribution_message += f"{shortened_address}: {amount}\n"
 
     await message.answer(distribution_message)
-    
-    signed = ctx.stellar_service.sign(response.data['xdr'])
+
+    signed = ctx.stellar_service.sign(response.data["xdr"])
     await ctx.stellar_service.async_submit(signed)
     await message.answer("Work done.")
 
@@ -120,25 +121,25 @@ async def cmd_do_council(message: Message, session: Session, app_context=None, s
 @router.message(Command(commands=["do_bim"]))
 async def cmd_do_bim(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_bod_eur)
-    
-    if int(balance.get('EURMTL', 0)) < 10:
-        await message.reply(f'Low balance at {MTLAddresses.public_bod_eur} can`t pay BIM')
+
+    if int(balance.get("EURMTL", 0)) < 10:
+        await message.reply(f"Low balance at {MTLAddresses.public_bod_eur} can`t pay BIM")
         return
 
     # новая запись
-    list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('Basic Income %d/%m/%Y'), 1)
-    
+    list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("Basic Income %d/%m/%Y"), 1)
+
     lines = []
     msg = await message.answer(ctx.utils_service.add_text(lines, 1, f"Start BDM pays. PayID №{list_id}. Step (1/7)"))
-    
+
     result = await ctx.stellar_service.calc_bim_pays(session, list_id)
-        
+
     await msg.edit_text(ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/7)"))
 
     i = 1
@@ -163,7 +164,7 @@ async def cmd_do_bim(message: Message, session: Session, app_context=None, skyus
 @router.message(Command(commands=["do_resend"]))
 async def cmd_do_key_rate(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     if not app_context:
@@ -184,7 +185,7 @@ async def cmd_do_key_rate(message: Message, session: Session, app_context=None, 
                 await msg.edit_text(ctx.utils_service.add_text(lines, 4, f"Part done. Need {i} more. Step (3/6)"))
             except Exception as err:
                 await msg.edit_text(ctx.utils_service.add_text(lines, 5, f"Got error. New attempt {e}. Step (4/6)"))
-                logger.info(f'249 line error {err}')
+                logger.info(f"249 line error {err}")
                 e += 1
         await msg.edit_text(ctx.utils_service.add_text(lines, 6, "Resend. Work done. Step (5/6)"))
 
@@ -192,7 +193,7 @@ async def cmd_do_key_rate(message: Message, session: Session, app_context=None, 
 @router.message(Command(commands=["do_all"]))
 async def cmd_do_all(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     await cmd_do_div(message, session=session, app_context=app_context, skyuser=skyuser)
@@ -205,28 +206,33 @@ async def cmd_do_all(message: Message, session: Session, app_context=None, skyus
 @router.message(Command(commands=["do_div"]))
 async def cmd_do_div(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_div)
-        
-    if int(balance.get('EURMTL', 0)) < 10:
-        await message.reply(f'Low balance at {MTLAddresses.public_div} can`t pay divs')
+
+    if int(balance.get("EURMTL", 0)) < 10:
+        await message.reply(f"Low balance at {MTLAddresses.public_div} can`t pay divs")
         return
 
-    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('mtl div %d/%m/%Y'), 0)
-    donate_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('donate %d/%m/%Y'), 0)
-        
+    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("mtl div %d/%m/%Y"), 0)
+    donate_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("donate %d/%m/%Y"), 0)
+
     lines = []
     msg = await message.answer(
-        ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id} donate pays №{donate_list_id}. Step (1/12)"))
-    
+        ctx.utils_service.add_text(
+            lines, 1, f"Start div pays №{div_list_id} donate pays №{donate_list_id}. Step (1/12)"
+        )
+    )
+
     result = await ctx.stellar_service.calc_divs(session, div_list_id, donate_list_id)
-        
-    await msg.edit_text(ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    await msg.edit_text(
+        ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)")
+    )
 
     i = 1
 
@@ -269,27 +275,28 @@ async def cmd_do_div(message: Message, session: Session, app_context=None, skyus
 @router.message(Command(commands=["do_sats_div"]))
 async def cmd_do_sats_div(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_div)
-        
-    if int(balance.get('SATSMTL', 0)) < 100:
-        await message.reply(f'Low sats balance at {MTLAddresses.public_div} can`t pay divs')
+
+    if int(balance.get("SATSMTL", 0)) < 100:
+        await message.reply(f"Low sats balance at {MTLAddresses.public_div} can`t pay divs")
         return
 
-    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('mtl div %d/%m/%Y'), 4)
-        
+    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("mtl div %d/%m/%Y"), 4)
+
     lines = []
-    msg = await message.answer(
-        ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
-    
+    msg = await message.answer(ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+
     result = await ctx.stellar_service.calc_sats_divs(session, div_list_id)
-        
-    await msg.edit_text(ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    await msg.edit_text(
+        ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)")
+    )
 
     i = 1
 
@@ -314,27 +321,28 @@ async def cmd_do_sats_div(message: Message, session: Session, app_context=None, 
 @router.message(Command(commands=["do_usdm_div"]))
 async def cmd_do_usdm_div(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_div)
-        
-    if int(balance.get('USDM', 0)) < 10:
-        await message.reply(f'Low usdm balance at {MTLAddresses.public_div} can`t pay divs')
+
+    if int(balance.get("USDM", 0)) < 10:
+        await message.reply(f"Low usdm balance at {MTLAddresses.public_div} can`t pay divs")
         return
 
-    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('mtl div %d/%m/%Y'), 5)
-        
+    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("mtl div %d/%m/%Y"), 5)
+
     lines = []
-    msg = await message.answer(
-        ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
-    
+    msg = await message.answer(ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+
     result = await ctx.stellar_service.calc_usdm_divs(session, div_list_id)
-        
-    await msg.edit_text(ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    await msg.edit_text(
+        ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)")
+    )
 
     i = 1
 
@@ -360,27 +368,28 @@ async def cmd_do_usdm_div(message: Message, session: Session, app_context=None, 
 @router.message(Command(commands=["do_usdm_usdm_div_daily"]))
 async def cmd_do_usdm_usdm_div(message: Message, session: Session, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     balance = await ctx.stellar_service.get_balances(MTLAddresses.public_usdm_div)
-        
-    if int(balance.get('USDM', 0)) < 100:
-        await message.reply(f'Low usdm balance at {MTLAddresses.public_usdm_div} can`t pay divs')
+
+    if int(balance.get("USDM", 0)) < 100:
+        await message.reply(f"Low usdm balance at {MTLAddresses.public_usdm_div} can`t pay divs")
         return
 
-    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime('usdm div %d/%m/%Y'), 6)
-        
+    div_list_id = ctx.stellar_service.create_list(session, datetime.now().strftime("usdm div %d/%m/%Y"), 6)
+
     lines = []
-    msg = await message.answer(
-        ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
-    
+    msg = await message.answer(ctx.utils_service.add_text(lines, 1, f"Start div pays №{div_list_id}. Step (1/12)"))
+
     result = await ctx.stellar_service.calc_usdm_daily(session, div_list_id)
-        
-    await msg.edit_text(ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)"))
+
+    await msg.edit_text(
+        ctx.utils_service.add_text(lines, 2, f"Found {len(result)} addresses. Try gen xdr. Step (2/12)")
+    )
 
     i = 1
 
@@ -409,15 +418,18 @@ async def cmd_do_usdm_usdm_div_test(message: Message, session: Session, app_cont
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     if message.chat.id != MTLChats.USDMMGroup:
-        await message.reply('Wrong chat')
+        await message.reply("Wrong chat")
         return
 
     parts = (message.text or "").split()
     test_sum = float(parts[1]) if len(parts) > 1 else 1000
 
-    calc = await ctx.stellar_service.calc_usdm_usdm_divs(session=session, div_list_id=0,
-                                                                 test_sum=test_sum,
-                                                                 test_for_address='GCLQ6TKOOJW33ABVG5D5KKJBZANSDW46BCXTSQ3TKLRYFPAVFZENUMON')
+    calc = await ctx.stellar_service.calc_usdm_usdm_divs(
+        session=session,
+        div_list_id=0,
+        test_sum=test_sum,
+        test_for_address="GCLQ6TKOOJW33ABVG5D5KKJBZANSDW46BCXTSQ3TKLRYFPAVFZENUMON",
+    )
     # [['GCLQ6TKOOJW33ABVG5D5KKJBZANSDW46BCXTSQ3TKLRYFPAVFZENUMON', 1000.0, 5.97253, 5.97253, 0]]
     await message.answer(f"current balance {calc[0][1]}\npay from {test_sum} will be {calc[0][2]}")
 
@@ -431,23 +443,24 @@ async def cmd_get_vote_fund_xdr(message: Message, app_context=None):
     parts = (message.text or "").split()
     if len(parts) > 1:
         arr2 = await ctx.stellar_service.get_new_vote_all_mtl(parts[1])
-            
+
         if len(arr2[0]) > 4000:
             await ctx.utils_service.answer_text_file(message, arr2[0], "vote_fund_xdr.txt")
         else:
             await message.answer(arr2[0])
     else:
-        await message.answer('Делаю транзакции подождите несколько секунд')
-        arr2 = await ctx.stellar_service.get_new_vote_all_mtl('')
-        await message.answer('for FUND')
+        await message.answer("Делаю транзакции подождите несколько секунд")
+        arr2 = await ctx.stellar_service.get_new_vote_all_mtl("")
+        await message.answer("for FUND")
         if len(arr2[0]) > 4000:
             await ctx.utils_service.answer_text_file(message, arr2[0], "vote_fund_xdr.txt")
         else:
             await ctx.utils_service.multi_answer(message, arr2[0])
 
 
-@update_command_info("/get_btcmtl_xdr",
-                     "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL")
+@update_command_info(
+    "/get_btcmtl_xdr", "use - /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL"
+)
 @router.message(Command(commands=["get_btcmtl_xdr"]))
 async def cmd_get_btcmtl_xdr(message: Message, app_context=None):
     if not app_context:
@@ -455,15 +468,16 @@ async def cmd_get_btcmtl_xdr(message: Message, app_context=None):
     ctx = cast(Any, app_context)
     arg = (message.text or "").split()
     if len(arg) > 1:
-        memo = None if len(arg) < 3 else ' '.join(arg[3:])
+        memo = None if len(arg) < 3 else " ".join(arg[3:])
         xdr = await ctx.stellar_service.get_btcmtl_xdr(float2str(arg[1]), arg[2], memo)
         decoded = await ctx.stellar_service.decode_xdr(xdr=xdr)
-            
+
         await ctx.utils_service.multi_answer(message, xdr)
-        await ctx.utils_service.multi_answer(message, '\n'.join(decoded))
+        await ctx.utils_service.multi_answer(message, "\n".join(decoded))
     else:
-        await ctx.utils_service.multi_answer(message,
-                           'use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL')
+        await ctx.utils_service.multi_answer(
+            message, "use -  /get_btcmtl_xdr 0.001 XXXXXXX \n where 0.001 sum, XXXXXXXX address to send BTCMTL"
+        )
 
 
 @router.message(Command(commands=["get_damircoin_xdr"]))
@@ -475,12 +489,11 @@ async def cmd_get_damircoin_xdr(message: Message, app_context=None):
     if len(arg) > 1:
         xdr = await ctx.stellar_service.get_damircoin_xdr(int(arg[1]))
         decoded = await ctx.stellar_service.decode_xdr(xdr=xdr)
-            
+
         await ctx.utils_service.multi_answer(message, xdr)
-        await ctx.utils_service.multi_answer(message, '\n'.join(decoded))
+        await ctx.utils_service.multi_answer(message, "\n".join(decoded))
     else:
-        await ctx.utils_service.multi_answer(message,
-                           'use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL')
+        await ctx.utils_service.multi_answer(message, "use -  /get_damircoin_xdr 123 \n where 123 sum in EURMTL")
 
 
 @router.message(Command(commands=["get_agora_xdr"]))
@@ -490,9 +503,9 @@ async def cmd_get_agora_xdr(message: Message, app_context=None):
     ctx = cast(Any, app_context)
     xdr = await ctx.stellar_service.get_agora_xdr()
     decoded = await ctx.stellar_service.decode_xdr(xdr=xdr)
-        
+
     await ctx.utils_service.multi_answer(message, xdr)
-    await ctx.utils_service.multi_answer(message, '\n'.join(decoded))
+    await ctx.utils_service.multi_answer(message, "\n".join(decoded))
 
 
 @update_command_info("/get_chicago_xdr", "Делает транзакцию кешбека для chicago")
@@ -502,19 +515,21 @@ async def cmd_get_chicago_xdr(message: Message, app_context=None):
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     result = await ctx.stellar_service.get_chicago_xdr()
-        
+
     xdr = result[-1]
-    await ctx.utils_service.multi_answer(message, '\n'.join(result[:-1]))
+    await ctx.utils_service.multi_answer(message, "\n".join(result[:-1]))
     if len(xdr) < 4000:
         await ctx.utils_service.multi_answer(message, xdr)
     else:
-        text = ('Не могу отправить xdr вы можете получить его по ссылке ' +
-                f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>')
+        text = (
+            "Не могу отправить xdr вы можете получить его по ссылке "
+            + f'<a href="https://eurmtl.me/sign_tools?xdr={quote(xdr)}">xdr</a>'
+        )
         await message.answer(text)
-    
+
     decoded = await ctx.stellar_service.decode_xdr(xdr=xdr)
-        
-    await ctx.utils_service.multi_answer(message, '\n'.join(decoded))
+
+    await ctx.utils_service.multi_answer(message, "\n".join(decoded))
 
 
 @router.message(Command(commands=["get_toc_xdr"]))
@@ -526,27 +541,26 @@ async def cmd_get_toc_xdr(message: Message, app_context=None):
     if len(arg) > 1:
         xdr = await ctx.stellar_service.get_toc_xdr(int(arg[1]))
         decoded = await ctx.stellar_service.decode_xdr(xdr=xdr)
-            
+
         await ctx.utils_service.multi_answer(message, xdr)
-        await ctx.utils_service.multi_answer(message, '\n'.join(decoded))
+        await ctx.utils_service.multi_answer(message, "\n".join(decoded))
     else:
-        await ctx.utils_service.multi_answer(message,
-                           'use -  /get_toc_xdr 123 \n where 123 sum in EURMTL')
+        await ctx.utils_service.multi_answer(message, "use -  /get_toc_xdr 123 \n where 123 sum in EURMTL")
 
 
 @update_command_info("/update_airdrops", "Обновить файл airdrops")
 @router.message(Command(commands=["update_airdrops"]))
 async def cmd_update_airdrops(message: Message, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
-    await message.answer('Запускаю полное обновление')
+    await message.answer("Запускаю полное обновление")
     await ctx.report_service.update_airdrop()
-    await message.answer('Обновление завершено')
+    await message.answer("Обновление завершено")
 
 
 @router.message(Command(commands=["update_fest"]))
@@ -554,9 +568,9 @@ async def cmd_update_fest(message: Message, session: Session, app_context=None):
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
-    await message.answer('Запускаю полное обновление')
+    await message.answer("Запускаю полное обновление")
     await ctx.report_service.update_fest(session)
-    await message.answer('Обновление завершено')
+    await message.answer("Обновление завершено")
 
 
 @update_command_info("/show_data", "Показать какие данные есть в стеларе на этот адрес. Use: /show_data public_key")
@@ -571,20 +585,20 @@ async def route_show_data(message: Message, app_context=None):
     parts = (message.text or "").split()
     if len(parts) > 1:
         result = await ctx.stellar_service.show_data(parts[1])
-            
+
         if len(result) == 0:
-            await message.reply('Data not found')
+            await message.reply("Data not found")
         else:
-            await ctx.utils_service.multi_reply(message, '\n'.join(result))
+            await ctx.utils_service.multi_reply(message, "\n".join(result))
         return
     # else
-    await message.reply('Wrong format. Use: /show_data public_key')
+    await message.reply("Wrong format. Use: /show_data public_key")
 
 
 @router.message(Command(commands=["update_bim1"]))
 async def cmd_update_bim1(message: Message, bot: Bot, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
     if not app_context:
         raise ValueError("app_context required")
@@ -604,8 +618,8 @@ async def cmd_update_bim1(message: Message, bot: Bot, app_context=None, skyuser:
                 new_data = False
         update_list.append([new_data])
 
-    await wks.update(range_name='S3', values=update_list)
-    await message.reply('Done')
+    await wks.update(range_name="S3", values=update_list)
+    await message.reply("Done")
 
 
 @router.message(Command(commands=["check_bim"]))
@@ -614,9 +628,9 @@ async def cmd_check_bim(message: Message, app_context=None, skyuser: SkyUser | N
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     cmd = (message.text or "").split()
-    if len(cmd) > 1 and cmd[1][0] == '@':
+    if len(cmd) > 1 and cmd[1][0] == "@":
         if not skyuser or not skyuser.is_skynet_admin():
-            await message.reply('You are not my admin.')
+            await message.reply("You are not my admin.")
             return
         msg = await ctx.gspread_service.check_bim(user_id_or_name=cmd[1][1:])
     else:
@@ -631,19 +645,19 @@ async def cmd_check_bim(message: Message, app_context=None, skyuser: SkyUser | N
 @router.message(Command(commands=["check_mtlap"]))
 async def cmd_check_mtlap(message: Message, app_context=None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
-        
+
     if not app_context:
         raise ValueError("app_context required")
     ctx = cast(Any, app_context)
     key = ctx.stellar_service.find_public_key(message.text)
-        
+
     if key is None and message.reply_to_message:
         key = ctx.stellar_service.find_public_key(message.reply_to_message.text)
 
     if key is None:
-        await message.reply('Wrong format. Use: /check_mtlap public_key')
+        await message.reply("Wrong format. Use: /check_mtlap public_key")
         return
 
     msg = await ctx.stellar_service.check_mtlap(key)
@@ -652,4 +666,4 @@ async def cmd_check_mtlap(message: Message, app_context=None, skyuser: SkyUser |
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router stellar was loaded')
+    logger.info("router stellar was loaded")

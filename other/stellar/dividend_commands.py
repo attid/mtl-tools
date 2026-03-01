@@ -61,13 +61,11 @@ def cmd_gen_data_xdr(account_id: str, data: str, xdr: str = None) -> str:
         server = get_server()
         root_account = server.load_account(account_id)
         transaction = TransactionBuilder(
-            source_account=root_account,
-            network_passphrase=get_network_passphrase(),
-            base_fee=BASE_FEE
+            source_account=root_account, network_passphrase=get_network_passphrase(), base_fee=BASE_FEE
         )
         transaction.set_timeout(60 * 60 * 24 * 7)
 
-    data = data.split(':')
+    data = data.split(":")
     data_name = data[0]
     data_value = data[1]
     if len(data_value) == 0:
@@ -94,10 +92,10 @@ def get_donate_list(account: dict) -> list:
         account_id = account.get("account_id")
         for data_name in list(data):
             data_value = data[data_name]
-            if data_name[:10] == 'mtl_donate':
-                if data_name.find('=') > 6:
+            if data_name[:10] == "mtl_donate":
+                if data_name.find("=") > 6:
                     persent: str
-                    persent = data_name[data_name.find('=') + 1:]
+                    persent = data_name[data_name.find("=") + 1 :]
                     if isfloat(persent):
                         donate_data_value = decode_data_value(data_value)
                         donate_list.append([account_id, donate_data_value, persent])
@@ -114,9 +112,7 @@ async def get_liquidity_pools_for_asset(asset: Asset) -> list:
     Returns:
         List of pool dicts with reserves_dict added
     """
-    async with ServerAsync(
-            horizon_url=get_horizon_url(), client=AiohttpClient(request_timeout=3 * 60)
-    ) as server:
+    async with ServerAsync(horizon_url=get_horizon_url(), client=AiohttpClient(request_timeout=3 * 60)) as server:
         pools = []
         pools_call_builder = server.liquidity_pools().for_reserves([asset]).limit(200)
 
@@ -124,14 +120,14 @@ async def get_liquidity_pools_for_asset(asset: Asset) -> list:
         while page_records["_embedded"]["records"]:
             for pool in page_records["_embedded"]["records"]:
                 # Remove _links from results
-                pool.pop('_links', None)
+                pool.pop("_links", None)
 
                 # Convert reserves list to reserves_dict
-                reserves_dict = {reserve['asset']: reserve['amount'] for reserve in pool['reserves']}
-                pool['reserves_dict'] = reserves_dict
+                reserves_dict = {reserve["asset"]: reserve["amount"] for reserve in pool["reserves"]}
+                pool["reserves_dict"] = reserves_dict
 
                 # Remove original reserves list
-                pool.pop('reserves', None)
+                pool.pop("reserves", None)
 
                 pools.append(pool)
 
@@ -173,50 +169,57 @@ async def cmd_calc_bim_pays(session: Session, list_id: int, test_sum: int = 0) -
         div_sum = test_sum
     else:
         div_sum = await get_balances(MTLAddresses.public_bod_eur)
-        div_sum = int(float(div_sum['EURMTL']) / 2)  # 50%
-        logger.info(f'div_sum = {div_sum}')
+        div_sum = int(float(div_sum["EURMTL"]) / 2)  # 50%
+        logger.info(f"div_sum = {div_sum}")
 
     accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
 
-    secretary = 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7'
+    secretary = "GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7"
 
-    valid_accounts = [account for account in accounts if
-                      account['account_id'] != secretary and
-                      (await get_balances(account['account_id'], account_json=account)).get('EURMTL') is not None]
-    one_mtlap_accounts = [account for account in valid_accounts if
-                          1 <= (await get_balances(account['account_id'], account_json=account))['MTLAP'] < 2]
-    two_or_more_mtlap_accounts = [account for account in valid_accounts if
-                                  (await get_balances(account['account_id'], account_json=account))['MTLAP'] >= 2]
+    valid_accounts = [
+        account
+        for account in accounts
+        if account["account_id"] != secretary
+        and (await get_balances(account["account_id"], account_json=account)).get("EURMTL") is not None
+    ]
+    one_mtlap_accounts = [
+        account
+        for account in valid_accounts
+        if 1 <= (await get_balances(account["account_id"], account_json=account))["MTLAP"] < 2
+    ]
+    two_or_more_mtlap_accounts = [
+        account
+        for account in valid_accounts
+        if (await get_balances(account["account_id"], account_json=account))["MTLAP"] >= 2
+    ]
 
     amount_for_one_mtlap_accounts = int(div_sum * 0.2)
     amount_for_two_or_more_mtlap_accounts = int(div_sum * 0.8)
 
-    sdiv_one_mtlap = int(
-        amount_for_one_mtlap_accounts / len(one_mtlap_accounts) * 100) / 100 if one_mtlap_accounts else 0
-    sdiv_two_mtlap = int(amount_for_two_or_more_mtlap_accounts / len(
-        two_or_more_mtlap_accounts) * 100) / 100 if two_or_more_mtlap_accounts else 0
+    sdiv_one_mtlap = (
+        int(amount_for_one_mtlap_accounts / len(one_mtlap_accounts) * 100) / 100 if one_mtlap_accounts else 0
+    )
+    sdiv_two_mtlap = (
+        int(amount_for_two_or_more_mtlap_accounts / len(two_or_more_mtlap_accounts) * 100) / 100
+        if two_or_more_mtlap_accounts
+        else 0
+    )
 
     mtl_accounts = []
     for account in valid_accounts:
-        balances = await get_balances(account['account_id'], account_json=account)
-        bls = balances['EURMTL']
+        balances = await get_balances(account["account_id"], account_json=account)
+        bls = balances["EURMTL"]
         if account in two_or_more_mtlap_accounts:
             div = sdiv_two_mtlap
         elif account in one_mtlap_accounts:
             div = sdiv_one_mtlap
         else:
             div = 0
-        mtl_accounts.append([account['account_id'], bls, div, div, list_id])
+        mtl_accounts.append([account["account_id"], bls, div, div, list_id])
 
     mtl_accounts.sort(key=lambda x: x[0], reverse=True)
     payments = [
-        TPayments(
-            user_key=item[0],
-            mtl_sum=item[1],
-            user_calc=item[2],
-            user_div=item[3],
-            id_div_list=item[4]
-        )
+        TPayments(user_key=item[0], mtl_sum=item[1], user_calc=item[2], user_div=item[3], id_div_list=item[4])
         for item in mtl_accounts
     ]
     session.add_all(payments)
@@ -261,12 +264,12 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
         div_sum = test_sum
     else:
         div_sum = await get_balances(MTLAddresses.public_div)
-        div_sum = float(div_sum['EURMTL']) - 0.1
-        logger.info(f'div_sum = {div_sum}')
+        div_sum = float(div_sum["EURMTL"]) - 0.1
+        logger.info(f"div_sum = {div_sum}")
         await stellar_async_submit(
             stellar_sign(
-                cmd_gen_data_xdr(MTLAddresses.public_div, f'LAST_DIVS:{div_sum}'),
-                config.private_sign.get_secret_value()
+                cmd_gen_data_xdr(MTLAddresses.public_div, f"LAST_DIVS:{div_sum}"),
+                config.private_sign.get_secret_value(),
             )
         )
 
@@ -291,8 +294,11 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
         div = round(div_sum / mtl_sum * total_balance, 7)
         donates.extend(get_donate_list(account))
 
-        if (eur > 0) and (div > 0.0001) and \
-                (account["account_id"] not in [MTLAddresses.public_issuer, MTLAddresses.public_pawnshop]):
+        if (
+            (eur > 0)
+            and (div > 0.0001)
+            and (account["account_id"] not in [MTLAddresses.public_issuer, MTLAddresses.public_pawnshop])
+        ):
             div_accounts.append([account["account_id"], total_balance, div, div, div_list_id])
 
     # calc donate
@@ -317,13 +323,7 @@ async def cmd_calc_divs(session: Session, div_list_id: int, donate_list_id: int,
 
     # Save to DB
     payments = [
-        TPayments(
-            user_key=item[0],
-            mtl_sum=item[1],
-            user_calc=item[2],
-            user_div=item[3],
-            id_div_list=item[4]
-        )
+        TPayments(user_key=item[0], mtl_sum=item[1], user_calc=item[2], user_div=item[3], id_div_list=item[4])
         for item in div_accounts
     ]
     session.add_all(payments)
@@ -370,10 +370,7 @@ async def cmd_calc_usdm_divs(session: Session, div_list_id: int, test_sum: int =
 
 @safe_catch_async
 async def cmd_calc_usdm_usdm_divs(
-    session: Session,
-    div_list_id: int,
-    test_sum: int = 0,
-    test_for_address: Optional[str] = None
+    session: Session, div_list_id: int, test_sum: int = 0, test_for_address: Optional[str] = None
 ) -> list:
     """
     Calculate USDM distribution dividends for USDM holders.
@@ -394,12 +391,15 @@ async def cmd_calc_usdm_usdm_divs(
         div_sum = test_sum
     else:
         div_sum = await get_balances(MTLAddresses.public_usdm_div)
-        div_sum = float(div_sum['USDM']) - 0.1
+        div_sum = float(div_sum["USDM"]) - 0.1
         logger.info(f"div_sum = {div_sum}")
         if not test_for_address:  # Only write to blockchain if not a test calculation
             await stellar_async_submit(
-                stellar_sign(cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f'LAST_DIVS_USDM:{div_sum}'),
-                             config.private_sign.get_secret_value()))
+                stellar_sign(
+                    cmd_gen_data_xdr(MTLAddresses.public_usdm_div, f"LAST_DIVS_USDM:{div_sum}"),
+                    config.private_sign.get_secret_value(),
+                )
+            )
 
     if div_sum > 700:
         logger.info(f"div_sum = {div_sum}")
@@ -413,18 +413,22 @@ async def cmd_calc_usdm_usdm_divs(
         balances = account["balances"]
         token_balance = 0
         for balance in balances:
-            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
-                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
+            if (
+                balance["asset_type"] == "credit_alphanum4"
+                and balance["asset_code"] == MTLAssets.usdm_asset.code
+                and balance["asset_issuer"] == MTLAssets.usdm_asset.issuer
+            ):
                 token_balance += float(balance["balance"])
             elif balance["asset_type"] == "liquidity_pool_shares":
                 # Find pool by ID and calculate USDM share for account
                 pool_id = balance["liquidity_pool_id"]
                 pool_share = float(balance["balance"])
                 for pool in pools:
-                    if pool['id'] == pool_id:
+                    if pool["id"] == pool_id:
                         usdm_amount = float(
-                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
-                        total_shares = float(pool['total_shares'])
+                            pool["reserves_dict"].get(MTLAssets.usdm_asset.code + ":" + MTLAssets.usdm_asset.issuer, 0)
+                        )
+                        total_shares = float(pool["total_shares"])
                         # Calculate USDM share in pool belonging to account
                         if total_shares > 0 and pool_share > 0:
                             token_balance += (pool_share / total_shares) * usdm_amount
@@ -456,14 +460,14 @@ async def cmd_calc_usdm_usdm_divs(
 
         for record in FinanceRepository(session).get_operations_by_asset(MTLAssets.usdm_asset.code, current_date):
             if record.for_account in div_accounts_dict:
-                if record.operation == 'account_credited':
+                if record.operation == "account_credited":
                     div_accounts_dict[record.for_account] -= float(record.amount1)
-                elif record.operation == 'account_debited':
+                elif record.operation == "account_debited":
                     div_accounts_dict[record.for_account] += float(record.amount1)
-                elif record.operation == 'trade':
-                    if record.code1 == 'USDM':
+                elif record.operation == "trade":
+                    if record.code1 == "USDM":
                         div_accounts_dict[record.for_account] += float(record.amount1)
-                    if record.code2 == 'USDM':
+                    if record.code2 == "USDM":
                         div_accounts_dict[record.for_account] -= float(record.amount2)
 
         current_date = current_date - timedelta(days=1)
@@ -490,13 +494,7 @@ async def cmd_calc_usdm_usdm_divs(
     else:
         # Standard DB save only if not a test calculation
         payments = [
-            TPayments(
-                user_key=item[0],
-                mtl_sum=item[1],
-                user_calc=item[2],
-                user_div=item[3],
-                id_div_list=item[4]
-            )
+            TPayments(user_key=item[0], mtl_sum=item[1], user_calc=item[2], user_div=item[3], id_div_list=item[4])
             for item in div_accounts
         ]
         session.add_all(payments)
@@ -524,7 +522,7 @@ async def cmd_calc_usdm_sum() -> float:
             target_month = today.month - 1
             target_year = today.year
 
-    key = f'next_divs_{target_month}'
+    key = f"next_divs_{target_month}"
     _, data = await get_balances(MTLAddresses.public_usdm, return_data=True)
 
     if not data or key not in data:
@@ -537,16 +535,13 @@ async def cmd_calc_usdm_sum() -> float:
         raise ValueError(f"Cannot parse dividend sum '{value_str}' for {key}") from exc
 
     days_in_month = calendar.monthrange(target_year, target_month)[1]
-    daily_sum = (monthly_sum / Decimal(days_in_month)).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+    daily_sum = (monthly_sum / Decimal(days_in_month)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
     return float(daily_sum)
 
 
 @safe_catch_async
 async def cmd_calc_usdm_daily(
-    session: Session,
-    div_list_id: int,
-    test_sum: int = 0,
-    test_for_address: Optional[str] = None
+    session: Session, div_list_id: int, test_sum: int = 0, test_for_address: Optional[str] = None
 ) -> list:
     """
     Calculate daily USDM distributions to USDM holders.
@@ -578,17 +573,21 @@ async def cmd_calc_usdm_daily(
         balances = account["balances"]
         token_balance = 0
         for balance in balances:
-            if balance["asset_type"] == "credit_alphanum4" and balance["asset_code"] == MTLAssets.usdm_asset.code and \
-                    balance["asset_issuer"] == MTLAssets.usdm_asset.issuer:
+            if (
+                balance["asset_type"] == "credit_alphanum4"
+                and balance["asset_code"] == MTLAssets.usdm_asset.code
+                and balance["asset_issuer"] == MTLAssets.usdm_asset.issuer
+            ):
                 token_balance += float(balance["balance"])
             elif balance["asset_type"] == "liquidity_pool_shares":
                 pool_id = balance["liquidity_pool_id"]
                 pool_share = float(balance["balance"])
                 for pool in pools:
-                    if pool['id'] == pool_id:
+                    if pool["id"] == pool_id:
                         usdm_amount = float(
-                            pool['reserves_dict'].get(MTLAssets.usdm_asset.code + ':' + MTLAssets.usdm_asset.issuer, 0))
-                        total_shares = float(pool['total_shares'])
+                            pool["reserves_dict"].get(MTLAssets.usdm_asset.code + ":" + MTLAssets.usdm_asset.issuer, 0)
+                        )
+                        total_shares = float(pool["total_shares"])
                         if total_shares > 0 and pool_share > 0:
                             token_balance += (pool_share / total_shares) * usdm_amount
 
@@ -618,13 +617,7 @@ async def cmd_calc_usdm_daily(
     else:
         # Standard DB save only if not a test calculation
         payments = [
-            TPayments(
-                user_key=item[0],
-                mtl_sum=item[1],
-                user_calc=item[2],
-                user_div=item[3],
-                id_div_list=item[4]
-            )
+            TPayments(user_key=item[0], mtl_sum=item[1], user_calc=item[2], user_div=item[3], id_div_list=item[4])
             for item in div_accounts
         ]
         session.add_all(payments)
@@ -670,18 +663,14 @@ def cmd_gen_xdr(session: Session, list_id: int) -> int:
         asset = MTLAssets.usdm_asset
 
     transaction = TransactionBuilder(
-        source_account=div_account,
-        network_passphrase=get_network_passphrase(),
-        base_fee=BASE_FEE
+        source_account=div_account, network_passphrase=get_network_passphrase(), base_fee=BASE_FEE
     )
     transaction.set_timeout(60 * 60 * 24 * 7)
 
     for payment in FinanceRepository(session).get_payments(list_id, PACK_COUNT):
         if round(payment.user_div, 7) > 0:
             transaction.append_payment_op(
-                destination=payment.user_key,
-                amount=str(round(payment.user_div, 7)),
-                asset=asset
+                destination=payment.user_key, amount=str(round(payment.user_div, 7)), asset=asset
             )
         payment.was_packed = 1
     session.commit()
@@ -708,10 +697,7 @@ async def cmd_send_by_list_id(session: Session, list_id: int) -> int:
         Number of remaining unsent transactions
     """
     for db_transaction in FinanceRepository(session).load_transactions(list_id):
-        transaction = TransactionEnvelope.from_xdr(
-            db_transaction.xdr,
-            network_passphrase=get_network_passphrase()
-        )
+        transaction = TransactionEnvelope.from_xdr(db_transaction.xdr, network_passphrase=get_network_passphrase())
         div_account = await load_account_async(transaction.transaction.source.account_id)
         sequence = div_account.sequence + 1
         transaction.transaction.sequence = sequence

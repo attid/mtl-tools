@@ -45,8 +45,8 @@ _reboot_flag = False
 
 # User cache is handled by spam_status_service inside app_context
 
-GIT_COMMIT = os.environ.get('GIT_COMMIT', 'unknown')
-logger.info(f'start (commit: {GIT_COMMIT})')
+GIT_COMMIT = os.environ.get("GIT_COMMIT", "unknown")
+logger.info(f"start (commit: {GIT_COMMIT})")
 
 
 async def set_commands(bot):
@@ -86,10 +86,10 @@ async def set_commands(bot):
 async def on_startup(bot: Bot, dispatcher: Dispatcher):
     await set_commands(bot)
     with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.ITolstov, text=f'Bot started (commit: {GIT_COMMIT})')
+        await bot.send_message(chat_id=MTLChats.ITolstov, text=f"Bot started (commit: {GIT_COMMIT})")
 
     if config.test_mode:
-        logger.info('test mode')
+        logger.info("test mode")
         # await pyro_start()
     else:
         await pyro_start()
@@ -97,10 +97,11 @@ async def on_startup(bot: Bot, dispatcher: Dispatcher):
 
 async def on_shutdown(bot: Bot):
     with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.ITolstov, text='Bot stopped')
+        await bot.send_message(chat_id=MTLChats.ITolstov, text="Bot stopped")
 
     # Stop stellar notification service
     import services.app_context as app_context_module
+
     if app_context_module.app_context and app_context_module.app_context.stellar_notification_service:
         await app_context_module.app_context.stellar_notification_service.stop()
 
@@ -112,24 +113,24 @@ async def load_routers(dp: Dispatcher, bot: Bot):
     """Динамическая загрузка и регистрация роутеров"""
     import os
 
-    routers_path = os.path.join(os.path.dirname(__file__), 'routers')
+    routers_path = os.path.join(os.path.dirname(__file__), "routers")
     router_modules = []
     registered_handlers = set()  # Для отслеживания уже зарегистрированных обработчиков
 
     # Загрузка всех модулей роутеров
     for filename in os.listdir(routers_path):
-        if filename.endswith('.py') and not filename.startswith('__'):
-            module_name = f'routers.{filename[:-3]}'
+        if filename.endswith(".py") and not filename.startswith("__"):
+            module_name = f"routers.{filename[:-3]}"
             try:
                 module = importlib.import_module(module_name)
-                if hasattr(module, 'register_handlers'):
+                if hasattr(module, "register_handlers"):
                     # Проверка на дублирование модуля
                     if module.__name__ in registered_handlers:
                         logger.warning(f"Skipping duplicate router module: {module.__name__}")
                         continue
 
                     # Установка дефолтного приоритета, если не указан
-                    if not hasattr(module.register_handlers, 'priority'):
+                    if not hasattr(module.register_handlers, "priority"):
                         module.register_handlers.priority = 50
                     router_modules.append(module)
                     registered_handlers.add(module.__name__)
@@ -138,7 +139,7 @@ async def load_routers(dp: Dispatcher, bot: Bot):
                 logger.error(f"Error loading module {module_name}: {e}", exc_info=True)
 
     # Сортировка модулей по приоритету
-    router_modules.sort(key=lambda m: getattr(m.register_handlers, 'priority', 50))
+    router_modules.sort(key=lambda m: getattr(m.register_handlers, "priority", 50))
 
     # Регистрация роутеров в порядке приоритета
     for module in router_modules:
@@ -153,7 +154,7 @@ async def load_routers(dp: Dispatcher, bot: Bot):
 
 
 async def main():
-    logger.add("logs/skynet.log", rotation="1 MB", level='INFO')
+    logger.add("logs/skynet.log", rotation="1 MB", level="INFO")
 
     # Запуск бота
     engine = create_engine(config.postgres_url, pool_pre_ping=True, max_overflow=50)
@@ -164,12 +165,14 @@ async def main():
     session: AiohttpSession = AiohttpSession()
     session.middleware(RetryRequestMiddleware())
     if config.test_mode:
-        bot = Bot(token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
-                  session=session)
-        logger.info('start test')
+        bot = Bot(
+            token=config.test_token.get_secret_value(), default=DefaultBotProperties(parse_mode="HTML"), session=session
+        )
+        logger.info("start test")
     else:
-        bot = Bot(token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode='HTML'),
-                  session=session)
+        bot = Bot(
+            token=config.bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode="HTML"), session=session
+        )
 
     redis = Redis.from_url(config.redis_url)
     storage = RedisStorage(redis=redis)
@@ -185,7 +188,7 @@ async def main():
     dp.edited_channel_post.middleware(DbSessionMiddleware(db_pool))
     dp.poll_answer.middleware(DbSessionMiddleware(db_pool))
     dp.message_reaction.middleware(DbSessionMiddleware(db_pool))
-    
+
     dp.message.middleware(app_context_middleware)
     dp.callback_query.middleware(app_context_middleware)
     dp.inline_query.middleware(app_context_middleware)
@@ -205,11 +208,12 @@ async def main():
     dp.message.middleware(ThrottlingMiddleware(redis=redis))
     dp.message.middleware(EmojiReactionMiddleware())
 
-    dp['dbsession_pool'] = db_pool
-    dp['app_context'] = app_context_middleware.app_context
+    dp["dbsession_pool"] = db_pool
+    dp["app_context"] = app_context_middleware.app_context
 
     # Update global singleton for modules that import app_context directly
     import services.app_context as app_context_module
+
     app_context_module.app_context = app_context_middleware.app_context
 
     global_tasks.append(asyncio.create_task(load_globals(db_pool(), bot, app_context_middleware.app_context)))
@@ -257,13 +261,14 @@ async def load_globals(session: Session, bot: Bot, app_context):
         except ValueError as e:
             logger.warning(f"spam_status_service preload failed: {e}")
     with suppress(TelegramBadRequest):
-        await bot.send_message(chat_id=MTLChats.ITolstov, text='globals loaded')
+        await bot.send_message(chat_id=MTLChats.ITolstov, text="globals loaded")
 
 
 def add_bot_users(session: Session, user_id: int, username: str | None, new_user_type: int = 0):
     """Добавляет или обновляет пользователя в списке с логированием"""
     try:
         from services import app_context as app_context_module
+
         if app_context_module.app_context and app_context_module.app_context.spam_status_service:
             app_context_module.app_context.spam_status_service.preload_statuses({user_id: new_user_type})
     except Exception as e:

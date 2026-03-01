@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 
 import gspread_asyncio
+
 # from google-auth package
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
@@ -22,19 +23,22 @@ from other.grist_tools import grist_manager, MTLGrist
 # First, set up a callback function that fetches our credentials off the disk.
 # gspread_asyncio needs this to re-authenticate when credentials expire.
 
+
 def get_creds():
     # To obtain a service account JSON file, follow these steps:
     # https://gspread.readthedocs.io/en/latest/oauth2.html#for-bots-using-service-account
 
-    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
+    key_path = os.path.join(start_path, "data", "mtl-google-doc.json")
     # print(start_path, key_path)
 
     creds = Credentials.from_service_account_file(key_path)
-    scoped = creds.with_scopes([
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ])
+    scoped = creds.with_scopes(
+        [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+    )
     return scoped
 
 
@@ -67,30 +71,30 @@ async def gs_check_bim(user_id=None, user_name=None):
             record = await ws.row_values(data.row)
             user_id = record[3]
     else:
-        user_name = 'Your'
+        user_name = "Your"
 
     if user_id:
         data = await ws.find(str(user_id), in_column=4)
 
     if data is None:
-        return f'{user_name} account not found =('
+        return f"{user_name} account not found =("
 
     record = await ws.row_values(data.row)
     user_name = record[2]
 
     if len(record[4]) != 56:
-        return f'{user_name} public key is bad =('
+        return f"{user_name} public key is bad =("
 
-    if record[10] != 'TRUE':
-        return f'{user_name} not resident =('
+    if record[10] != "TRUE":
+        return f"{user_name} not resident =("
 
     if float(float2str(record[17])) < 1:
-        return f'{user_name} MTL balance =('
+        return f"{user_name} MTL balance =("
 
     if len(record[20]) < 10:
-        return f'{user_name} does not use MW  =('
+        return f"{user_name} does not use MW  =("
 
-    return f'{user_name} in BIM!'
+    return f"{user_name} in BIM!"
 
 
 # получить ID
@@ -109,11 +113,24 @@ async def gs_save_new_task(task_name, customer, manager, executor, contract_url)
     ss = await agc.open("MTL_TASKS_register")
     ws = await ss.worksheet("Term")
     # N	task	date_in	plan	fact	customer	manager	executor	program	contract
-    await ws.update(range_name=f'A{last_col + 1}', values=[[last_task_number + 1, task_name, datetime.now().strftime('%d.%m'), None, None,
-                                          customer, manager, executor, None, contract_url]])
-    return json.dumps({'task_number': last_task_number + 1,
-                       'task_name': task_name
-                       })
+    await ws.update(
+        range_name=f"A{last_col + 1}",
+        values=[
+            [
+                last_task_number + 1,
+                task_name,
+                datetime.now().strftime("%d.%m"),
+                None,
+                None,
+                customer,
+                manager,
+                executor,
+                None,
+                contract_url,
+            ]
+        ],
+    )
+    return json.dumps({"task_number": last_task_number + 1, "task_name": task_name})
 
 
 async def gs_get_last_support_id():
@@ -131,9 +148,29 @@ async def gs_save_new_support(user_id, username, agent_username, url):
     ss = await agc.open("MTL_support_register")
     ws = await ss.worksheet("ALL")
     # n	date_in	username	ID	ticket	request	status	1	2	3	4	5	6	notes	agent
-    await ws.update(range_name=f'A{last_col + 1}', values=[[last_number + 1, datetime.now().strftime('%d.%m'), username, user_id, url,
-                                          None, None, None, None, None, None, None, None, None, agent_username]],
-                    value_input_option='USER_ENTERED')
+    await ws.update(
+        range_name=f"A{last_col + 1}",
+        values=[
+            [
+                last_number + 1,
+                datetime.now().strftime("%d.%m"),
+                username,
+                user_id,
+                url,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                agent_username,
+            ]
+        ],
+        value_input_option="USER_ENTERED",
+    )
     # await wks.update('G1', now.strftime('%d.%m.%Y %H:%M:%S'))
     # await wks.update('U3', use_date_list, value_input_option='USER_ENTERED')
 
@@ -156,18 +193,18 @@ async def gs_find_user(user_id):
     ws = await ss.worksheet("List")
     data = await ws.find(str(user_id), in_column=5)
     if data:
-        result.append('Найден в ID')
+        result.append("Найден в ID")
     else:
-        result.append('Не найден в ID')
+        result.append("Не найден в ID")
 
     agc = await agcm.authorize()
     ss = await agc.open("MTL_Airdrop_register")
     ws = await ss.worksheet("EUR_GNRL")
     data = await ws.find(str(user_id), in_column=7)
     if data:
-        result.append(f'Найден в Airdrop строка {data.row}')
+        result.append(f"Найден в Airdrop строка {data.row}")
     else:
-        result.append('ID пользователя не найдено в Airdrop')
+        result.append("ID пользователя не найдено в Airdrop")
 
     return result
 
@@ -379,12 +416,10 @@ async def gs_set_column_width(spreadsheet, worksheet_id, column_index, width):
                         "sheetId": worksheet_id,
                         "dimension": "COLUMNS",
                         "startIndex": column_index - 1,
-                        "endIndex": column_index
+                        "endIndex": column_index,
                     },
-                    "properties": {
-                        "pixelSize": width
-                    },
-                    "fields": "pixelSize"
+                    "properties": {"pixelSize": width},
+                    "fields": "pixelSize",
                 }
             }
         ]
@@ -417,10 +452,10 @@ async def gs_copy_a_table(new_name):
         new_sheet = await new_ss.worksheet(title=sheet.title)
         # Получаем данные из исходного листа
         # cells = await sheet.get_all_values()
-        cells = (await sheet.batch_get(['A1:D20'], value_render_option='FORMULA'))[0]
+        cells = (await sheet.batch_get(["A1:D20"], value_render_option="FORMULA"))[0]
 
         # Заполняем лист данными
-        await new_sheet.update(range_name='A1', values=cells, value_input_option='USER_ENTERED')
+        await new_sheet.update(range_name="A1", values=cells, value_input_option="USER_ENTERED")
 
     await new_ss.del_worksheet((await new_ss.worksheets())[0])
 
@@ -437,31 +472,32 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
     await gs_set_column_width(ss, wks.id, 1, 200)
     await gs_set_column_width(ss, wks.id, 2, 400)
 
-    update_data = [[question],
-                   [datetime.now().strftime('%d.%m.%Y %H:%M:%S')],
-                   [],
-                   [len(votes)],
-                   [math.floor(len(votes) / 2) + 1]
-                   ]
-    await wks.update(range_name='B1', values=update_data)
+    update_data = [
+        [question],
+        [datetime.now().strftime("%d.%m.%Y %H:%M:%S")],
+        [],
+        [len(votes)],
+        [math.floor(len(votes) / 2) + 1],
+    ]
+    await wks.update(range_name="B1", values=update_data)
     update_data = []
     for option in options:
         update_data.append([option])
-    await wks.update(range_name='A7', values=update_data)
-    update_data = [['']] * 10
-    await wks.update(range_name=f'B{7 + len(options)}', values=update_data)
+    await wks.update(range_name="A7", values=update_data)
+    update_data = [[""]] * 10
+    await wks.update(range_name=f"B{7 + len(options)}", values=update_data)
     # 2
     wks = await ss.worksheet("Log")
     await wks.delete_row(2)
-    await wks.update(range_name='C1', values=[options])
+    await wks.update(range_name="C1", values=[options])
     # 3
     # {'GA5Q2PZWIHSCOHNIGJN4BX5P42B4EMGTYAS3XCMAHEHCFFKCQQ3ZX34A': {'delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 'vote': 1, 'was_delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7'}
     update_data = []
     for vote in votes:
-        update_data.append([vote, votes[vote].get('was_delegate')])
+        update_data.append([vote, votes[vote].get("was_delegate")])
 
     wks = await ss.worksheet("Members")
-    await wks.update(range_name='A2', values=update_data)
+    await wks.update(range_name="A2", values=update_data)
 
 
 # async def gs_find_user_a(username):
@@ -493,22 +529,22 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
     # if data:
     while data:
         await wks.delete_row(data.row)
-        data = await wks.find(f'{address[:4]}..{address[-4:]}', case_sensitive=False)
+        data = await wks.find(f"{address[:4]}..{address[-4:]}", case_sensitive=False)
 
     # Если опции не пусты, то добавляем запись
     if options:
         record = await wks.col_values(1)
-        update_data = [address, datetime.now().strftime('%d.%m.%Y %H:%M:%S')]
+        update_data = [address, datetime.now().strftime("%d.%m.%Y %H:%M:%S")]
 
         # Создаем список для голосов
         votes_list = [None] * (max(options) + 1)  # Предполагаем, что максимальное значение в options это конец списка
-        x = delegated if delegated else 'X'
+        x = delegated if delegated else "X"
         for option in options:
             votes_list[option] = x
         update_data.extend(votes_list)  # Начинаем добавление данных с третьей колонки, пропускаем первые два элемента
 
         # Записываем данные в таблицу, начиная с новой строки
-        await wks.update(range_name=f'A{len(record) + 1}', values=[update_data])
+        await wks.update(range_name=f"A{len(record) + 1}", values=[update_data])
 
         if delegated:
             return
@@ -516,8 +552,9 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
         delegate_data = await (await ss.worksheet("Members")).get_all_values()
         for record in delegate_data[1:]:
             if record[1] == address:
-                await gs_update_a_table_vote(table_uuid, record[0], options,
-                                             delegated=f'{address[:4]}..{address[-4:]}', wks=wks)
+                await gs_update_a_table_vote(
+                    table_uuid, record[0], options, delegated=f"{address[:4]}..{address[-4:]}", wks=wks
+                )
 
         #
         wks = await ss.worksheet("Result")
@@ -537,10 +574,10 @@ async def gs_check_vote_table(table_uuid):
             if not stellar_address:
                 continue
             if telegram_username:
-                username = telegram_username if telegram_username.startswith('@') else f'@{telegram_username}'
+                username = telegram_username if telegram_username.startswith("@") else f"@{telegram_username}"
             else:
                 tg_id = user.get("TGID")
-                username = f'id:{tg_id}' if tg_id else None
+                username = f"id:{tg_id}" if tg_id else None
             if username:
                 address_dict[stellar_address] = username
 
@@ -585,19 +622,19 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
         sheet_name_to = sheet_name_from
     # sheet_data_result = await asyncio.to_thread(get_sheet_data_and_styles_sync, service, copy_from, sheet_name)
     # Настройка аутентификации для Google Sheets API
-    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
+    key_path = os.path.join(start_path, "data", "mtl-google-doc.json")
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
-    service = build('sheets', 'v4', credentials=credentials)
+    service = build("sheets", "v4", credentials=credentials)
 
     # Запрос метаданных всего документа
     source_sheet_data = service.spreadsheets().get(spreadsheetId=copy_from, includeGridData=True).execute()
 
     # Находим нужный лист по имени
     sheet_data = None
-    for sheet in source_sheet_data['sheets']:
-        if sheet['properties']['title'] == sheet_name_from:
+    for sheet in source_sheet_data["sheets"]:
+        if sheet["properties"]["title"] == sheet_name_from:
             sheet_data = sheet
             break
 
@@ -605,8 +642,8 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
         raise Exception(f"Sheet {sheet_name_from} not found in spreadsheet.")
 
     # Получение данных и стилей с исходного листа
-    row_data = sheet_data.get('data', [])[0].get('rowData', [])
-    merges = sheet_data.get('merges', [])
+    row_data = sheet_data.get("data", [])[0].get("rowData", [])
+    merges = sheet_data.get("merges", [])
 
     # Получение целевого документа и листа
     # Запрос метаданных всего документа
@@ -614,9 +651,9 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
 
     # Находим нужный лист в целевом документе по имени и получаем его ID
     target_sheet_id = None
-    for sheet in target_sheet_data['sheets']:
-        if sheet['properties']['title'] == sheet_name_to:
-            target_sheet_id = sheet['properties']['sheetId']
+    for sheet in target_sheet_data["sheets"]:
+        if sheet["properties"]["title"] == sheet_name_to:
+            target_sheet_id = sheet["properties"]["sheetId"]
             break
 
     if target_sheet_id is None:
@@ -628,56 +665,54 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
     # Применение данных и стилей к целевому листу
     requests = []
     for row_index, row in enumerate(row_data):
-        for col_index, cell in enumerate(row.get('values', [])):
-            cell_data = cell.get('effectiveValue', {})
-            cell_style = cell.get('effectiveFormat', {})
+        for col_index, cell in enumerate(row.get("values", [])):
+            cell_data = cell.get("effectiveValue", {})
+            cell_style = cell.get("effectiveFormat", {})
 
             # Формирование значения для ячейки
             user_entered_value = {}
-            if 'stringValue' in cell_data:
-                user_entered_value = {"stringValue": cell_data['stringValue']}
-            elif 'numberValue' in cell_data:
-                user_entered_value = {"numberValue": cell_data['numberValue']}
-            elif 'boolValue' in cell_data:
-                user_entered_value = {"boolValue": cell_data['boolValue']}
+            if "stringValue" in cell_data:
+                user_entered_value = {"stringValue": cell_data["stringValue"]}
+            elif "numberValue" in cell_data:
+                user_entered_value = {"numberValue": cell_data["numberValue"]}
+            elif "boolValue" in cell_data:
+                user_entered_value = {"boolValue": cell_data["boolValue"]}
 
             # Формирование запроса для обновления ячейки
-            cell_update = {
-                "userEnteredFormat": cell_style
-            }
+            cell_update = {"userEnteredFormat": cell_style}
             if user_entered_value:
                 cell_update["userEnteredValue"] = user_entered_value
 
-            requests.append({
-                "updateCells": {
-                    "rows": [{"values": [cell_update]}],
-                    "fields": "userEnteredValue,userEnteredFormat",
-                    "start": {
-                        "sheetId": target_sheet_id,
-                        "rowIndex": row_index,
-                        "columnIndex": col_index
+            requests.append(
+                {
+                    "updateCells": {
+                        "rows": [{"values": [cell_update]}],
+                        "fields": "userEnteredValue,userEnteredFormat",
+                        "start": {"sheetId": target_sheet_id, "rowIndex": row_index, "columnIndex": col_index},
                     }
                 }
-            })
+            )
 
     for merge in merges:
-        start_row = merge.get('startRowIndex', 0)
-        end_row = merge.get('endRowIndex', 0)
-        start_col = merge.get('startColumnIndex', 0)
-        end_col = merge.get('endColumnIndex', 0)
+        start_row = merge.get("startRowIndex", 0)
+        end_row = merge.get("endRowIndex", 0)
+        start_col = merge.get("startColumnIndex", 0)
+        end_col = merge.get("endColumnIndex", 0)
 
-        requests.append({
-            "mergeCells": {
-                "range": {
-                    "sheetId": target_sheet_id,
-                    "startRowIndex": start_row,
-                    "endRowIndex": end_row,
-                    "startColumnIndex": start_col,
-                    "endColumnIndex": end_col
-                },
-                "mergeType": "MERGE_ALL"  # или "MERGE_COLUMNS", "MERGE_ROWS" в зависимости от ваших потребностей
+        requests.append(
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": target_sheet_id,
+                        "startRowIndex": start_row,
+                        "endRowIndex": end_row,
+                        "startColumnIndex": start_col,
+                        "endColumnIndex": end_col,
+                    },
+                    "mergeType": "MERGE_ALL",  # или "MERGE_COLUMNS", "MERGE_ROWS" в зависимости от ваших потребностей
+                }
             }
-        })
+        )
 
     # Отправка запросов к API
     if requests:
@@ -690,22 +725,24 @@ def unmerge_all_cells(service, spreadsheet_id, sheet_id):
     requests = []
 
     # Поиск объединенных ячеек в нужном листе
-    for sheet in sheet_info['sheets']:
-        if sheet['properties']['sheetId'] == sheet_id:
-            merges = sheet.get('merges', [])
+    for sheet in sheet_info["sheets"]:
+        if sheet["properties"]["sheetId"] == sheet_id:
+            merges = sheet.get("merges", [])
             for merge in merges:
                 # Для каждой найденной объединенной группы создаем запрос на разъединение
-                requests.append({
-                    "unmergeCells": {
-                        "range": {
-                            "sheetId": sheet_id,
-                            "startRowIndex": merge['startRowIndex'],
-                            "endRowIndex": merge['endRowIndex'],
-                            "startColumnIndex": merge['startColumnIndex'],
-                            "endColumnIndex": merge['endColumnIndex']
+                requests.append(
+                    {
+                        "unmergeCells": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": merge["startRowIndex"],
+                                "endRowIndex": merge["endRowIndex"],
+                                "startColumnIndex": merge["startColumnIndex"],
+                                "endColumnIndex": merge["endColumnIndex"],
+                            }
                         }
                     }
-                })
+                )
             break
 
     # Если есть запросы на разъединение, отправляем их
@@ -729,12 +766,12 @@ async def get_one_data_mm_from_report():
     ss = await agc.open_by_key("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc")
     ws = await ss.worksheet("autodata_config")
 
-    data = await ws.get_values('D2:D15')
+    data = await ws.get_values("D2:D15")
     mtl_market = data[11][0]
     mtlfarm_usd = data[8][0]
     usd_eur = data[1][0]
     xlm_usd = data[3][0]
-    mtl_market_xlm = (float(float2str(mtl_market)) / float(float2str(usd_eur)) / float(float2str(xlm_usd)))
+    mtl_market_xlm = float(float2str(mtl_market)) / float(float2str(usd_eur)) / float(float2str(xlm_usd))
     mtlfarm_usd = float(float2str(mtlfarm_usd))
     return mtl_market_xlm, mtlfarm_usd
 
@@ -758,7 +795,7 @@ async def gs_get_update_mtlap_skynet_row(data):
     await ws.update(range_name=cell_range, values=values)
 
 
-async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=False):
+async def gs_permission(table_id, email="attid0@gmail.com", remove_permissions=False):
     agc = await agcm.authorize()
     ss = await agc.open_by_key(table_id)
 
@@ -766,15 +803,10 @@ async def gs_permission(table_id, email='attid0@gmail.com', remove_permissions=F
     if remove_permissions:
         permissions = await ss.list_permissions()
         for permission in permissions:
-            if permission.get('emailAddress') == email:
-                await ss.remove_permissions(permission['id'])
+            if permission.get("emailAddress") == email:
+                await ss.remove_permissions(permission["id"])
     else:
-        await agc.insert_permission(
-            ss.id,
-            email,
-            perm_type='user',
-            role='writer'
-        )
+        await agc.insert_permission(ss.id, email, perm_type="user", role="writer")
 
 
 def extract_links_from_column_C():
@@ -782,62 +814,58 @@ def extract_links_from_column_C():
     from oauth2client.service_account import ServiceAccountCredentials
     import os
 
-    SPREADSHEET_ID = '1NYtsXZET8q-MJYeHaWrMbs4-3SeQgidf1O5IVGa3Jzo'
-    SHEET_NAME = 'EUR_GNRL'
+    SPREADSHEET_ID = "1NYtsXZET8q-MJYeHaWrMbs4-3SeQgidf1O5IVGa3Jzo"
+    SHEET_NAME = "EUR_GNRL"
     COLUMN_FROM_INDEX = 16  # C (0-based index)
-    COLUMN_TO_INDEX = 25   # X (0-based index)
+    COLUMN_TO_INDEX = 25  # X (0-based index)
 
-    key_path = os.path.join(start_path, 'data', 'mtl-google-doc.json')
+    key_path = os.path.join(start_path, "data", "mtl-google-doc.json")
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
-    service = build('sheets', 'v4', credentials=credentials)
+    service = build("sheets", "v4", credentials=credentials)
 
     # Получаем весь лист с gridData
     print("📥 Запрашиваем данные с листа...")
-    spreadsheet = service.spreadsheets().get(
-        spreadsheetId=SPREADSHEET_ID,
-        includeGridData=True,
-        ranges=[SHEET_NAME]
-    ).execute()
-
-    sheet_data = next(
-        (s for s in spreadsheet['sheets'] if s['properties']['title'] == SHEET_NAME), None
+    spreadsheet = (
+        service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID, includeGridData=True, ranges=[SHEET_NAME]).execute()
     )
+
+    sheet_data = next((s for s in spreadsheet["sheets"] if s["properties"]["title"] == SHEET_NAME), None)
     if not sheet_data:
         raise Exception("❌ Лист не найден: EUR_GNRL")
 
     print("✅ Лист найден. Обрабатываем строки...")
 
-    rows = sheet_data['data'][0].get('rowData', [])
+    rows = sheet_data["data"][0].get("rowData", [])
     requests = []
     processed_rows = 0
     filled_rows = 0
 
     for row_index, row in enumerate(rows):
         processed_rows += 1
-        cells = row.get('values', [])
+        cells = row.get("values", [])
         if COLUMN_FROM_INDEX >= len(cells):
             print(f"⚠️ Строка {row_index + 1}: нет данных в колонке C")
             continue
 
         cell = cells[COLUMN_FROM_INDEX]
-        full_text = cell.get('formattedValue', '')
-        runs = cell.get('textFormatRuns', [])
+        full_text = cell.get("formattedValue", "")
+        runs = cell.get("textFormatRuns", [])
         links = []
 
         print(f"🔍 Строка {row_index + 1}: текст='{full_text}', runs={len(runs)}")
 
         # 1. Пробуем как ссылка на всю ячейку
-        if 'hyperlink' in cell:
-            link = cell['hyperlink']
+        if "hyperlink" in cell:
+            link = cell["hyperlink"]
             print(f"  🔗 Ссылка на всю ячейку: {link}")
             links.append(link)
 
         # 2. Пробуем как форматированный фрагмент
         for i, run in enumerate(runs):
-            run_link = run.get('link', {}).get('uri')
-            start = run.get('startIndex', 0)
-            end = runs[i + 1]['startIndex'] if i + 1 < len(runs) else len(full_text)
+            run_link = run.get("link", {}).get("uri")
+            start = run.get("startIndex", 0)
+            end = runs[i + 1]["startIndex"] if i + 1 < len(runs) else len(full_text)
             text_fragment = full_text[start:end]
 
             print(f"  ⤷ Фрагмент [{start}:{end}]: '{text_fragment}', ссылка: {run_link}")
@@ -845,37 +873,33 @@ def extract_links_from_column_C():
             if run_link:
                 links.append(run_link)
 
-        final_text = ', '.join(links)
+        final_text = ", ".join(links)
 
         if final_text:
             filled_rows += 1
-            requests.append({
-                "updateCells": {
-                    "rows": [{
-                        "values": [{
-                            "userEnteredValue": {"stringValue": final_text}
-                        }]
-                    }],
-                    "fields": "userEnteredValue",
-                    "start": {
-                        "sheetId": sheet_data['properties']['sheetId'],
-                        "rowIndex": row_index,
-                        "columnIndex": COLUMN_TO_INDEX
+            requests.append(
+                {
+                    "updateCells": {
+                        "rows": [{"values": [{"userEnteredValue": {"stringValue": final_text}}]}],
+                        "fields": "userEnteredValue",
+                        "start": {
+                            "sheetId": sheet_data["properties"]["sheetId"],
+                            "rowIndex": row_index,
+                            "columnIndex": COLUMN_TO_INDEX,
+                        },
                     }
                 }
-            })
+            )
 
     print(f"📦 Обработано строк: {processed_rows}, Ссылки найдены в: {filled_rows}")
 
     if requests:
         print(f"🚀 Отправка {len(requests)} обновлений через batchUpdate...")
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=SPREADSHEET_ID,
-            body={"requests": requests}
-        ).execute()
+        service.spreadsheets().batchUpdate(spreadsheetId=SPREADSHEET_ID, body={"requests": requests}).execute()
         print("✅ Готово: ссылки записаны в столбец X")
     else:
         print("ℹ️ Ничего не найдено для обновления")
+
 
 if __name__ == "__main__":
     pass

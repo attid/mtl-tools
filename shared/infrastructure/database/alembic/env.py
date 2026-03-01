@@ -10,22 +10,24 @@ from shared.infrastructure.database.models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
+
 # --- НАЧАЛО ИЗМЕНЕНИЙ ---
 # Получаем URL из переменной окружения 'POSTGRES_URL'.
 # Если переменная не установлена, пробуем Docker Swarm secret,
 # затем используем значение из alembic.ini.
 def _read_secret(name: str) -> str | None:
-    path = f'/run/secrets/{name}'
+    path = f"/run/secrets/{name}"
     try:
         with open(path) as f:
             return f.read().strip()
     except FileNotFoundError:
         return None
 
-db_url = os.getenv('POSTGRES_URL') or _read_secret('postgres_url') or config.get_main_option("sqlalchemy.url")
+
+db_url = os.getenv("POSTGRES_URL") or _read_secret("postgres_url") or config.get_main_option("sqlalchemy.url")
 
 # Устанавливаем это значение как основное для Alembic
-config.set_main_option('sqlalchemy.url', db_url)
+config.set_main_option("sqlalchemy.url", db_url)
 # --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
 # Interpret the config file for Python logging.
@@ -43,6 +45,7 @@ target_metadata = Base.metadata
 # can be acquired a number of ways:
 # in the config itself, defined in setup.py entry points, etc.
 # config.set_main_option('sqlalchemy.url', 'postgresql://user:password@host:port/dbname') # Example
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -81,9 +84,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

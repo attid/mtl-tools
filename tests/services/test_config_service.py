@@ -58,11 +58,13 @@ class TestWelcomeMessages:
         service.remove_welcome_message(999)  # should not raise
 
     def test_load_welcome_messages_bulk(self, service):
-        service.load_welcome_messages({
-            123: "Message 1",
-            456: "Message 2",
-            789: "Message 3",
-        })
+        service.load_welcome_messages(
+            {
+                123: "Message 1",
+                456: "Message 2",
+                789: "Message 3",
+            }
+        )
 
         assert service.get_welcome_message(123) == "Message 1"
         assert service.get_welcome_message(456) == "Message 2"
@@ -111,10 +113,12 @@ class TestWelcomeButtons:
         service.remove_welcome_button(999)  # should not raise
 
     def test_load_welcome_buttons_bulk(self, service):
-        service.load_welcome_buttons({
-            123: {"btn": 1},
-            456: {"btn": 2},
-        })
+        service.load_welcome_buttons(
+            {
+                123: {"btn": 1},
+                456: {"btn": 2},
+            }
+        )
 
         assert service.get_welcome_button(123) == {"btn": 1}
         assert service.get_welcome_button(456) == {"btn": 2}
@@ -162,10 +166,12 @@ class TestDeleteIncome:
         service.remove_delete_income(999)  # should not raise
 
     def test_load_delete_income_bulk(self, service):
-        service.load_delete_income({
-            123: {"cfg": 1},
-            456: {"cfg": 2},
-        })
+        service.load_delete_income(
+            {
+                123: {"cfg": 1},
+                456: {"cfg": 2},
+            }
+        )
 
         assert service.get_delete_income(123) == {"cfg": 1}
         assert service.get_delete_income(456) == {"cfg": 2}

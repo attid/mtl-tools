@@ -10,7 +10,7 @@ from tests.conftest import RouterTestMiddleware
 async def cleanup_router():
     yield
     if inline_router.parent_router:
-         inline_router._parent_router = None
+        inline_router._parent_router = None
 
 
 @pytest.mark.asyncio
@@ -21,17 +21,9 @@ async def test_inline_query_returns_commands(mock_telegram, router_app_context):
     dp.include_router(inline_router)
 
     # Register commands via DI service (the way production code works)
+    router_app_context.command_registry.register_command(name="/help", description="Show help", cmd_type=0, cmd_list=[])
     router_app_context.command_registry.register_command(
-        name="/help",
-        description="Show help",
-        cmd_type=0,
-        cmd_list=[]
-    )
-    router_app_context.command_registry.register_command(
-        name="/start",
-        description="Start bot",
-        cmd_type=0,
-        cmd_list=[]
+        name="/start", description="Start bot", cmd_type=0, cmd_list=[]
     )
 
     update = types.Update(
@@ -40,8 +32,8 @@ async def test_inline_query_returns_commands(mock_telegram, router_app_context):
             id="iq1",
             from_user=types.User(id=123, is_bot=False, first_name="Test", username="test"),
             query="help",
-            offset=""
-        )
+            offset="",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -69,8 +61,8 @@ async def test_inline_query_empty_when_no_commands(mock_telegram, router_app_con
             id="iq2",
             from_user=types.User(id=123, is_bot=False, first_name="Test", username="test"),
             query="anything",
-            offset=""
-        )
+            offset="",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -93,10 +85,7 @@ async def test_inline_query_shows_feature_status(mock_telegram, router_app_conte
 
     # Register command with cmd_type > 0 (shows status)
     router_app_context.command_registry.register_command(
-        name="/set_captcha",
-        description="Toggle captcha",
-        cmd_type=1,
-        cmd_list=["captcha"]
+        name="/set_captcha", description="Toggle captcha", cmd_type=1, cmd_list=["captcha"]
     )
 
     # Enable captcha for the chat
@@ -109,8 +98,8 @@ async def test_inline_query_shows_feature_status(mock_telegram, router_app_conte
             id="iq3",
             from_user=types.User(id=123, is_bot=False, first_name="Test", username="test"),
             query=f"{chat_id} captcha",
-            offset=""
-        )
+            offset="",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)

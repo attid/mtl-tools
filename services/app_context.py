@@ -1,7 +1,19 @@
-from services.external_services import (GristService, GSpreadService, WebService, MtlService,
-                                       StellarService, AirdropService, ReportService, AntispamService,
-                                       PollService, ModerationService, AIService, TalkService,
-                                       GroupService, UtilsService)
+from services.external_services import (
+    GristService,
+    GSpreadService,
+    WebService,
+    MtlService,
+    StellarService,
+    AirdropService,
+    ReportService,
+    AntispamService,
+    PollService,
+    ModerationService,
+    AIService,
+    TalkService,
+    GroupService,
+    UtilsService,
+)
 from services.spam_status_service import SpamStatusService
 from services.config_service import ConfigService
 from services.feature_flags import FeatureFlagsService
@@ -48,6 +60,7 @@ class AppContext:
     def check_user(self, user_id: int):
         """Check user status for antispam. Uses spam_status_service cache."""
         from shared.domain.user import SpamStatus
+
         if not self.spam_status_service:
             return SpamStatus.NEW
         return self.spam_status_service.get_status(user_id)
@@ -93,6 +106,7 @@ class AppContext:
         Called from start.py after session_pool is created.
         """
         from other.config_reader import config
+
         if config.notifier_url:
             self.stellar_notification_service = StellarNotificationService(bot, session_pool)
 

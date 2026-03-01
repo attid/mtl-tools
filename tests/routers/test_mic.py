@@ -118,4 +118,3 @@ async def test_mic_take_and_release_and_busy_user():
 
     release_text = bot.edit_message_text.call_args.kwargs["text"]
     assert "Статус: свободно" in release_text
-

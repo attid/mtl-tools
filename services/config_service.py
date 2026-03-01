@@ -18,7 +18,7 @@ _STR_TO_ENUM: dict[str, BotValueTypes] = {}
 for _member in BotValueTypes:
     # Convert CamelCase to snake_case
     _name = _member.name
-    _snake = ''.join(f'_{c.lower()}' if c.isupper() else c for c in _name).lstrip('_')
+    _snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in _name).lstrip("_")
     _STR_TO_ENUM[_snake] = _member
 
 
@@ -117,10 +117,7 @@ class ConfigService:
             return []
         chat_ids = self._repo.get_chat_ids_by_key(_resolve_key(feature_key))
         # Filter to only those with truthy values
-        return [
-            cid for cid in chat_ids
-            if self.load_value(cid, feature_key)
-        ]
+        return [cid for cid in chat_ids if self.load_value(cid, feature_key)]
 
     def invalidate_cache(self, chat_id: Optional[int] = None) -> None:
         """Invalidate cache for specific chat or all."""
@@ -152,9 +149,7 @@ class ConfigService:
             self._welcome_messages[chat_id] = message
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.WelcomeMessage, message
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeMessage, message)
 
     def remove_welcome_message(self, chat_id: int, session: Session | None = None) -> None:
         """Remove welcome message for chat. Removes from DB if session provided."""
@@ -162,9 +157,7 @@ class ConfigService:
             self._welcome_messages.pop(chat_id, None)
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.WelcomeMessage, None
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeMessage, None)
 
     def load_welcome_messages(self, data: dict[int, Any]) -> None:
         """Bulk load welcome messages from global_data."""
@@ -183,9 +176,7 @@ class ConfigService:
             self._welcome_buttons[chat_id] = button
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.WelcomeButton, button
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeButton, button)
 
     def remove_welcome_button(self, chat_id: int, session: Session | None = None) -> None:
         """Remove welcome button config for chat. Removes from DB if session provided."""
@@ -193,9 +184,7 @@ class ConfigService:
             self._welcome_buttons.pop(chat_id, None)
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.WelcomeButton, None
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.WelcomeButton, None)
 
     def load_welcome_buttons(self, data: dict[int, Any]) -> None:
         """Bulk load welcome buttons from global_data."""
@@ -214,9 +203,7 @@ class ConfigService:
             self._delete_income[chat_id] = config
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.DeleteIncome, config
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.DeleteIncome, config)
 
     def remove_delete_income(self, chat_id: int, session: Session | None = None) -> None:
         """Remove delete income config for chat. Removes from DB if session provided."""
@@ -224,9 +211,7 @@ class ConfigService:
             self._delete_income.pop(chat_id, None)
 
         if session is not None:
-            ConfigRepository(session).save_bot_value(
-                chat_id, BotValueTypes.DeleteIncome, None
-            )
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.DeleteIncome, None)
 
     def load_delete_income(self, data: dict[int, Any]) -> None:
         """Bulk load delete income configs from global_data."""

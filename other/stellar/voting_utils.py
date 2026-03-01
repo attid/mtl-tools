@@ -26,13 +26,11 @@ async def cmd_get_blacklist() -> dict:
         Dictionary of blacklisted addresses
     """
     response = await http_session_manager.get_web_request(
-        'GET',
-        url='https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json',
-        return_type='json'
+        "GET", url="https://raw.githubusercontent.com/montelibero-org/mtl/main/json/blacklist.json", return_type="json"
     )
     if isinstance(response.data, dict):
         return response.data
-    raise ValueError('Invalid blacklist response format')
+    raise ValueError("Invalid blacklist response format")
 
 
 def check_mtla_delegate(account: str, result: dict, delegated_list: list = None):
@@ -49,28 +47,28 @@ def check_mtla_delegate(account: str, result: dict, delegated_list: list = None)
     """
     if delegated_list is None:
         delegated_list = []
-    delegate_to_account = result[account]['delegate']
+    delegate_to_account = result[account]["delegate"]
     # Remove self-delegation cycle
     if delegate_to_account and delegate_to_account == account:
-        result[account]['delegate'] = None
+        result[account]["delegate"] = None
         return
 
     # Remove larger delegation cycle
     if delegate_to_account and delegate_to_account in delegated_list:
-        result[account]['delegate'] = None
+        result[account]["delegate"] = None
         return
 
     if delegate_to_account:
-        if result[account]['vote'] > 0:
+        if result[account]["vote"] > 0:
             delegated_list.append(account)
-        if result[delegate_to_account]['delegate']:
-            result[account]['was_delegate'] = check_mtla_delegate(delegate_to_account, result, delegated_list)
+        if result[delegate_to_account]["delegate"]:
+            result[account]["was_delegate"] = check_mtla_delegate(delegate_to_account, result, delegated_list)
         else:
-            if 'delegated_list' in result[delegate_to_account]:
-                result[delegate_to_account]['delegated_list'].extend(delegated_list)
+            if "delegated_list" in result[delegate_to_account]:
+                result[delegate_to_account]["delegated_list"].extend(delegated_list)
             else:
-                result[delegate_to_account]['delegated_list'] = delegated_list
-            result[account]['was_delegate'] = delegate_to_account
+                result[delegate_to_account]["delegated_list"] = delegated_list
+            result[account]["was_delegate"] = delegate_to_account
             return delegate_to_account
 
 
@@ -94,15 +92,14 @@ async def cmd_get_new_vote_all_mtl(public_key: str, remove_master: bool = False)
     else:
         vote_list = await cmd_gen_mtl_vote_list()
         accounts = await grist_manager.load_table_data(
-            MTLGrist.EURMTL_accounts,
-            filter_dict={"signers_type": ['multisp']}
+            MTLGrist.EURMTL_accounts, filter_dict={"signers_type": ["multisp"]}
         )
 
         result = []
         source_account = await load_account_async(MTLAddresses.public_issuer)
         transaction = TransactionBuilder(
-            source_account=source_account,
-            network_passphrase=get_network_passphrase(), base_fee=BASE_FEE)
+            source_account=source_account, network_passphrase=get_network_passphrase(), base_fee=BASE_FEE
+        )
         sequence = transaction.source_account.sequence
         transaction.set_timeout(60 * 60 * 24 * 7)
         xdr = None
@@ -166,8 +163,8 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
                 account_id=account_id,
                 balance_mtl=balance_mtl,
                 balance_rect=balance_rect,
-                data=account.get('data'),
-                votes=votes
+                data=account.get("data"),
+                votes=votes,
             )
             shareholder_list.append(shareholder)
 
@@ -175,12 +172,7 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
     existing_account_ids = {sh.account_id for sh in shareholder_list}
     for signer_id, weight in signer_weights.items():
         if weight > 0 and signer_id not in existing_account_ids:
-            shareholder = MyShareHolder(
-                account_id=signer_id,
-                balance_mtl=0,
-                balance_rect=0,
-                votes=weight
-            )
+            shareholder = MyShareHolder(account_id=signer_id, balance_mtl=0, balance_rect=0, votes=weight)
             shareholder_list.append(shareholder)
 
     # Filter shareholder_list, keeping only accounts with balance >= 1
@@ -195,7 +187,7 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
             data = shareholder.data
             for data_name in list(data):
                 data_value = data[data_name]
-                if data_name in ('delegate', 'mtl_delegate'):
+                if data_name in ("delegate", "mtl_delegate"):
                     delegate_list[shareholder.account_id] = decode_data_value(data_value)
 
     # Multi-step delegation
@@ -256,11 +248,14 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
         big_vote = eligible_shareholders[0].calculated_votes
 
         for account in eligible_shareholders:
-            account.calculated_votes = round(account.calculated_votes ** (
-                    1 - (1.74 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote))
+            account.calculated_votes = round(
+                account.calculated_votes
+                ** (1 - (1.74 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote)
+            )
 
-        major_percent = eligible_shareholders[0].calculated_votes / sum(
-            sh.calculated_votes for sh in eligible_shareholders) * 100
+        major_percent = (
+            eligible_shareholders[0].calculated_votes / sum(sh.calculated_votes for sh in eligible_shareholders) * 100
+        )
         if major_percent < 33 or major_percent > 36:
             logger.warning(f"Warning! Major has {major_percent:.2f}% votes (outside 33-36% range)")
         else:
@@ -316,40 +311,43 @@ async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin) -> li
 
         while page_records["_embedded"]["records"]:
             for payment in page_records["_embedded"]["records"]:
-                if payment.get('to') and payment['to'] == account_id and datetime.strptime(payment['created_at'],
-                                                                                           '%Y-%m-%dT%H:%M:%SZ') > one_year_ago:
-                    amount = float(payment['amount'])
-                    last_donation_date = datetime.strptime(payment['created_at'], '%Y-%m-%dT%H:%M:%SZ')
-                    if payment['from'] not in donor_dict:
-                        donor_dict[payment['from']] = {'sum': amount, 'date': last_donation_date}
+                if (
+                    payment.get("to")
+                    and payment["to"] == account_id
+                    and datetime.strptime(payment["created_at"], "%Y-%m-%dT%H:%M:%SZ") > one_year_ago
+                ):
+                    amount = float(payment["amount"])
+                    last_donation_date = datetime.strptime(payment["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+                    if payment["from"] not in donor_dict:
+                        donor_dict[payment["from"]] = {"sum": amount, "date": last_donation_date}
                     else:
-                        donor_dict[payment['from']]['sum'] += amount
-                        if last_donation_date > donor_dict[payment['from']]['date']:
-                            donor_dict[payment['from']]['date'] = last_donation_date
+                        donor_dict[payment["from"]]["sum"] += amount
+                        if last_donation_date > donor_dict[payment["from"]]["date"]:
+                            donor_dict[payment["from"]]["date"] = last_donation_date
             page_records = await payments_call_builder.next()
 
         # Step 3
         ninety_days_ago = now - timedelta(days=days_inactive)
         for donor, data in list(donor_dict.items()):
-            if data['date'] < ninety_days_ago:
+            if data["date"] < ninety_days_ago:
                 donor_dict.pop(donor)
 
         # Step 4 and 5
         for donor, data in donor_dict.items():
             account_data = await server.accounts().account_id(donor).call()
-            delegate_data = account_data['data']
+            delegate_data = account_data["data"]
             if delegate_key in delegate_data:
                 delegate_id = delegate_data[delegate_key]
-                payment_amount = data['sum']
-                payment_date = data['date']
+                payment_amount = data["sum"]
+                payment_date = data["date"]
 
                 if delegate_id in donor_dict:
-                    donor_dict[delegate_id]['sum'] += payment_amount
-                    if payment_date > donor_dict[delegate_id]['date']:
-                        donor_dict[delegate_id]['date'] = payment_date
+                    donor_dict[delegate_id]["sum"] += payment_amount
+                    if payment_date > donor_dict[delegate_id]["date"]:
+                        donor_dict[delegate_id]["date"] = payment_date
 
         # Step 6
-        sorted_donors = sorted(donor_dict.items(), key=lambda x: (x[1]['sum'], x[1]['date']), reverse=True)
+        sorted_donors = sorted(donor_dict.items(), key=lambda x: (x[1]["sum"], x[1]["date"]), reverse=True)
 
         # Step 7
         top_sorted_donors = sorted_donors[:top_donors]
@@ -357,11 +355,11 @@ async def cmd_gen_fin_vote_list(account_id: str = MTLAddresses.public_fin) -> li
         # Step 8
         final_list = []
         for donor, data in top_sorted_donors:
-            sum_of_payments = data['sum']
+            sum_of_payments = data["sum"]
             for coeff in coefficients:
                 sum_of_payments /= coeff
             votes = math.log2(sum_of_payments)
-            final_list.append([donor, data['sum'], int(votes), 0, data['date']])
+            final_list.append([donor, data["sum"], int(votes), 0, data["date"]])
 
     return final_list
 
@@ -373,7 +371,7 @@ def gen_vote_xdr(
     source: str = None,
     remove_master: bool = False,
     max_count: int = 20,
-    threshold_style: int = 0
+    threshold_style: int = 0,
 ) -> str:
     """
     Create SetOptions XDR with signers for voting.
@@ -434,8 +432,9 @@ def gen_vote_xdr(
     source_account = server.load_account(public_key)
     root_account = Account(public_key, sequence=source_account.sequence)
     if transaction is None:
-        transaction = TransactionBuilder(source_account=root_account,
-                                         network_passphrase=get_network_passphrase(), base_fee=BASE_FEE)
+        transaction = TransactionBuilder(
+            source_account=root_account, network_passphrase=get_network_passphrase(), base_fee=BASE_FEE
+        )
         transaction.set_timeout(60 * 60 * 24 * 7)
     threshold = 0
 
@@ -450,11 +449,13 @@ def gen_vote_xdr(
         threshold = threshold // 2 + 1
 
     if remove_master:
-        transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
-                                          source=source, master_weight=0)
+        transaction.append_set_options_op(
+            low_threshold=threshold, med_threshold=threshold, high_threshold=threshold, source=source, master_weight=0
+        )
     else:
-        transaction.append_set_options_op(low_threshold=threshold, med_threshold=threshold, high_threshold=threshold,
-                                          source=source)
+        transaction.append_set_options_op(
+            low_threshold=threshold, med_threshold=threshold, high_threshold=threshold, source=source
+        )
 
     transaction = transaction.build()
     xdr = transaction.to_xdr()
@@ -483,57 +484,63 @@ async def get_mtlap_votes() -> dict:
     accounts = await stellar_get_holders(MTLAssets.mtlap_asset)
     for account in accounts:
         delegate = None
-        if account['data'] and account['data'].get('mtla_a_delegate'):
-            delegate = decode_data_value(account['data']['mtla_a_delegate'])
+        if account["data"] and account["data"].get("mtla_a_delegate"):
+            delegate = decode_data_value(account["data"]["mtla_a_delegate"])
         vote = 0
-        for balance in account['balances']:
-            if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and balance[
-                'asset_issuer'] == MTLAssets.mtlap_asset.issuer:
-                vote = int(float(balance['balance']))
+        for balance in account["balances"]:
+            if (
+                balance.get("asset_code")
+                and balance["asset_code"] == MTLAssets.mtlap_asset.code
+                and balance["asset_issuer"] == MTLAssets.mtlap_asset.issuer
+            ):
+                vote = int(float(balance["balance"]))
                 break
-        result[account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
+        result[account["id"]] = {"delegate": delegate, "vote": vote, "can_vote": vote >= 2}
 
     # Add accounts that don't exist yet
     find_new = True
     while find_new:
         find_new = False
         for account in list(result):
-            if result[account]['delegate'] and result[account]['delegate'] not in result:
+            if result[account]["delegate"] and result[account]["delegate"] not in result:
                 find_new = True
-                new_account = await stellar_get_account(result[account]['delegate'])
+                new_account = await stellar_get_account(result[account]["delegate"])
                 delegate = None
-                if new_account.get('data') and new_account['data'].get('mtla_a_delegate'):
-                    delegate = decode_data_value(new_account['data']['mtla_a_delegate'])
+                if new_account.get("data") and new_account["data"].get("mtla_a_delegate"):
+                    delegate = decode_data_value(new_account["data"]["mtla_a_delegate"])
                 vote = 0
-                balances = new_account.get('balances')
+                balances = new_account.get("balances")
                 if balances:
                     for balance in balances:
-                        if balance.get('asset_code') and balance['asset_code'] == MTLAssets.mtlap_asset.code and \
-                                balance['asset_issuer'] == MTLAssets.mtlap_asset.issuer:
-                            vote = int(float(balance['balance']))
+                        if (
+                            balance.get("asset_code")
+                            and balance["asset_code"] == MTLAssets.mtlap_asset.code
+                            and balance["asset_issuer"] == MTLAssets.mtlap_asset.issuer
+                        ):
+                            vote = int(float(balance["balance"]))
                             break
-                result[new_account['id']] = {'delegate': delegate, 'vote': vote, 'can_vote': vote >= 2}
+                result[new_account["id"]] = {"delegate": delegate, "vote": vote, "can_vote": vote >= 2}
 
     for account in list(result):
         check_mtla_delegate(account, result)
 
     # Check if account can vote
     for account in list(result):
-        if not result[account]['can_vote']:
+        if not result[account]["can_vote"]:
             # Check if there are delegators with 2 or more tokens
-            if 'delegated_list' in result[account]:
-                for delegator in result[account]['delegated_list']:
-                    if result[delegator]['vote'] >= 2:
-                        result[account]['can_vote'] = True
+            if "delegated_list" in result[account]:
+                for delegator in result[account]["delegated_list"]:
+                    if result[delegator]["vote"] >= 2:
+                        result[account]["can_vote"] = True
                         break
 
     # Remove accounts that cannot vote
     for account in list(result):
-        if not result[account]['can_vote']:
+        if not result[account]["can_vote"]:
             del result[account]
 
-    del result['GDGC46H4MQKRW3TZTNCWUU6R2C7IPXGN7HQLZBJTNQO6TW7ZOS6MSECR']
-    del result['GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA']
+    del result["GDGC46H4MQKRW3TZTNCWUU6R2C7IPXGN7HQLZBJTNQO6TW7ZOS6MSECR"]
+    del result["GCNVDZIHGX473FEI7IXCUAEXUJ4BGCKEMHF36VYP5EMS7PX2QBLAMTLA"]
 
     return result
 

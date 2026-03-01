@@ -1,4 +1,5 @@
 """Tests for admin_panel.py router."""
+
 import pytest
 import datetime
 from aiogram import types
@@ -41,6 +42,7 @@ async def cleanup_router():
 
 # ============ Unit Tests: Helper Functions ============
 
+
 class TestInaccessibleChats:
     def test_mark_chat_inaccessible(self):
         """Test marking chat as inaccessible."""
@@ -72,6 +74,7 @@ class TestInaccessibleChats:
 
 
 # ============ Unit Tests: Keyboard Builders ============
+
 
 class TestChatListKb:
     def test_empty_list(self):
@@ -193,14 +196,17 @@ class TestWelcomeKb:
 
 # ============ Integration Tests: Command Handlers ============
 
+
 def setup_admin_response(mock_server, user_id, is_admin=True):
     """Helper to set up getChatAdministrators response."""
     if is_admin:
-        result = [{
-            "status": "creator",
-            "user": {"id": user_id, "is_bot": False, "username": "admin", "first_name": "Admin"},
-            "is_anonymous": False
-        }]
+        result = [
+            {
+                "status": "creator",
+                "user": {"id": user_id, "is_bot": False, "username": "admin", "first_name": "Admin"},
+                "is_anonymous": False,
+            }
+        ]
     else:
         result = []
     mock_server.add_response("getChatAdministrators", {"ok": True, "result": result})
@@ -219,10 +225,10 @@ async def test_cmd_admin_no_chats(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=user_id, type='private'),
+            chat=types.Chat(id=user_id, type="private"),
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
-            text="/admin"
-        )
+            text="/admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -247,34 +253,37 @@ async def test_cmd_admin_with_chats(mock_telegram, router_app_context):
     router_app_context.admin_service.set_chat_admins(chat_id, [user_id])
 
     # Mock getChat response
-    mock_telegram.add_response("getChat", {
-        "ok": True,
-        "result": {
-            "id": chat_id,
-            "type": "supergroup",
-            "title": "Test Group",
-            "accent_color_id": 0,
-            "max_reaction_count": 0,
-            "permissions": {},
-            "accepted_gift_types": {
-                "unlimited_gifts": True,
-                "limited_gifts": False,
-                "unique_gifts": False,
-                "premium_subscription": False,
-                "gifts_from_channels": False
-            }
-        }
-    })
+    mock_telegram.add_response(
+        "getChat",
+        {
+            "ok": True,
+            "result": {
+                "id": chat_id,
+                "type": "supergroup",
+                "title": "Test Group",
+                "accent_color_id": 0,
+                "max_reaction_count": 0,
+                "permissions": {},
+                "accepted_gift_types": {
+                    "unlimited_gifts": True,
+                    "limited_gifts": False,
+                    "unique_gifts": False,
+                    "premium_subscription": False,
+                    "gifts_from_channels": False,
+                },
+            },
+        },
+    )
 
     update = types.Update(
         update_id=1,
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=user_id, type='private'),
+            chat=types.Chat(id=user_id, type="private"),
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
-            text="/admin"
-        )
+            text="/admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -303,10 +312,10 @@ async def test_cmd_admin_reload_in_group(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=chat_id, type='supergroup', title="Group"),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group"),
             from_user=types.User(id=user_id, is_bot=False, first_name="Admin"),
-            text="/admin"
-        )
+            text="/admin",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -322,6 +331,7 @@ async def test_cmd_admin_reload_in_group(mock_telegram, router_app_context):
 
 
 # ============ Integration Tests: Callback Handlers ============
+
 
 @pytest.mark.asyncio
 async def test_cb_noop(mock_telegram, router_app_context):
@@ -340,13 +350,10 @@ async def test_cb_noop(mock_telegram, router_app_context):
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=user_id, type='private'),
-                text="text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=user_id, type="private"), text="text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -379,13 +386,10 @@ async def test_cb_show_chat_list_pagination(mock_telegram, router_app_context):
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=user_id, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=user_id, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -418,13 +422,10 @@ async def test_cb_show_chat_menu(mock_telegram, router_app_context):
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=user_id, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=user_id, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -456,13 +457,10 @@ async def test_cb_show_chat_menu_not_admin(mock_telegram, router_app_context):
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=user_id, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=user_id, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -495,13 +493,10 @@ async def test_cb_toggle_feature(mock_telegram, router_app_context):
             from_user=types.User(id=12345, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=12345, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -536,13 +531,10 @@ async def test_cb_show_welcome_settings(mock_telegram, router_app_context):
             from_user=types.User(id=12345, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=12345, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -575,13 +567,10 @@ async def test_cb_delete_welcome(mock_telegram, router_app_context):
             from_user=types.User(id=12345, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=12345, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -607,13 +596,10 @@ async def test_cb_feature_info(mock_telegram, router_app_context):
             from_user=types.User(id=12345, is_bot=False, first_name="User"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=1,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=12345, type='private'),
-                text="old text"
+                message_id=1, date=datetime.datetime.now(), chat=types.Chat(id=12345, type="private"), text="old text"
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -626,6 +612,7 @@ async def test_cb_feature_info(mock_telegram, router_app_context):
 
 
 # ============ Integration Tests: FSM Handlers ============
+
 
 @pytest.mark.asyncio
 async def test_cmd_cancel_no_state(mock_telegram, router_app_context):
@@ -640,10 +627,10 @@ async def test_cmd_cancel_no_state(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=user_id, type='private'),
+            chat=types.Chat(id=user_id, type="private"),
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
-            text="/cancel"
-        )
+            text="/cancel",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -682,10 +669,10 @@ async def test_process_welcome_message(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=user_id, type='private'),
+            chat=types.Chat(id=user_id, type="private"),
             from_user=types.User(id=user_id, is_bot=False, first_name="User"),
-            text="Welcome to our group, {name}!"
-        )
+            text="Welcome to our group, {name}!",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -696,6 +683,7 @@ async def test_process_welcome_message(mock_telegram, router_app_context):
 
 
 # ============ Tests: Owner Notification ============
+
 
 def make_chat_response(chat_id, title="Test Chat"):
     """Helper to create getChat response."""
@@ -713,9 +701,9 @@ def make_chat_response(chat_id, title="Test Chat"):
                 "limited_gifts": False,
                 "unique_gifts": False,
                 "premium_subscription": False,
-                "gifts_from_channels": False
-            }
-        }
+                "gifts_from_channels": False,
+            },
+        },
     }
 
 
@@ -723,30 +711,34 @@ def make_admins_response(owner_id=None, admin_ids=None):
     """Helper to create getChatAdministrators response with owner and optional admins."""
     result = []
     if owner_id:
-        result.append({
-            "status": "creator",
-            "user": {"id": owner_id, "is_bot": False, "first_name": "Owner"},
-            "is_anonymous": False
-        })
+        result.append(
+            {
+                "status": "creator",
+                "user": {"id": owner_id, "is_bot": False, "first_name": "Owner"},
+                "is_anonymous": False,
+            }
+        )
     if admin_ids:
         for aid in admin_ids:
-            result.append({
-                "status": "administrator",
-                "user": {"id": aid, "is_bot": False, "first_name": f"Admin{aid}"},
-                "is_anonymous": False,
-                "can_be_edited": False,
-                "can_manage_chat": True,
-                "can_change_info": False,
-                "can_delete_messages": False,
-                "can_invite_users": False,
-                "can_restrict_members": False,
-                "can_pin_messages": False,
-                "can_promote_members": False,
-                "can_manage_video_chats": False,
-                "can_post_stories": False,
-                "can_edit_stories": False,
-                "can_delete_stories": False
-            })
+            result.append(
+                {
+                    "status": "administrator",
+                    "user": {"id": aid, "is_bot": False, "first_name": f"Admin{aid}"},
+                    "is_anonymous": False,
+                    "can_be_edited": False,
+                    "can_manage_chat": True,
+                    "can_change_info": False,
+                    "can_delete_messages": False,
+                    "can_invite_users": False,
+                    "can_restrict_members": False,
+                    "can_pin_messages": False,
+                    "can_promote_members": False,
+                    "can_manage_video_chats": False,
+                    "can_post_stories": False,
+                    "can_edit_stories": False,
+                    "can_delete_stories": False,
+                }
+            )
     return {"ok": True, "result": result}
 
 
@@ -763,9 +755,7 @@ async def test_notify_owner_sends_message(mock_telegram, router_app_context):
     mock_telegram.add_response("getChatAdministrators", make_admins_response(owner_id, [admin_id]))
 
     admin_user = types.User(id=admin_id, is_bot=False, first_name="Admin", username="admin_user")
-    await notify_owner_about_settings_change(
-        bot, chat_id, admin_user, "Test change"
-    )
+    await notify_owner_about_settings_change(bot, chat_id, admin_user, "Test change")
 
     requests = mock_telegram.get_requests()
     send_msg = next((r for r in requests if r["method"] == "sendMessage"), None)
@@ -787,9 +777,7 @@ async def test_notify_owner_skips_when_admin_is_owner(mock_telegram, router_app_
     mock_telegram.add_response("getChatAdministrators", make_admins_response(owner_id))
 
     admin_user = types.User(id=owner_id, is_bot=False, first_name="Owner")
-    await notify_owner_about_settings_change(
-        bot, chat_id, admin_user, "Test change"
-    )
+    await notify_owner_about_settings_change(bot, chat_id, admin_user, "Test change")
 
     requests = mock_telegram.get_requests()
     send_msg = next((r for r in requests if r["method"] == "sendMessage"), None)
@@ -808,9 +796,7 @@ async def test_notify_owner_skips_when_no_owner(mock_telegram, router_app_contex
     mock_telegram.add_response("getChatAdministrators", make_admins_response(owner_id=None, admin_ids=[admin_id]))
 
     admin_user = types.User(id=admin_id, is_bot=False, first_name="Admin")
-    await notify_owner_about_settings_change(
-        bot, chat_id, admin_user, "Test change"
-    )
+    await notify_owner_about_settings_change(bot, chat_id, admin_user, "Test change")
 
     requests = mock_telegram.get_requests()
     send_msg = next((r for r in requests if r["method"] == "sendMessage"), None)
@@ -834,9 +820,7 @@ async def test_notify_owner_handles_errors_gracefully(mock_telegram, router_app_
 
     admin_user = types.User(id=admin_id, is_bot=False, first_name="Admin")
     # Should not raise an exception
-    await notify_owner_about_settings_change(
-        bot, chat_id, admin_user, "Test change"
-    )
+    await notify_owner_about_settings_change(bot, chat_id, admin_user, "Test change")
 
 
 @pytest.mark.asyncio
@@ -894,11 +878,11 @@ async def test_cb_toggle_feature_notifies_owner(mock_telegram, router_app_contex
             message=types.Message(
                 message_id=1,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=admin_id, type='private'),
-                text="old text"
+                chat=types.Chat(id=admin_id, type="private"),
+                text="old text",
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -939,11 +923,11 @@ async def test_cb_delete_welcome_notifies_owner(mock_telegram, router_app_contex
             message=types.Message(
                 message_id=1,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=admin_id, type='private'),
-                text="old text"
+                chat=types.Chat(id=admin_id, type="private"),
+                text="old text",
             ),
-            data=callback_data
-        )
+            data=callback_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)

@@ -73,11 +73,12 @@ def async_cache_with_ttl(ttl_seconds: int, maxsize: int = 32):
 
 # Примеры использования:
 
+
 # С дефолтным maxsize=32
 @async_cache_with_ttl(ttl_seconds=3600)
 async def get_fund_signers():
-    print('real call')
-    return 'data'
+    print("real call")
+    return "data"
 
 
 # Тестирование

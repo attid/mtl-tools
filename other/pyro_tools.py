@@ -26,7 +26,7 @@ class MessageInfo:
     thread_id: Optional[int] = None
     thread_name: Optional[int] = None
     message_text: Optional[str] = None
-    reply_to_message: Optional['MessageInfo'] = None
+    reply_to_message: Optional["MessageInfo"] = None
     full_text: Optional[str] = None
 
 
@@ -43,7 +43,7 @@ class GroupMember:
 #     session_name = "test_session"
 # else:
 #     session_name = "pyro_session"
-#pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
+# pyro_app = Client(session_name, api_id=config.pyro_api_id, api_hash=config.pyro_api_hash.get_secret_value(),
 #                  workdir=os.path.join(start_path, 'data'))
 
 _pyro_app: Optional[Client] = None
@@ -57,18 +57,17 @@ def get_pyro_app() -> Client:
             bot_token=config.bot_token.get_secret_value(),
             api_id=config.pyro_api_id,
             api_hash=config.pyro_api_hash.get_secret_value(),
-            workdir=os.path.join(start_path, 'data'),
+            workdir=os.path.join(start_path, "data"),
             no_updates=True,
         )
     return _pyro_app
 
 
-
 def extract_telegram_info(url):
-    pattern1 = r'https://t\.me/([^/]+)/(\d+)$'
-    pattern2 = r'https://t\.me/c/(\d+)/(\d+)$'
-    pattern3 = r'https://t\.me/([^/]+)/\d+/(\d+)$'
-    pattern4 = r'https://t\.me/c/(\d+)/\d+/(\d+)$'
+    pattern1 = r"https://t\.me/([^/]+)/(\d+)$"
+    pattern2 = r"https://t\.me/c/(\d+)/(\d+)$"
+    pattern3 = r"https://t\.me/([^/]+)/\d+/(\d+)$"
+    pattern4 = r"https://t\.me/c/(\d+)/\d+/(\d+)$"
 
     match1 = re.match(pattern1, url)
     match2 = re.match(pattern2, url)
@@ -78,11 +77,11 @@ def extract_telegram_info(url):
     if match1:
         return MessageInfo(chat_id=match1.group(1), message_id=int(match1.group(2)))
     elif match2:
-        return MessageInfo(chat_id=int('-100' + match2.group(1)), message_id=int(match2.group(2)))
+        return MessageInfo(chat_id=int("-100" + match2.group(1)), message_id=int(match2.group(2)))
     elif match3:
         return MessageInfo(chat_id=match3.group(1), message_id=int(match3.group(2)))
     elif match4:
-        return MessageInfo(chat_id=int('-100' + match4.group(1)), message_id=int(match4.group(2)))
+        return MessageInfo(chat_id=int("-100" + match4.group(1)), message_id=int(match4.group(2)))
     else:
         return None
 
@@ -153,6 +152,7 @@ async def pyro_start():
 async def pyro_test():
     await get_pyro_app().send_message("@itolstov", "Greetings from **SkyNet**!")
 
+
 async def get_group_members(chat_id: int) -> List[GroupMember]:
     pyro_app = get_pyro_app()
     members = []
@@ -161,13 +161,15 @@ async def get_group_members(chat_id: int) -> List[GroupMember]:
             if member.user.is_deleted:
                 continue
             is_admin = member.status in (ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR)
-            members.append(GroupMember(
-                user_id=member.user.id,
-                username=member.user.username,
-                full_name=member.user.first_name + (" " + member.user.last_name if member.user.last_name else ""),
-                is_admin=is_admin,
-                is_bot=member.user.is_bot
-            ))
+            members.append(
+                GroupMember(
+                    user_id=member.user.id,
+                    username=member.user.username,
+                    full_name=member.user.first_name + (" " + member.user.last_name if member.user.last_name else ""),
+                    is_admin=is_admin,
+                    is_bot=member.user.is_bot,
+                )
+            )
     except Exception as e:
         logger.error(f"Error getting group members: {e}")
         capture_exception(e)
@@ -196,6 +198,7 @@ async def remove_deleted_users(chat_id: int):
         logger.error(f"Error in remove_deleted_users for chat {chat_id}: {e}")
         capture_exception(e)
 
+
 async def add_contact(user_id: int):
     pyro_app = get_pyro_app()
     try:
@@ -210,7 +213,7 @@ async def add_contact(user_id: int):
             user_id=user.id,
             first_name=user.first_name or "",
             last_name=user.last_name or "",
-            phone_number=user.phone_number or ""
+            phone_number=user.phone_number or "",
         )
         if result:
             logger.info(f"Successfully added user {user_id} to contacts")
@@ -234,7 +237,7 @@ async def add_contact(user_id: int):
         return False
 
 
-async def common_chats(user_id: int|str):
+async def common_chats(user_id: int | str):
     pyro_app = get_pyro_app()
     try:
         chats = await pyro_app.get_common_chats(user_id=user_id)
@@ -242,6 +245,7 @@ async def common_chats(user_id: int|str):
     except Exception as e:
         logger.error(f"Error for chat {user_id}: {e}")
         capture_exception(e)
+
 
 async def main():
     pyro_app = get_pyro_app()
@@ -256,14 +260,12 @@ async def main():
     for member in a:
         print(f"{member.user_id}\t{member.full_name}\t{member.username or ''}")
 
-
     # from app_context import app_context
     # await app_context.mongo_config.update_chat_info(-1001892843127, await get_group_members(-1001892843127))
     # url = "https://t.me/c/1798357244/90095/95343"
     # msg_info = extract_telegram_info(url)
     # await pyro_update_msg_info(msg_info)
     # print(msg_info)
-
 
     try:
         await pyro_app.stop()

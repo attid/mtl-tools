@@ -15,11 +15,7 @@ class TelegramUtilsService:
         await original_sleep_and_delete(message, seconds)
 
 
-async def get_chat_info(
-    chat_id: int,
-    bot: Bot,
-    db_service: "DatabaseService"
-) -> Tuple[Optional[str], Optional[str]]:
+async def get_chat_info(chat_id: int, bot: Bot, db_service: "DatabaseService") -> Tuple[Optional[str], Optional[str]]:
     """
     Get chat (title, username) - database first, API fallback.
 

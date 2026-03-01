@@ -81,10 +81,12 @@ class TestChannelLinkService:
         service = ChannelLinkService()
 
         # JSON storage uses string keys
-        service.load_from_dict({
-            "-1001234567890": 123456,
-            "-1009876543210": {"user_id": 789012, "username": "second"},
-        })
+        service.load_from_dict(
+            {
+                "-1001234567890": 123456,
+                "-1009876543210": {"user_id": 789012, "username": "second"},
+            }
+        )
 
         assert service.get_user_for_channel(-1001234567890) == 123456
         assert service.get_user_for_channel(-1009876543210) == 789012

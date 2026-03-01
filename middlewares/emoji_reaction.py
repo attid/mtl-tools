@@ -10,11 +10,7 @@ from loguru import logger
 from other.openrouter_reactions import label_to_emoji
 from other.openrouter_service import classify_message
 
-ALLOWED_CHAT_IDS = {
-    -1001908537713,
-    -1001677907211,
-    -1002124914508
-}
+ALLOWED_CHAT_IDS = {-1001908537713, -1001677907211, -1002124914508}
 LINK_ONLY_RE = re.compile(r"^\s*(https?://\S+)\s*$")
 
 

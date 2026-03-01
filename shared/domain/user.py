@@ -9,6 +9,7 @@ from datetime import datetime
 
 class SpamStatus(IntEnum):
     """Spam status values stored in BotUsers.user_type."""
+
     NEW = 0
     GOOD = 1
     BAD = 2
@@ -16,6 +17,7 @@ class SpamStatus(IntEnum):
 
 class AdminStatus(IntEnum):
     """Admin status for domain logic (not tied to DB)."""
+
     REGULAR = 0
     ADMIN = 1
     SUPERADMIN = 2
@@ -28,6 +30,7 @@ class User:
 
     Immutable value object with business logic.
     """
+
     user_id: int
     username: Optional[str] = None
     spam_status: SpamStatus = SpamStatus.NEW

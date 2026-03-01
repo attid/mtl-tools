@@ -32,11 +32,13 @@ TEST_BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 # --- Helpers ---
 
+
 def get_free_port():
     """Finds a free port on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
+
 
 def random_address():
     """Generates a random Stellar-like address for testing."""
@@ -45,27 +47,33 @@ def random_address():
 
 # --- Fixtures: Config ---
 
+
 @pytest.fixture(scope="function")
 def telegram_server_config():
     port = get_free_port()
     return {"host": "localhost", "port": port, "url": f"http://localhost:{port}"}
+
 
 @pytest.fixture(scope="function")
 def horizon_server_config():
     port = get_free_port()
     return {"host": "localhost", "port": port, "url": f"http://localhost:{port}"}
 
+
 @pytest.fixture(scope="function")
 def grist_server_config():
     port = get_free_port()
     return {"host": "localhost", "port": port, "url": f"http://localhost:{port}"}
 
+
 # --- Mock Servers ---
+
 
 # 1. Mock Telegram Server
 @pytest.fixture
 async def mock_telegram(telegram_server_config):
     """Starts a local mock Telegram server."""
+
     class TelegramMockState:
         def __init__(self):
             self.received_requests = []
@@ -91,16 +99,16 @@ async def mock_telegram(telegram_server_config):
 
     @routes.post("/bot{token}/{method}")
     async def handle_request(request):
-        token = request.match_info['token']
-        method = request.match_info['method']
+        token = request.match_info["token"]
+        method = request.match_info["method"]
 
-        if request.content_type == 'application/json':
+        if request.content_type == "application/json":
             try:
                 data = await request.json()
             except Exception:
                 data = {}
         else:
-            if request.content_type.startswith('multipart/'):
+            if request.content_type.startswith("multipart/"):
                 with suppress(Exception):
                     await request.read()
                 data = {}
@@ -119,132 +127,145 @@ async def mock_telegram(telegram_server_config):
 
         # Default responses for common methods
         if method == "getMe":
-            return web.json_response({
-                "ok": True,
-                "result": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"}
-            })
+            return web.json_response(
+                {"ok": True, "result": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"}}
+            )
         elif method in ("sendMessage", "forwardMessage"):
-            chat_id = data.get('chat_id', 0)
-            text = data.get('text', '')
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "message_id": random.randint(1, 1000),
-                    "date": 1234567890,
-                    "chat": {"id": chat_id, "type": "private"},
-                    "text": text
+            chat_id = data.get("chat_id", 0)
+            text = data.get("text", "")
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "message_id": random.randint(1, 1000),
+                        "date": 1234567890,
+                        "chat": {"id": chat_id, "type": "private"},
+                        "text": text,
+                    },
                 }
-            })
+            )
         elif method == "sendPhoto":
-            chat_id = data.get('chat_id', 0)
-            caption = data.get('caption')
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "message_id": random.randint(1, 1000),
-                    "date": 1234567890,
-                    "chat": {"id": chat_id, "type": "private"},
-                    "caption": caption,
-                    "photo": [{
-                        "file_id": "photo_id",
-                        "file_unique_id": "photo_unique",
-                        "width": 1,
-                        "height": 1
-                    }]
+            chat_id = data.get("chat_id", 0)
+            caption = data.get("caption")
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "message_id": random.randint(1, 1000),
+                        "date": 1234567890,
+                        "chat": {"id": chat_id, "type": "private"},
+                        "caption": caption,
+                        "photo": [{"file_id": "photo_id", "file_unique_id": "photo_unique", "width": 1, "height": 1}],
+                    },
                 }
-            })
+            )
         elif method == "sendDocument":
-            chat_id = data.get('chat_id', 0)
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "message_id": random.randint(1, 1000),
-                    "date": 1234567890,
-                    "chat": {"id": chat_id, "type": "private"},
-                    "document": {
-                        "file_id": "doc_id",
-                        "file_unique_id": "doc_unique",
-                        "file_name": "file.txt",
-                        "mime_type": "text/plain"
-                    }
+            chat_id = data.get("chat_id", 0)
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "message_id": random.randint(1, 1000),
+                        "date": 1234567890,
+                        "chat": {"id": chat_id, "type": "private"},
+                        "document": {
+                            "file_id": "doc_id",
+                            "file_unique_id": "doc_unique",
+                            "file_name": "file.txt",
+                            "mime_type": "text/plain",
+                        },
+                    },
                 }
-            })
+            )
         elif method == "copyMessage":
-            return web.json_response({
-                "ok": True,
-                "result": {"message_id": random.randint(1, 1000)}
-            })
+            return web.json_response({"ok": True, "result": {"message_id": random.randint(1, 1000)}})
         elif method == "sendPoll":
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "message_id": random.randint(1, 1000),
-                    "date": 1234567890,
-                    "chat": {"id": 123, "type": "private"},
-                    "poll": {
-                        "id": str(random.randint(1, 1000)), "question": "Q", "options": [{"text": "A", "voter_count": 0}],
-                        "total_voter_count": 0, "is_closed": False, "is_anonymous": True, "type": "regular", "allows_multiple_answers": False
-                    }
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "message_id": random.randint(1, 1000),
+                        "date": 1234567890,
+                        "chat": {"id": 123, "type": "private"},
+                        "poll": {
+                            "id": str(random.randint(1, 1000)),
+                            "question": "Q",
+                            "options": [{"text": "A", "voter_count": 0}],
+                            "total_voter_count": 0,
+                            "is_closed": False,
+                            "is_anonymous": True,
+                            "type": "regular",
+                            "allows_multiple_answers": False,
+                        },
+                    },
                 }
-            })
+            )
         elif method == "getChatAdministrators":
-             # Default fallback: emtpy list or some generic admin
-             return web.json_response({
-                "ok": True,
-                "result": [{
-                    "status": "creator",
-                    "user": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"},
-                    "is_anonymous": False,
-                    "custom_title": None
-                }]
-             })
+            # Default fallback: emtpy list or some generic admin
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": [
+                        {
+                            "status": "creator",
+                            "user": {"id": 123456, "is_bot": True, "first_name": "TestBot", "username": "test_bot"},
+                            "is_anonymous": False,
+                            "custom_title": None,
+                        }
+                    ],
+                }
+            )
         elif method == "getChatMember":
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "user": {"id": data.get("user_id", 0), "is_bot": False, "first_name": "User"},
-                    "status": "member"
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "user": {"id": data.get("user_id", 0), "is_bot": False, "first_name": "User"},
+                        "status": "member",
+                    },
                 }
-            })
+            )
         elif method == "getChat":
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "id": data.get("chat_id", 0),
-                    "type": "supergroup",
-                    "title": "Test Chat",
-                    "accent_color_id": 0,
-                    "max_reaction_count": 0,
-                    "permissions": {"can_send_messages": True},
-                    "accepted_gift_types": {
-                        "unlimited_gifts": True,
-                        "limited_gifts": False,
-                        "unique_gifts": False,
-                        "premium_subscription": False,
-                        "gifts_from_channels": False
-                    }
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {
+                        "id": data.get("chat_id", 0),
+                        "type": "supergroup",
+                        "title": "Test Chat",
+                        "accent_color_id": 0,
+                        "max_reaction_count": 0,
+                        "permissions": {"can_send_messages": True},
+                        "accepted_gift_types": {
+                            "unlimited_gifts": True,
+                            "limited_gifts": False,
+                            "unique_gifts": False,
+                            "premium_subscription": False,
+                            "gifts_from_channels": False,
+                        },
+                    },
                 }
-            })
+            )
         elif method == "getFile":
             file_id = data.get("file_id")
             if file_id in state.files_by_id:
-                return web.json_response({
-                    "ok": True,
-                    "result": {
-                        "file_id": file_id,
-                        "file_unique_id": str(file_id),
-                        "file_path": state.files_by_id[file_id]["file_path"],
-                        "file_size": len(state.files_by_id[file_id]["content"])
+                return web.json_response(
+                    {
+                        "ok": True,
+                        "result": {
+                            "file_id": file_id,
+                            "file_unique_id": str(file_id),
+                            "file_path": state.files_by_id[file_id]["file_path"],
+                            "file_size": len(state.files_by_id[file_id]["content"]),
+                        },
                     }
-                })
-            return web.json_response({
-                "ok": True,
-                "result": {
-                    "file_id": file_id,
-                    "file_unique_id": str(file_id),
-                    "file_path": f"files/{file_id}.bin"
+                )
+            return web.json_response(
+                {
+                    "ok": True,
+                    "result": {"file_id": file_id, "file_unique_id": str(file_id), "file_path": f"files/{file_id}.bin"},
                 }
-            })
+            )
 
         return web.json_response({"ok": True, "result": True})
 
@@ -266,6 +287,7 @@ async def mock_telegram(telegram_server_config):
     yield state
 
     await runner.cleanup()
+
 
 # 2. Mock Horizon Server
 @pytest.fixture
@@ -289,7 +311,7 @@ async def mock_horizon(horizon_server_config):
                 "signers": [{"key": account_id, "weight": 1}],
                 "thresholds": {"low_threshold": 0, "med_threshold": 1, "high_threshold": 2},
                 "data": data or {},
-                "flags": {"auth_required": False, "auth_revocable": False}
+                "flags": {"auth_required": False, "auth_revocable": False},
             }
 
         def get_requests(self, endpoint=None):
@@ -304,7 +326,7 @@ async def mock_horizon(horizon_server_config):
 
     @routes.get("/accounts/{account_id}")
     async def get_account(request):
-        account_id = request.match_info['account_id']
+        account_id = request.match_info["account_id"]
         state.requests.append({"endpoint": "accounts", "method": "GET", "account_id": account_id})
 
         if account_id in state.accounts:
@@ -314,11 +336,13 @@ async def mock_horizon(horizon_server_config):
     @routes.get("/fee_stats")
     async def fee_stats(request):
         state.requests.append({"endpoint": "fee_stats", "method": "GET"})
-        return web.json_response({
-            "last_ledger": "1",
-            "fee_charged": {"max": "100", "min": "100", "mode": "100", "p95": "100"},
-            "max_fee": {"mode": "100"}
-        })
+        return web.json_response(
+            {
+                "last_ledger": "1",
+                "fee_charged": {"max": "100", "min": "100", "mode": "100", "p95": "100"},
+                "max_fee": {"mode": "100"},
+            }
+        )
 
     @routes.post("/transactions")
     async def submit_transaction(request):
@@ -330,7 +354,7 @@ async def mock_horizon(horizon_server_config):
 
     @routes.get("/{path:.*}")
     async def catch_all(request):
-        path = request.match_info['path']
+        path = request.match_info["path"]
         state.requests.append({"endpoint": path, "method": "GET"})
         return web.json_response({"status": 404}, status=404)
 
@@ -345,14 +369,16 @@ async def mock_horizon(horizon_server_config):
 
     await runner.cleanup()
 
+
 # 3. Mock Grist Server
 @pytest.fixture
 async def mock_grist(grist_server_config):
     """Starts a local mock Grist server."""
+
     class GristMockState:
         def __init__(self):
             self.requests = []
-            self.records = {} # table_id -> list of records
+            self.records = {}  # table_id -> list of records
 
         def add_records(self, table_id, records):
             if table_id not in self.records:
@@ -364,17 +390,17 @@ async def mock_grist(grist_server_config):
 
     @routes.get("/api/docs/{doc_id}/tables/{table_id}/records")
     async def get_records(request):
-        table_id = request.match_info['table_id']
+        table_id = request.match_info["table_id"]
         state.requests.append({"table": table_id, "method": "GET"})
         records = state.records.get(table_id, [])
         return web.json_response({"records": records})
 
     @routes.post("/api/docs/{doc_id}/tables/{table_id}/records")
     async def add_records(request):
-        table_id = request.match_info['table_id']
+        table_id = request.match_info["table_id"]
         try:
             body = await request.json()
-            records_to_add = body.get('records', [])
+            records_to_add = body.get("records", [])
             new_records = []
             if table_id not in state.records:
                 state.records[table_id] = []
@@ -388,12 +414,9 @@ async def mock_grist(grist_server_config):
                 if table_id == "Deals" and "Checked" not in fields:
                     fields["Checked"] = False
 
-                new_record = {
-                    "id": new_id,
-                    "fields": fields
-                }
+                new_record = {"id": new_id, "fields": fields}
                 state.records[table_id].append(new_record)
-                new_records.append(new_record["id"]) # Grist POST returns IDs usually
+                new_records.append(new_record["id"])  # Grist POST returns IDs usually
         except Exception:
             pass
 
@@ -415,6 +438,7 @@ async def mock_grist(grist_server_config):
 
 # --- Router Test Infrastructure ---
 
+
 @pytest.fixture
 async def router_bot(mock_telegram, telegram_server_config):
     """Creates a Bot instance connected to mock Telegram server."""
@@ -423,10 +447,12 @@ async def router_bot(mock_telegram, telegram_server_config):
     yield bot
     await bot.session.close()
 
+
 @pytest.fixture
 def dp():
     """Provides a standalone Dispatcher for tests not using router_app_context."""
     return Dispatcher(storage=MemoryStorage())
+
 
 @pytest.fixture
 async def router_app_context(mock_telegram, router_bot, horizon_server_config, mock_horizon):
@@ -451,11 +477,13 @@ async def router_app_context(mock_telegram, router_bot, horizon_server_config, m
     app_context_module.app_context = original_singleton
     aiogram_tools_module.app_context = original_aiogram_tools
 
+
 class RouterTestMiddleware(BaseMiddleware):
     """
     Middleware for router tests to inject dependencies.
     Uses shared FakeSession from app_context so tests can set up data.
     """
+
     def __init__(self, app_context):
         self.app_context = app_context
         self._user_resolver = UserResolverMiddleware(app_context, app_context.bot)
@@ -464,18 +492,21 @@ class RouterTestMiddleware(BaseMiddleware):
         data["app_context"] = self.app_context
         # Use shared session from app_context so tests can set up data
         data["session"] = self.app_context.session
-        if hasattr(self.app_context, 'localization_service'):
+        if hasattr(self.app_context, "localization_service"):
             data["l10n"] = self.app_context.localization_service
         skyuser = self._user_resolver._resolve_user(event)
         data["skyuser"] = skyuser
         return await handler(event, data)
+
 
 class MockDbMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         data["session"] = FakeSession()
         return await handler(event, data)
 
+
 # --- Updates Factories ---
+
 
 def create_message_update(user_id, text, **kwargs) -> types.Update:
     return types.Update(
@@ -483,12 +514,13 @@ def create_message_update(user_id, text, **kwargs) -> types.Update:
         message=types.Message(
             message_id=1,
             date=1234567890,
-            chat=types.Chat(id=user_id, type='private'),
+            chat=types.Chat(id=user_id, type="private"),
             from_user=types.User(id=user_id, is_bot=False, first_name="Test"),
             text=text,
-            **kwargs
-        )
+            **kwargs,
+        ),
     )
+
 
 def create_callback_update(user_id, data, message_id=1, **kwargs) -> types.Update:
     return types.Update(
@@ -498,12 +530,9 @@ def create_callback_update(user_id, data, message_id=1, **kwargs) -> types.Updat
             from_user=types.User(id=user_id, is_bot=False, first_name="Test"),
             chat_instance="ci1",
             message=types.Message(
-                message_id=message_id,
-                date=1234567890,
-                chat=types.Chat(id=user_id, type='private'),
-                text="msg"
+                message_id=message_id, date=1234567890, chat=types.Chat(id=user_id, type="private"), text="msg"
             ),
             data=data,
-            **kwargs
-        )
+            **kwargs,
+        ),
     )

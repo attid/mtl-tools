@@ -1,4 +1,3 @@
-
 import aiohttp
 from dataclasses import dataclass
 from loguru import logger
@@ -20,15 +19,15 @@ def _text_to_html(text: str) -> str:
     Single newlines become <br> within paragraphs.
     """
     if not text:
-        return ''
-    paragraphs = text.split('\n\n')
+        return ""
+    paragraphs = text.split("\n\n")
     html_paragraphs = []
     for p in paragraphs:
         p = p.strip()
         if p:
-            p_with_br = p.replace('\n', '<br>\n')
-            html_paragraphs.append(f'<p>{p_with_br}</p>')
-    return '\n'.join(html_paragraphs)
+            p_with_br = p.replace("\n", "<br>\n")
+            html_paragraphs.append(f"<p>{p_with_br}</p>")
+    return "\n".join(html_paragraphs)
 
 
 HTML_HEAD = """<head>
@@ -110,22 +109,18 @@ class MiniAppsAPI:
 
     async def create_stateless_page(self, html_content: str) -> MiniAppPage:
         if not self.key:
-             logger.warning("MiniApps key is not set. Page creation might fail.")
+            logger.warning("MiniApps key is not set. Page creation might fail.")
 
         url = f"{self.BASE_URL}/api/generate"
 
-        data = {
-            "key": self.key,
-            "html": html_content,
-            "compress": True
-        }
+        data = {"key": self.key, "html": html_content, "compress": True}
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=data) as response:
                 if response.status == 200:
                     json_data = await response.json()
                     # Response: {"url": "full_url"}
-                    return MiniAppPage(url=json_data['url'])
+                    return MiniAppPage(url=json_data["url"])
                 else:
                     text = await response.text()
                     raise Exception(f"Error creating page: {response.status} {text}")
@@ -135,16 +130,16 @@ class MiniAppsAPI:
         # but keeping it for compatibility with existing calls.
         title = f"Message from {msg_info.user_from}"
 
-        body_parts = [f'<p><b>Сообщение от {msg_info.user_from}:</b></p>']
+        body_parts = [f"<p><b>Сообщение от {msg_info.user_from}:</b></p>"]
         body_parts.append(_text_to_html(msg_info.message_text or ""))
 
         if msg_info.reply_to_message:
-            body_parts.append(f'<p>{adv_text}</p>')
-            body_parts.append(f'<blockquote><b>Ответ на сообщение от {msg_info.reply_to_message.user_from}:</b><br>')
+            body_parts.append(f"<p>{adv_text}</p>")
+            body_parts.append(f"<blockquote><b>Ответ на сообщение от {msg_info.reply_to_message.user_from}:</b><br>")
             body_parts.append(_text_to_html(msg_info.reply_to_message.message_text or ""))
-            body_parts.append('</blockquote>')
+            body_parts.append("</blockquote>")
 
-        body_html = '\n'.join(body_parts)
+        body_html = "\n".join(body_parts)
 
         full_html = f"""<!DOCTYPE html>
 <html>
@@ -154,5 +149,6 @@ class MiniAppsAPI:
 </body>
 </html>"""
         return await self.create_stateless_page(full_html)
+
 
 miniapps = MiniAppsAPI(config.miniapps_key)

@@ -15,7 +15,9 @@ class AdminManagementService:
         self._lock = Lock()
         self._admins: dict[int, list[int]] = {}  # chat_id -> [user_ids]
         self._topic_admins: dict[str, list[str]] = {}  # "chat_id-thread_id" -> [usernames with @]
-        self._topic_mute: dict[str, dict[int, dict[str, str]]] = {}  # "chat_id-thread_id" -> {user_id: {"end_time": str, "user": str}}
+        self._topic_mute: dict[
+            str, dict[int, dict[str, str]]
+        ] = {}  # "chat_id-thread_id" -> {user_id: {"end_time": str, "user": str}}
         self._skynet_admins: list[str] = []  # usernames with @
         self._skynet_img: list[str] = []  # usernames with @ allowed to use /img
 
@@ -65,7 +67,7 @@ class AdminManagementService:
             return False
         with self._lock:
             key = self._topic_key(chat_id, thread_id)
-            normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+            normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
             return normalized in self._topic_admins.get(key, [])
 
     def is_topic_admin_by_key(self, topic_key: str, username: str) -> bool:
@@ -73,7 +75,7 @@ class AdminManagementService:
         if not username:
             return False
         with self._lock:
-            normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+            normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
             return normalized in self._topic_admins.get(topic_key, [])
 
     def get_topic_admins(self, chat_id: int, thread_id: int) -> list[str]:
@@ -90,7 +92,7 @@ class AdminManagementService:
 
     def add_topic_admin(self, chat_id: int, thread_id: int, username: str) -> None:
         """Add a topic admin by username."""
-        normalized = username.lower() if username.startswith('@') else f'@{username.lower()}'
+        normalized = username.lower() if username.startswith("@") else f"@{username.lower()}"
         with self._lock:
             key = self._topic_key(chat_id, thread_id)
             if key not in self._topic_admins:
@@ -191,7 +193,7 @@ class AdminManagementService:
             return False
         with self._lock:
             # Normalize: ensure @ prefix for comparison
-            normalized = username if username.startswith('@') else f'@{username}'
+            normalized = username if username.startswith("@") else f"@{username}"
             return normalized in self._skynet_admins
 
     def get_skynet_admins(self) -> list[str]:
@@ -203,7 +205,7 @@ class AdminManagementService:
             self._skynet_admins = usernames.copy()
 
     def add_skynet_admin(self, username: str) -> None:
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         with self._lock:
             if normalized not in self._skynet_admins:
                 self._skynet_admins.append(normalized)
@@ -214,7 +216,7 @@ class AdminManagementService:
             return False
         with self._lock:
             # Normalize: ensure @ prefix for comparison
-            normalized = username if username.startswith('@') else f'@{username}'
+            normalized = username if username.startswith("@") else f"@{username}"
             return normalized.lower() in [u.lower() for u in self._skynet_img]
 
     def get_skynet_img_users(self) -> list[str]:
@@ -226,7 +228,7 @@ class AdminManagementService:
             self._skynet_img = usernames.copy()
 
     def add_skynet_img_user(self, username: str) -> None:
-        normalized = username if username.startswith('@') else f'@{username}'
+        normalized = username if username.startswith("@") else f"@{username}"
         with self._lock:
             if normalized not in self._skynet_img:
                 self._skynet_img.append(normalized)
@@ -234,10 +236,10 @@ class AdminManagementService:
     # Bulk loading for initialization
     def load_admins(self, admins_data: dict[int, list[int]]) -> None:
         with self._lock:
-            self._admins = {k: (v.copy() if isinstance(v, (list, dict)) else v)
-                           for k, v in admins_data.items()}
+            self._admins = {k: (v.copy() if isinstance(v, (list, dict)) else v) for k, v in admins_data.items()}
 
     def load_topic_admins(self, topic_admins_data: dict[str, list]) -> None:  # type: ignore[type-arg]
         with self._lock:
-            self._topic_admins = {k: (v.copy() if isinstance(v, (list, dict)) else v)
-                                 for k, v in topic_admins_data.items()}
+            self._topic_admins = {
+                k: (v.copy() if isinstance(v, (list, dict)) else v) for k, v in topic_admins_data.items()
+            }

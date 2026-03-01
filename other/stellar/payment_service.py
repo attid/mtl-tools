@@ -17,11 +17,7 @@ from .sdk_utils import get_private_sign
 
 
 async def send_payment_async(
-    source_address: str,
-    destination: str,
-    asset: Asset,
-    amount: str,
-    memo_text: Optional[str] = None
+    source_address: str, destination: str, asset: Asset, amount: str, memo_text: Optional[str] = None
 ) -> dict:
     """
     Builds, signs and submits a payment transaction.
@@ -36,9 +32,7 @@ async def send_payment_async(
     Returns:
         Transaction response dict
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as async_server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as async_server:
         source_account = await async_server.load_account(source_address)
 
     builder = TransactionBuilder(
@@ -69,13 +63,8 @@ async def stellar_async_submit(xdr: str) -> dict:
     Returns:
         Submission response dict
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
-        transaction = TransactionEnvelope.from_xdr(
-            xdr,
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE
-        )
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
+        transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         return await server.submit_transaction(transaction)
 
 
@@ -89,13 +78,8 @@ async def stellar_sync_submit(xdr: str) -> dict:
     Returns:
         Submission response dict
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
-        transaction = TransactionEnvelope.from_xdr(
-            xdr,
-            network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE
-        )
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
+        transaction = TransactionEnvelope.from_xdr(xdr, network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE)
         return await server.submit_transaction(transaction)
 
 
@@ -115,9 +99,7 @@ async def build_batch_payment_xdr(
     Returns:
         Unsigned transaction XDR
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         source_account = await server.load_account(source_address)
 
     builder = TransactionBuilder(

@@ -6,7 +6,7 @@ from typing import Any, Optional, cast
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
-from aiogram.types import (Message, ReactionTypeEmoji)
+from aiogram.types import Message, ReactionTypeEmoji
 from loguru import logger
 
 from other.constants import BotValueTypes
@@ -21,6 +21,7 @@ router = Router()
 # =============================================================================
 # DI Service Access Helpers
 # =============================================================================
+
 
 def _get_feature_flag_list(ctx, feature_name: str) -> list:
     """Get feature flag list from DI service. Raises error if ctx not available."""
@@ -96,7 +97,7 @@ def _get_entry_channel(ctx, chat_id: int) -> Optional[str]:
     """Get entry channel config using DI. Raises error if ctx not available."""
     if not ctx or not ctx.config_service:
         raise ValueError("app_context with config_service required")
-    return ctx.config_service.load_value(chat_id, 'entry_channel')
+    return ctx.config_service.load_value(chat_id, "entry_channel")
 
 
 # =============================================================================
@@ -123,7 +124,6 @@ commands_info = {
     "set_captcha": (BotValueTypes.Captcha, "toggle", "admin", 1, "captcha"),
     "set_moderate": (BotValueTypes.Moderate, "toggle", "admin", 1, "moderate"),
     "set_entry_channel": (BotValueTypes.EntryChannel, "toggle_entry_channel", "admin", 1, "entry_channel"),
-
     "add_skynet_img": (BotValueTypes.SkynetImg, "add_list", "skynet_admin", 3, "skynet_img"),
     "del_skynet_img": (BotValueTypes.SkynetImg, "del_list", "skynet_admin", 0, "skynet_img"),
     "show_skynet_img": (BotValueTypes.SkynetImg, "show_list", "skynet_admin", 0, "skynet_img"),
@@ -188,18 +188,18 @@ def command_config_loads(app_context):
             app_context.feature_flags.set_feature(chat_id, "entry_channel", True, persist=False)
 
         # Load JSON-based global lists (skynet_admins, skynet_img)
-        skynet_admins = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetAdmins, '[]'))
+        skynet_admins = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetAdmins, "[]"))
         app_context.admin_service.set_skynet_admins(skynet_admins)
 
-        skynet_img = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetImg, '[]'))
+        skynet_img = json.loads(repo.load_bot_value(0, BotValueTypes.SkynetImg, "[]"))
         app_context.admin_service.set_skynet_img_users(skynet_img)
 
         # Load topic admins (JSON dict)
-        topic_admins = json.loads(repo.load_bot_value(0, BotValueTypes.TopicAdmins, '{}'))
+        topic_admins = json.loads(repo.load_bot_value(0, BotValueTypes.TopicAdmins, "{}"))
         app_context.admin_service.load_topic_admins(topic_admins)
 
         # Load votes data
-        votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, '{}'))
+        votes = json.loads(repo.load_bot_value(0, BotValueTypes.Votes, "{}"))
         app_context.voting_service.load_votes(votes)
 
         # Load first_vote into voting service
@@ -207,11 +207,11 @@ def command_config_loads(app_context):
         app_context.voting_service.load_first_vote(first_vote_chat_ids)
 
         # Load topic mutes
-        topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, '{}'))
+        topic_mute = json.loads(repo.load_bot_value(0, BotValueTypes.TopicMutes, "{}"))
         app_context.admin_service.load_topic_mutes(topic_mute)
 
         # Load inaccessible chats for admin panel
-        inaccessible_chats = json.loads(repo.load_bot_value(0, BotValueTypes.Inaccessible, '[]'))
+        inaccessible_chats = json.loads(repo.load_bot_value(0, BotValueTypes.Inaccessible, "[]"))
         load_inaccessible_chats(inaccessible_chats)
 
         # Load welcome messages and buttons
@@ -239,13 +239,13 @@ def command_config_loads(app_context):
             app_context.bot_state_service.mark_needs_decode(chat_id)
 
         # Load channel links
-        channel_links = json.loads(repo.load_bot_value(0, BotValueTypes.ChannelLinks, '{}'))
+        channel_links = json.loads(repo.load_bot_value(0, BotValueTypes.ChannelLinks, "{}"))
         app_context.channel_link_service.load_from_dict(channel_links)
 
     # Log loaded feature flags statistics
     _log_feature_flags_stats(app_context)
 
-    logger.info('finished command_config_loads task')
+    logger.info("finished command_config_loads task")
 
 
 def _log_feature_flags_stats(app_context):
@@ -276,39 +276,54 @@ def _log_feature_flags_stats(app_context):
 
 @update_command_info("/set_reply_only", "Следить за сообщениями вне тренда и сообщать об этом.", 1, "reply_only")
 @update_command_info("/set_first_vote", "Показывать ли голосованием о первом сообщении.", 1, "first_vote")
-@update_command_info("/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата", 2,
-                     "delete_income")
+@update_command_info(
+    "/delete_income", "Разрешить боту удалять сообщения о входе и выходе участников чата", 2, "delete_income"
+)
 @update_command_info("/set_no_first_link", "Защита от спама первого сообщения с ссылкой", 1, "no_first_link")
 @update_command_info("/need_decode", "Нужно ли декодировать сообщения в чате.", 1, "need_decode")
-@update_command_info("/save_last_message_date", "Сохранять ли время последнего сообщения в чате", 1,
-                     "save_last_message_date")
-@update_command_info("/add_skynet_img",
-                     "Добавить пользователей в пользователи img. запуск с параметрами "
-                     "/add_skynet_admin @user1 @user2 итд")
-@update_command_info("/del_skynet_admin",
-                     "Убрать пользователей из админов скайнета. запуск с параметрами "
-                     "/del_skynet_admin @user1 @user2 итд")
-@update_command_info("/add_skynet_admin",
-                     "Добавить пользователей в админы скайнета. запуск с параметрами "
-                     "/add_skynet_admin @user1 @user2 итд")
+@update_command_info(
+    "/save_last_message_date", "Сохранять ли время последнего сообщения в чате", 1, "save_last_message_date"
+)
+@update_command_info(
+    "/add_skynet_img",
+    "Добавить пользователей в пользователи img. запуск с параметрами /add_skynet_admin @user1 @user2 итд",
+)
+@update_command_info(
+    "/del_skynet_admin",
+    "Убрать пользователей из админов скайнета. запуск с параметрами /del_skynet_admin @user1 @user2 итд",
+)
+@update_command_info(
+    "/add_skynet_admin",
+    "Добавить пользователей в админы скайнета. запуск с параметрами /add_skynet_admin @user1 @user2 итд",
+)
 @update_command_info("/show_skynet_admin", "Показать админов скайнета")
 @update_command_info("/add_topic_admin", "Добавить админов топика. Использование: /add_topic_admin @user1 @user2")
 @update_command_info("/del_topic_admin", "Удалить админов топика. Использование: /del_topic_admin @user1 @user2")
 @update_command_info("/show_topic_admin", "Показать админов топика")
-@update_command_info("/notify_join_request",
-                     "Оповещать о новом участнике, требующем подтверждения для присоединения. "
-                     "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу", 2,
-                     "notify_join")
-@update_command_info("/notify_message",
-                     "Оповещать о новом сообщении в определенный чат"
-                     "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками", 2,
-                     "notify_message")
-@update_command_info("/set_entry_channel",
-                     "Ограничение входа только для подписчиков канала. Использование: /set_entry_channel -100123456",
-                     2, "entry_channel")
-@update_command_info("/join_request_captcha",
-                     "Шлет пользователю капчу для подтверждения его человечности. "
-                     "Работает только совместно с /notify_join_request")
+@update_command_info(
+    "/notify_join_request",
+    "Оповещать о новом участнике, требующем подтверждения для присоединения. "
+    "Если вторым параметром будет группа в виде -100123456 то оповещать будет в эту группу",
+    2,
+    "notify_join",
+)
+@update_command_info(
+    "/notify_message",
+    "Оповещать о новом сообщении в определенный чат"
+    "Чат указываем в виде -100123456 для обычного чата или -100123456:12345 для чата с топиками",
+    2,
+    "notify_message",
+)
+@update_command_info(
+    "/set_entry_channel",
+    "Ограничение входа только для подписчиков канала. Использование: /set_entry_channel -100123456",
+    2,
+    "entry_channel",
+)
+@update_command_info(
+    "/join_request_captcha",
+    "Шлет пользователю капчу для подтверждения его человечности. Работает только совместно с /notify_join_request",
+)
 @update_command_info("/auto_all", "Автоматически добавлять пользователей в /all при входе", 1, "auto_all")
 @update_command_info("/set_captcha", "Включает\\Выключает капчу", 1, "captcha")
 @update_command_info("/set_moderate", "Включает\\Выключает режим модерации по топикам/topic", 1, "moderate")
@@ -349,12 +364,17 @@ async def universal_command_handler(
         dest_chat = command_arg.split(":")[0]
         dest_chat_id = int(dest_chat) if dest_chat.lstrip("-").isdigit() else None
         if not skyuser or not await skyuser.is_admin(dest_chat_id):
-            text = skyuser.admin_denied_text("Bad target chat. Or you are not admin.") if skyuser else "Bad target chat. Or you are not admin."
+            text = (
+                skyuser.admin_denied_text("Bad target chat. Or you are not admin.")
+                if skyuser
+                else "Bad target chat. Or you are not admin."
+            )
             await message.reply(text)
             return
 
-    await bot.set_message_reaction(chat_id=message.chat.id, message_id=message.message_id,
-                                   reaction=[ReactionTypeEmoji(emoji='👀')])
+    await bot.set_message_reaction(
+        chat_id=message.chat.id, message_id=message.message_id, reaction=[ReactionTypeEmoji(emoji="👀")]
+    )
 
     if action_type in ["add_list", "del_list", "show_list"]:
         await list_command_handler(message, command_info, session, app_context=app_context)
@@ -400,17 +420,17 @@ async def handle_command(message: Message, command_info, session, app_context=No
         # Sync removal to specialized DI services
         _sync_toggle_removal(app_context, db_value_type, chat_id)
 
-        info_message = await message.reply('Removed')
+        info_message = await message.reply("Removed")
     else:
         # Enable the feature
-        value_to_set = command_args[0] if command_args else '1'
+        value_to_set = command_args[0] if command_args else "1"
         feature_flags.set_feature(chat_id, feature_name, True, persist=False)
         ConfigRepository(session).save_bot_value(chat_id, db_value_type, value_to_set)
 
         # Sync addition to specialized DI services
         _sync_toggle_addition(app_context, db_value_type, chat_id, value_to_set)
 
-        info_message = await message.reply('Added')
+        info_message = await message.reply("Added")
 
     await utils_service.sleep_and_delete(info_message, 5)
 
@@ -466,7 +486,7 @@ async def handle_entry_channel_toggle(message: Message, command_info, session, a
     if not is_enabled:
         command_args = (message.text or "").split()[1:]
         if not command_args:
-            info_message = await message.reply('Необходимо указать канал или чат в формате -100123456 или @channel.')
+            info_message = await message.reply("Необходимо указать канал или чат в формате -100123456 или @channel.")
             await utils_service.sleep_and_delete(info_message, 10)
             with suppress(TelegramBadRequest):
                 await asyncio.sleep(1)
@@ -476,7 +496,9 @@ async def handle_entry_channel_toggle(message: Message, command_info, session, a
     await handle_command(message, command_info, session, app_context=app_context)
 
 
-async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None) -> tuple[bool, bool]:
+async def enforce_entry_channel(
+    bot: Bot, chat_id: int, user_id: int, required_channel: str, app_context=None
+) -> tuple[bool, bool]:
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
     group_service = cast(Any, app_context.group_service)
@@ -490,7 +512,7 @@ async def enforce_entry_channel(bot: Bot, chat_id: int, user_id: int, required_c
         await asyncio.sleep(0.2)
         return False, True
     except (TelegramBadRequest, TelegramForbiddenError) as exc:
-        logger.warning(f'enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}')
+        logger.warning(f"enforce_entry_channel failed for user {user_id} in chat {chat_id}: {exc}")
         return False, False
 
 
@@ -500,7 +522,7 @@ async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> t
     group_service = cast(Any, app_context.group_service)
     required_channel = _get_entry_channel(app_context, chat_id)
     if not required_channel:
-        raise ValueError('entry_channel setting is not enabled for this chat')
+        raise ValueError("entry_channel setting is not enabled for this chat")
 
     members = await group_service.get_members(chat_id)
 
@@ -513,7 +535,9 @@ async def run_entry_channel_check(bot: Bot, chat_id: int, app_context=None) -> t
 
         checked_count += 1
 
-        membership_ok, action_applied = await enforce_entry_channel(bot, chat_id, member.user_id, required_channel, app_context=app_context)
+        membership_ok, action_applied = await enforce_entry_channel(
+            bot, chat_id, member.user_id, required_channel, app_context=app_context
+        )
         if membership_ok:
             await asyncio.sleep(0.1)
             continue
@@ -559,7 +583,7 @@ async def list_command_handler(message: Message, command_info, session, app_cont
             else:
                 admin_service.set_skynet_img_users(current_list)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
-            await message.reply(f'Added: {" ".join(command_args)}')
+            await message.reply(f"Added: {' '.join(command_args)}")
 
     elif action_type == "del_list":
         if not command_args:
@@ -575,13 +599,13 @@ async def list_command_handler(message: Message, command_info, session, app_cont
             else:
                 admin_service.set_skynet_img_users(current_list)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(current_list))
-            await message.reply(f'Removed: {" ".join(command_args)}')
+            await message.reply(f"Removed: {' '.join(command_args)}")
 
     elif action_type == "show_list":
         if current_list:
-            await message.reply(' '.join(current_list))
+            await message.reply(" ".join(current_list))
         else:
-            await message.reply('The list is empty.')
+            await message.reply("The list is empty.")
 
 
 async def list_command_handler_topic(message: Message, command_info, session, app_context=None):
@@ -608,7 +632,7 @@ async def list_command_handler_topic(message: Message, command_info, session, ap
             # Update service and persist
             admin_service.load_topic_admins(all_topic_admins)
             ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
-            await message.reply(f'Added at this thread: {" ".join(command_args)}')
+            await message.reply(f"Added at this thread: {' '.join(command_args)}")
 
     elif action_type == "del_list_topic":
         if not command_args:
@@ -621,20 +645,21 @@ async def list_command_handler_topic(message: Message, command_info, session, ap
                 # Update service and persist
                 admin_service.load_topic_admins(all_topic_admins)
                 ConfigRepository(session).save_bot_value(0, db_value_type, json.dumps(all_topic_admins))
-                await message.reply(f'Removed from this thread: {" ".join(command_args)}')
+                await message.reply(f"Removed from this thread: {' '.join(command_args)}")
             else:
-                await message.reply('This thread has no items in the list.')
+                await message.reply("This thread has no items in the list.")
 
     elif action_type == "show_list_topic":
         if chat_thread_key in all_topic_admins and all_topic_admins[chat_thread_key]:
-            await message.reply(f'Items in this thread: {" ".join(all_topic_admins[chat_thread_key])}')
+            await message.reply(f"Items in this thread: {' '.join(all_topic_admins[chat_thread_key])}")
         else:
-            await message.reply('The list for this thread is empty.')
+            await message.reply("The list for this thread is empty.")
 
 
-@update_command_info("/link_channel",
-                     "Привязать канал к пользователю. Отправьте команду от имени канала в чате. "
-                     "Бот должен быть админом канала.")
+@update_command_info(
+    "/link_channel",
+    "Привязать канал к пользователю. Отправьте команду от имени канала в чате. Бот должен быть админом канала.",
+)
 @router.message(Command(commands=["link_channel"]))
 async def link_channel_handler(message: Message, bot: Bot, session, app_context=None):
     """Handle /link_channel command.
@@ -669,8 +694,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
         # Persist to database
         all_links = channel_link_service.get_all_links()
         ConfigRepository(session).save_bot_value(
-            0, BotValueTypes.ChannelLinks,
-            json.dumps({str(k): v for k, v in all_links.items()})
+            0, BotValueTypes.ChannelLinks, json.dumps({str(k): v for k, v in all_links.items()})
         )
 
         info_message = await message.reply(f"Канал {message.sender_chat.title} отвязан.")
@@ -686,8 +710,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
     except (TelegramBadRequest, TelegramForbiddenError) as e:
         logger.warning(f"Cannot get admins for channel {channel_id}: {e}")
         info_message = await message.reply(
-            "Не удалось получить информацию о канале. "
-            "Убедитесь, что бот добавлен в канал как администратор."
+            "Не удалось получить информацию о канале. Убедитесь, что бот добавлен в канал как администратор."
         )
         await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
@@ -706,8 +729,7 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
 
     if owner_id is None:
         info_message = await message.reply(
-            "Не удалось найти владельца канала. "
-            "Убедитесь, что у канала есть владелец-пользователь."
+            "Не удалось найти владельца канала. Убедитесь, что у канала есть владелец-пользователь."
         )
         await utils_service.sleep_and_delete(info_message, 5)
         with suppress(TelegramBadRequest):
@@ -721,13 +743,10 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
     # Persist to database
     all_links = channel_link_service.get_all_links()
     ConfigRepository(session).save_bot_value(
-        0, BotValueTypes.ChannelLinks,
-        json.dumps({str(k): v for k, v in all_links.items()})
+        0, BotValueTypes.ChannelLinks, json.dumps({str(k): v for k, v in all_links.items()})
     )
 
-    info_message = await message.reply(
-        f"Канал {message.sender_chat.title} привязан к владельцу (ID: {owner_id})."
-    )
+    info_message = await message.reply(f"Канал {message.sender_chat.title} привязан к владельцу (ID: {owner_id}).")
     await utils_service.sleep_and_delete(info_message, 5)
     with suppress(TelegramBadRequest):
         await asyncio.sleep(1)
@@ -736,14 +755,14 @@ async def link_channel_handler(message: Message, bot: Bot, session, app_context=
 
 @router.startup()
 async def on_startup(dispatcher):
-    app_context = dispatcher.get('app_context') if hasattr(dispatcher, 'get') else None
+    app_context = dispatcher.get("app_context") if hasattr(dispatcher, "get") else None
     if app_context:
         command_config_loads(app_context)
 
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router admin was loaded')
+    logger.info("router admin was loaded")
 
 
 if __name__ == "__main__":

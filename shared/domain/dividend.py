@@ -10,6 +10,7 @@ from datetime import datetime
 @dataclass(frozen=True)
 class Dividend:
     """Single dividend payment to holder."""
+
     address: str
     amount: Decimal
     asset_code: str
@@ -23,6 +24,7 @@ class DividendList:
 
     Mutable aggregate root for dividend operations.
     """
+
     id: Optional[int] = None
     memo: str = ""
     pay_type: str = "EURMTL"

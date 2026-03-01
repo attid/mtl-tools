@@ -8,6 +8,7 @@ from db.repositories.base import BaseRepository
 from other.pyro_tools import GroupMember
 from shared.infrastructure.database.models import Chat, ChatMember, BotUsers, BotUserChats
 
+
 # DTOs replacing MongoUser and MongoChat
 class ChatUserDTO(BaseModel):
     user_id: Optional[int] = None
@@ -16,6 +17,7 @@ class ChatUserDTO(BaseModel):
     is_admin: bool = False
     created_at: datetime
     left_at: Optional[datetime] = None
+
 
 class ChatDTO(BaseModel):
     chat_id: int
@@ -30,67 +32,45 @@ class ChatDTO(BaseModel):
 class ChatsRepository(BaseRepository):
     def update_chat_info(self, chat_id: int, members: List[GroupMember], clear_users: bool = False) -> bool:
         now = datetime.now(UTC)
-        
+
         # Получаем текущую информацию о чате
-        result = self.session.execute(
-            select(Chat).where(Chat.chat_id == chat_id)
-        )
+        result = self.session.execute(select(Chat).where(Chat.chat_id == chat_id))
         chat = result.scalar_one_or_none()
 
         if not chat:
-            chat = Chat(
-                chat_id=chat_id,
-                created_at=now,
-                last_updated=now,
-                admins=[],
-                metadata_={}
-            )
+            chat = Chat(chat_id=chat_id, created_at=now, last_updated=now, admins=[], metadata_={})
             self.session.add(chat)
             self.session.flush()
 
         if clear_users:
-            self.session.execute(
-                delete(ChatMember).where(ChatMember.chat_id == chat_id)
-            )
+            self.session.execute(delete(ChatMember).where(ChatMember.chat_id == chat_id))
             chat.admins = []
 
         chat.last_updated = now
-        
+
         # Ensure chat.admins is a list
         if chat.admins is None:
             chat.admins = []
-            
+
         admin_ids = set(chat.admins)
 
         for member in members:
             # Check user existence in BotUsers
-            user_result = self.session.execute(
-                select(BotUsers).where(BotUsers.user_id == member.user_id)
-            )
+            user_result = self.session.execute(select(BotUsers).where(BotUsers.user_id == member.user_id))
             user_record = user_result.scalar_one_or_none()
 
             if not user_record:
-                new_user = BotUsers(
-                    user_id=member.user_id,
-                    user_name=member.username,
-                    user_type=0
-                )
+                new_user = BotUsers(user_id=member.user_id, user_name=member.username, user_type=0)
                 self.session.add(new_user)
                 # No need to flush every time, but maybe safer for FKs if we weren't using bulk approach.
                 # Here we are adding one by one.
 
             # Check member existence
             existing_member = self.session.execute(
-                select(ChatMember).where(
-                    and_(ChatMember.chat_id == chat_id, ChatMember.user_id == member.user_id)
-                )
+                select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == member.user_id))
             ).scalar_one_or_none()
 
-            member_metadata = {
-                "username": member.username,
-                "full_name": member.full_name,
-                "is_admin": member.is_admin
-            }
+            member_metadata = {"username": member.username, "full_name": member.full_name, "is_admin": member.is_admin}
 
             if existing_member:
                 existing_member.metadata_ = member_metadata
@@ -98,10 +78,7 @@ class ChatsRepository(BaseRepository):
                     existing_member.left_at = None
             else:
                 new_member = ChatMember(
-                    chat_id=chat_id,
-                    user_id=member.user_id,
-                    created_at=now,
-                    metadata_=member_metadata
+                    chat_id=chat_id, user_id=member.user_id, created_at=now, metadata_=member_metadata
                 )
                 self.session.add(new_member)
 
@@ -115,94 +92,65 @@ class ChatsRepository(BaseRepository):
         # We will let the service/caller handle commit if possible, or do it here if we strictly follow mongo.py behavior.
         # mongo.py methods committed. To match behavior, I should probably not commit if I want a clean repo pattern,
         # but since I am replacing logic that expects side effects, I might need to be careful.
-        # Ideally Repositories don't commit. Unit of Work does. 
+        # Ideally Repositories don't commit. Unit of Work does.
         # But for now, let's assume the calling code (Session context) will commit.
         return True
 
     def add_user_to_chat(self, chat_id: int, member: GroupMember) -> bool:
         now = datetime.now(UTC)
-        
-        result = self.session.execute(
-            select(Chat).where(Chat.chat_id == chat_id)
-        )
+
+        result = self.session.execute(select(Chat).where(Chat.chat_id == chat_id))
         chat = result.scalar_one_or_none()
 
         if not chat:
-            chat = Chat(
-                chat_id=chat_id,
-                created_at=now,
-                last_updated=now,
-                admins=[],
-                metadata_={}
-            )
+            chat = Chat(chat_id=chat_id, created_at=now, last_updated=now, admins=[], metadata_={})
             self.session.add(chat)
             self.session.flush()
 
         chat.last_updated = now
 
-        user_result = self.session.execute(
-            select(BotUsers).where(BotUsers.user_id == member.user_id)
-        )
+        user_result = self.session.execute(select(BotUsers).where(BotUsers.user_id == member.user_id))
         user_record = user_result.scalar_one_or_none()
 
         if not user_record:
-            new_user = BotUsers(
-                user_id=member.user_id,
-                user_name=member.username,
-                user_type=0
-            )
+            new_user = BotUsers(user_id=member.user_id, user_name=member.username, user_type=0)
             self.session.add(new_user)
 
         existing_member = self.session.execute(
-            select(ChatMember).where(
-                and_(ChatMember.chat_id == chat_id, ChatMember.user_id == member.user_id)
-            )
+            select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == member.user_id))
         ).scalar_one_or_none()
 
-        member_metadata = {
-            "username": member.username,
-            "full_name": member.full_name,
-            "is_admin": member.is_admin
-        }
+        member_metadata = {"username": member.username, "full_name": member.full_name, "is_admin": member.is_admin}
 
         if existing_member:
             existing_member.metadata_ = member_metadata
             if existing_member.left_at:
                 existing_member.left_at = None
         else:
-            new_member = ChatMember(
-                chat_id=chat_id,
-                user_id=member.user_id,
-                created_at=now,
-                metadata_=member_metadata
-            )
+            new_member = ChatMember(chat_id=chat_id, user_id=member.user_id, created_at=now, metadata_=member_metadata)
             self.session.add(new_member)
 
         if member.is_admin:
             if chat.admins is None:
                 chat.admins = []
             if member.user_id not in chat.admins:
-                 # We need to re-assign for mutation tracking if it's not a MutableList
-                 admins = list(chat.admins)
-                 admins.append(member.user_id)
-                 chat.admins = admins
-        
+                # We need to re-assign for mutation tracking if it's not a MutableList
+                admins = list(chat.admins)
+                admins.append(member.user_id)
+                chat.admins = admins
+
         return True
 
     def remove_user_from_chat(self, chat_id: int, user_id: int) -> bool:
-        result = self.session.execute(
-            select(Chat).where(Chat.chat_id == chat_id)
-        )
+        result = self.session.execute(select(Chat).where(Chat.chat_id == chat_id))
         chat = result.scalar_one_or_none()
         if not chat:
             return False
 
         now = datetime.now(UTC)
-        
+
         result = self.session.execute(
-            select(ChatMember).where(
-                and_(ChatMember.chat_id == chat_id, ChatMember.user_id == user_id)
-            )
+            select(ChatMember).where(and_(ChatMember.chat_id == chat_id, ChatMember.user_id == user_id))
         )
         member_record = result.scalar_one_or_none()
 
@@ -232,11 +180,7 @@ class ChatsRepository(BaseRepository):
         return self._get_users_by_filter(chat_id, ChatMember.left_at > one_day_ago)
 
     def _get_users_by_filter(self, chat_id: int, filter_condition) -> List[ChatUserDTO]:
-        result = self.session.execute(
-            select(ChatMember).where(
-                and_(ChatMember.chat_id == chat_id, filter_condition)
-            )
-        )
+        result = self.session.execute(select(ChatMember).where(and_(ChatMember.chat_id == chat_id, filter_condition)))
         members = result.scalars().all()
 
         dtos = []
@@ -248,7 +192,7 @@ class ChatsRepository(BaseRepository):
                 full_name=metadata.get("full_name", ""),
                 is_admin=metadata.get("is_admin", False),
                 created_at=member.created_at,
-                left_at=member.left_at
+                left_at=member.left_at,
             )
             dtos.append(dto)
         return dtos
@@ -259,9 +203,7 @@ class ChatsRepository(BaseRepository):
 
         chat_dtos = []
         for chat in chats:
-            members_result = self.session.execute(
-                select(ChatMember).where(ChatMember.chat_id == chat.chat_id)
-            )
+            members_result = self.session.execute(select(ChatMember).where(ChatMember.chat_id == chat.chat_id))
             members = members_result.scalars().all()
 
             users_dict = {}
@@ -273,7 +215,7 @@ class ChatsRepository(BaseRepository):
                     full_name=metadata.get("full_name"),
                     is_admin=metadata.get("is_admin", False),
                     created_at=member.created_at,
-                    left_at=member.left_at
+                    left_at=member.left_at,
                 )
 
             chat_dto = ChatDTO(
@@ -283,22 +225,18 @@ class ChatsRepository(BaseRepository):
                 created_at=chat.created_at,
                 last_updated=chat.last_updated,
                 users=users_dict,
-                admins=chat.admins or []
+                admins=chat.admins or [],
             )
             chat_dtos.append(chat_dto)
         return chat_dtos
 
     def get_all_chats_by_user(self, user_id: int) -> List[ChatDTO]:
-        result = self.session.execute(
-            select(ChatMember).where(ChatMember.user_id == user_id)
-        )
+        result = self.session.execute(select(ChatMember).where(ChatMember.user_id == user_id))
         memberships = result.scalars().all()
 
         chat_dtos = []
         for membership in memberships:
-            chat_result = self.session.execute(
-                select(Chat).where(Chat.chat_id == membership.chat_id)
-            )
+            chat_result = self.session.execute(select(Chat).where(Chat.chat_id == membership.chat_id))
             chat = chat_result.scalar_one_or_none()
 
             if chat:
@@ -310,7 +248,7 @@ class ChatsRepository(BaseRepository):
                         full_name=metadata.get("full_name"),
                         is_admin=metadata.get("is_admin", False),
                         created_at=membership.created_at,
-                        left_at=membership.left_at
+                        left_at=membership.left_at,
                     )
                 }
 
@@ -321,15 +259,13 @@ class ChatsRepository(BaseRepository):
                     created_at=chat.created_at,
                     last_updated=chat.last_updated,
                     users=users_dict,
-                    admins=chat.admins or []
+                    admins=chat.admins or [],
                 )
                 chat_dtos.append(chat_dto)
         return chat_dtos
 
     def update_chat_with_dict(self, chat_id: int, update_data: Dict) -> bool:
-        result = self.session.execute(
-            select(Chat).where(Chat.chat_id == chat_id)
-        )
+        result = self.session.execute(select(Chat).where(Chat.chat_id == chat_id))
         chat = result.scalar_one_or_none()
 
         if not chat:
@@ -344,7 +280,7 @@ class ChatsRepository(BaseRepository):
             else:
                 new_metadata[key] = value
                 metadata_updated = True
-        
+
         if metadata_updated:
             chat.metadata_ = new_metadata
 
@@ -353,10 +289,8 @@ class ChatsRepository(BaseRepository):
 
     # BotUsers methods (from requests.py)
     def save_bot_user(self, user_id: int, user_name: Optional[str], user_type: int = 0) -> None:
-        user = self.session.execute(
-            select(BotUsers).where(BotUsers.user_id == user_id)
-        ).scalar_one_or_none()
-        
+        user = self.session.execute(select(BotUsers).where(BotUsers.user_id == user_id)).scalar_one_or_none()
+
         if user is None:
             new_user = BotUsers(user_id=user_id, user_name=user_name, user_type=user_type)
             self.session.add(new_user)
@@ -366,7 +300,7 @@ class ChatsRepository(BaseRepository):
             user.user_type = user_type
 
     def get_user_id(self, user_name: str) -> int:
-        if user_name.startswith('@'):
+        if user_name.startswith("@"):
             username = user_name[1:]
             result = self.session.execute(
                 select(BotUsers.user_id).where(BotUsers.user_name == username).limit(1)
@@ -386,9 +320,7 @@ class ChatsRepository(BaseRepository):
 
     def update_user_chat_date(self, user_id: int, chat_id: int) -> None:
         existing_record = self.session.execute(
-            select(BotUserChats).where(
-                and_(BotUserChats.user_id == user_id, BotUserChats.chat_id == chat_id)
-            )
+            select(BotUserChats).where(and_(BotUserChats.user_id == user_id, BotUserChats.chat_id == chat_id))
         ).scalar_one_or_none()
 
         if existing_record:
@@ -399,9 +331,7 @@ class ChatsRepository(BaseRepository):
 
     def get_user_by_id(self, user_id: int) -> Optional[BotUsers]:
         """Get user by ID."""
-        result = self.session.execute(
-            select(BotUsers).where(BotUsers.user_id == user_id)
-        )
+        result = self.session.execute(select(BotUsers).where(BotUsers.user_id == user_id))
         return result.scalar_one_or_none()
 
     def save_user_type(self, user_id: int, user_type: int) -> None:
@@ -415,9 +345,7 @@ class ChatsRepository(BaseRepository):
 
     def get_chat_by_id(self, chat_id: int) -> Optional[Chat]:
         """Get chat record from database."""
-        result = self.session.execute(
-            select(Chat).where(Chat.chat_id == chat_id)
-        )
+        result = self.session.execute(select(Chat).where(Chat.chat_id == chat_id))
         return result.scalar_one_or_none()
 
     def upsert_chat_info(self, chat_id: int, title: Optional[str], username: Optional[str]) -> None:
@@ -429,11 +357,5 @@ class ChatsRepository(BaseRepository):
             chat.username = username
             chat.last_updated = now
         else:
-            chat = Chat(
-                chat_id=chat_id,
-                title=title,
-                username=username,
-                created_at=now,
-                last_updated=now
-            )
+            chat = Chat(chat_id=chat_id, title=title, username=username, created_at=now, last_updated=now)
             self.session.add(chat)

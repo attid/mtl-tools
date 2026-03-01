@@ -23,9 +23,13 @@ from .address_utils import address_id_to_username
 # Operation types that carry meaningful amounts and can be filtered by filter_sum.
 # When filter_sum > 0, operations NOT in this set are skipped entirely.
 AMOUNT_OPERATIONS = {
-    "Payment", "ManageSellOffer", "ManageBuyOffer",
-    "PathPaymentStrictSend", "PathPaymentStrictReceive",
-    "CreatePassiveSellOffer", "Clawback",
+    "Payment",
+    "ManageSellOffer",
+    "ManageBuyOffer",
+    "PathPaymentStrictSend",
+    "PathPaymentStrictReceive",
+    "CreatePassiveSellOffer",
+    "Clawback",
 }
 
 
@@ -119,10 +123,7 @@ async def decode_xdr(
     filter_ops_by_account = filter_account and tx_source_id != filter_account
 
     source_name = await address_id_to_username(
-        tx_source_id,
-        full_data=full_data,
-        grist_manager=grist_manager,
-        global_data=global_data
+        tx_source_id, full_data=full_data, grist_manager=grist_manager, global_data=global_data
     )
     result.append(f"Операции с аккаунта {source_name}")
 
@@ -141,15 +142,15 @@ async def decode_xdr(
         if filter_ops_by_account:
             op_source_id = operation.source.account_id if operation.source else tx_source_id
             op_accounts = {op_source_id}
-            if hasattr(operation, 'destination'):
+            if hasattr(operation, "destination"):
                 dest = operation.destination
-                if hasattr(dest, 'account_id'):
+                if hasattr(dest, "account_id"):
                     op_accounts.add(dest.account_id)
                 elif isinstance(dest, str):
                     op_accounts.add(dest)
-            if hasattr(operation, 'from_') and operation.from_:
+            if hasattr(operation, "from_") and operation.from_:
                 op_accounts.add(operation.from_.account_id)
-            if hasattr(operation, 'trustor') and operation.trustor:
+            if hasattr(operation, "trustor") and operation.trustor:
                 op_accounts.add(operation.trustor)
             if filter_account not in op_accounts:
                 continue
@@ -157,15 +158,12 @@ async def decode_xdr(
         result.append(f"Операция {idx} - {type(operation).__name__}")
         if operation.source:
             op_source_name = await address_id_to_username(
-                operation.source.account_id,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.source.account_id, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"*** для аккаунта {op_source_name}")
 
         if good_operation(operation, "Payment", filter_operation, ignore_operation):
-            if 'SPAM' in ignore_operation and operation.asset.code == 'XLM' and operation.amount < '0.1':
+            if "SPAM" in ignore_operation and operation.asset.code == "XLM" and operation.amount < "0.1":
                 continue
             if float(operation.amount) > filter_sum:
                 if (filter_asset is None) or (operation.asset == filter_asset):
@@ -174,7 +172,7 @@ async def decode_xdr(
                         operation.destination.account_id,
                         full_data=full_data,
                         grist_manager=grist_manager,
-                        global_data=global_data
+                        global_data=global_data,
                     )
                     result.append(f"    Перевод {operation.amount} {operation.asset.code} на аккаунт {dest_name}")
             continue
@@ -186,7 +184,7 @@ async def decode_xdr(
                     operation.signer.signer_key.encoded_signer_key,
                     full_data=full_data,
                     grist_manager=grist_manager,
-                    global_data=global_data
+                    global_data=global_data,
                 )
                 result.append(f"    Изменяем подписанта {signer_name} новые голоса : {operation.signer.weight}")
             if operation.med_threshold:
@@ -199,24 +197,27 @@ async def decode_xdr(
 
         if good_operation(operation, "ChangeTrust", filter_operation, ignore_operation):
             data_exist = True
-            if operation.asset.type == 'liquidity_pool_shares':
-                if operation.limit == '0':
+            if operation.asset.type == "liquidity_pool_shares":
+                if operation.limit == "0":
                     result.append(
-                        f"    Закрываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}")
+                        f"    Закрываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}"
+                    )
                 else:
                     result.append(
-                        f"    Открываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}")
+                        f"    Открываем линию доверия к пулу {operation.asset.asset_a.code}/{operation.asset.asset_b.code}"
+                    )
             else:
                 issuer_name = await address_id_to_username(
-                    operation.asset.issuer,
-                    full_data=full_data,
-                    grist_manager=grist_manager,
-                    global_data=global_data
+                    operation.asset.issuer, full_data=full_data, grist_manager=grist_manager, global_data=global_data
                 )
-                if operation.limit == '0':
-                    result.append(f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {issuer_name}")
+                if operation.limit == "0":
+                    result.append(
+                        f"    Закрываем линию доверия к токену {operation.asset.code} от аккаунта {issuer_name}"
+                    )
                 else:
-                    result.append(f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {issuer_name}")
+                    result.append(
+                        f"    Открываем линию доверия к токену {operation.asset.code} от аккаунта {issuer_name}"
+                    )
             continue
 
         if good_operation(operation, "CreateClaimableBalance", filter_operation, ignore_operation):
@@ -229,21 +230,24 @@ async def decode_xdr(
             if float(operation.amount) > filter_sum:
                 data_exist = True
                 result.append(
-                    f"    Офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}")
+                    f"    Офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}"
+                )
             continue
 
         if good_operation(operation, "CreatePassiveSellOffer", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
                 data_exist = True
                 result.append(
-                    f"    Пассивный офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}")
+                    f"    Пассивный офер на продажу {operation.amount} {operation.selling.code} по цене {operation.price.n / operation.price.d} {operation.buying.code}"
+                )
             continue
 
         if good_operation(operation, "ManageBuyOffer", filter_operation, ignore_operation):
             if float(operation.amount) > filter_sum:
                 data_exist = True
                 result.append(
-                    f"    Офер на покупку {operation.amount} {operation.buying.code} по цене {operation.price.n / operation.price.d} {operation.selling.code}")
+                    f"    Офер на покупку {operation.amount} {operation.buying.code} по цене {operation.price.n / operation.price.d} {operation.selling.code}"
+                )
             continue
 
         if good_operation(operation, "PathPaymentStrictSend", filter_operation, ignore_operation):
@@ -254,10 +258,11 @@ async def decode_xdr(
                         operation.destination.account_id,
                         full_data=full_data,
                         grist_manager=grist_manager,
-                        global_data=global_data
+                        global_data=global_data,
                     )
                     result.append(
-                        f"    Покупка {dest_name}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} ")
+                        f"    Покупка {dest_name}, шлем {operation.send_asset.code} {operation.send_amount} в обмен на {operation.dest_asset.code} min {operation.dest_min} "
+                    )
             continue
 
         if good_operation(operation, "PathPaymentStrictReceive", filter_operation, ignore_operation):
@@ -268,10 +273,11 @@ async def decode_xdr(
                         operation.destination.account_id,
                         full_data=full_data,
                         grist_manager=grist_manager,
-                        global_data=global_data
+                        global_data=global_data,
                     )
                     result.append(
-                        f"    Продажа {dest_name}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} ")
+                        f"    Продажа {dest_name}, Получаем {operation.send_asset.code} max {operation.send_max} в обмен на {operation.dest_asset.code} {operation.dest_amount} "
+                    )
             continue
 
         if good_operation(operation, "ManageData", filter_operation, ignore_operation):
@@ -282,10 +288,7 @@ async def decode_xdr(
         if good_operation(operation, "SetTrustLineFlags", filter_operation, ignore_operation):
             data_exist = True
             trustor_name = await address_id_to_username(
-                operation.trustor,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.trustor, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"    Trustor {trustor_name} for asset {operation.asset.code}")
             if operation.clear_flags is not None:
@@ -297,10 +300,7 @@ async def decode_xdr(
         if good_operation(operation, "CreateAccount", filter_operation, ignore_operation):
             data_exist = True
             dest_name = await address_id_to_username(
-                operation.destination,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.destination, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"    Создание аккаунта {dest_name} с суммой {operation.starting_balance} XLM")
             continue
@@ -311,7 +311,7 @@ async def decode_xdr(
                 operation.destination.account_id,
                 full_data=full_data,
                 grist_manager=grist_manager,
-                global_data=global_data
+                global_data=global_data,
             )
             result.append(f"    Слияние аккаунта c {dest_name} ")
             continue
@@ -319,10 +319,7 @@ async def decode_xdr(
         if good_operation(operation, "ClaimClaimableBalance", filter_operation, ignore_operation):
             data_exist = True
             balance_name = await address_id_to_username(
-                operation.balance_id,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.balance_id, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"    ClaimClaimableBalance {balance_name}")
             continue
@@ -330,10 +327,7 @@ async def decode_xdr(
         if good_operation(operation, "BeginSponsoringFutureReserves", filter_operation, ignore_operation):
             data_exist = True
             sponsored_name = await address_id_to_username(
-                operation.sponsored_id,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.sponsored_id, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"    BeginSponsoringFutureReserves {sponsored_name}")
             continue
@@ -346,10 +340,7 @@ async def decode_xdr(
         if type(operation).__name__ == "Clawback":
             data_exist = True
             from_name = await address_id_to_username(
-                operation.from_.account_id,
-                full_data=full_data,
-                grist_manager=grist_manager,
-                global_data=global_data
+                operation.from_.account_id, full_data=full_data, grist_manager=grist_manager, global_data=global_data
             )
             result.append(f"    Возврат {operation.amount} {operation.asset.code} с аккаунта {from_name}")
             continue
@@ -359,25 +350,39 @@ async def decode_xdr(
             min_price = operation.min_price.n / operation.min_price.d
             max_price = operation.max_price.n / operation.max_price.d
             result.append(
-                f"    LiquidityPoolDeposit {operation.liquidity_pool_id} пополнение {operation.max_amount_a}/{operation.max_amount_b} ограничения цены {min_price}/{max_price}")
+                f"    LiquidityPoolDeposit {operation.liquidity_pool_id} пополнение {operation.max_amount_a}/{operation.max_amount_b} ограничения цены {min_price}/{max_price}"
+            )
             continue
 
         if type(operation).__name__ == "LiquidityPoolWithdraw":
             data_exist = True
             result.append(
-                f"    LiquidityPoolWithdraw {operation.liquidity_pool_id} вывод {operation.amount} минимум {operation.min_amount_a}/{operation.min_amount_b} ")
+                f"    LiquidityPoolWithdraw {operation.liquidity_pool_id} вывод {operation.amount} минимум {operation.min_amount_a}/{operation.min_amount_b} "
+            )
             continue
 
-        if type(operation).__name__ in ["PathPaymentStrictSend", "ManageBuyOffer", "ManageSellOffer", "AccountMerge",
-                                        "PathPaymentStrictReceive", "ClaimClaimableBalance", "CreateAccount",
-                                        "CreateClaimableBalance", "ChangeTrust", "SetOptions", "Payment", "ManageData",
-                                        "BeginSponsoringFutureReserves", "EndSponsoringFutureReserves",
-                                        "CreatePassiveSellOffer"]:
+        if type(operation).__name__ in [
+            "PathPaymentStrictSend",
+            "ManageBuyOffer",
+            "ManageSellOffer",
+            "AccountMerge",
+            "PathPaymentStrictReceive",
+            "ClaimClaimableBalance",
+            "CreateAccount",
+            "CreateClaimableBalance",
+            "ChangeTrust",
+            "SetOptions",
+            "Payment",
+            "ManageData",
+            "BeginSponsoringFutureReserves",
+            "EndSponsoringFutureReserves",
+            "CreatePassiveSellOffer",
+        ]:
             continue
 
         data_exist = True
         result.append("Прости хозяин, не понимаю")
-        logger.info(['bad xdr', idx, operation])
+        logger.info(["bad xdr", idx, operation])
 
     if data_exist:
         return result
@@ -392,12 +397,10 @@ async def cmd_check_fee() -> str:
     Returns:
         String with fee range like "100-500"
     """
-    async with ServerAsync(
-        horizon_url=config.horizon_url, client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=config.horizon_url, client=AiohttpClient()) as server:
         fee = await server.fee_stats().call()
     fee_charged = fee["fee_charged"]
-    return fee_charged['min'] + '-' + fee_charged['max']
+    return fee_charged["min"] + "-" + fee_charged["max"]
 
 
 def stellar_get_transaction_builder(xdr: str) -> TransactionBuilder:
@@ -419,16 +422,13 @@ def stellar_get_transaction_builder(xdr: str) -> TransactionBuilder:
     existing_transaction = transaction_envelope.transaction
 
     # Load source account
-    source_account = Account(
-        account=existing_transaction.source.account_id,
-        sequence=existing_transaction.sequence - 1
-    )
+    source_account = Account(account=existing_transaction.source.account_id, sequence=existing_transaction.sequence - 1)
 
     # Create new TransactionBuilder with same source info
     transaction_builder = TransactionBuilder(
         source_account=source_account,
         network_passphrase=Network.PUBLIC_NETWORK_PASSPHRASE,
-        base_fee=existing_transaction.fee  # Keep original base fee
+        base_fee=existing_transaction.fee,  # Keep original base fee
     )
 
     # Set time bounds if they were specified
@@ -458,10 +458,10 @@ def decode_data_value(data_value: str) -> str:
     """
     try:
         base64_message = data_value
-        base64_bytes = base64_message.encode('ascii')
+        base64_bytes = base64_message.encode("ascii")
         message_bytes = base64.b64decode(base64_bytes)
-        message = message_bytes.decode('ascii')
+        message = message_bytes.decode("ascii")
         return message
     except Exception as ex:
         logger.info(f"decode_data_value error: {ex}")
-        return 'decode error'
+        return "decode error"

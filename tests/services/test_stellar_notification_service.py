@@ -29,7 +29,7 @@ def mock_session_pool():
 @pytest.fixture
 def service(mock_bot, mock_session_pool):
     """Create StellarNotificationService with mocks."""
-    with patch('services.stellar_notification_service.config') as mock_config:
+    with patch("services.stellar_notification_service.config") as mock_config:
         mock_config.notifier_url = "http://notifier:8000"
         mock_config.webhook_public_url = "http://skynet:8081/webhook"
         mock_config.webhook_port = 8081
@@ -74,9 +74,9 @@ class TestFormatMessage:
                 "source_account": "GABC1234567890123456789012345678901234567890123456789012",
                 "to": "GDEF1234567890123456789012345678901234567890123456789012",
                 "amount": "100.5",
-                "asset": {"asset_code": "MTL", "asset_type": "credit_alphanum4"}
+                "asset": {"asset_code": "MTL", "asset_type": "credit_alphanum4"},
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "asset"}
 
@@ -96,9 +96,9 @@ class TestFormatMessage:
                 "type": "create_account",
                 "source_account": "GABC1234567890123456789012345678901234567890123456789012",
                 "destination": "GNEW1234567890123456789012345678901234567890123456789012",
-                "amount": "50"
+                "amount": "50",
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "account"}
 
@@ -118,9 +118,9 @@ class TestFormatMessage:
                 "source_amount": "100",
                 "source_asset": {"asset_code": "USDC", "asset_type": "credit_alphanum4"},
                 "dest_amount": "95",
-                "asset": {"asset_code": "EURMTL", "asset_type": "credit_alphanum12"}
+                "asset": {"asset_code": "EURMTL", "asset_type": "credit_alphanum12"},
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "asset"}
 
@@ -142,9 +142,9 @@ class TestFormatMessage:
                 "price": "1.5",
                 "source_asset": {"asset_code": "MTL", "asset_type": "credit_alphanum4"},
                 "asset": {"asset_code": "EURMTL", "asset_type": "credit_alphanum12"},
-                "offer_id": 12345
+                "offer_id": 12345,
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "asset"}
 
@@ -164,9 +164,9 @@ class TestFormatMessage:
                 "type": "change_trust",
                 "source_account": "GABC1234567890123456789012345678901234567890123456789012",
                 "asset": {"asset_code": "MMWB", "asset_type": "credit_alphanum4"},
-                "limit": "1000000"
+                "limit": "1000000",
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "account"}
 
@@ -184,14 +184,9 @@ class TestFormatMessage:
                 "source_account": "GABC1234567890123456789012345678901234567890123456789012",
                 "to": "GDEF1234567890123456789012345678901234567890123456789012",
                 "amount": "50",
-                "asset": {"asset_type": "native"}
+                "asset": {"asset_type": "native"},
             },
-            "transaction": {
-                "memo": {
-                    "type": "text",
-                    "value": "Test memo"
-                }
-            }
+            "transaction": {"memo": {"type": "text", "value": "Test memo"}},
         }
         destination = {"type": "asset"}
 
@@ -207,14 +202,14 @@ class TestFormatMessage:
                 "source_account": "GABC1234567890123456789012345678901234567890123456789012",
                 "to": "GDEF1234567890123456789012345678901234567890123456789012",
                 "amount": "50",
-                "asset": {"asset_type": "native"}
+                "asset": {"asset_type": "native"},
             },
             "transaction": {
                 "memo": {
                     "type": "text",
-                    "value": {"data": [72, 101, 108, 108, 111]}  # "Hello"
+                    "value": {"data": [72, 101, 108, 108, 111]},  # "Hello"
                 }
-            }
+            },
         }
         destination = {"type": "asset"}
 
@@ -227,9 +222,9 @@ class TestFormatMessage:
             "operation": {
                 "id": "66666",
                 "type": "unknown_op",
-                "source_account": "GABC1234567890123456789012345678901234567890123456789012"
+                "source_account": "GABC1234567890123456789012345678901234567890123456789012",
             },
-            "transaction": {}
+            "transaction": {},
         }
         destination = {"type": "asset"}
 
@@ -244,50 +239,36 @@ class TestDeduplication:
 
     @pytest.mark.asyncio
     async def test_duplicate_operation_skipped(self, service):
-        service.subscriptions_map["sub-1"] = {
-            "chat_id": 123,
-            "topic_id": None,
-            "type": "asset",
-            "min": 0
-        }
+        service.subscriptions_map["sub-1"] = {"chat_id": 123, "topic_id": None, "type": "asset", "min": 0}
 
         payload = {
             "subscription": "sub-1",
-            "operation": {
-                "id": "op-123",
-                "type": "payment",
-                "amount": "100"
-            },
-            "transaction": {}
+            "operation": {"id": "op-123", "type": "payment", "amount": "100"},
+            "transaction": {},
         }
 
         # First call
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload, "sub-1")
             assert mock_send.called
 
         # Second call with same operation ID
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload, "sub-1")
             assert not mock_send.called
 
     @pytest.mark.asyncio
     async def test_cache_cleared_when_full(self, service):
         service.max_cache_size = 3
-        service.subscriptions_map["sub-1"] = {
-            "chat_id": 123,
-            "topic_id": None,
-            "type": "asset",
-            "min": 0
-        }
+        service.subscriptions_map["sub-1"] = {"chat_id": 123, "topic_id": None, "type": "asset", "min": 0}
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock):
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock):
             # Fill up the cache
             for i in range(4):
                 payload = {
                     "subscription": "sub-1",
                     "operation": {"id": f"op-{i}", "type": "payment", "amount": "100"},
-                    "transaction": {}
+                    "transaction": {},
                 }
                 await service.process_notification(payload, "sub-1")
 
@@ -329,7 +310,7 @@ class TestMinimumAmountFilter:
             "chat_id": 123,
             "topic_id": None,
             "type": "asset",
-            "min": 100  # Minimum amount filter
+            "min": 100,  # Minimum amount filter
         }
 
         payload = {
@@ -337,35 +318,30 @@ class TestMinimumAmountFilter:
             "operation": {
                 "id": "op-below-min",
                 "type": "payment",
-                "amount": "50"  # Below minimum
+                "amount": "50",  # Below minimum
             },
-            "transaction": {}
+            "transaction": {},
         }
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload, "sub-1")
             assert not mock_send.called
 
     @pytest.mark.asyncio
     async def test_operation_above_minimum_sent(self, service):
-        service.subscriptions_map["sub-1"] = {
-            "chat_id": 123,
-            "topic_id": None,
-            "type": "asset",
-            "min": 100
-        }
+        service.subscriptions_map["sub-1"] = {"chat_id": 123, "topic_id": None, "type": "asset", "min": 100}
 
         payload = {
             "subscription": "sub-1",
             "operation": {
                 "id": "op-above-min",
                 "type": "payment",
-                "amount": "150"  # Above minimum
+                "amount": "150",  # Above minimum
             },
-            "transaction": {}
+            "transaction": {},
         }
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload, "sub-1")
             assert mock_send.called
 
@@ -378,21 +354,18 @@ class TestSubscriptionRouting:
         payload = {
             "subscription": "unknown-sub",
             "operation": {"id": "op-1", "type": "payment", "amount": "100"},
-            "transaction": {}
+            "transaction": {},
         }
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload)
             assert not mock_send.called
 
     @pytest.mark.asyncio
     async def test_missing_subscription_id_handled(self, service):
-        payload = {
-            "operation": {"id": "op-1", "type": "payment", "amount": "100"},
-            "transaction": {}
-        }
+        payload = {"operation": {"id": "op-1", "type": "payment", "amount": "100"}, "transaction": {}}
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock) as mock_send:
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock) as mock_send:
             await service.process_notification(payload)
             assert not mock_send.called
 
@@ -422,23 +395,18 @@ class TestWebhookHandler:
 
     @pytest.mark.asyncio
     async def test_handle_webhook_valid_payload(self, service):
-        service.subscriptions_map["sub-1"] = {
-            "chat_id": 123,
-            "topic_id": None,
-            "type": "asset",
-            "min": 0
-        }
+        service.subscriptions_map["sub-1"] = {"chat_id": 123, "topic_id": None, "type": "asset", "min": 0}
 
         payload = {
             "subscription": "sub-1",
             "operation": {"id": "webhook-op-1", "type": "payment", "amount": "100"},
-            "transaction": {}
+            "transaction": {},
         }
 
         request = MagicMock()
         request.read = AsyncMock(return_value=json.dumps(payload).encode())
 
-        with patch.object(service, '_send_to_telegram', new_callable=AsyncMock):
+        with patch.object(service, "_send_to_telegram", new_callable=AsyncMock):
             response = await service.handle_webhook(request)
 
         assert response.status == 200
@@ -449,7 +417,7 @@ class TestAuthHeaders:
     """Tests for authentication header generation."""
 
     def test_get_auth_headers_with_token(self, service):
-        with patch('services.stellar_notification_service.config') as mock_config:
+        with patch("services.stellar_notification_service.config") as mock_config:
             mock_config.notifier_auth_token = "Bearer test123"
 
             headers = service._get_auth_headers()
@@ -458,7 +426,7 @@ class TestAuthHeaders:
             assert headers["Content-Type"] == "application/json"
 
     def test_get_auth_headers_without_token(self, service):
-        with patch('services.stellar_notification_service.config') as mock_config:
+        with patch("services.stellar_notification_service.config") as mock_config:
             mock_config.notifier_auth_token = None
 
             headers = service._get_auth_headers()
@@ -480,6 +448,7 @@ class TestNonce:
     @pytest.mark.asyncio
     async def test_nonce_initializes_from_time(self, service):
         import time
+
         before = int(time.time() * 1000)
         nonce = await service._get_next_nonce()
         after = int(time.time() * 1000) + 1

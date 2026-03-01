@@ -14,8 +14,7 @@ from aiogram.enums import ChatType, ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import (Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton,
-                           LoginUrl, User)
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, LoginUrl, User
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -37,13 +36,13 @@ router = Router()
 @router.message(Command(commands=["restart"]))
 async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     data = await state.get_data()
-    my_state = data.get('MyState')
+    my_state = data.get("MyState")
 
-    if my_state == 'StateExit':
+    if my_state == "StateExit":
         await state.update_data(MyState=None)
         await message.reply(":[[[ ушла в закат =(")
         if not app_context or not app_context.bot_state_service:
@@ -51,30 +50,30 @@ async def cmd_exit(message: Message, state: FSMContext, app_context: AppContext,
         app_context.bot_state_service.request_reboot()
         exit()
     else:
-        await state.update_data(MyState='StateExit')
+        await state.update_data(MyState="StateExit")
         await message.reply(":'[ боюсь")
 
 
 @router.message(Command(commands=["err"]))
 async def cmd_log_err(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
-    await cmd_send_file(message, 'skynet.err')
+    await cmd_send_file(message, "skynet.err")
 
 
 @router.message(Command(commands=["log"]))
 async def cmd_log(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
-    await cmd_send_file(message, 'skynet.log')
+    await cmd_send_file(message, "skynet.log")
 
 
 @router.message(Command(commands=["ping_piro"]))
 async def cmd_ping_piro(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
@@ -85,7 +84,7 @@ async def cmd_ping_piro(message: Message, app_context: AppContext, skyuser: SkyU
 @router.message(Command(commands=["reload"]))
 async def cmd_reload_subscriptions(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
     if not app_context.stellar_notification_service:
         await message.reply("Stellar notification service not available")
@@ -99,8 +98,8 @@ async def cmd_reload_subscriptions(message: Message, app_context: AppContext, sk
 @router.message(Command(commands=["test"]))
 async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-         await message.reply("Only for admins")
-         return
+        await message.reply("Only for admins")
+        return
 
     user_from = message.from_user.username if message.from_user and message.from_user.username else "Unknown"
     msg_info = MessageInfo(
@@ -108,14 +107,12 @@ async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: 
         message_id=message.message_id,
         user_from=user_from,
         message_text="This is a test message from Skynet Bot to verify MiniApps integration.\n<b>Bold Text</b>",
-        reply_to_message=None
+        reply_to_message=None,
     )
-    
+
     try:
         page = await miniapps.create_uuid_page(msg_info)
-        markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Open MiniApp Page", url=page.url)]
-        ])
+        markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Open MiniApp Page", url=page.url)]])
         await message.reply(f"Generated page: {page.url}", reply_markup=markup)
     except Exception as e:
         await message.reply(f"Error generating page: {e}")
@@ -124,10 +121,10 @@ async def cmd_test_miniapps(message: Message, app_context: AppContext, skyuser: 
 @router.message(Command(commands=["check_gs"]))
 async def cmd_check_gs(message: Message, app_context: AppContext | None = None, skyuser: SkyUser | None = None):
     if not skyuser or not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
     if not app_context or not app_context.gspread_service:
-        await message.reply('GSpread сервис недоступен.')
+        await message.reply("GSpread сервис недоступен.")
         return False
     gspread_service = cast(Any, app_context.gspread_service)
 
@@ -137,31 +134,31 @@ async def cmd_check_gs(message: Message, app_context: AppContext | None = None, 
         info = info[:200] + "..."
 
     if ok:
-        await message.reply(f'Google ключ: OK. Таблиц: {info}')
+        await message.reply(f"Google ключ: OK. Таблиц: {info}")
     else:
-        await message.reply(f'Google ключ: ошибка. {info}')
+        await message.reply(f"Google ключ: ошибка. {info}")
 
 
 async def cmd_send_file(message: Message, filename):
     try:
         if not os.path.isfile(filename):
-            await message.reply(f'Файл {filename} не найден')
+            await message.reply(f"Файл {filename} не найден")
             return
-        
+
         if os.path.getsize(filename) == 0:
-            await message.reply(f'Файл {filename} пуст')
+            await message.reply(f"Файл {filename} пуст")
             return
-            
+
         await message.reply_document(FSInputFile(filename))
     except Exception as e:
         logger.error(f"Ошибка при отправке файла {filename}: {e}")
-        await message.reply(f'Произошла ошибка при отправке файла {filename}')
+        await message.reply(f"Произошла ошибка при отправке файла {filename}")
 
 
 @router.message(Command(commands=["summary"]))
 async def cmd_get_summary(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return False
 
     # Check if listening is enabled for this chat
@@ -171,7 +168,7 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
     is_listening = feature_flags.is_listening(message.chat.id)
 
     if not is_listening:
-        await message.reply('No messages 1')
+        await message.reply("No messages 1")
         return
 
     try:
@@ -182,10 +179,10 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
         )
 
         if not data:
-            await message.reply('Нет новых сообщений для обработки')
+            await message.reply("Нет новых сообщений для обработки")
             return
 
-        text = ''
+        text = ""
         summary = MessageRepository(session).add_summary(text=text)
         summary_obj = cast(Any, summary)
         session.flush()
@@ -194,7 +191,7 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
             for record in data:
                 record_username = str(record.username or "")
                 record_text = str(record.text or "")
-                new_text = text + f'{record_username}: {record_text} \n\n'
+                new_text = text + f"{record_username}: {record_text} \n\n"
                 if len(new_text) < 16000:
                     text = new_text
                     record.summary_id = summary.id
@@ -202,13 +199,13 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
                 else:
                     summary_obj.text = await talk_get_summary(text)
                     session.flush()
-                    summary = MessageRepository(session).add_summary(text='')
+                    summary = MessageRepository(session).add_summary(text="")
                     summary_obj = cast(Any, summary)
                     session.flush()
                     text = f"{record_username}: {record_text}\n\n"
                     record.summary_id = summary.id
                     session.flush()
-            
+
             if text:  # Обработка оставшегося текста
                 summary_obj.text = await talk_get_summary(text)
                 session.flush()
@@ -219,7 +216,7 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
             )
 
             if not summaries:
-                await message.reply('Не удалось получить сводку сообщений')
+                await message.reply("Не удалось получить сводку сообщений")
                 return
 
             for record in summaries:
@@ -234,12 +231,12 @@ async def cmd_get_summary(message: Message, session: Session, app_context: AppCo
         except Exception as e:
             session.rollback()
             logger.error(f"Error processing messages for summary: {e}")
-            await message.reply('Произошла ошибка при обработке сообщений')
+            await message.reply("Произошла ошибка при обработке сообщений")
             return
 
     except Exception as e:
         logger.error(f"Database error in cmd_get_summary: {e}")
-        await message.reply('Произошла ошибка при работе с базой данных')
+        await message.reply("Произошла ошибка при работе с базой данных")
         return
 
 
@@ -258,24 +255,24 @@ async def cmd_get_sha1(message: Message, bot: Bot):
     hasher = hashlib.sha1()
     hasher.update(file_bytes)
     sha1_hash = hasher.hexdigest()
-    base64_hash = base64.b64encode(hasher.digest()).decode('utf-8')
+    base64_hash = base64.b64encode(hasher.digest()).decode("utf-8")
 
     sha256_hasher = hashlib.sha256()
     sha256_hasher.update(file_bytes)
     sha256_hash = sha256_hasher.hexdigest()
 
-    await message.reply(f'SHA-1: <code>{sha1_hash}</code>\n'
-                        f'BASE64: <code>{base64_hash}</code>\n\n'
-                        f'SHA-256: <code>{sha256_hash}</code>')
+    await message.reply(
+        f"SHA-1: <code>{sha1_hash}</code>\nBASE64: <code>{base64_hash}</code>\n\nSHA-256: <code>{sha256_hash}</code>"
+    )
 
 
 @router.message(Command(commands=["sha256"]))
 async def cmd_sha256(message: Message):
     sha256_hasher = hashlib.sha256()
     text = message.text or ""
-    sha256_hasher.update(text[8:].encode('utf-8'))
+    sha256_hasher.update(text[8:].encode("utf-8"))
     sha256_hash = sha256_hasher.hexdigest()
-    await message.reply(f'SHA-256: <code>{sha256_hash}</code>')
+    await message.reply(f"SHA-256: <code>{sha256_hash}</code>")
 
 
 @update_command_info("/sync", "Синхронизирует сообщение в чате с постом в канале")
@@ -286,17 +283,17 @@ async def cmd_sync_post(message: Message, bot: Bot, session: Session, app_contex
         return
 
     if not message.reply_to_message or not message.reply_to_message.forward_from_chat:
-        await message.reply('Могу синхронизировать только посты')
+        await message.reply("Могу синхронизировать только посты")
         return
 
     try:
         chat = await bot.get_chat(message.reply_to_message.forward_from_chat.id)
     except TelegramBadRequest:
-        await message.reply('Канал не найден, нужно быть админом в канале')
+        await message.reply("Канал не найден, нужно быть админом в канале")
         return
     except Exception as e:
         logger.error(f"Unexpected error while getting chat: {e}")
-        await message.reply('Произошла непредвиденная ошибка при получении информации о канале')
+        await message.reply("Произошла непредвиденная ошибка при получении информации о канале")
         return
 
     if not app_context or not app_context.bot_state_service:
@@ -304,16 +301,16 @@ async def cmd_sync_post(message: Message, bot: Bot, session: Session, app_contex
 
     try:
         post_id = message.reply_to_message.forward_from_message_id
-        url = f'https://t.me/c/{str(chat.id)[4:]}/{post_id}'
+        url = f"https://t.me/c/{str(chat.id)[4:]}/{post_id}"
         msg_text = message.reply_to_message.html_text
-        reply_markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Edit', url=url),
-                                                              InlineKeyboardButton(text='Edit', url=url)]])
-        if msg_text and msg_text[-1] == '*':
+        reply_markup = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Edit", url=url), InlineKeyboardButton(text="Edit", url=url)]]
+        )
+        if msg_text and msg_text[-1] == "*":
             msg_text = msg_text[:-1]
             reply_markup = None
 
-        new_msg = await message.answer(msg_text, disable_web_page_preview=True,
-                                       reply_markup=reply_markup)
+        new_msg = await message.answer(msg_text, disable_web_page_preview=True, reply_markup=reply_markup)
 
         # Get sync state for this channel
         sync_key = str(chat.id)
@@ -322,15 +319,12 @@ async def cmd_sync_post(message: Message, bot: Bot, session: Session, app_contex
         if str(post_id) not in channel_sync:
             channel_sync[str(post_id)] = []
 
-        channel_sync[str(post_id)].append({'chat_id': message.chat.id,
-                                           'message_id': new_msg.message_id,
-                                           'url': url})
+        channel_sync[str(post_id)].append({"chat_id": message.chat.id, "message_id": new_msg.message_id, "url": url})
 
         # Save sync state
         app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
-        ConfigRepository(session).save_bot_value(chat.id, BotValueTypes.Sync,
-                                                      json.dumps(channel_sync))
+        ConfigRepository(session).save_bot_value(chat.id, BotValueTypes.Sync, json.dumps(channel_sync))
 
         with suppress(TelegramBadRequest):
             await message.reply_to_message.delete()
@@ -339,7 +333,7 @@ async def cmd_sync_post(message: Message, bot: Bot, session: Session, app_contex
 
     except Exception as e:
         logger.error(f"Error in cmd_sync_post: {e}")
-        await message.reply('Произошла ошибка при синхронизации поста')
+        await message.reply("Произошла ошибка при синхронизации поста")
 
 
 @update_command_info("/resync", "Восстанавливает синхронизацию сообщения с постом в канале")
@@ -351,7 +345,7 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
 
     reply_message = message.reply_to_message if isinstance(message.reply_to_message, Message) else None
     if not reply_message or not reply_message.from_user or reply_message.from_user.id != bot.id:
-        await message.reply('Нужно ответить на сообщение, отправленное ботом')
+        await message.reply("Нужно ответить на сообщение, отправленное ботом")
         return
 
     if not app_context or not app_context.bot_state_service:
@@ -361,24 +355,25 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
         # Получаем клавиатуру из сообщения бота
         reply_markup = reply_message.reply_markup
         if not reply_markup or not isinstance(reply_markup, InlineKeyboardMarkup):
-            await message.reply('Не найдена клавиатура с кнопкой редактирования')
+            await message.reply("Не найдена клавиатура с кнопкой редактирования")
             return
 
         # Извлекаем URL из кнопки Edit
-        edit_button = next((button for row in reply_markup.inline_keyboard for button in row if button.text == 'Edit'),
-                           None)
+        edit_button = next(
+            (button for row in reply_markup.inline_keyboard for button in row if button.text == "Edit"), None
+        )
         if not edit_button:
-            await message.reply('Не найдена кнопка Edit')
+            await message.reply("Не найдена кнопка Edit")
             return
 
         url = edit_button.url
         if not url:
-            await message.reply('Неверный формат URL')
+            await message.reply("Неверный формат URL")
             return
         # Извлекаем chat_id и post_id из URL
-        match = re.search(r'https://t\.me/c/(\d+)/(\d+)', url)
+        match = re.search(r"https://t\.me/c/(\d+)/(\d+)", url)
         if not match:
-            await message.reply('Неверный формат URL')
+            await message.reply("Неверный формат URL")
             return
 
         chat_id, post_id = match.groups()
@@ -387,11 +382,19 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
         # Проверяем, что бот является участником канала
         try:
             bot_member = await bot.get_chat_member(chat_id, bot.id)
-            if bot_member.status not in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR):
-                await message.reply('Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова.')
+            if bot_member.status not in (
+                ChatMemberStatus.MEMBER,
+                ChatMemberStatus.ADMINISTRATOR,
+                ChatMemberStatus.CREATOR,
+            ):
+                await message.reply(
+                    "Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова."
+                )
                 return
         except TelegramBadRequest:
-            await message.reply('Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова.')
+            await message.reply(
+                "Бот не является участником канала, синхронизация не будет работать. Добавьте бота в канал и попробуйте снова."
+            )
             return
 
         # Get sync state for this channel
@@ -402,32 +405,36 @@ async def cmd_resync_post(message: Message, session: Session, bot: Bot, app_cont
             channel_sync[post_id] = []
 
         # Проверяем, существует ли уже запись для данного чата и сообщения
-        existing_record = next((record for record in channel_sync[post_id]
-                                if record['chat_id'] == message.chat.id and
-                                record['message_id'] == reply_message.message_id), None)
+        existing_record = next(
+            (
+                record
+                for record in channel_sync[post_id]
+                if record["chat_id"] == message.chat.id and record["message_id"] == reply_message.message_id
+            ),
+            None,
+        )
 
         if existing_record:
-            await message.reply('Синхронизация для этого сообщения уже существует')
+            await message.reply("Синхронизация для этого сообщения уже существует")
         else:
             # Добавляем новую запись, не затрагивая существующие
-            channel_sync[post_id].append({
-                'chat_id': message.chat.id,
-                'message_id': reply_message.message_id,
-                'url': url
-            })
+            channel_sync[post_id].append(
+                {"chat_id": message.chat.id, "message_id": reply_message.message_id, "url": url}
+            )
 
             # Save sync state
             app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
 
             # Сохраняем обновленные данные в БД
-            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Sync,
-                                                          json.dumps(channel_sync))
+            ConfigRepository(session).save_bot_value(chat_id, BotValueTypes.Sync, json.dumps(channel_sync))
 
-            await message.reply('Синхронизация восстановлена, сообщение не обновленно, внесите любую правку в оригинал.')
+            await message.reply(
+                "Синхронизация восстановлена, сообщение не обновленно, внесите любую правку в оригинал."
+            )
 
     except Exception as e:
         logger.error(f"Error in cmd_resync_post: {e}")
-        await message.reply('Произошла ошибка при восстановлении синхронизации')
+        await message.reply("Произошла ошибка при восстановлении синхронизации")
 
     # Удаляем команду /resync
     with suppress(TelegramBadRequest):
@@ -467,27 +474,33 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
     for data in post_sync_records:
         msg_text = message.html_text
         reply_markup = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='Edit', url=data['url']),
-                              InlineKeyboardButton(text='Edit', url=data['url'])]])
-        if msg_text and msg_text[-1] == '*':
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Edit", url=data["url"]), InlineKeyboardButton(text="Edit", url=data["url"])]
+            ]
+        )
+        if msg_text and msg_text[-1] == "*":
             msg_text = msg_text[:-1]
             reply_markup = None
         logger.info(
             "Syncing edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
-            data['chat_id'],
-            data['message_id'],
+            data["chat_id"],
+            data["message_id"],
             message.chat.id,
             message.message_id,
         )
         try:
-            await bot.edit_message_text(text=msg_text, chat_id=data['chat_id'],
-                                        message_id=data['message_id'], disable_web_page_preview=True,
-                                        reply_markup=reply_markup)
+            await bot.edit_message_text(
+                text=msg_text,
+                chat_id=data["chat_id"],
+                message_id=data["message_id"],
+                disable_web_page_preview=True,
+                reply_markup=reply_markup,
+            )
         except TelegramBadRequest as exc:
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
-                data['chat_id'],
-                data['message_id'],
+                data["chat_id"],
+                data["message_id"],
                 message.chat.id,
                 message.message_id,
                 exc,
@@ -496,8 +509,8 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
         except Exception as exc:
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
-                data['chat_id'],
-                data['message_id'],
+                data["chat_id"],
+                data["message_id"],
                 message.chat.id,
                 message.message_id,
                 exc,
@@ -505,8 +518,8 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
             continue
         logger.info(
             "Synced edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}",
-            data['chat_id'],
-            data['message_id'],
+            data["chat_id"],
+            data["message_id"],
             message.chat.id,
             message.message_id,
         )
@@ -519,26 +532,27 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
         if not channel_sync[post_key]:
             del channel_sync[post_key]
         app_context.bot_state_service.set_sync_state(sync_key, channel_sync)
-        ConfigRepository(session).save_bot_value(
-            message.chat.id, BotValueTypes.Sync, json.dumps(channel_sync)
-        )
+        ConfigRepository(session).save_bot_value(message.chat.id, BotValueTypes.Sync, json.dumps(channel_sync))
 
 
 @router.message(Command(commands=["eurmtl"]))
-@router.message(CommandStart(deep_link=True, magic=F.args == 'eurmtl'), F.chat.type == "private")
+@router.message(CommandStart(deep_link=True, magic=F.args == "eurmtl"), F.chat.type == "private")
 async def cmd_eurmtl(message: Message):
-    url1 = LoginUrl(url='https://eurmtl.me/authorize')
-    url2 = LoginUrl(url='https://eurmtl.me/tables/authorize')
-    await message.answer("Click the button below to log in EURMTL.me:", reply_markup=InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Main", login_url=url1)],
-            [InlineKeyboardButton(text="Tables", login_url=url2)],
-        ]
-    ))
+    url1 = LoginUrl(url="https://eurmtl.me/authorize")
+    url2 = LoginUrl(url="https://eurmtl.me/tables/authorize")
+    await message.answer(
+        "Click the button below to log in EURMTL.me:",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Main", login_url=url1)],
+                [InlineKeyboardButton(text="Tables", login_url=url2)],
+            ]
+        ),
+    )
 
 
 @router.message(Command(commands=["grist"]))
-@router.message(CommandStart(deep_link=True, magic=F.args == 'grist'), F.chat.type == "private")
+@router.message(CommandStart(deep_link=True, magic=F.args == "grist"), F.chat.type == "private")
 async def cmd_grist(message: Message, app_context: AppContext):
     if not app_context or not app_context.grist_service:
         raise ValueError("app_context with grist_service required")
@@ -553,7 +567,7 @@ async def cmd_grist(message: Message, app_context: AppContext):
         for r in access_records:
             print(r)
 
-        user_record = next((r for r in access_records if r.get('user_id') == user_id), None)
+        user_record = next((r for r in access_records if r.get("user_id") == user_id), None)
 
         if not user_record:
             await message.answer("❌ У вас нет доступа к Grist.")
@@ -562,13 +576,7 @@ async def cmd_grist(message: Message, app_context: AppContext):
         new_key = str(uuid.uuid4())
 
         update_data = {
-            "records": [{
-                "id": user_record['id'],
-                "fields": {
-                    "key": new_key,
-                    "dt_update": datetime.now().isoformat()
-                }
-            }]
+            "records": [{"id": user_record["id"], "fields": {"key": new_key, "dt_update": datetime.now().isoformat()}}]
         }
 
         await grist_service.patch_data(MTLGrist.GRIST_access, update_data)
@@ -583,7 +591,7 @@ async def cmd_grist(message: Message, app_context: AppContext):
 @router.message(Command(commands=["update_mtlap"]))
 async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if not app_context or not app_context.gspread_service or not app_context.mtl_service:
@@ -612,7 +620,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, 
 
         try:
             user_id = int(row[1])
-            await bot.send_chat_action(user_id, action='typing')
+            await bot.send_chat_action(user_id, action="typing")
             results.append(True)
         except Exception:
             results.append(False)
@@ -625,7 +633,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, 
     result = await mtl_service.check_consul_mtla_chats(message.bot)
 
     if result:
-        await message.reply('\n'.join(result))
+        await message.reply("\n".join(result))
 
     await message.reply("Готово 2")
 
@@ -633,7 +641,7 @@ async def cmd_update_mtlap(message: Message, bot: Bot, app_context: AppContext, 
 @router.message(Command(commands=["update_chats_info"]))
 async def cmd_chats_info(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
     if not app_context or not app_context.group_service:
         raise ValueError("app_context with group_service required")
@@ -659,16 +667,16 @@ async def check_membership(bot: Bot, chat_id: int, user_id: int) -> tuple[bool, 
 @router.message(Command(commands=["push"]))
 async def cmd_push(message: Message, bot: Bot, app_context: AppContext, skyuser: SkyUser):
     if not skyuser.is_skynet_admin():
-        await message.reply('You are not my admin.')
+        await message.reply("You are not my admin.")
         return
 
     if message.reply_to_message is None:
-        await message.reply('Команду надо посылать в ответ на список логинов')
+        await message.reply("Команду надо посылать в ответ на список логинов")
         return
 
     source_text = message.reply_to_message.text or ""
-    if source_text.find('@') == -1:
-        await message.reply('Нет не одной собаки. Команда работает в ответ на список логинов')
+    if source_text.find("@") == -1:
+        await message.reply("Нет не одной собаки. Команда работает в ответ на список логинов")
         return
 
     all_users = source_text.split()
@@ -678,37 +686,34 @@ async def cmd_push(message: Message, bot: Bot, app_context: AppContext, skyuser:
 @router.message(Command(commands=["get_info"]))
 @router.message(Command(re.compile(r"get_info_(\d+)")))
 async def cmd_get_info(
-    message: Message,
-    bot: Bot,
-    app_context: AppContext | None = None,
-    skyuser: SkyUser | None = None
+    message: Message, bot: Bot, app_context: AppContext | None = None, skyuser: SkyUser | None = None
 ):
     if not skyuser or not skyuser.is_skynet_admin():
         if message.chat.id != MTLChats.HelperChat:
-            await message.reply('You are not my admin.')
+            await message.reply("You are not my admin.")
             return
 
-    command_args = (message.text or '').split()
+    command_args = (message.text or "").split()
     if not command_args:
-        await message.reply('Пришлите числовой ID')
+        await message.reply("Пришлите числовой ID")
         return
 
-    command_name = command_args[0].split('@')[0].lstrip('/')
+    command_name = command_args[0].split("@")[0].lstrip("/")
     if command_name == "get_info":
         if len(command_args) < 2:
-            await message.reply('Пришлите числовой ID')
+            await message.reply("Пришлите числовой ID")
             return
         raw_id = command_args[1].strip()
         if raw_id.upper().startswith("#ID"):
             raw_id = raw_id[3:]
         if not raw_id.isdigit():
-            await message.reply('ID должен быть числом.')
+            await message.reply("ID должен быть числом.")
             return
         user_id = raw_id
     else:
         match = re.match(r"get_info_(\d+)", command_name)
         if not match:
-            await message.reply('Некорректная команда. Используйте /get_info <ID>')
+            await message.reply("Некорректная команда. Используйте /get_info <ID>")
             return
         user_id = match.group(1)
 
@@ -730,18 +735,18 @@ async def cmd_get_info(
                 messages.append("<b>!Внимание: нет юзернейма</b>")
         else:
             messages.append(f"Пользователь не подписан на {chat_name}")
-    
-    #messages.extend(await gs_find_user(user_id))
+
+    # messages.extend(await gs_find_user(user_id))
     # if app_context:
     #      messages.extend(await app_context.gspread_service.find_user(user_id))
     # else:
     #      messages.extend(await gs_find_user(user_id))
-          
+
     messages.append("Я больше не умею проверять на айдропы, гуглшит не работает")
 
-    await message.reply('\n'.join(messages))
+    await message.reply("\n".join(messages))
 
 
 def register_handlers(dp, bot):
     dp.include_router(router)
-    logger.info('router admin_system was loaded')
+    logger.info("router admin_system was loaded")

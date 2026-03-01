@@ -12,6 +12,7 @@ from services.config_service import ConfigService
 @dataclass
 class ChatFeatures:
     """Feature flags for a specific chat."""
+
     chat_id: int
     captcha: bool = False
     moderate: bool = False
@@ -122,10 +123,7 @@ class FeatureFlagsService:
         if feature not in FEATURE_TO_ENUM:
             return []
         with self._lock:
-            return [
-                chat_id for chat_id, features in self._cache.items()
-                if getattr(features, feature, False)
-            ]
+            return [chat_id for chat_id, features in self._cache.items() if getattr(features, feature, False)]
 
     def get_feature_list(self, feature: str) -> list[int]:
         """Get list of chat IDs with feature enabled.

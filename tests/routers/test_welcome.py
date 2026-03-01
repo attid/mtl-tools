@@ -9,11 +9,13 @@ from other.constants import MTLChats, BotValueTypes
 
 # --- Existing Tests (Router Integration) ---
 
+
 @pytest.fixture(autouse=True)
 async def cleanup_router():
     yield
     if welcome_router.parent_router:
-         welcome_router._parent_router = None
+        welcome_router._parent_router = None
+
 
 @pytest.mark.asyncio
 async def test_set_welcome_command(mock_telegram, router_app_context):
@@ -26,10 +28,10 @@ async def test_set_welcome_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=1,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.TestGroup, type='supergroup', title="Test Chat"),
+            chat=types.Chat(id=MTLChats.TestGroup, type="supergroup", title="Test Chat"),
             from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
-            text="/set_welcome Hello $$USER$$"
-        )
+            text="/set_welcome Hello $$USER$$",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -40,6 +42,7 @@ async def test_set_welcome_command(mock_telegram, router_app_context):
     # Verify reply
     requests = mock_telegram.get_requests()
     assert any("Added" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_new_chat_member_welcome(mock_telegram, router_app_context):
@@ -58,11 +61,11 @@ async def test_new_chat_member_welcome(mock_telegram, router_app_context):
     router_app_context.config_service.set_user_status(user.id, 0)
 
     event = types.ChatMemberUpdated(
-        chat=types.Chat(id=MTLChats.TestGroup, type='supergroup', title="Test Chat"),
+        chat=types.Chat(id=MTLChats.TestGroup, type="supergroup", title="Test Chat"),
         from_user=user,
         date=datetime.datetime.now(),
         old_chat_member=types.ChatMemberLeft(user=user),
-        new_chat_member=types.ChatMemberMember(user=user)
+        new_chat_member=types.ChatMemberMember(user=user),
     )
 
     update = types.Update(update_id=2, chat_member=event)
@@ -73,6 +76,7 @@ async def test_new_chat_member_welcome(mock_telegram, router_app_context):
     # Verify welcome message was sent
     requests = mock_telegram.get_requests()
     assert any("Welcome" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_stop_exchange_command(mock_telegram, router_app_context):
@@ -89,10 +93,10 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
         message=types.Message(
             message_id=3,
             date=datetime.datetime.now(),
-            chat=types.Chat(id=MTLChats.TestGroup, type='supergroup', title="Test Chat"),
+            chat=types.Chat(id=MTLChats.TestGroup, type="supergroup", title="Test Chat"),
             from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
-            text="/stop_exchange"
-        )
+            text="/stop_exchange",
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -100,6 +104,7 @@ async def test_stop_exchange_command(mock_telegram, router_app_context):
     assert router_app_context.stellar_service.stop_all_exchange.called
     requests = mock_telegram.get_requests()
     assert any("Was stop" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_join_request(mock_telegram, router_app_context):
@@ -113,17 +118,18 @@ async def test_join_request(mock_telegram, router_app_context):
     update = types.Update(
         update_id=4,
         chat_join_request=types.ChatJoinRequest(
-            chat=types.Chat(id=MTLChats.TestGroup, type='supergroup', title="Test Chat"),
+            chat=types.Chat(id=MTLChats.TestGroup, type="supergroup", title="Test Chat"),
             from_user=types.User(id=999, is_bot=False, first_name="User", username="user"),
             user_chat_id=999,
-            date=datetime.datetime.now()
-        )
+            date=datetime.datetime.now(),
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
     assert any("Новый участник" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
 
 @pytest.mark.asyncio
 async def test_cq_join(mock_telegram, router_app_context):
@@ -139,9 +145,11 @@ async def test_cq_join(mock_telegram, router_app_context):
             id="cb1",
             chat_instance="ci1",
             from_user=types.User(id=123456, is_bot=False, first_name="Admin", username="admin"),
-            message=types.Message(message_id=10, date=datetime.datetime.now(), chat=types.Chat(id=123, type='supergroup'), text="Join req"),
-            data=cb_data
-        )
+            message=types.Message(
+                message_id=10, date=datetime.datetime.now(), chat=types.Chat(id=123, type="supergroup"), text="Join req"
+            ),
+            data=cb_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)
@@ -150,7 +158,9 @@ async def test_cq_join(mock_telegram, router_app_context):
     assert any(r["method"] == "approveChatJoinRequest" for r in requests)
     assert any("✅" in r["data"]["text"] for r in requests if r["method"] == "answerCallbackQuery")
 
+
 # --- Additional Router Integration Tests (No Fake Bot/Message) ---
+
 
 def build_chat_member_update(user, chat_id=-1001, update_id=200):
     event = types.ChatMemberUpdated(
@@ -186,7 +196,10 @@ async def test_cas_spam_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    cas_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    cas_report = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)),
+        None,
+    )
     assert cas_report is not None
     assert "CAS ban" in cas_report["data"]["text"]
     assert "Причина:" in cas_report["data"]["text"]
@@ -206,7 +219,10 @@ async def test_lols_spam_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    lols_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    lols_report = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)),
+        None,
+    )
     assert lols_report is not None
     assert "LOLS base" in lols_report["data"]["text"]
     assert "Причина:" in lols_report["data"]["text"]
@@ -225,7 +241,10 @@ async def test_forbidden_name_ban(mock_telegram, router_app_context):
 
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
-    forbidden_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    forbidden_report = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)),
+        None,
+    )
     assert forbidden_report is not None
     assert "запрещенного никнейма" in forbidden_report["data"]["text"]
     assert "Причина:" in forbidden_report["data"]["text"]
@@ -247,7 +266,10 @@ async def test_existing_banned_user(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "banChatMember" for r in requests)
     # Message goes to SpamGroup, not the chat, and includes unban moderation artifact
-    spam_report = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)), None)
+    spam_report = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)),
+        None,
+    )
     assert spam_report is not None
     assert "was banned" in spam_report["data"]["text"]
     assert "SpamStatus.BAD (db)" in spam_report["data"]["text"]
@@ -263,7 +285,7 @@ async def test_entry_channel_enforcement_fail(mock_telegram, router_app_context)
     chat_id = -1005
     user = types.User(id=888, is_bot=False, first_name="Test", username="testuser")
     # Set entry_channel via config_service (DI)
-    router_app_context.config_service._bot_values[(chat_id, 'entry_channel')] = -100999
+    router_app_context.config_service._bot_values[(chat_id, "entry_channel")] = -100999
     router_app_context.group_service.enforce_entry_channel.return_value = (False, "Join channel")
     update = build_chat_member_update(user, chat_id=chat_id, update_id=205)
 
@@ -289,7 +311,9 @@ async def test_welcome_message_simple(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    msg_req = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None)
+    msg_req = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None
+    )
     assert msg_req is not None
     assert "$$USER$$" not in msg_req["data"]["text"]
     assert len(router_app_context.utils_service.sleep_and_delete_calls) == 1
@@ -318,7 +342,9 @@ async def test_welcome_captcha(mock_telegram, router_app_context):
     assert str(restrict_req["data"]["user_id"]) == str(user.id)
     can_send_messages = _can_send_messages_value(restrict_req["data"])
     assert can_send_messages in (False, "false", "False", 0, "0")
-    msg_req = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None)
+    msg_req = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None
+    )
     assert msg_req is not None
     assert msg_req["data"].get("reply_markup") is not None
 
@@ -367,7 +393,9 @@ async def test_welcome_emoji_captcha(mock_telegram, router_app_context):
     await dp.feed_update(bot=router_app_context.bot, update=update)
 
     requests = mock_telegram.get_requests()
-    msg_req = next((r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None)
+    msg_req = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(chat_id)), None
+    )
     assert msg_req is not None
     assert "$$COLOR$$" not in msg_req["data"]["text"]
     assert msg_req["data"].get("reply_markup") is not None
@@ -391,6 +419,7 @@ async def test_auto_all_no_username(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any("dont have username" in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
 
+
 @pytest.mark.asyncio
 async def test_cq_captcha_restores_permissions(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
@@ -412,11 +441,11 @@ async def test_cq_captcha_restores_permissions(mock_telegram, router_app_context
             message=types.Message(
                 message_id=11,
                 date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type='supergroup', title="Test Chat"),
-                text="Welcome"
+                chat=types.Chat(id=chat_id, type="supergroup", title="Test Chat"),
+                text="Welcome",
             ),
-            data=cb_data
-        )
+            data=cb_data,
+        ),
     )
 
     await dp.feed_update(bot=router_app_context.bot, update=update)

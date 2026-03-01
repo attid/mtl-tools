@@ -20,11 +20,13 @@ from other.config_reader import config
 
 TESTNET_HORIZON_URL = "https://horizon-testnet.stellar.org"
 
+
 def get_horizon_url() -> str:
     """Get Horizon URL based on config."""
     if config.stellar_testnet:
         return TESTNET_HORIZON_URL
     return config.horizon_url
+
 
 def get_network_passphrase() -> str:
     """Get network passphrase based on config."""
@@ -34,6 +36,7 @@ def get_network_passphrase() -> str:
 
 
 # ============ Server Factories ============
+
 
 def get_server() -> Server:
     """Get synchronous Stellar Horizon server connection."""
@@ -55,14 +58,12 @@ async def load_account_async(account_id: str):
     Returns:
         Account object from Horizon
     """
-    async with ServerAsync(
-        horizon_url=get_horizon_url(),
-        client=AiohttpClient()
-    ) as server:
+    async with ServerAsync(horizon_url=get_horizon_url(), client=AiohttpClient()) as server:
         return await server.load_account(account_id)
 
 
 # ============ Signing Utilities ============
+
 
 def get_private_sign() -> str:
     """Get private signing key from config."""
@@ -90,6 +91,7 @@ def stellar_sign(xdr: str, sign_key: Optional[str] = None) -> str:
 
 # ============ Keypair Utilities ============
 
+
 def gen_new(last_name: str = "") -> list:
     """
     Generate new Stellar keypair with optional suffix matching.
@@ -109,7 +111,7 @@ def gen_new(last_name: str = "") -> list:
         except ValueError:
             continue
 
-        if not last_name or new_account.public_key[-len(last_name):] == last_name:
+        if not last_name or new_account.public_key[-len(last_name) :] == last_name:
             break
 
         i += 1
@@ -118,6 +120,7 @@ def gen_new(last_name: str = "") -> list:
 
 
 # ============ XDR Utilities ============
+
 
 def decode_xdr_envelope(xdr: str) -> TransactionEnvelope:
     """
@@ -130,9 +133,7 @@ def decode_xdr_envelope(xdr: str) -> TransactionEnvelope:
         TransactionEnvelope or FeeBumpTransactionEnvelope object
     """
     if FeeBumpTransactionEnvelope.is_fee_bump_transaction_envelope(xdr):
-        fee_transaction = FeeBumpTransactionEnvelope.from_xdr(
-            xdr, network_passphrase=get_network_passphrase()
-        )
+        fee_transaction = FeeBumpTransactionEnvelope.from_xdr(xdr, network_passphrase=get_network_passphrase())
         return fee_transaction.transaction.inner_transaction_envelope
     else:
         return TransactionEnvelope.from_xdr(xdr, network_passphrase=get_network_passphrase())

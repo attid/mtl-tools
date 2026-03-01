@@ -8,10 +8,7 @@ class IGristService(Protocol):
     """Interface for Grist spreadsheet operations."""
 
     async def load_table_data(
-        self,
-        table_name: str,
-        filter_dict: Optional[dict] = None,
-        sort: Optional[str] = None
+        self, table_name: str, filter_dict: Optional[dict] = None, sort: Optional[str] = None
     ) -> list[dict]:
         """Load data from table with optional filter and sort."""
         ...
@@ -24,11 +21,7 @@ class IGristService(Protocol):
         """Insert new records into table."""
         ...
 
-    async def fetch_table(
-        self,
-        table_name: str,
-        filter_: Optional[dict] = None
-    ) -> list[dict]:
+    async def fetch_table(self, table_name: str, filter_: Optional[dict] = None) -> list[dict]:
         """Fetch table with optional filter."""
         ...
 
