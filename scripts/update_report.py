@@ -115,15 +115,13 @@ async def update_main_report(session: Session):
     await wks.update(range_name="D20", values=[[float(rq.json()["rates"]["ETH"])]])
     await wks.update(range_name="D21", values=[[float(rq.json()["rates"]["XRP"])]])
 
-    # aum
-    s = requests.get(
-        "https://www.suissegold.eu/en/product/argor-heraeus-10-gram-gold-bullion-bar-999-9-fine?change-currency=EUR"
-    ).text
-    s = s[s.find('"offers":') :]
-    # print(s)
-    s = s[s.find('"price": "') + 10 :]
-    s = s[: s.find('"')]
-    await wks.update(range_name="D6", values=[[float(s)]])
+    # aum — gold spot price per 10g (EUR) via Kitco
+    try:
+        rq = requests.get("https://proxy.kitco.com/getPM?symbol=AU&currency=EUR&unit=gram", timeout=15)
+        gold_per_gram = float(rq.text.strip().split(",")[6])  # mid price EUR/gram
+        await wks.update(range_name="D6", values=[[gold_per_gram * 10]])
+    except Exception as e:
+        logger.warning(f"Failed to fetch gold price from Kitco: {e}")
 
     # defi
     defi_balance = await get_debank_balance("0x0358d265874b5cf002d1801949f1cee3b08fa2e9")
