@@ -861,8 +861,8 @@ async def test_mute_command_not_local_admin(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
-async def test_mute_command_no_reply(mock_telegram, router_app_context):
-    """Test /mute command without reply message."""
+async def test_mute_command_no_reply_no_mention(mock_telegram, router_app_context):
+    """Test /mute command without reply or mention."""
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
@@ -890,7 +890,230 @@ async def test_mute_command_no_reply(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
-    assert "reply message" in req["data"]["text"]
+    assert "Specify user by reply or @username" in req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_mute_command_by_mention(mock_telegram, router_app_context):
+    """Test /mute @username 1h — mute by mention without reply."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+    chat_thread_key = f"{chat_id}-{thread_id}"
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    # Register target user in DB so get_user_id can resolve them
+    router_app_context.session.set_user(789, user_name="baduser")
+
+    update = types.Update(
+        update_id=3,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/mute @baduser 1h",
+            entities=[
+                types.MessageEntity(type="bot_command", offset=0, length=5),
+                types.MessageEntity(type="mention", offset=6, length=8),
+            ],
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    assert 789 in mutes
+
+
+@pytest.mark.asyncio
+async def test_mute_mention_wins_over_reply(mock_telegram, router_app_context):
+    """Test /mute @username 1h as reply — mention takes priority over reply."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+    chat_thread_key = f"{chat_id}-{thread_id}"
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    # Register mentioned user in DB
+    router_app_context.session.set_user(789, user_name="mentioned_user")
+
+    # Reply targets a different user (id=555)
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=555, is_bot=False, first_name="OtherUser", username="otheruser"),
+        text="Some msg",
+    )
+
+    update = types.Update(
+        update_id=3,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/mute @mentioned_user 1h",
+            reply_to_message=reply_msg,
+            entities=[
+                types.MessageEntity(type="bot_command", offset=0, length=5),
+                types.MessageEntity(type="mention", offset=6, length=15),
+            ],
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    # Mentioned user (789) is muted, NOT the reply user (555)
+    assert 789 in mutes
+    assert 555 not in mutes
+
+
+@pytest.mark.asyncio
+async def test_unmute_command_by_reply(mock_telegram, router_app_context):
+    """Test /unmute via reply removes mute."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+    chat_thread_key = f"{chat_id}-{thread_id}"
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    # Set an active mute
+    future_time = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
+    router_app_context.admin_service.set_user_mute_by_key(chat_thread_key, 789, future_time, "@baduser")
+
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        text="Some msg",
+    )
+
+    update = types.Update(
+        update_id=3,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/unmute",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    assert 789 not in mutes
+
+
+@pytest.mark.asyncio
+async def test_unmute_command_by_mention(mock_telegram, router_app_context):
+    """Test /unmute @username removes mute."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+    chat_thread_key = f"{chat_id}-{thread_id}"
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    # Register user in DB
+    router_app_context.session.set_user(789, user_name="baduser")
+
+    # Set an active mute
+    future_time = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
+    router_app_context.admin_service.set_user_mute_by_key(chat_thread_key, 789, future_time, "@baduser")
+
+    update = types.Update(
+        update_id=3,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/unmute @baduser",
+            entities=[
+                types.MessageEntity(type="bot_command", offset=0, length=7),
+                types.MessageEntity(type="mention", offset=8, length=8),
+            ],
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
+    assert 789 not in mutes
+
+
+@pytest.mark.asyncio
+async def test_unmute_command_not_muted(mock_telegram, router_app_context):
+    """Test /unmute when user is not muted."""
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=789, is_bot=False, first_name="User", username="someuser"),
+        text="Some msg",
+    )
+
+    update = types.Update(
+        update_id=3,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/unmute",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "is not muted" in req["data"]["text"]
 
 
 @pytest.mark.asyncio
@@ -2232,7 +2455,7 @@ async def test_mute_command_reply_to_forum_topic(mock_telegram, router_app_conte
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
-    assert "reply message" in req["data"]["text"]
+    assert "Specify user by reply or @username" in req["data"]["text"]
 
 
 @pytest.mark.asyncio

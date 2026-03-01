@@ -44,9 +44,12 @@ async def parse_timedelta_from_message(
         return None
     _, *args = message.text.split()
 
-    if args:  # Parse custom duration
+    # Skip @username arguments to find the duration token
+    duration_args = [a for a in args if not a.startswith("@")]
+
+    if duration_args:  # Parse custom duration
         try:
-            duration = parse_timedelta(args[0])
+            duration = parse_timedelta(duration_args[0])
         except TimedeltaParseError:
             await message.reply("Failed to parse duration")
             return None

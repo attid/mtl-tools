@@ -341,9 +341,17 @@ class FakeSession:
     def _handle_bot_users_query(self, statement, stmt_str, params):
         """Handle queries to bot_users table."""
         user_id = params.get("user_id")
+        user_name = params.get("user_name")
         if user_id is not None:
             user = self._bot_users.get(user_id)
             return FakeResult(user)
+        if user_name is not None:
+            # Lookup by username (used by ChatsRepository.get_user_id)
+            # Returns user_id scalar, not the full object
+            for u in self._bot_users.values():
+                if u.user_name == user_name:
+                    return FakeResult(u.user_id)
+            return FakeResult(None)
         return FakeResult(list(self._bot_users.values()))
 
     def _handle_chats_query(self, statement, stmt_str, params):

@@ -25,7 +25,7 @@ from aiogram.types import (
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from db.repositories import ConfigRepository
+from db.repositories import ConfigRepository, ChatsRepository
 from other.aiogram_tools import ChatInOption, get_username_link
 from other.config_reader import config
 from other.constants import MTLChats, BotValueTypes
@@ -46,6 +46,44 @@ def _has_topic_admins(chat_id: int, thread_id: int, app_context) -> bool:
         raise ValueError("app_context with admin_service required")
     admin_service = cast(Any, app_context.admin_service)
     return admin_service.has_topic_admins_by_key(chat_thread_key)
+
+
+def _extract_mention_username(message: Message) -> str | None:
+    """Extract @username from message entities (mention type).
+
+    Returns the username string including @ prefix, or None if no mention found.
+    """
+    if not message.entities or not message.text:
+        return None
+    for entity in message.entities:
+        if entity.type == "mention":
+            return entity.extract_from(message.text)
+    return None
+
+
+def _resolve_mute_target(message: Message, session: Session) -> tuple[int, str] | None:
+    """Resolve mute/unmute target user. Priority: mention > reply.
+
+    Returns (user_id, display_name) or None if no target found.
+    """
+    # 1. Try mention (@username in message text)
+    mention = _extract_mention_username(message)
+    if mention:
+        try:
+            user_id = ChatsRepository(session).get_user_id(mention)
+            return user_id, mention
+        except ValueError:
+            return None
+
+    # 2. Fallback to reply
+    reply = message.reply_to_message
+    if reply and not reply.forum_topic_created:
+        if reply.sender_chat:
+            return reply.sender_chat.id, f"Channel {reply.sender_chat.title}"
+        if reply.from_user:
+            return reply.from_user.id, get_username_link(reply.from_user)
+
+    return None
 
 
 @router.message(F.text.startswith("!ro"))
@@ -207,7 +245,7 @@ async def cmd_delete_dead_members(message: Message, state: FSMContext, app_conte
         await message.reply(f"An error occurred while removing deleted users: {str(e)}")
 
 
-@update_command_info("/mute", "Блокирует пользователя в текущей ветке")
+@update_command_info("/mute", "Блокирует пользователя в текущей ветке (reply или @username)")
 @router.message(ChatInOption("moderate"), Command(commands=["mute"]))
 async def cmd_mute(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
     if not app_context or not app_context.admin_service:
@@ -227,23 +265,14 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext, 
         await message.reply("You are not local admin")
         return False
 
-    if message.reply_to_message is None or message.reply_to_message.forum_topic_created:
-        await message.reply("Please send for reply message to set mute")
+    # Resolve target: mention > reply
+    target = _resolve_mute_target(message, session)
+    if target is None:
+        await message.reply("Specify user by reply or @username")
         return
+    user_id, user = target
 
     delta = await parse_timedelta_from_message(message)
-
-    # Check if the message is from a channel (sender_chat) or a user (from_user)
-    if message.reply_to_message.sender_chat:
-        user_id = message.reply_to_message.sender_chat.id
-        user = f"Channel {message.reply_to_message.sender_chat.title}"
-    else:
-        if not message.reply_to_message.from_user:
-            await message.reply("User not found in replied message")
-            return
-        user_id = message.reply_to_message.from_user.id
-        user = get_username_link(message.reply_to_message.from_user)
-
     if not delta:
         await message.reply("Unable to parse mute duration")
         return
@@ -255,6 +284,46 @@ async def cmd_mute(message: Message, session: Session, app_context: AppContext, 
     ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
     await message.reply(f"{user} was set mute for {delta} in topic {chat_thread_key}")
+
+
+@update_command_info("/unmute", "Снимает мьют пользователя в текущей ветке (reply или @username)")
+@router.message(ChatInOption("moderate"), Command(commands=["unmute"]))
+async def cmd_unmute(message: Message, session: Session, app_context: AppContext, skyuser: SkyUser):
+    if not app_context or not app_context.admin_service:
+        raise ValueError("app_context with admin_service required")
+    admin_service = cast(Any, app_context.admin_service)
+    if message.message_thread_id is None:
+        await message.reply("This command must be used in topic.")
+        return False
+    thread_id = message.message_thread_id
+    chat_thread_key = f"{message.chat.id}-{message.message_thread_id}"
+
+    if not _has_topic_admins(message.chat.id, thread_id, app_context):
+        await message.reply("Local admins not set yet")
+        return False
+
+    if not skyuser.is_topic_admin(message.chat.id, thread_id):
+        await message.reply("You are not local admin")
+        return False
+
+    # Resolve target: mention > reply
+    target = _resolve_mute_target(message, session)
+    if target is None:
+        await message.reply("Specify user by reply or @username")
+        return
+    user_id, user = target
+
+    # Check if user is actually muted
+    topic_mutes = admin_service.get_topic_mutes_by_key(chat_thread_key)
+    if not topic_mutes or user_id not in topic_mutes:
+        await message.reply(f"{user} is not muted in this topic")
+        return
+
+    admin_service.remove_user_mute_by_key(chat_thread_key, user_id)
+    all_mutes = admin_service.get_all_topic_mutes()
+    ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
+
+    await message.reply(f"{user} was unmuted in topic {chat_thread_key}")
 
 
 @update_command_info("/show_mute", "Показывает пользователей, которые заблокированы в текущей ветке")
