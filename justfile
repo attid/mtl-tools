@@ -60,3 +60,7 @@ types:
 
 test:
     uv run --group dev pytest
+
+secrets:
+    # Scan for leaked secrets (requires gitleaks: https://github.com/gitleaks/gitleaks)
+    gitleaks detect --source . -v

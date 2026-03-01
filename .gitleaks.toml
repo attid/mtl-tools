@@ -1,0 +1,8 @@
+title = "Gitleaks config for skynet_bot"
+
+[allowlist]
+  description = "Allow example/placeholder secrets"
+  paths = [
+    '''\.env\.example''',
+    '''docs/''',
+  ]
