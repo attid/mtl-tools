@@ -439,7 +439,6 @@ async def message_reaction(
 
             await message_any.reply(f"{user} was set mute for {delta} in topic {chat_thread_key}")
 
-    logger.info(f"message_reaction: {message}")
     # new_reaction=[ReactionTypeCustomEmoji(type='custom_emoji', custom_emoji_id='5220151067429335888')]
     # 10m    "custom_emoji_id": "5220090169088045319"
     # 60m    "custom_emoji_id": "5220223291599383581"
