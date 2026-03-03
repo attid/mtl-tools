@@ -76,7 +76,7 @@ class HTTPSessionManager:
 
                 # Определяем, как обрабатывать ответ
                 if "application/json" in content_type or return_type == "json":
-                    data = await response.json()
+                    data = await response.json(content_type=None)
                 else:
                     data = await response.text()
 
