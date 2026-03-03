@@ -549,8 +549,8 @@ async def test_edited_channel_post(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
-async def test_edited_channel_post_raises_telegram_error(mock_telegram, router_app_context):
-    """Test edited channel post does not suppress Telegram API errors."""
+async def test_edited_channel_post_removes_stale_sync_on_telegram_error(mock_telegram, router_app_context):
+    """Test edited channel post removes stale sync record when target message is not found."""
     dp = router_app_context.dispatcher
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.edited_channel_post.middleware(RouterTestMiddleware(router_app_context))
@@ -580,8 +580,12 @@ async def test_edited_channel_post_raises_telegram_error(mock_telegram, router_a
         ),
     )
 
-    with pytest.raises(TelegramBadRequest):
-        await dp.feed_update(bot=router_app_context.bot, update=update)
+    # Should not raise — stale record is removed instead
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    # Verify the stale record was cleaned up from sync state
+    updated_sync = router_app_context.bot_state_service.get_sync_state(str(channel_id), {})
+    assert str(post_id) not in updated_sync
 
 
 @pytest.mark.asyncio

@@ -505,7 +505,8 @@ async def cmd_edited_channel_post(message: Message, bot: Bot, session: Session, 
                 message.message_id,
                 exc,
             )
-            raise
+            stale_records.append(data)
+            continue
         except Exception as exc:
             logger.error(
                 "Failed to sync edited post to chat_id={}, message_id={}, source_channel_id={}, source_post_id={}: {}",
