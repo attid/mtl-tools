@@ -116,6 +116,65 @@ async def cmd_get_new_vote_all_mtl(public_key: str, remove_master: bool = False)
     return result
 
 
+def normalize_vote_weights(
+    balances: list[float],
+    target_min: float = 0.33,
+    target_max: float = 0.40,
+) -> list[int]:
+    """Normalize vote weights so the largest holder's share falls within target range.
+
+    Uses binary search to find a power-law exponent coefficient that maps
+    proportional base votes into a distribution where the top holder's share
+    is between ``target_min`` and ``target_max``.
+
+    Args:
+        balances: Non-empty list of balances sorted descending. Must contain at
+            least one positive value.
+        target_min: Lower bound for the major holder share (0-1).
+        target_max: Upper bound for the major holder share (0-1).
+
+    Returns:
+        List of integer vote weights (same length as *balances*).
+    """
+    total_sum = sum(balances)
+    if total_sum == 0:
+        return [0] * len(balances)
+
+    base_votes = [math.ceil(b * 100 / total_sum) for b in balances]
+    total_vote = sum(base_votes)
+    big_vote = base_votes[0]
+    diff = (big_vote - total_vote / 3) / total_vote
+
+    target_mid = (target_min + target_max) / 2
+
+    lo, hi = 0.0, 5.0
+    best_coeff = 1.74  # fallback
+    best_distance = float("inf")
+
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        exponent = 1 - (mid - diff) * diff
+        trial = [round(bv**exponent) for bv in base_votes]
+        trial_sum = sum(trial)
+        if trial_sum == 0:
+            hi = mid
+            continue
+        major_share = trial[0] / trial_sum
+        distance = abs(major_share - target_mid)
+
+        if distance < best_distance:
+            best_distance = distance
+            best_coeff = mid
+
+        if major_share > target_mid:
+            lo = mid
+        else:
+            hi = mid
+
+    exponent = 1 - (best_coeff - diff) * diff
+    return [round(bv**exponent) for bv in base_votes]
+
+
 async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None) -> list[MyShareHolder]:
     """
     Generate MTL signer vote list based on MTLRECT holdings.
@@ -236,30 +295,27 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
     eligible_shareholders = [sh for sh in shareholder_list if sh.balance_rect >= 500]
 
     if eligible_shareholders:
-        total_sum = 0
-        for account in eligible_shareholders:
-            total_sum += account.balance
+        balances = [sh.balance for sh in eligible_shareholders]
+        vote_weights = normalize_vote_weights(balances, target_min=0.33, target_max=0.40)
 
-        total_vote = 0
-        for account in eligible_shareholders:
-            account.calculated_votes = math.ceil(account.balance * 100 / total_sum)
-            total_vote += account.calculated_votes
+        for i, account in enumerate(eligible_shareholders):
+            account.calculated_votes = vote_weights[i]
 
-        big_vote = eligible_shareholders[0].calculated_votes
+        total_calculated = sum(vote_weights)
+        major_percent = vote_weights[0] / total_calculated * 100 if total_calculated else 0
 
-        for account in eligible_shareholders:
-            account.calculated_votes = round(
-                account.calculated_votes
-                ** (1 - (1.74 - (big_vote - total_vote / 3) / total_vote) * (big_vote - total_vote / 3) / total_vote)
+        if major_percent < 33 or major_percent > 40:
+            logger.warning(f"Could not fit into 33-40% range, got {major_percent:.2f}%")
+            # Add warning entry to the end of shareholder_list so it appears in the report table
+            warning_holder = MyShareHolder(
+                account_id=f"WARNING: major={major_percent:.1f}% outside 33-40%",
+                balance_mtl=0,
+                balance_rect=0,
+                calculated_votes=0,
             )
-
-        major_percent = (
-            eligible_shareholders[0].calculated_votes / sum(sh.calculated_votes for sh in eligible_shareholders) * 100
-        )
-        if major_percent < 33 or major_percent > 36:
-            logger.warning(f"Warning! Major has {major_percent:.2f}% votes (outside 33-36% range)")
+            shareholder_list.append(warning_holder)
         else:
-            logger.info(f"Major has {major_percent:.2f}% votes (within 33-36% range)")
+            logger.info(f"Major has {major_percent:.2f}% votes")
 
         # Update calculated_votes in main shareholder_list
         # Create dictionary for quick lookup of calculated votes
