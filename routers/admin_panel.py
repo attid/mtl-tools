@@ -931,7 +931,7 @@ async def process_welcome_message(
         return
 
     # Save welcome message to cache and DB
-    new_message = message.text or message.caption or ""
+    new_message = message.html_text or message.text or message.caption or ""
     app_context.config_service.set_welcome_message(chat_id, new_message, session)
 
     await state.clear()
