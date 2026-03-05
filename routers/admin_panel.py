@@ -434,6 +434,60 @@ def feature_flags_kb(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def _preview_text(value: Any, max_length: int) -> str:
+    """Return shortened string value for admin UI."""
+    raw = "" if value is None else str(value)
+    if not raw:
+        return "Not set"
+
+    normalized = raw.replace("\r\n", "\n").strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 3] + "..."
+
+
+def _format_welcome_settings(chat_id: int, title: str, app_context: AppContext) -> list[str]:
+    """Build display lines for welcome settings."""
+    welcome_msg = app_context.config_service.get_welcome_message(chat_id) if app_context.config_service else None
+    welcome_btn = app_context.config_service.get_welcome_button(chat_id) if app_context.config_service else None
+
+    msg_display = _preview_text(welcome_msg, 450)
+    btn_display = _preview_text(welcome_btn, 120)
+
+    return [
+        f"Welcome Settings: {html.escape(title)}",
+        "",
+        f"Message: {html.escape(msg_display)}",
+        f"Button: {html.escape(btn_display)}",
+    ]
+
+
+def _build_welcome_edit_prompt(chat_id: int, edit_type: str, app_context: AppContext | None) -> str:
+    """Build a contextual prompt with current value for editing."""
+    if not app_context or not app_context.config_service:
+        return (
+            "Send the new welcome message.\n\nYou can use {name} for user's name.\n\nSend /cancel to cancel."
+            if edit_type == "msg"
+            else "Send the button text.\n\nSend /cancel to cancel."
+        )
+
+    if edit_type == "msg":
+        current = _preview_text(app_context.config_service.get_welcome_message(chat_id), 1200)
+        return (
+            "Edit welcome message.\n"
+            f"Current:\n{current}\n\n"
+            "You can use {name} for user's name.\n"
+            "Send /cancel to cancel."
+        )
+
+    current = _preview_text(app_context.config_service.get_welcome_button(chat_id), 120)
+    return (
+        "Edit welcome button.\n"
+        f"Current: {current}\n\n"
+        "Send /cancel to cancel."
+    )
+
+
 def welcome_kb(chat_id: int) -> InlineKeyboardMarkup:
     """Build keyboard for welcome settings."""
     return InlineKeyboardMarkup(
@@ -744,20 +798,10 @@ async def cb_show_welcome_settings(
         await query.answer("Chat not accessible.", show_alert=True)
         return
 
-    # Get current welcome settings
-    welcome_msg = app_context.config_service.get_welcome_message(chat_id)
-    welcome_btn = app_context.config_service.get_welcome_button(chat_id)
-
-    # Format display text (escape HTML to prevent parse errors)
-    msg_display = welcome_msg[:50] + "..." if welcome_msg and len(welcome_msg) > 50 else welcome_msg
-    btn_display = str(welcome_btn)[:30] if welcome_btn else None
-
-    text_parts = [f"Welcome Settings: {html.escape(title)}", ""]
-    text_parts.append(f"Message: {html.escape(msg_display) if msg_display else 'Not set'}")
-    text_parts.append(f"Button: {html.escape(btn_display) if btn_display else 'Not set'}")
+    text_parts = _format_welcome_settings(chat_id, title, app_context)
 
     with suppress(TelegramBadRequest):
-        await query.message.edit_text("\n".join(text_parts), reply_markup=welcome_kb(chat_id))
+        await query.message.edit_text("\n".join(text_parts), reply_markup=welcome_kb(chat_id), parse_mode=ParseMode.HTML)
     await query.answer()
 
 
@@ -808,10 +852,10 @@ async def cb_edit_welcome(
 
     if edit_type == "msg":
         await state.set_state(AdminPanelStates.waiting_welcome_message)
-        prompt = "Send the new welcome message.\n\nYou can use {name} for user's name.\n\nSend /cancel to cancel."
     else:  # btn
         await state.set_state(AdminPanelStates.waiting_welcome_button)
-        prompt = "Send the button text.\n\nSend /cancel to cancel."
+
+    prompt = _build_welcome_edit_prompt(chat_id, edit_type, app_context)
 
     with suppress(TelegramBadRequest):
         await query.message.edit_text(prompt)
@@ -893,10 +937,9 @@ async def process_welcome_message(
     await state.clear()
 
     title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
-
-    await message.answer(
-        f"Welcome message updated for {title}.\n\nUse /admin to continue.",
-    )
+    text_parts = _format_welcome_settings(chat_id, title, app_context)
+    with suppress(TelegramBadRequest):
+        await message.answer("\n".join(text_parts), reply_markup=welcome_kb(chat_id), parse_mode=ParseMode.HTML)
 
     # Notify owner about settings change
     if message.from_user:
@@ -935,10 +978,9 @@ async def process_welcome_button(
     await state.clear()
 
     title = await get_chat_title(chat_id, bot, session, app_context) or str(chat_id)
-
-    await message.answer(
-        f"Welcome button updated for {title}.\n\nUse /admin to continue.",
-    )
+    text_parts = _format_welcome_settings(chat_id, title, app_context)
+    with suppress(TelegramBadRequest):
+        await message.answer("\n".join(text_parts), reply_markup=welcome_kb(chat_id), parse_mode=ParseMode.HTML)
 
     # Notify owner about settings change
     if message.from_user:
