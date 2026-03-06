@@ -63,4 +63,8 @@ test:
 
 secrets:
     # Scan for leaked secrets (requires gitleaks: https://github.com/gitleaks/gitleaks)
-    gitleaks detect --source . -v
+    if command -v gitleaks >/dev/null 2>&1; then \
+        gitleaks detect --source . -v; \
+    else \
+        docker run --rm -v "$PWD:/src" zricethezav/gitleaks detect --source /src -v; \
+    fi
