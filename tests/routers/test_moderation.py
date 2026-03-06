@@ -1,5 +1,6 @@
 import pytest
 import datetime
+import json
 from aiogram import types
 
 from routers.moderation import router as moderation_router, UnbanCallbackData
@@ -100,6 +101,12 @@ async def test_unban_callback(mock_telegram, router_app_context):
     requests = mock_telegram.get_requests()
     assert any(r["method"] == "unbanChatMember" for r in requests)
     assert any(r["method"] == "answerCallbackQuery" for r in requests)
+    edit_markup_req = next((r for r in requests if r["method"] == "editMessageReplyMarkup"), None)
+    assert edit_markup_req is not None
+    reply_markup = json.loads(edit_markup_req["data"]["reply_markup"])
+    button = reply_markup["inline_keyboard"][0][0]
+    assert button["text"] == "@admin"
+    assert button["callback_data"] == "👀"
 
 
 @pytest.mark.asyncio

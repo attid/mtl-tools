@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from loguru import logger
 
 from other.constants import MTLChats
@@ -204,7 +204,16 @@ async def cmd_q_unban(
 
     await call.answer("User unbanned successfully.")
     if isinstance(call.message, Message):
-        await call.message.delete_reply_markup()
+        actor_label = (
+            f"@{call.from_user.username}"
+            if call.from_user and call.from_user.username
+            else call.from_user.full_name if call.from_user and call.from_user.full_name else "done"
+        )
+        await call.message.edit_reply_markup(
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text=actor_label, callback_data="👀")]]
+            )
+        )
 
 
 def register_handlers(dp, bot):

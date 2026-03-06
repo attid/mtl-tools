@@ -469,6 +469,9 @@ async def left_chat_member(
         actor_username = event.from_user.username if event.from_user else None
         logger.info(f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {actor_username}")
 
+        if event.from_user and event.from_user.id == bot.id:
+            return
+
         if skyuser and skyuser.is_skynet_admin():
             c1, _ = await group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
             c2, _ = await group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
