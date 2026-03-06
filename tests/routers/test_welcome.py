@@ -277,6 +277,41 @@ async def test_existing_banned_user(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
+async def test_manual_kicked_by_regular_admin_sends_spam_report(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.chat_member.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(welcome_router)
+
+    chat_id = -1002042
+    kicked_user = types.User(id=888777, is_bot=False, first_name="Victim", username="victim")
+    admin_user = types.User(id=321654, is_bot=False, first_name="Moderator", username="moderator")
+
+    router_app_context.admin_service.set_skynet_admins([])
+    router_app_context.admin_service.set_chat_admins(chat_id, [admin_user.id])
+    router_app_context.group_service.check_membership.return_value = (False, None)
+
+    event = types.ChatMemberUpdated(
+        chat=types.Chat(id=chat_id, type="supergroup", title="Manual Ban Chat"),
+        from_user=admin_user,
+        date=datetime.datetime.now(),
+        old_chat_member=types.ChatMemberMember(user=kicked_user),
+        new_chat_member=types.ChatMemberBanned(user=kicked_user, until_date=datetime.datetime.now()),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=types.Update(update_id=205, chat_member=event))
+
+    requests = mock_telegram.get_requests()
+    spam_report = next(
+        (r for r in requests if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)),
+        None,
+    )
+    assert spam_report is not None
+    assert "Причина:" in spam_report["data"]["text"]
+    assert "Banned manually by chat admin" in spam_report["data"]["text"]
+    assert "Кем:" in spam_report["data"]["text"]
+
+
+@pytest.mark.asyncio
 async def test_entry_channel_enforcement_fail(mock_telegram, router_app_context):
     dp = router_app_context.dispatcher
     dp.chat_member.middleware(RouterTestMiddleware(router_app_context))

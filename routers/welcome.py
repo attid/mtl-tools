@@ -466,40 +466,34 @@ async def left_chat_member(
             config_repo.save_bot_value(chat_id, BotValueTypes.All, json.dumps(members))
 
     if event.new_chat_member.status == ChatMemberStatus.KICKED:
-        is_admin_user = skyuser.is_skynet_admin() if skyuser else False
+        actor_username = event.from_user.username if event.from_user else None
+        logger.info(f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {actor_username}")
 
-        if is_admin_user:
-            logger.info(
-                f"{event.old_chat_member.user} kicked from {get_chat_link(event.chat)} by {event.from_user.username}"
-            )
-
+        if skyuser and skyuser.is_skynet_admin():
             c1, _ = await group_service.check_membership(bot, MTLChats.SerpicaGroup, event.old_chat_member.user.id)
             c2, _ = await group_service.check_membership(bot, MTLChats.MTLAAgoraGroup, event.old_chat_member.user.id)
             c3, _ = await group_service.check_membership(bot, MTLChats.ClubFMCGroup, event.old_chat_member.user.id)
             in_other_chats = c1 or c2 or c3
 
-            if in_other_chats:
-                return
+            if not in_other_chats:
+                add_bot_users(session, event.old_chat_member.user.id, None, 2)
 
-            add_bot_users(session, event.old_chat_member.user.id, None, 2)
-            kb_unban = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="unban",
-                            callback_data=UnbanCallbackData(
-                                user_id=event.new_chat_member.user.id, chat_id=chat_id
-                            ).pack(),
-                        )
-                    ]
+        kb_unban = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="unban",
+                        callback_data=UnbanCallbackData(user_id=event.new_chat_member.user.id, chat_id=chat_id).pack(),
+                    )
                 ]
-            )
-            reason = "Kicked by admin"
-            await bot.send_message(
-                MTLChats.SpamGroup,
-                build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
-                reply_markup=kb_unban,
-            )
+            ]
+        )
+        reason = "Banned manually by chat admin"
+        await bot.send_message(
+            MTLChats.SpamGroup,
+            build_ban_message(event.new_chat_member.user, event.chat, reason, actor=event.from_user),
+            reply_markup=kb_unban,
+        )
 
 
 def contains_emoji(s: str) -> bool:
