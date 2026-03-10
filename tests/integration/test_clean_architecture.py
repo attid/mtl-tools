@@ -267,6 +267,30 @@ class TestFeatureFlagsService:
         assert flags_service.is_listening(100) is True
         assert flags_service.is_full_data(100) is True
 
+    def test_notify_message_toggle(self):
+        """notify_message must be a recognized feature flag so toggle works."""
+        config_repo = FakeConfigRepositoryProtocol()
+        config_service = ConfigService(config_repo)
+        flags_service = FeatureFlagsService(config_service)
+
+        # Initially disabled
+        assert flags_service.is_enabled(100, "notify_message") is False
+
+        # Enable
+        result = flags_service.set_feature(100, "notify_message", True)
+        assert result is True
+        assert flags_service.is_enabled(100, "notify_message") is True
+
+        # Toggle off
+        toggled = flags_service.toggle(100, "notify_message")
+        assert toggled is False
+        assert flags_service.is_enabled(100, "notify_message") is False
+
+        # Toggle back on
+        toggled = flags_service.toggle(100, "notify_message")
+        assert toggled is True
+        assert flags_service.is_enabled(100, "notify_message") is True
+
     def test_cache_invalidation(self):
         config_repo = FakeConfigRepositoryProtocol()
         config_service = ConfigService(config_repo)

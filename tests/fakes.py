@@ -875,6 +875,7 @@ class FakeFeatureFlagsService:
         "delete_income",
         "entry_channel",
         "notify_join",
+        "notify_message",
     ]
 
     def __init__(self):

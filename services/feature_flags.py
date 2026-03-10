@@ -28,6 +28,7 @@ class ChatFeatures:
     delete_income: bool = False
     entry_channel: bool = False
     notify_join: bool = False
+    notify_message: bool = False
 
 
 # Mapping from feature name to BotValueTypes enum
@@ -46,6 +47,7 @@ FEATURE_TO_ENUM = {
     "delete_income": BotValueTypes.DeleteIncome,
     "entry_channel": BotValueTypes.EntryChannel,
     "notify_join": BotValueTypes.NotifyJoin,
+    "notify_message": BotValueTypes.NotifyMessage,
 }
 
 
