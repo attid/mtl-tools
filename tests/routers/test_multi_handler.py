@@ -122,6 +122,95 @@ async def test_topic_admin_management(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
+async def test_show_topic_admin_allows_topic_admin(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(multi_router)
+
+    chat_id = MTLChats.TestGroup
+    thread_id = 5
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@topicadmin", "@otheradmin"])
+
+    update = types.Update(
+        update_id=4,
+        message=types.Message(
+            message_id=4,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group"),
+            message_thread_id=thread_id,
+            from_user=types.User(id=777, is_bot=False, first_name="Topic", username="topicadmin"),
+            text="/show_topic_admin",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    assert any(
+        "Items in this thread: @topicadmin @otheradmin" in r["data"]["text"]
+        for r in requests
+        if r["method"] == "sendMessage"
+    )
+
+
+@pytest.mark.asyncio
+async def test_show_topic_admin_denies_non_topic_admin(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(multi_router)
+
+    chat_id = MTLChats.TestGroup
+    thread_id = 5
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@topicadmin"])
+
+    update = types.Update(
+        update_id=5,
+        message=types.Message(
+            message_id=5,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group"),
+            message_thread_id=thread_id,
+            from_user=types.User(id=778, is_bot=False, first_name="User", username="regularuser"),
+            text="/show_topic_admin",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    assert any("You are not admin." in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+
+
+@pytest.mark.asyncio
+async def test_add_topic_admin_still_denies_topic_admin_without_chat_admin_rights(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(multi_router)
+
+    chat_id = MTLChats.TestGroup
+    thread_id = 5
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@topicadmin"])
+
+    update = types.Update(
+        update_id=6,
+        message=types.Message(
+            message_id=6,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group"),
+            message_thread_id=thread_id,
+            from_user=types.User(id=779, is_bot=False, first_name="Topic", username="topicadmin"),
+            text="/add_topic_admin @newtopicadmin",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    assert any("You are not admin." in r["data"]["text"] for r in requests if r["method"] == "sendMessage")
+    assert router_app_context.admin_service.get_topic_admins(chat_id, thread_id) == ["@topicadmin"]
+
+
+@pytest.mark.asyncio
 async def test_on_startup_triggers_loads(monkeypatch):
     """Test that on_startup calls command_config_loads with app_context."""
     called_with = []

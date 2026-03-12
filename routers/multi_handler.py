@@ -346,6 +346,12 @@ async def universal_command_handler(
     command_info = commands_info[command]
     action_type = command_info[1]
     admin_check = command_info[2]
+    is_topic_admin_show = bool(
+        command == "show_topic_admin"
+        and message.message_thread_id
+        and skyuser
+        and skyuser.is_topic_admin(message.chat.id, message.message_thread_id)
+    )
 
     if action_type == "ignore":
         await message.reply("Technical command. Ignore it.")
@@ -355,7 +361,10 @@ async def universal_command_handler(
         await message.reply("You are not my admin.")
         return
     elif admin_check == "admin":
-        if not skyuser or not await skyuser.is_admin():
+        if not skyuser:
+            await message.reply("You are not admin.")
+            return
+        if not is_topic_admin_show and not await skyuser.is_admin():
             text = skyuser.admin_denied_text() if skyuser else "You are not admin."
             await message.reply(text)
             return
