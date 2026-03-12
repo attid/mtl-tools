@@ -5,6 +5,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 start_path = os.path.dirname(os.path.dirname(__file__)) + "/"
 dotenv_path = os.path.join(start_path, ".env")
+default_secrets_path = "/run/secrets"
+
+
+def get_secrets_dir() -> str | None:
+    if os.path.isdir(default_secrets_path):
+        return default_secrets_path
+    return None
 
 
 class Settings(BaseSettings):
@@ -44,7 +51,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="allow",
         case_sensitive=False,
-        secrets_dir="/run/secrets",
+        secrets_dir=get_secrets_dir(),
     )
 
 
