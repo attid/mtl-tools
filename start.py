@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from db.repositories import ChatsRepository
 from middlewares.db import DbSessionMiddleware
 from middlewares.emoji_reaction import EmojiReactionMiddleware
+from middlewares.message_thread_cache import MessageThreadCacheMiddleware
 from middlewares.retry import RetryRequestMiddleware
 from middlewares.sentry_error_handler import sentry_error_handler
 from middlewares.throttling import ThrottlingMiddleware
@@ -36,6 +37,7 @@ from other.constants import MTLChats
 from other.pyro_tools import pyro_start
 from services.command_registry_service import get_pending_commands
 from services.health_server import start_health_server
+from services.message_thread_cache import RedisMessageThreadCacheService
 
 # Task list for background asyncio tasks - was previously in global_data
 global_tasks = []
@@ -197,6 +199,9 @@ async def main():
     dp.edited_channel_post.middleware(app_context_middleware)
     dp.poll_answer.middleware(app_context_middleware)
     dp.message_reaction.middleware(app_context_middleware)
+
+    app_context_middleware.app_context.message_thread_cache_service = RedisMessageThreadCacheService(redis)
+    dp.message.middleware(MessageThreadCacheMiddleware())
 
     # UserResolverMiddleware resolves user_id from channel links
     user_resolver_middleware = UserResolverMiddleware(app_context_middleware.app_context, bot)

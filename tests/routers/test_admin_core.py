@@ -271,7 +271,7 @@ async def test_show_mutes_no_admins(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
-async def test_message_reaction_no_action(router_app_context):
+async def test_message_reaction_no_action(mock_telegram, router_app_context):
     # This handler uses bot directly, but we can call it manually or via dispatch if we want.
     # The original test called it manually.
 
@@ -284,17 +284,14 @@ async def test_message_reaction_no_action(router_app_context):
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
             self.chat = types.Chat(id=123, type="supergroup", title="Group")
-            self.message_thread_id = None
-            self.reply_to_message = None
-            self._replies = []
-
-        async def reply(self, text):
-            self._replies.append(text)
+            self.message_id = 55
+            self.user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
 
     reaction_update = ReactionEvent()
 
     await message_reaction_handler(reaction_update, bot, session, app_context)
-    # Assert nothing bad happened
+    requests = mock_telegram.get_requests()
+    assert not any(r["method"] in ("sendMessage", "forwardMessage", "deleteMessage") for r in requests)
 
 
 @pytest.mark.asyncio
@@ -858,6 +855,220 @@ async def test_mute_command_not_local_admin(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "You are not local admin" in req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_del_command_success_for_topic_admin(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        text="Bad msg",
+    )
+
+    update = types.Update(
+        update_id=30,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/del",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    forward_req = next((r for r in requests if r["method"] == "forwardMessage"), None)
+    assert forward_req is not None
+    assert str(forward_req["data"]["chat_id"]) == str(MTLChats.SpamGroup)
+    assert int(forward_req["data"]["message_id"]) == 10
+
+    spam_log_req = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)
+            and "admin" in r["data"]["text"]
+        ),
+        None,
+    )
+    assert spam_log_req is not None
+
+    delete_requests = [r for r in requests if r["method"] == "deleteMessage"]
+    deleted_ids = {int(r["data"]["message_id"]) for r in delete_requests}
+    assert 10 in deleted_ids
+    assert 11 in deleted_ids
+
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 1
+    _, seconds = router_app_context.utils_service.sleep_and_delete_calls[0]
+    assert seconds == 5
+
+
+@pytest.mark.asyncio
+async def test_del_command_not_local_admin(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@other_admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        text="Bad msg",
+    )
+
+    update = types.Update(
+        update_id=31,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="User", username="notadmin"),
+            text="/del",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "You are not local admin" in req["data"]["text"]
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
+    assert all(seconds == 5 for _, seconds in router_app_context.utils_service.sleep_and_delete_calls)
+
+
+@pytest.mark.asyncio
+async def test_del_command_requires_reply(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    update = types.Update(
+        update_id=32,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/del",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "reply" in req["data"]["text"].lower()
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
+    assert all(seconds == 5 for _, seconds in router_app_context.utils_service.sleep_and_delete_calls)
+
+
+@pytest.mark.asyncio
+async def test_del_command_requires_topic(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    router_app_context.feature_flags.enable(123, "moderate")
+
+    update = types.Update(
+        update_id=33,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type="supergroup", title="Group", is_forum=True),
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/del",
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "This command must be used in topic." in req["data"]["text"]
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
+    assert all(seconds == 5 for _, seconds in router_app_context.utils_service.sleep_and_delete_calls)
+
+
+@pytest.mark.asyncio
+async def test_del_command_requires_local_admins(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.feature_flags.enable(chat_id, "moderate")
+
+    reply_msg = types.Message(
+        message_id=10,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+        message_thread_id=thread_id,
+        from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        text="Bad msg",
+    )
+
+    update = types.Update(
+        update_id=34,
+        message=types.Message(
+            message_id=11,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=chat_id, type="supergroup", title="Group", is_forum=True),
+            message_thread_id=thread_id,
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="/del",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "Local admins not set yet" in req["data"]["text"]
+    assert len(router_app_context.utils_service.sleep_and_delete_calls) == 2
+    assert all(seconds == 5 for _, seconds in router_app_context.utils_service.sleep_and_delete_calls)
 
 
 @pytest.mark.asyncio
@@ -1858,7 +2069,7 @@ async def test_get_users_csv_wrong_chat(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
-async def test_message_reaction_mute_emoji(router_app_context):
+async def test_message_reaction_mute_emoji(mock_telegram, router_app_context):
     """Test message_reaction with mute emoji."""
     from routers.admin_core import message_reaction as message_reaction_handler
 
@@ -1872,26 +2083,22 @@ async def test_message_reaction_mute_emoji(router_app_context):
 
     # Set up topic admins
     router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    await router_app_context.message_thread_cache_service.remember_message_context(
+        chat_id=chat_id,
+        message_id=10,
+        thread_id=thread_id,
+        user_id=789,
+        username="baduser",
+        full_name="BadUser",
+    )
 
     class ReactionEvent:
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]  # 10m mute emoji
             self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
-            self.message_thread_id = thread_id
-            self.from_user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
-            self.reply_to_message = types.Message(
-                message_id=10,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type="supergroup"),
-                from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message",
-            )
-            # parse_timedelta_from_message needs message.text - simulate reaction message
-            self.text = "reaction"  # Default - will use 15 minutes
-            self._replies = []
-
-        async def reply(self, text):
-            self._replies.append(text)
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
+            self.text = "reaction"
 
     reaction_update = ReactionEvent()
 
@@ -1900,10 +2107,13 @@ async def test_message_reaction_mute_emoji(router_app_context):
     # Verify mute was applied
     mutes = router_app_context.admin_service.get_topic_mutes_by_key(chat_thread_key)
     assert 789 in mutes
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage" and "was set mute" in r["data"]["text"]), None)
+    assert req is not None
 
 
 @pytest.mark.asyncio
-async def test_message_reaction_no_topic_admins(router_app_context):
+async def test_message_reaction_no_topic_admins(mock_telegram, router_app_context):
     """Test message_reaction when no topic admins are set."""
     from routers.admin_core import message_reaction as message_reaction_handler
 
@@ -1918,29 +2128,28 @@ async def test_message_reaction_no_topic_admins(router_app_context):
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
             self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
-            self.message_thread_id = thread_id
-            self.from_user = types.User(id=999, is_bot=False, first_name="User", username="user")
-            self.reply_to_message = types.Message(
-                message_id=10,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type="supergroup"),
-                from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message",
-            )
-            self._replies = []
-
-        async def reply(self, text):
-            self._replies.append(text)
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="User", username="user")
 
     reaction_update = ReactionEvent()
+    await router_app_context.message_thread_cache_service.remember_message_context(
+        chat_id=chat_id,
+        message_id=10,
+        thread_id=thread_id,
+        user_id=789,
+        username="baduser",
+        full_name="BadUser",
+    )
 
     await message_reaction_handler(reaction_update, bot, session, app_context)
-
-    assert "Local admins not set yet" in reaction_update._replies
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "Local admins not set yet" in req["data"]["text"]
 
 
 @pytest.mark.asyncio
-async def test_message_reaction_not_topic_admin(router_app_context):
+async def test_message_reaction_not_topic_admin(mock_telegram, router_app_context):
     """Test message_reaction when user is not topic admin."""
     from routers.admin_core import message_reaction as message_reaction_handler
 
@@ -1958,25 +2167,24 @@ async def test_message_reaction_not_topic_admin(router_app_context):
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
             self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
-            self.message_thread_id = thread_id
-            self.from_user = types.User(id=999, is_bot=False, first_name="User", username="notadmin")
-            self.reply_to_message = types.Message(
-                message_id=10,
-                date=datetime.datetime.now(),
-                chat=types.Chat(id=chat_id, type="supergroup"),
-                from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
-                text="Bad message",
-            )
-            self._replies = []
-
-        async def reply(self, text):
-            self._replies.append(text)
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="User", username="notadmin")
 
     reaction_update = ReactionEvent()
+    await router_app_context.message_thread_cache_service.remember_message_context(
+        chat_id=chat_id,
+        message_id=10,
+        thread_id=thread_id,
+        user_id=789,
+        username="baduser",
+        full_name="BadUser",
+    )
 
     await message_reaction_handler(reaction_update, bot, session, app_context)
-
-    assert "You are not local admin" in reaction_update._replies
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert req is not None
+    assert "You are not local admin" in req["data"]["text"]
 
 
 @pytest.mark.asyncio
@@ -2530,8 +2738,8 @@ async def test_get_users_csv_user_not_member(mock_telegram, router_app_context):
 
 
 @pytest.mark.asyncio
-async def test_message_reaction_no_reply(router_app_context):
-    """Test message_reaction when reply_to_message is None."""
+async def test_message_reaction_no_mapping(mock_telegram, router_app_context):
+    """Test message_reaction when message context is not cached."""
     from routers.admin_core import message_reaction as message_reaction_handler
 
     bot = router_app_context.bot
@@ -2547,20 +2755,70 @@ async def test_message_reaction_no_reply(router_app_context):
         def __init__(self):
             self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220090169088045319")]
             self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
-            self.message_thread_id = thread_id
-            self.from_user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
-            self.reply_to_message = None  # No reply
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
             self.text = "reaction"
-            self._replies = []
-
-        async def reply(self, text):
-            self._replies.append(text)
 
     reaction_update = ReactionEvent()
 
     await message_reaction_handler(reaction_update, bot, session, app_context)
 
-    assert "reply message" in reaction_update._replies[0]
+    requests = mock_telegram.get_requests()
+    assert not any(r["method"] in ("sendMessage", "forwardMessage", "deleteMessage") for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_message_reaction_x_emoji_deletes_message(mock_telegram, router_app_context):
+    from routers.admin_core import message_reaction as message_reaction_handler
+
+    bot = router_app_context.bot
+    session = router_app_context.session
+    app_context = router_app_context
+
+    chat_id = 123
+    thread_id = 5
+
+    router_app_context.admin_service.set_topic_admins(chat_id, thread_id, ["@admin"])
+    await router_app_context.message_thread_cache_service.remember_message_context(
+        chat_id=chat_id,
+        message_id=10,
+        thread_id=thread_id,
+        user_id=789,
+        username="baduser",
+        full_name="Bad User",
+    )
+
+    class ReactionEvent:
+        def __init__(self):
+            self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="5220151067429335888")]
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="Admin", username="admin")
+
+    reaction_update = ReactionEvent()
+
+    await message_reaction_handler(reaction_update, bot, session, app_context)
+
+    requests = mock_telegram.get_requests()
+    forward_req = next((r for r in requests if r["method"] == "forwardMessage"), None)
+    assert forward_req is not None
+    assert str(forward_req["data"]["chat_id"]) == str(MTLChats.SpamGroup)
+
+    log_req = next(
+        (
+            r
+            for r in requests
+            if r["method"] == "sendMessage"
+            and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)
+            and "deleted by" in r["data"]["text"]
+        ),
+        None,
+    )
+    assert log_req is not None
+
+    delete_req = next((r for r in requests if r["method"] == "deleteMessage"), None)
+    assert delete_req is not None
+    assert int(delete_req["data"]["message_id"]) == 10
 
 
 @pytest.mark.asyncio

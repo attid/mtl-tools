@@ -137,10 +137,30 @@ class TestUserResolverMiddleware:
         # Create a mock event with from_user attribute
         mock_event = MagicMock()
         mock_event.from_user = types.User(id=777888, is_bot=False, first_name="Test")
+        mock_event.user = None
 
         resolved = middleware._resolve_user(mock_event)
 
         assert resolved.user_id == 777888
+
+    def test_resolve_user_id_for_reaction_event_with_user(self):
+        """MessageReactionUpdated-like event with user attribute should resolve correctly."""
+        channel_link_service = ChannelLinkService()
+
+        app_context = MagicMock()
+        app_context.channel_link_service = channel_link_service
+
+        middleware = UserResolverMiddleware(app_context, MagicMock())
+
+        mock_event = MagicMock()
+        mock_event.user = types.User(id=123321, is_bot=False, first_name="React", username="react_admin")
+        mock_event.chat = types.Chat(id=-100123, type="supergroup", title="Group")
+
+        resolved = middleware._resolve_user(mock_event)
+
+        assert resolved.user_id == 123321
+        assert resolved.username == "react_admin"
+        assert resolved.chat_id == -100123
 
     def test_resolve_from_channel_no_service(self):
         """When channel_link_service is None, return None."""

@@ -56,6 +56,7 @@ class AppContext:
         self.db_service = None
         self.channel_link_service = None
         self.stellar_notification_service = None
+        self.message_thread_cache_service = None
 
     def check_user(self, user_id: int):
         """Check user status for antispam. Uses spam_status_service cache."""

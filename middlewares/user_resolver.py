@@ -104,9 +104,18 @@ class UserResolverMiddleware(BaseMiddleware):
         else:
             event_any = cast(Any, event)
             from_user = getattr(event_any, "from_user", None)
+            reaction_user = getattr(event_any, "user", None)
             message = getattr(event_any, "message", None)
             chat = getattr(event_any, "chat", None)
-            if from_user:
+            if reaction_user:
+                user_id = reaction_user.id
+                username = reaction_user.username
+                logger.debug(
+                    "skyuser.resolve: generic user id={} username={}",
+                    user_id,
+                    username,
+                )
+            elif from_user:
                 user_id = from_user.id
                 username = from_user.username
                 logger.debug(

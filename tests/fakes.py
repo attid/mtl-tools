@@ -486,6 +486,38 @@ class TestUtilsService:
         return add_text(lines, num_line, text)
 
 
+class FakeMessageThreadCacheService:
+    def __init__(self):
+        self._messages = {}
+        self.remember_calls = []
+        self.get_calls = []
+
+    async def remember_message_context(
+        self,
+        chat_id: int,
+        message_id: int,
+        thread_id: int,
+        user_id: int | None = None,
+        username: str | None = None,
+        full_name: str | None = None,
+        sender_chat_id: int | None = None,
+        sender_chat_title: str | None = None,
+    ) -> None:
+        self.remember_calls.append((chat_id, message_id, thread_id, user_id, username, full_name, sender_chat_id, sender_chat_title))
+        self._messages[(chat_id, message_id)] = {
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "username": username,
+            "full_name": full_name,
+            "sender_chat_id": sender_chat_id,
+            "sender_chat_title": sender_chat_title,
+        }
+
+    async def get_message_context(self, chat_id: int, message_id: int) -> dict | None:
+        self.get_calls.append((chat_id, message_id))
+        return self._messages.get((chat_id, message_id))
+
+
 class FakeConfigService:
     def __init__(self):
         self._bot_values = {}
@@ -1484,6 +1516,7 @@ class TestAppContext:
         self.command_registry = FakeCommandRegistryService()
         self.db_service = FakeDatabaseService()
         self.channel_link_service = ChannelLinkService()
+        self.message_thread_cache_service = FakeMessageThreadCacheService()
         self.admin_id = 123456
         # Wire admin_service to utils_service
         self.utils_service.set_admin_service(self.admin_service)

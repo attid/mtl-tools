@@ -4,12 +4,13 @@ import csv
 import io
 from contextlib import suppress
 from datetime import datetime
+from datetime import timedelta
 from typing import Any, cast
 
 import aiohttp
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType, ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -84,6 +85,60 @@ def _resolve_mute_target(message: Message, session: Session) -> tuple[int, str] 
             return reply.from_user.id, get_username_link(reply.from_user)
 
     return None
+
+
+async def _reply_and_cleanup(message: Message, utils_service: Any, text: str, seconds: int = 5) -> None:
+    """Send a short-lived reply and schedule command cleanup."""
+    info_message = await message.reply(text)
+    await utils_service.sleep_and_delete(info_message, seconds)
+    await utils_service.sleep_and_delete(message, seconds)
+
+
+def _describe_reply_sender(reply: Message) -> str:
+    """Build a short HTML-safe sender description for moderation logs."""
+    if reply.sender_chat:
+        title = html.escape(reply.sender_chat.title or str(reply.sender_chat.id))
+        return f"channel {title}"
+    if reply.from_user:
+        return get_username_link(reply.from_user)
+    return "unknown sender"
+
+
+def _describe_cached_sender(message_context: dict[str, Any]) -> str:
+    sender_chat_title = message_context.get("sender_chat_title")
+    if sender_chat_title:
+        return f"channel {html.escape(sender_chat_title)}"
+
+    user_id = message_context.get("user_id")
+    username = message_context.get("username")
+    full_name = message_context.get("full_name") or username or str(user_id or "unknown user")
+    if username:
+        return f"@{html.escape(username)}"
+    if user_id is not None:
+        return f'<a href="tg://user?id={user_id}">{html.escape(full_name)}</a>'
+    return "unknown sender"
+
+
+async def _send_topic_message(bot: Bot, chat_id: int, thread_id: int, text: str) -> None:
+    await bot.send_message(chat_id=chat_id, text=text, message_thread_id=thread_id, parse_mode=ParseMode.HTML)
+
+
+async def _log_and_delete_target(
+    bot: Bot,
+    chat_id: int,
+    thread_id: int,
+    target_message_id: int,
+    actor: str,
+    target_sender: str,
+    chat_title: str,
+) -> None:
+    await bot.forward_message(chat_id=MTLChats.SpamGroup, from_chat_id=chat_id, message_id=target_message_id)
+    await bot.send_message(
+        chat_id=MTLChats.SpamGroup,
+        text=f"Message from {target_sender} deleted by {actor} in {chat_title} topic {thread_id}.",
+        parse_mode=ParseMode.HTML,
+    )
+    await bot.delete_message(chat_id=chat_id, message_id=target_message_id)
 
 
 @router.message(F.text.startswith("!ro"))
@@ -384,16 +439,71 @@ async def cmd_show_mutes(message: Message, session: Session, app_context: AppCon
         await message.reply("No users are currently muted in this topic")
 
 
+@update_command_info("/del", "Удаляет сообщение в текущей ветке по reply")
+@router.message(ChatInOption("moderate"), Command(commands=["del"]))
+async def cmd_del_message(message: Message, bot: Bot, app_context: AppContext, skyuser: SkyUser):
+    if not app_context or not app_context.admin_service or not app_context.utils_service:
+        raise ValueError("app_context with admin_service and utils_service required")
+    utils_service = cast(Any, app_context.utils_service)
+
+    if message.message_thread_id is None:
+        await _reply_and_cleanup(message, utils_service, "This command must be used in topic.")
+        return False
+
+    thread_id = message.message_thread_id
+    if not _has_topic_admins(message.chat.id, thread_id, app_context):
+        await _reply_and_cleanup(message, utils_service, "Local admins not set yet")
+        return False
+
+    if not skyuser.is_topic_admin(message.chat.id, thread_id):
+        await _reply_and_cleanup(message, utils_service, "You are not local admin")
+        return False
+
+    reply = message.reply_to_message
+    if reply is None or reply.forum_topic_created:
+        await _reply_and_cleanup(message, utils_service, "Please send for reply message to delete")
+        return False
+
+    actor = get_username_link(message.from_user) if message.from_user else "unknown actor"
+    chat_title = html.escape(message.chat.title or str(message.chat.id))
+    target_sender = _describe_reply_sender(reply)
+
+    try:
+        await _log_and_delete_target(
+            bot=bot,
+            chat_id=reply.chat.id,
+            thread_id=thread_id,
+            target_message_id=reply.message_id,
+            actor=actor,
+            target_sender=target_sender,
+            chat_title=chat_title,
+        )
+    except (TelegramBadRequest, TelegramForbiddenError) as exc:
+        logger.warning(
+            "cmd_del_message failed chat_id={} thread_id={} target_message_id={} error={}",
+            message.chat.id,
+            thread_id,
+            reply.message_id,
+            exc,
+        )
+        await _reply_and_cleanup(message, utils_service, "Unable to delete this message")
+        return False
+
+    await utils_service.sleep_and_delete(message, 5)
+    return True
+
+
 @router.message_reaction(ChatInOption("moderate"))
 async def message_reaction(
     message: MessageReactionUpdated, bot: Bot, session: Session, app_context: AppContext, skyuser: SkyUser | None = None
 ):
-    if not app_context or not app_context.admin_service:
-        raise ValueError("app_context with admin_service required")
+    if not app_context or not app_context.admin_service or not app_context.message_thread_cache_service:
+        raise ValueError("app_context with admin_service and message_thread_cache_service required")
     admin_service = cast(Any, app_context.admin_service)
+    message_thread_cache_service = cast(Any, app_context.message_thread_cache_service)
     message_any = cast(Any, message)
     if skyuser is None:
-        user = message_any.from_user if hasattr(message_any, "from_user") else None
+        user = message_any.user if hasattr(message_any, "user") else None
         skyuser = SkyUser(
             user_id=user.id if user else None,
             username=user.username if user else None,
@@ -404,40 +514,73 @@ async def message_reaction(
         )
     if message_any.new_reaction and isinstance(message_any.new_reaction[0], ReactionTypeCustomEmoji):
         reaction: ReactionTypeCustomEmoji = message_any.new_reaction[0]
+        message_context = await message_thread_cache_service.get_message_context(message_any.chat.id, message_any.message_id)
+        if not message_context:
+            logger.debug(
+                "message_reaction skipped: no cached message context chat_id={} message_id={}",
+                message_any.chat.id,
+                message_any.message_id,
+            )
+            return False
+
+        thread_id = int(message_context["thread_id"])
+        chat_thread_key = f"{message_any.chat.id}-{thread_id}"
+
+        if not _has_topic_admins(message_any.chat.id, thread_id, app_context):
+            await _send_topic_message(bot, message_any.chat.id, thread_id, "Local admins not set yet")
+            return False
+
+        if not skyuser.is_topic_admin(message_any.chat.id, thread_id):
+            await _send_topic_message(bot, message_any.chat.id, thread_id, "You are not local admin")
+            return False
 
         if reaction.custom_emoji_id == "5220151067429335888":  # X emoji
-            pass
+            actor = f"@{html.escape(skyuser.username)}" if skyuser.username else "unknown actor"
+            chat_title = html.escape(message_any.chat.title or str(message_any.chat.id))
+            target_sender = _describe_cached_sender(message_context)
+            try:
+                await _log_and_delete_target(
+                    bot=bot,
+                    chat_id=message_any.chat.id,
+                    thread_id=thread_id,
+                    target_message_id=message_any.message_id,
+                    actor=actor,
+                    target_sender=target_sender,
+                    chat_title=chat_title,
+                )
+            except (TelegramBadRequest, TelegramForbiddenError) as exc:
+                logger.warning(
+                    "message_reaction delete failed chat_id={} thread_id={} target_message_id={} error={}",
+                    message_any.chat.id,
+                    thread_id,
+                    message_any.message_id,
+                    exc,
+                )
+            return True
 
-        if reaction.custom_emoji_id in ["5220090169088045319", "5220223291599383581", "5221946956464548565"]:
-            chat_thread_key = f"{message_any.chat.id}-{message_any.message_thread_id}"
+        mute_deltas = {
+            "5220090169088045319": timedelta(minutes=10),
+            "5220223291599383581": timedelta(minutes=60),
+            "5221946956464548565": timedelta(days=1),
+        }
+        delta = mute_deltas.get(reaction.custom_emoji_id)
+        if delta is None:
+            return False
 
-            if not _has_topic_admins(message_any.chat.id, message_any.message_thread_id, app_context):
-                await message_any.reply("Local admins not set yet")
-                return False
+        user_id = message_context.get("user_id")
+        if user_id is None:
+            await _send_topic_message(bot, message_any.chat.id, thread_id, "Please react to a user message to set mute")
+            return False
 
-            if not skyuser.is_topic_admin(message_any.chat.id, message_any.message_thread_id):
-                await message_any.reply("You are not local admin")
-                return False
+        user = _describe_cached_sender(message_context)
+        end_time_str = (datetime.now() + delta).isoformat()
 
-            if message_any.reply_to_message is None or message_any.reply_to_message.forum_topic_created:
-                await message_any.reply("Please send for reply message to set mute")
-                return
+        admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
+        all_mutes = admin_service.get_all_topic_mutes()
+        ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
-            delta = await parse_timedelta_from_message(cast(Message, message_any))
-            if not delta:
-                await message_any.reply("Unable to parse mute duration")
-                return
-            user_id = message_any.reply_to_message.from_user.id
-            end_time_str = (datetime.now() + delta).isoformat()
-
-            user = get_username_link(message_any.reply_to_message.from_user)
-
-            # Use DI service
-            admin_service.set_user_mute_by_key(chat_thread_key, user_id, end_time_str, user)
-            all_mutes = admin_service.get_all_topic_mutes()
-            ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
-
-            await message_any.reply(f"{user} was set mute for {delta} in topic {chat_thread_key}")
+        await _send_topic_message(bot, message_any.chat.id, thread_id, f"{user} was set mute for {delta} in topic {chat_thread_key}")
+        return True
 
     # new_reaction=[ReactionTypeCustomEmoji(type='custom_emoji', custom_emoji_id='5220151067429335888')]
     # 10m    "custom_emoji_id": "5220090169088045319"
