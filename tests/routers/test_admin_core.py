@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 from aiogram import types
+from aiogram.exceptions import TelegramBadRequest
 from routers.admin_core import router as admin_router, message_reaction as message_reaction_handler
 from tests.conftest import RouterTestMiddleware
 from other.constants import MTLChats
@@ -317,6 +318,30 @@ async def test_on_my_chat_member_added(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "sendMessage"), None)
     assert req is not None
     assert "Thanks for adding me" in req["data"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_on_my_chat_member_added_ignores_send_message_permission_error(mock_telegram, router_app_context):
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+    router_app_context.bot.send_message = AsyncMock(
+        side_effect=TelegramBadRequest(method=None, message="Bad Request: not enough rights to send text messages to the chat")
+    )
+
+    chat = types.Chat(id=123, type="supergroup", title="Group")
+    user = types.User(id=999, is_bot=False, first_name="User", username="user")
+    update_event = types.ChatMemberUpdated(
+        chat=chat,
+        from_user=user,
+        date=datetime.datetime.now(),
+        old_chat_member=types.ChatMemberLeft(user=user),
+        new_chat_member=types.ChatMemberMember(user=user),
+    )
+    update = types.Update(update_id=10, my_chat_member=update_event)
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+    router_app_context.bot.send_message.assert_awaited_once_with(123, "Thanks for adding me to this chat!")
 
 
 @pytest.mark.asyncio

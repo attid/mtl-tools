@@ -94,6 +94,14 @@ async def _reply_and_cleanup(message: Message, utils_service: Any, text: str, se
     await utils_service.sleep_and_delete(message, seconds)
 
 
+async def _safe_send_chat_status_message(bot: Bot, chat_id: int, text: str) -> None:
+    """Best-effort chat status notification that must not break my_chat_member flow."""
+    try:
+        await bot.send_message(chat_id, text)
+    except (TelegramBadRequest, TelegramForbiddenError) as exc:
+        logger.warning(f"Failed to send chat status message to {chat_id}: {exc}")
+
+
 def _describe_reply_sender(reply: Message) -> str:
     """Build a short HTML-safe sender description for moderation logs."""
     if reply.sender_chat:
@@ -599,7 +607,7 @@ async def on_my_chat_member(update: ChatMemberUpdated, bot: Bot):
         if new_status == ChatMemberStatus.MEMBER:
             logger.info(f"Bot was added to chat {chat.id}")
             if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-                await bot.send_message(chat.id, "Thanks for adding me to this chat!")
+                await _safe_send_chat_status_message(bot, chat.id, "Thanks for adding me to this chat!")
 
         elif new_status == ChatMemberStatus.LEFT:
             logger.info(f"Bot was removed from chat {chat.id}")
@@ -607,7 +615,7 @@ async def on_my_chat_member(update: ChatMemberUpdated, bot: Bot):
         elif new_status == ChatMemberStatus.ADMINISTRATOR:
             logger.info(f"Bot's permissions were updated in chat {chat.id}")
             if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-                await bot.send_message(chat.id, "Thanks for making me an admin!")
+                await _safe_send_chat_status_message(bot, chat.id, "Thanks for making me an admin!")
 
         elif new_status == ChatMemberStatus.RESTRICTED:
             logger.warning(f"Bot's permissions were restricted in chat {chat.id}")
