@@ -30,8 +30,8 @@ def _log_moderation_action(
 
 
 class GristService:
-    async def load_table_data(self, table_id):
-        return await grist_manager.load_table_data(table_id)
+    async def load_table_data(self, table_id, sort=None, filter_dict=None):
+        return await grist_manager.load_table_data(table_id, sort=sort, filter_dict=filter_dict)
 
     async def patch_data(self, table_id, data):
         return await grist_manager.patch_data(table_id, data)
