@@ -488,7 +488,7 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
     await wks.update(range_name=f"B{7 + len(options)}", values=update_data)
     # 2
     wks = await ss.worksheet("Log")
-    await wks.delete_row(2)
+    await wks.delete_rows(2)
     await wks.update(range_name="C1", values=[options])
     # 3
     # {'GA5Q2PZWIHSCOHNIGJN4BX5P42B4EMGTYAS3XCMAHEHCFFKCQQ3ZX34A': {'delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7', 'vote': 1, 'was_delegate': 'GCPOWDQQDVSAQGJXZW3EWPPJ5JCF4KTTHBYNB4U54AKQVDLZXLLYMXY7'}
@@ -510,7 +510,8 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
 #         return result[2]
 
 
-async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, wks=None):
+async def gs_update_a_table_vote(table_uuid, address: str, options, delegated=None, wks=None):
+    ss = None
     if wks is None:
         agc = await agcm.authorize()
         ss = await agc.open_by_key(table_uuid)
@@ -528,7 +529,7 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
 
     # if data:
     while data:
-        await wks.delete_row(data.row)
+        await wks.delete_rows(data.row)
         data = await wks.find(f"{address[:4]}..{address[-4:]}", case_sensitive=False)
 
     # Если опции не пусты, то добавляем запись
@@ -548,17 +549,19 @@ async def gs_update_a_table_vote(table_uuid, address, options, delegated=None, w
 
         if delegated:
             return
+        
+        assert ss is not None
         # теперь с делегаций
         delegate_data = await (await ss.worksheet("Members")).get_all_values()
         for record in delegate_data[1:]:
             if record[1] == address:
                 await gs_update_a_table_vote(
-                    table_uuid, record[0], options, delegated=f"{address[:4]}..{address[-4:]}", wks=wks
+                    table_uuid, str(record[0]), options, delegated=f"{address[:4]}..{address[-4:]}", wks=wks
                 )
 
         #
-        wks = await ss.worksheet("Result")
-        data = await wks.get_all_values()
+        wks_result = await ss.worksheet("Result")
+        data = await wks_result.get_all_values()
 
         return data[3:]
 
