@@ -145,7 +145,8 @@ def normalize_vote_weights(
     big_vote = base_votes[0]
     diff = (big_vote - total_vote / 3) / total_vote
 
-    target_mid = (target_min + target_max) / 2
+    # Целимся ближе к нижней границе (33%), а не в середину (36.5%)
+    target_mid = target_min + 0.005
 
     lo, hi = 0.0, 5.0
     best_coeff = 1.74  # fallback
