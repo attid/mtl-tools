@@ -462,6 +462,10 @@ async def cmd_apoll_check_handler(message: Message, session: Session, app_contex
         my_poll = poll_service.load_mtla_poll(session, message.reply_to_message.poll.id)
         google_id = my_poll.get("google_id")
         
+        if not google_id:
+            await message.reply("Таблица для этого опроса не найдена (возможно, он не был создан ботом).")
+            return
+        
         # 1. Fetch current state from Google Sheets
         result, delegates, already_voted_addresses = await gspread_service.check_vote_table(google_id)
 
