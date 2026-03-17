@@ -247,60 +247,6 @@ async def common_chats(user_id: int | str):
         capture_exception(e)
 
 
-async def pyro_get_poll_voters(chat_id: int, message_id: int) -> dict[int, list[int]]:
-    """
-    Fetch all voters for a specific poll message.
-    Returns a dictionary mapping user_id to a list of selected option indexes.
-    """
-    from pyrogram.raw import functions
-
-    app = get_pyro_app()
-    voters = {}
-    
-    try:
-        if not app.is_connected:
-            await app.start()
-            
-        peer = await app.resolve_peer(chat_id)
-        offset = None
-        
-        while True:
-            # We use the raw API because pyrogram Client doesn't have a high-level wrapper for getting poll voters
-            kwargs = {
-                "peer": peer,
-                "id": message_id,
-                "limit": 100,
-            }
-            if offset:
-                kwargs["offset"] = offset
-                
-            result = await app.invoke(functions.messages.GetPollVotes(**kwargs))
-            
-            if not result.votes:
-                break
-                
-            for vote in result.votes:
-                user_id = vote.user_id
-                if user_id not in voters:
-                    voters[user_id] = []
-                
-                # Option is usually stored as a byte array representing the option index (e.g., b'0', b'1')
-                try:
-                    option_idx = int(vote.option.decode("utf-8"))
-                    voters[user_id].append(option_idx)
-                except (ValueError, AttributeError):
-                    logger.warning(f"Could not parse poll option: {vote.option}")
-                    
-            if not getattr(result, "next_offset", None):
-                break
-            offset = result.next_offset
-            
-    except Exception as e:
-        logger.error(f"Failed to fetch poll voters for chat={chat_id} msg={message_id}: {e}")
-        
-    return voters
-
-
 async def main():
     pyro_app = get_pyro_app()
     await pyro_app.start()
