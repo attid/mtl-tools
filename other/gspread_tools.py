@@ -628,13 +628,15 @@ async def gs_check_vote_table(table_uuid):
     wks = await ss.worksheet("Log")
     who_vote = await wks.col_values(1)
 
+    already_voted_addresses = set(who_vote[1:])
+
     for address in who_vote[1:]:
         if address in matched_addresses:
             matched_addresses.pop(address)
         elif address in matched_addresses_delegated:
             matched_addresses_delegated.pop(address)
 
-    return list(matched_addresses.values()), list(matched_addresses_delegated.values())
+    return list(matched_addresses.values()), list(matched_addresses_delegated.values()), already_voted_addresses
 
 
 def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to=None):
