@@ -65,6 +65,7 @@ async def gs_check_bim(user_id=None, user_name=None):
     ss = await agc.open("MTL_BIM_register")
     ws = await ss.worksheet("List")
 
+    data = None
     if user_name:
         data = await ws.find(str(user_name), in_column=3)
         if data:
@@ -104,7 +105,7 @@ async def gs_get_last_task_id():
     ws = await ss.worksheet("Term")
 
     record = await ws.col_values(1)
-    return int(record[-1]), len(record)
+    return int(record[-1] or 0), len(record)
 
 
 async def gs_save_new_task(task_name, customer, manager, executor, contract_url):
@@ -139,7 +140,7 @@ async def gs_get_last_support_id():
     ws = await ss.worksheet("ALL")
 
     record = await ws.col_values(1)
-    return int(record[-1]), len(record)
+    return int(record[-1] or 0), len(record)
 
 
 async def gs_save_new_support(user_id, username, agent_username, url):
@@ -609,13 +610,16 @@ async def gs_check_vote_table(table_uuid):
     matched_addresses_delegated = {}
 
     for i, address in enumerate(who_in[1:], start=1):
+        if not address:
+            continue
+        address = str(address)
         if address in address_dict:
-            if i < len(delegate_to) and delegate_to[i].strip():
+            if i < len(delegate_to) and delegate_to[i] and str(delegate_to[i]).strip():
                 matched_addresses_delegated[address] = address_dict[address]
             else:
                 matched_addresses[address] = address_dict[address]
         else:
-            if i < len(delegate_to) and delegate_to[i].strip():
+            if i < len(delegate_to) and delegate_to[i] and str(delegate_to[i]).strip():
                 matched_addresses_delegated[address] = f"{address[:4]}..{address[-4:]}"
             else:
                 matched_addresses[address] = f"{address[:4]}..{address[-4:]}"
@@ -641,7 +645,7 @@ def gs_copy_sheets_with_style(copy_from, copy_to, sheet_name_from, sheet_name_to
     key_path = os.path.join(start_path, "data", "mtl-google-doc.json")
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)  # type: ignore
     service = build("sheets", "v4", credentials=credentials)
 
     # Запрос метаданных всего документа
@@ -837,7 +841,7 @@ def extract_links_from_column_C():
 
     key_path = os.path.join(start_path, "data", "mtl-google-doc.json")
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_path, scopes)  # type: ignore
     service = build("sheets", "v4", credentials=credentials)
 
     # Получаем весь лист с gridData
