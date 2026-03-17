@@ -510,7 +510,20 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
 #         return result[2]
 
 
+_gspread_locks: dict[str, asyncio.Lock] = {}
+
+def _get_table_lock(table_uuid: str) -> asyncio.Lock:
+    if table_uuid not in _gspread_locks:
+        _gspread_locks[table_uuid] = asyncio.Lock()
+    return _gspread_locks[table_uuid]
+
+
 async def gs_update_a_table_vote(table_uuid, address: str, options, delegated=None, wks=None):
+    async with _get_table_lock(table_uuid):
+        return await _gs_update_a_table_vote_internal(table_uuid, address, options, delegated, wks)
+
+
+async def _gs_update_a_table_vote_internal(table_uuid, address: str, options, delegated=None, wks=None):
     ss = None
     if wks is None:
         agc = await agcm.authorize()
@@ -555,7 +568,7 @@ async def gs_update_a_table_vote(table_uuid, address: str, options, delegated=No
         delegate_data = await (await ss.worksheet("Members")).get_all_values()
         for record in delegate_data[1:]:
             if record[1] == address:
-                await gs_update_a_table_vote(
+                await _gs_update_a_table_vote_internal(
                     table_uuid, str(record[0]), options, delegated=f"{address[:4]}..{address[-4:]}", wks=wks
                 )
 
@@ -927,3 +940,19 @@ if __name__ == "__main__":
     #                           "1iQgWZ7vjkcN7tMJDUvTSXvLvzIxWD6ZnkmF8kx_Hu1c", "usdm_report", None)
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
     #                           "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")
+
+async def gs_write_cell_value(document_id: str, sheet_name: str, cell: str, value) -> None:
+    """
+    Utility function for testing: writes a specific value to a single cell.
+    
+    Args:
+        document_id: The ID of the Google Sheet document.
+        sheet_name: The name of the worksheet tab.
+        cell: The cell address (e.g., "A1").
+        value: The value to write into the cell.
+    """
+    agc = await agcm.authorize()
+    ss = await agc.open_by_key(document_id)
+    wks = await ss.worksheet(sheet_name)
+    await wks.update(range_name=cell, values=[[value]])
+

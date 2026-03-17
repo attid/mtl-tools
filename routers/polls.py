@@ -450,20 +450,72 @@ async def cmd_poll_answer_handler(poll: PollAnswer, session: Session, bot: Bot, 
 @update_command_info("/apoll_check", "Проверка голосования в Ассоциации")
 @router.message(Command(commands=["apoll_check"]))
 async def cmd_apoll_check_handler(message: Message, session: Session, app_context: AppContext):
-    if not app_context or not app_context.poll_service or not app_context.gspread_service:
-        raise ValueError("app_context with poll_service and gspread_service required")
+    if not app_context or not app_context.poll_service or not app_context.gspread_service or not app_context.grist_service:
+        raise ValueError("app_context with poll_service, gspread_service, and grist_service required")
     poll_service = cast(Any, app_context.poll_service)
     gspread_service = cast(Any, app_context.gspread_service)
+    grist_service = cast(Any, app_context.grist_service)
+    
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
 
         my_poll = poll_service.load_mtla_poll(session, message.reply_to_message.poll.id)
-        result, delegates = await gspread_service.check_vote_table(my_poll.get("google_id"))
+        google_id = my_poll.get("google_id")
+        
+        # 1. Fetch current state from Google Sheets
+        result, delegates, already_voted_addresses = await gspread_service.check_vote_table(google_id)
+
+        # 2. Sync missing votes using Pyrogram
+        restored_users = []
+        try:
+            from other.pyro_tools import pyro_get_poll_voters
+            from other.grist_tools import MTLGrist
+            
+            # Fetch all voters from Telegram via Pyrogram
+            actual_voters = await pyro_get_poll_voters(message.chat.id, message.reply_to_message.message_id)
+            
+            if actual_voters:
+                # Load Grist user dictionary to map TG ID to Stellar Address
+                grist_users = await grist_service.load_table_data(MTLGrist.MTLA_USERS)
+                tg_to_stellar = {}
+                tg_to_username = {}
+                for user in grist_users:
+                    if user.get("Stellar") and user.get("TGID"):
+                        tg_to_stellar[user.get("TGID")] = user.get("Stellar")
+                        username = user.get("Telegram")
+                        if username:
+                            tg_to_username[user.get("TGID")] = username if username.startswith("@") else f"@{username}"
+                        else:
+                            tg_to_username[user.get("TGID")] = f"id:{user.get('TGID')}"
+                            
+                for tg_id, option_ids in actual_voters.items():
+                    stellar_address = tg_to_stellar.get(tg_id)
+                    
+                    if stellar_address and stellar_address not in already_voted_addresses:
+                        # We found a missing vote!
+                        await gspread_service.update_a_table_vote(google_id, stellar_address, option_ids)
+                        restored_users.append(tg_to_username.get(tg_id, f"id:{tg_id}"))
+                        # Add to the set so we don't process it again or list it as missing
+                        already_voted_addresses.add(stellar_address)
+                        
+                        # Also remove from the 'result' or 'delegates' list so they don't show up as 'did not vote'
+                        username = tg_to_username.get(tg_id)
+                        if username in result:
+                            result.remove(username)
+                        if username in delegates:
+                            delegates.remove(username)
+                            
+        except Exception as e:
+            logger.error(f"Failed to sync poll voters: {e}")
 
         msg_text = " ".join(result)
         msg_text2 = " ".join(delegates)
         msg_text = f"{msg_text} \n --------- delegates --------- \n {msg_text2}"
-        if result:
+        
+        if restored_users:
+            msg_text += "\n\n♻️ Автоматически восстановлены голоса:\n" + ", ".join(restored_users)
+            
+        if result or restored_users:
             with suppress(TelegramBadRequest):
                 await message.reply(msg_text)
     else:

@@ -763,7 +763,7 @@ class FakeGSpreadService:
         self.copy_a_table = FakeAsyncMethod(return_value=("", ""))
         self.update_a_table_first = FakeAsyncMethod(return_value=None)
         self.update_a_table_vote = FakeAsyncMethod(return_value=[])
-        self.check_vote_table = FakeAsyncMethod(return_value=([], []))
+        self.check_vote_table = FakeAsyncMethod(return_value=([], [], set()))
         self.check_credentials = FakeAsyncMethod(return_value=(True, "token refreshed"))
         self._agc_client = FakeAgcClient()
         self.authorize = FakeAsyncMethod(return_value=self._agc_client)

@@ -386,7 +386,7 @@ async def test_apoll_check_reply(mock_telegram, router_app_context):
 
     my_poll = {"google_id": "gid"}
     router_app_context.poll_service.load_mtla_poll.return_value = my_poll
-    router_app_context.gspread_service.check_vote_table.return_value = (["ok"], ["d1"])
+    router_app_context.gspread_service.check_vote_table.return_value = (["ok"], ["d1"], set())
 
     poll = types.Poll(
         id="321",
