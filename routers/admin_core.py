@@ -522,6 +522,21 @@ async def message_reaction(
         )
     if message_any.new_reaction and isinstance(message_any.new_reaction[0], ReactionTypeCustomEmoji):
         reaction: ReactionTypeCustomEmoji = message_any.new_reaction[0]
+
+        # 1. First, check if this emoji is a known moderation command
+        is_delete_command = reaction.custom_emoji_id == "5220151067429335888"  # X emoji
+        mute_deltas = {
+            "5220090169088045319": timedelta(minutes=10),
+            "5220223291599383581": timedelta(minutes=60),
+            "5221946956464548565": timedelta(days=1),
+        }
+        delta = mute_deltas.get(reaction.custom_emoji_id)
+
+        # If it's not a known command, ignore it immediately
+        if not is_delete_command and delta is None:
+            return False
+
+        # 2. Since it's a moderation command, now we need to check context and permissions
         message_context = await message_thread_cache_service.get_message_context(message_any.chat.id, message_any.message_id)
         if not message_context:
             logger.debug(
@@ -542,7 +557,8 @@ async def message_reaction(
             await _send_topic_message(bot, message_any.chat.id, thread_id, "You are not local admin")
             return False
 
-        if reaction.custom_emoji_id == "5220151067429335888":  # X emoji
+        # 3. Execute the command
+        if is_delete_command:
             actor = f"@{html.escape(skyuser.username)}" if skyuser.username else "unknown actor"
             chat_title = html.escape(message_any.chat.title or str(message_any.chat.id))
             target_sender = _describe_cached_sender(message_context)
@@ -566,15 +582,7 @@ async def message_reaction(
                 )
             return True
 
-        mute_deltas = {
-            "5220090169088045319": timedelta(minutes=10),
-            "5220223291599383581": timedelta(minutes=60),
-            "5221946956464548565": timedelta(days=1),
-        }
-        delta = mute_deltas.get(reaction.custom_emoji_id)
-        if delta is None:
-            return False
-
+        # Handle mute (delta is not None here)
         user_id = message_context.get("user_id")
         if user_id is None:
             await _send_topic_message(bot, message_any.chat.id, thread_id, "Please react to a user message to set mute")

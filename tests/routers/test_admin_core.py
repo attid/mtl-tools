@@ -2174,6 +2174,43 @@ async def test_message_reaction_no_topic_admins(mock_telegram, router_app_contex
 
 
 @pytest.mark.asyncio
+async def test_message_reaction_unknown_emoji_ignored(mock_telegram, router_app_context):
+    """Test message_reaction when unknown custom emoji is used - it should be ignored."""
+    from routers.admin_core import message_reaction as message_reaction_handler
+
+    bot = router_app_context.bot
+    session = router_app_context.session
+    app_context = router_app_context
+
+    chat_id = 123
+    thread_id = 5
+
+    class ReactionEvent:
+        def __init__(self):
+            # Elephant emoji ID (unknown to bot)
+            self.new_reaction = [types.ReactionTypeCustomEmoji(custom_emoji_id="543210123456789")]
+            self.chat = types.Chat(id=chat_id, type="supergroup", title="Group")
+            self.message_id = 10
+            self.user = types.User(id=999, is_bot=False, first_name="User", username="user")
+
+    reaction_update = ReactionEvent()
+    await router_app_context.message_thread_cache_service.remember_message_context(
+        chat_id=chat_id,
+        message_id=10,
+        thread_id=thread_id,
+        user_id=789,
+        username="baduser",
+        full_name="BadUser",
+    )
+
+    await message_reaction_handler(reaction_update, bot, session, app_context)
+    requests = mock_telegram.get_requests()
+    # Check that NO sendMessage was called
+    send_message_reqs = [r for r in requests if r["method"] == "sendMessage"]
+    assert len(send_message_reqs) == 0
+
+
+@pytest.mark.asyncio
 async def test_message_reaction_not_topic_admin(mock_telegram, router_app_context):
     """Test message_reaction when user is not topic admin."""
     from routers.admin_core import message_reaction as message_reaction_handler
