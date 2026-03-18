@@ -53,19 +53,23 @@ def good_operation(operation, operation_name: str, filter_operation: list, ignor
     return False
 
 
-async def check_url_xdr(url: str, full_data: bool = True) -> List[str]:
+async def check_url_xdr(
+    url: str, full_data: bool = True, grist_manager=None, global_data=None
+) -> List[str]:
     """
     Fetch XDR from URL and decode it.
 
     Args:
         url: URL to fetch XDR from (e.g., eurmtl.me transaction page)
         full_data: Whether to include full address lookups
+        grist_manager: Optional Grist manager for address lookups
+        global_data: Optional global data for name list cache
 
     Returns:
         List of decoded operation descriptions
     """
     xdr = await get_eurmtl_xdr(url)
-    return await decode_xdr(xdr, full_data=full_data)
+    return await decode_xdr(xdr, full_data=full_data, grist_manager=grist_manager, global_data=global_data)
 
 
 async def decode_xdr(

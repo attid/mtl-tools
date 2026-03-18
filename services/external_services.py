@@ -112,15 +112,19 @@ class StellarService:
 
         return await cmd_check_fee()
 
-    async def check_url_xdr(self, url, full_data=False):
+    async def check_url_xdr(self, url, full_data=False, grist_manager=grist_manager, global_data=None):
         from other.stellar import check_url_xdr
 
-        return await check_url_xdr(url, full_data=full_data)
+        return await check_url_xdr(
+            url, full_data=full_data, grist_manager=grist_manager, global_data=global_data
+        )
 
-    async def decode_xdr(self, xdr, full_data=False):
+    async def decode_xdr(self, xdr, full_data=False, grist_manager=grist_manager, global_data=None):
         from other.stellar import decode_xdr
 
-        return await decode_xdr(xdr, full_data=full_data)
+        return await decode_xdr(
+            xdr, full_data=full_data, grist_manager=grist_manager, global_data=global_data
+        )
 
     async def show_bim(self, session):
         from other.stellar import cmd_show_bim
@@ -253,10 +257,12 @@ class StellarService:
 
         return await get_mtlap_votes()
 
-    async def address_id_to_username(self, address, full_data=False):
+    async def address_id_to_username(self, address, full_data=False, grist_manager=grist_manager, global_data=None):
         from other.stellar import address_id_to_username
 
-        return await address_id_to_username(address, full_data=full_data)
+        return await address_id_to_username(
+            address, full_data=full_data, grist_manager=grist_manager, global_data=global_data
+        )
 
 
 class AirdropService:

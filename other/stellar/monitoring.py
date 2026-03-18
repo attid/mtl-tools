@@ -100,7 +100,13 @@ async def cmd_check_new_transaction(
 
 
 async def cmd_check_new_asset_transaction(
-    session: Session, asset: str, filter_sum: int = -1, filter_operation=None, filter_asset=None, chat_id=None
+    session: Session,
+    asset: str,
+    filter_sum: int = -1,
+    filter_operation=None,
+    filter_asset=None,
+    chat_id=None,
+    grist_manager=None,
 ):
     """
     Check for new transactions involving a specific asset.
@@ -112,6 +118,7 @@ async def cmd_check_new_asset_transaction(
         filter_operation: List of operations to filter
         filter_asset: Specific asset to filter
         chat_id: Chat ID for storing last processed transaction
+        grist_manager: Optional Grist manager for name lookups
 
     Returns:
         List of decoded effect details
@@ -142,7 +149,7 @@ async def cmd_check_new_asset_transaction(
         data = FinanceRepository(session).get_new_effects_for_token(asset_name, last_id, filter_sum)
         for row in data:
             try:
-                effect = await _decode_db_effect(row)
+                effect = await _decode_db_effect(row, grist_manager=grist_manager)
                 if effect:  # Check effect is not empty
                     result.append(effect)
                     max_id = row.id
@@ -161,12 +168,13 @@ async def cmd_check_new_asset_transaction(
         return []
 
 
-async def _decode_db_effect(row: TOperations):
+async def _decode_db_effect(row: TOperations, grist_manager=None):
     """
     Decode a database effect row into human-readable format.
 
     Args:
         row: TOperations database row
+        grist_manager: Optional Grist manager for name lookups
 
     Returns:
         Formatted string describing the operation
@@ -174,7 +182,7 @@ async def _decode_db_effect(row: TOperations):
     try:
         result = (
             f'<a href="https://viewer.eurmtl.me/operation/{row.id.split("-")[0]}">'
-            f"Операция</a> с аккаунта {await address_id_to_username(row.for_account)} \n"
+            f"Операция</a> с аккаунта {await address_id_to_username(row.for_account, full_data=True, grist_manager=grist_manager)} \n"
         )
         if row.operation == "trade":
             result += (
