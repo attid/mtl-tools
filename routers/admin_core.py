@@ -891,6 +891,9 @@ async def cmd_get_users_csv(message: Message, bot: Bot, app_context: AppContext)
     await message.reply_document(csv_file)
 
 
+GD_LINK = "https://docs.google.com/spreadsheets/d/1HSgK_QvK4YmVGwFXuW5CmqgszDxe99FAS2btN3FlQsI/edit#gid=171831156"
+
+
 @update_command_info("/update_top_holders", "Обновляет Top Holders Google Sheets")
 @router.message(Command(commands=["update_top_holders"]))
 async def cmd_update_top_holders(message: Message, session: Session, skyuser: SkyUser):
@@ -901,7 +904,7 @@ async def cmd_update_top_holders(message: Message, session: Session, skyuser: Sk
     await message.reply("Обновляю Top Holders report...")
     try:
         await update_top_holders_report(session)
-        await message.reply("Top Holders report обновлён.")
+        await message.reply(f'Top Holders report обновлён.\n<a href="{GD_LINK}">MTL_TopHolders</a>')
     except Exception as e:
         logger.error(f"Error in cmd_update_top_holders: {e}")
         await message.reply(f"Ошибка: {e}")
