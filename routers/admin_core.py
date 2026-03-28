@@ -590,7 +590,8 @@ async def message_reaction(
                 )
             return True
 
-        # Handle mute (delta is not None here)
+        # Handle mute (delta is not None here — guarded by early return above)
+        assert delta is not None
         user_id = message_context.get("user_id")
         if user_id is None:
             await _send_topic_message(bot, message_any.chat.id, thread_id, "Please react to a user message to set mute")

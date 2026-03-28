@@ -12,13 +12,13 @@
 
 ## План изменений
 
-1. [ ] Написать падающий тест `test_ro_command_external_reply` в `tests/routers/test_admin_core.py`
-2. [ ] Убедиться что тест падает (RED)
-3. [ ] Добавить `MessageOriginUser` в импорты `routers/admin_core.py`
-4. [ ] Исправить `cmd_set_ro`: если `reply_to_message is None`, проверять `external_reply.origin`
+1. [x] Написать падающий тест `test_ro_command_external_reply` в `tests/routers/test_admin_core.py`
+2. [x] Убедиться что тест падает (RED)
+3. [x] Добавить `MessageOriginUser` в импорты `routers/admin_core.py`
+4. [x] Исправить `cmd_set_ro`: если `reply_to_message is None`, проверять `external_reply.origin`
        типа `MessageOriginUser` и использовать `sender_user` как целевого пользователя
-5. [ ] Убедиться что тест проходит (GREEN)
-6. [ ] `just check` — всё зелёное
+5. [x] Убедиться что тест проходит (GREEN)
+6. [x] `just lint` + `pyright routers/admin_core.py` — чисто (pre-existing ошибки в mic.py не затронуты)
 
 ## Риски и открытые вопросы
 
@@ -30,6 +30,6 @@
 ## Верификация
 
 - Тест `test_ro_command_external_reply`: `restrictChatMember` вызван с `user_id=789`
-  при `reply_to_message=None` и `external_reply` с `MessageOriginUser`
-- Существующий тест `test_ro_command_no_reply` по-прежнему проходит (оба поля None)
-- `just check` без ошибок
+  при `reply_to_message=None` и `external_reply` с `MessageOriginUser` ✓
+- Существующий тест `test_ro_command_no_reply` по-прежнему проходит ✓
+- 90 тестов в `test_admin_core.py` — все зелёные ✓
