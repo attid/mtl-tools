@@ -19,6 +19,7 @@ from aiogram.types import (
     ChatMemberUpdated,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    MessageOriginUser,
     MessageReactionUpdated,
     ReactionTypeCustomEmoji,
     BufferedInputFile,
@@ -156,11 +157,18 @@ async def cmd_set_ro(message: Message, skyuser: SkyUser):
         await message.reply(skyuser.admin_denied_text())
         return False
 
-    if message.reply_to_message is None:
+    if message.reply_to_message is None and message.external_reply is None:
         await message.reply("Please send for reply message to set ro")
         return
 
-    if not message.reply_to_message.from_user:
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    elif message.external_reply and isinstance(message.external_reply.origin, MessageOriginUser):
+        target_user = message.external_reply.origin.sender_user
+    else:
+        target_user = None
+
+    if not target_user:
         await message.reply("Please reply to a user message.")
         return
     delta = await parse_timedelta_from_message(message)
@@ -168,15 +176,14 @@ async def cmd_set_ro(message: Message, skyuser: SkyUser):
         await message.reply("Unable to parse duration.")
         return
     await message.chat.restrict(
-        message.reply_to_message.from_user.id,
+        target_user.id,
         permissions=ChatPermissions(
             can_send_messages=False, can_send_media_messages=False, can_send_other_messages=False
         ),
         until_date=delta,
     )
 
-    reply_user = message.reply_to_message.from_user
-    user = reply_user.username if reply_user.username else reply_user.full_name
+    user = target_user.username if target_user.username else target_user.full_name
     await message.reply(f"{user} was set ro for {delta}")
 
 

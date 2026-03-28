@@ -3136,3 +3136,46 @@ async def test_delete_dead_members_not_admin_of_both_chats(mock_telegram, router
     requests = mock_telegram.get_requests()
     req = next((r for r in requests if r["method"] == "sendMessage" and "not an admin" in r["data"]["text"]), None)
     assert req is not None
+
+
+@pytest.mark.asyncio
+async def test_ro_command_external_reply(mock_telegram, router_app_context):
+    """Test !ro command with external_reply (cross-topic reply in forum group).
+
+    When an admin replies to a message from a different forum topic,
+    Telegram sets external_reply instead of reply_to_message.
+    The bot should still restrict the target user.
+    """
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    setup_is_admin(mock_telegram, 999, True)
+    mock_telegram.add_response("restrictChatMember", {"ok": True, "result": True})
+
+    external_reply = types.ExternalReplyInfo(
+        origin=types.MessageOriginUser(
+            type="user",
+            date=datetime.datetime.now(),
+            sender_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        )
+    )
+
+    update = types.Update(
+        update_id=1,
+        message=types.Message(
+            message_id=6,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="!ro 4w",
+            external_reply=external_reply,
+        ),
+    )
+
+    await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
+    assert req is not None, "restrictChatMember should be called for external_reply target"
+    assert int(req["data"]["user_id"]) == 789
