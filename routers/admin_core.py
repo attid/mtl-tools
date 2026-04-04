@@ -175,13 +175,17 @@ async def cmd_set_ro(message: Message, skyuser: SkyUser):
     if not delta:
         await message.reply("Unable to parse duration.")
         return
-    await message.chat.restrict(
-        target_user.id,
-        permissions=ChatPermissions(
-            can_send_messages=False, can_send_media_messages=False, can_send_other_messages=False
-        ),
-        until_date=delta,
-    )
+    try:
+        await message.chat.restrict(
+            target_user.id,
+            permissions=ChatPermissions(
+                can_send_messages=False, can_send_media_messages=False, can_send_other_messages=False
+            ),
+            until_date=delta,
+        )
+    except TelegramBadRequest as e:
+        await message.reply(f"Failed to restrict user: {e.message}")
+        return
 
     user = target_user.username if target_user.username else target_user.full_name
     await message.reply(f"{user} was set ro for {delta}")

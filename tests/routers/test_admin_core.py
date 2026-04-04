@@ -3179,3 +3179,51 @@ async def test_ro_command_external_reply(mock_telegram, router_app_context):
     req = next((r for r in requests if r["method"] == "restrictChatMember"), None)
     assert req is not None, "restrictChatMember should be called for external_reply target"
     assert int(req["data"]["user_id"]) == 789
+
+
+@pytest.mark.asyncio
+async def test_ro_command_restrict_bad_request(mock_telegram, router_app_context):
+    """Test !ro command when restrictChatMember fails (user not in chat).
+
+    In real Telegram the API returns HTTP 400 → TelegramBadRequest.
+    We mock restrict() directly to simulate this.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    dp = router_app_context.dispatcher
+    dp.message.middleware(RouterTestMiddleware(router_app_context))
+    dp.include_router(admin_router)
+
+    setup_is_admin(mock_telegram, 999, True)
+
+    reply_msg = types.Message(
+        message_id=5,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=123, type="supergroup", title="Group"),
+        from_user=types.User(id=789, is_bot=False, first_name="BadUser", username="baduser"),
+        text="Spam",
+    )
+
+    update = types.Update(
+        update_id=1,
+        message=types.Message(
+            message_id=6,
+            date=datetime.datetime.now(),
+            chat=types.Chat(id=123, type="supergroup", title="Group"),
+            from_user=types.User(id=999, is_bot=False, first_name="Admin", username="admin"),
+            text="!ro 10m",
+            reply_to_message=reply_msg,
+        ),
+    )
+
+    with patch.object(
+        types.Chat,
+        "restrict",
+        new=AsyncMock(side_effect=TelegramBadRequest(method=None, message="Bad Request: user not found")),
+    ):
+        await dp.feed_update(bot=router_app_context.bot, update=update)
+
+    requests = mock_telegram.get_requests()
+    reply = next((r for r in requests if r["method"] == "sendMessage"), None)
+    assert reply is not None
+    assert "Failed to restrict" in reply["data"]["text"]
