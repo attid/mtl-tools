@@ -13,6 +13,20 @@ from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.fsm.storage.memory import MemoryStorage
 
 sys.path.append(os.getcwd())
+os.environ.setdefault("TEST_TOKEN", "test-token")
+os.environ.setdefault("BASE_FEE", "0")
+os.environ.setdefault("OPENAI_KEY", "test-openai-key")
+os.environ.setdefault("PRIVATE_SIGN", "test-private-sign")
+os.environ.setdefault("CURRENCYLAYER_ID", "test-currencylayer-id")
+os.environ.setdefault("COINLAYER_ID", "test-coinlayer-id")
+os.environ.setdefault("DEBANK", "test-debank")
+os.environ.setdefault("EURMTL_KEY", "test-eurmtl-key")
+os.environ.setdefault("SENTRY_DSN", "test-sentry-dsn")
+os.environ.setdefault("SENTRY_REPORT_DSN", "test-sentry-report-dsn")
+os.environ.setdefault("HORIZON_URL", "https://horizon.example.com")
+os.environ.setdefault("COINMARKETCAP", "test-coinmarketcap")
+os.environ.setdefault("GRIST_TOKEN", "test-grist-token")
+os.environ.setdefault("BOT_TOKEN", "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
 
 from tests.fakes import FakeSession, TestAppContext
 from middlewares.user_resolver import UserResolverMiddleware
@@ -333,6 +347,11 @@ async def mock_horizon(horizon_server_config):
             return web.json_response(state.accounts[account_id])
         return web.json_response({"status": 404, "title": "Not Found"}, status=404)
 
+    @routes.get("/accounts")
+    async def get_accounts(request):
+        state.requests.append({"endpoint": "accounts_query", "method": "GET", "params": dict(request.rel_url.query)})
+        return web.json_response({"_embedded": {"records": []}})
+
     @routes.get("/fee_stats")
     async def fee_stats(request):
         state.requests.append({"endpoint": "fee_stats", "method": "GET"})
@@ -461,6 +480,11 @@ async def router_app_context(mock_telegram, router_bot, horizon_server_config, m
     Uses fake services and real Bot connected to mock_telegram.
     Also patches the global app_context singleton so filters can use test services.
     """
+    from other.config_reader import config as app_config
+
+    original_horizon_url = app_config.horizon_url
+    app_config.horizon_url = horizon_server_config["url"]
+
     test_ctx = TestAppContext(bot=router_bot, dispatcher=Dispatcher(storage=MemoryStorage()))
 
     # Patch the global app_context singleton so filters (like ChatInOption) use test services
@@ -472,6 +496,8 @@ async def router_app_context(mock_telegram, router_bot, horizon_server_config, m
     aiogram_tools_module.app_context = test_ctx
 
     yield test_ctx
+
+    app_config.horizon_url = original_horizon_url
 
     # Restore the original singletons
     app_context_module.app_context = original_singleton
