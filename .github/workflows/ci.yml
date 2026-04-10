@@ -7,7 +7,7 @@ on:
     branches: [main, master]
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,8 +23,6 @@ jobs:
           fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@v2
-        with:
-          reporter: github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
