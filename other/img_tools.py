@@ -1,3 +1,5 @@
+import os
+
 from PIL import Image, ImageDraw, ImageFont
 
 from other.config_reader import start_path
@@ -41,4 +43,6 @@ def create_image_with_text(text, font_path="DejaVuSansMono.ttf", font_size=30, i
         draw.text((x, y), display_line, font=font, fill=fill)
         y += height + line_spacing
 
-    image.save(start_path + "data/output_image.png")
+    output_path = os.path.join(start_path, "data", "output_image.png")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    image.save(output_path)
