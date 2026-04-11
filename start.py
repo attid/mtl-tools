@@ -10,6 +10,7 @@ import uvloop
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import (
@@ -164,7 +165,12 @@ async def main():
     db_pool = sessionmaker(bind=engine)
 
     # Creating bot and its dispatcher
-    session: AiohttpSession = AiohttpSession()
+    if config.telegram_api_url:
+        api_server = TelegramAPIServer.from_base(config.telegram_api_url, is_local=True)
+        session: AiohttpSession = AiohttpSession(api=api_server)
+        logger.info(f"Using local Telegram Bot API: {config.telegram_api_url}")
+    else:
+        session = AiohttpSession()
     session.middleware(RetryRequestMiddleware())
     if config.test_mode:
         bot = Bot(

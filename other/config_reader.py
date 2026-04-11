@@ -17,6 +17,7 @@ def get_secrets_dir() -> str | None:
 class Settings(BaseSettings):
     bot_token: SecretStr
     test_token: SecretStr
+    telegram_api_url: str | None = None  # e.g. http://telegram-bot-api:8081 for self-hosted Bot API
     base_fee: int
     redis_url: str
     # firebird_url: str
