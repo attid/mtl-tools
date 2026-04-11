@@ -116,7 +116,7 @@ async def cmd_mic(message: Message) -> None:
 
 @router.callback_query(MicCallbackData.filter())
 async def cb_mic(callback: CallbackQuery, callback_data: MicCallbackData, bot: Bot) -> None:
-    if not callback.message:
+    if not isinstance(callback.message, Message):
         await callback.answer()
         return
 

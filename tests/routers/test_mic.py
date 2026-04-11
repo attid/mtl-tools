@@ -1,48 +1,45 @@
+import datetime
+from unittest.mock import AsyncMock
+
 import pytest
 from aiogram import types
-from unittest.mock import AsyncMock
 
 from routers import mic as mic_module
 
 
-class FakeMessage:
-    def __init__(
-        self,
-        *,
-        chat_id: int,
-        message_id: int,
-        text: str,
-        from_user: types.User | None = None,
-        message_thread_id: int | None = None,
-        reply_markup: types.InlineKeyboardMarkup | None = None,
-    ):
-        self.chat = types.Chat(id=chat_id, type="supergroup")
-        self.message_id = message_id
-        self.text = text
-        self.from_user = from_user or types.User(id=1, is_bot=False, first_name="User", username="user")
-        self.message_thread_id = message_thread_id
-        self.reply_markup = reply_markup
-        self.answer = AsyncMock(side_effect=self._answer)
-        self._answers: list[dict] = []
-
-    async def _answer(self, text: str, reply_markup=None):
-        self._answers.append({"text": text, "reply_markup": reply_markup})
-        return FakeMessage(
-            chat_id=self.chat.id,
-            message_id=self.message_id + 1,
-            text=text,
-            from_user=self.from_user,
-            message_thread_id=self.message_thread_id,
-            reply_markup=reply_markup,
-        )
+def _make_message(
+    *,
+    chat_id: int,
+    message_id: int,
+    text: str,
+    message_thread_id: int | None = None,
+    reply_markup: types.InlineKeyboardMarkup | None = None,
+    from_user: types.User | None = None,
+) -> types.Message:
+    return types.Message(
+        message_id=message_id,
+        date=datetime.datetime.now(),
+        chat=types.Chat(id=chat_id, type="supergroup"),
+        from_user=from_user or types.User(id=1, is_bot=False, first_name="User", username="user"),
+        text=text,
+        message_thread_id=message_thread_id,
+        reply_markup=reply_markup,
+    )
 
 
-class FakeCallback:
-    def __init__(self, *, from_user: types.User, message: FakeMessage, data: str):
-        self.from_user = from_user
-        self.message = message
-        self.data = data
-        self.answer = AsyncMock()
+def _make_callback(
+    *,
+    from_user: types.User,
+    message: types.Message,
+    data: str,
+) -> types.CallbackQuery:
+    return types.CallbackQuery(
+        id="cb-1",
+        from_user=from_user,
+        chat_instance="chat-instance",
+        message=message,
+        data=data,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -56,15 +53,36 @@ def _cleanup_sessions():
 
 @pytest.mark.asyncio
 async def test_mic_command_creates_session_message():
-    msg = FakeMessage(chat_id=-100123, message_id=10, text="/mic ютуб выступление", message_thread_id=55)
+    chat_id = -100123
+    topic_id = 55
 
-    await mic_module.cmd_mic(msg)  # type: ignore[arg-type]
+    sent = _make_message(
+        chat_id=chat_id,
+        message_id=11,
+        message_thread_id=topic_id,
+        text="🎙 Микрофон\nТема: ютуб выступление\nСтатус: свободно",
+    )
 
-    assert msg.answer.called
-    sent = msg._answers[0]
-    assert "ютуб выступление" in sent["text"]
-    assert "Статус: свободно" in sent["text"]
-    assert sent["reply_markup"] is not None
+    bot = AsyncMock()
+    bot.return_value = sent
+
+    msg = _make_message(
+        chat_id=chat_id,
+        message_id=10,
+        text="/mic ютуб выступление",
+        message_thread_id=topic_id,
+    ).as_(bot)
+
+    await mic_module.cmd_mic(msg)
+
+    assert bot.call_count == 1
+    send_message_call = bot.call_args.args[0]
+    assert "ютуб выступление" in send_message_call.text
+    assert "Статус: свободно" in send_message_call.text
+    assert send_message_call.reply_markup is not None
+
+    expected_key = (chat_id, topic_id, sent.message_id)
+    assert expected_key in mic_module._sessions
 
 
 @pytest.mark.asyncio
@@ -77,7 +95,7 @@ async def test_mic_take_and_release_and_busy_user():
     free_markup = types.InlineKeyboardMarkup(
         inline_keyboard=[[types.InlineKeyboardButton(text="🟢 Взять", callback_data=free_cb)]]
     )
-    msg = FakeMessage(
+    msg_free = _make_message(
         chat_id=chat_id,
         message_id=message_id,
         message_thread_id=topic_id,
@@ -88,8 +106,8 @@ async def test_mic_take_and_release_and_busy_user():
     bot = AsyncMock()
 
     owner = types.User(id=200, is_bot=False, first_name="Igor", username="igor")
-    cb_take = FakeCallback(from_user=owner, message=msg, data=free_cb)
-    await mic_module.cb_mic(cb_take, mic_module.MicCallbackData(action="take", owner_id=0), bot)  # type: ignore[arg-type]
+    cb_take = _make_callback(from_user=owner, message=msg_free, data=free_cb).as_(bot)
+    await mic_module.cb_mic(cb_take, mic_module.MicCallbackData(action="take", owner_id=0), bot)
 
     assert bot.edit_message_text.called
     take_text = bot.edit_message_text.call_args.kwargs["text"]
@@ -100,7 +118,7 @@ async def test_mic_take_and_release_and_busy_user():
     taken_markup = types.InlineKeyboardMarkup(
         inline_keyboard=[[types.InlineKeyboardButton(text="🔴 Взято: @igor", callback_data=taken_cb)]]
     )
-    msg_taken = FakeMessage(
+    msg_taken = _make_message(
         chat_id=chat_id,
         message_id=message_id,
         message_thread_id=topic_id,
@@ -109,12 +127,17 @@ async def test_mic_take_and_release_and_busy_user():
     )
 
     other = types.User(id=201, is_bot=False, first_name="Other", username="other")
-    cb_busy = FakeCallback(from_user=other, message=msg_taken, data=taken_cb)
-    await mic_module.cb_mic(cb_busy, mic_module.MicCallbackData(action="release", owner_id=200), bot)  # type: ignore[arg-type]
-    assert cb_busy.answer.called
+    cb_busy = _make_callback(from_user=other, message=msg_taken, data=taken_cb).as_(bot)
+    await mic_module.cb_mic(cb_busy, mic_module.MicCallbackData(action="release", owner_id=200), bot)
 
-    cb_release = FakeCallback(from_user=owner, message=msg_taken, data=taken_cb)
-    await mic_module.cb_mic(cb_release, mic_module.MicCallbackData(action="release", owner_id=200), bot)  # type: ignore[arg-type]
+    busy_answer = next(
+        (c for c in bot.call_args_list if c.args and type(c.args[0]).__name__ == "AnswerCallbackQuery"),
+        None,
+    )
+    assert busy_answer is not None
+
+    cb_release = _make_callback(from_user=owner, message=msg_taken, data=taken_cb).as_(bot)
+    await mic_module.cb_mic(cb_release, mic_module.MicCallbackData(action="release", owner_id=200), bot)
 
     release_text = bot.edit_message_text.call_args.kwargs["text"]
     assert "Статус: свободно" in release_text
