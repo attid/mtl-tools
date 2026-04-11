@@ -207,7 +207,9 @@ async def cmd_q_unban(
         actor_label = (
             f"@{call.from_user.username}"
             if call.from_user and call.from_user.username
-            else call.from_user.full_name if call.from_user and call.from_user.full_name else "done"
+            else call.from_user.full_name
+            if call.from_user and call.from_user.full_name
+            else "done"
         )
         await call.message.edit_reply_markup(
             reply_markup=InlineKeyboardMarkup(

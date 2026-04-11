@@ -115,16 +115,12 @@ class StellarService:
     async def check_url_xdr(self, url, full_data=False, grist_manager=grist_manager, global_data=None):
         from other.stellar import check_url_xdr
 
-        return await check_url_xdr(
-            url, full_data=full_data, grist_manager=grist_manager, global_data=global_data
-        )
+        return await check_url_xdr(url, full_data=full_data, grist_manager=grist_manager, global_data=global_data)
 
     async def decode_xdr(self, xdr, full_data=False, grist_manager=grist_manager, global_data=None):
         from other.stellar import decode_xdr
 
-        return await decode_xdr(
-            xdr, full_data=full_data, grist_manager=grist_manager, global_data=global_data
-        )
+        return await decode_xdr(xdr, full_data=full_data, grist_manager=grist_manager, global_data=global_data)
 
     async def show_bim(self, session):
         from other.stellar import cmd_show_bim

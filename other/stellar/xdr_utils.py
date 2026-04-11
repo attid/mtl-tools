@@ -53,9 +53,7 @@ def good_operation(operation, operation_name: str, filter_operation: list, ignor
     return False
 
 
-async def check_url_xdr(
-    url: str, full_data: bool = True, grist_manager=None, global_data=None
-) -> List[str]:
+async def check_url_xdr(url: str, full_data: bool = True, grist_manager=None, global_data=None) -> List[str]:
     """
     Fetch XDR from URL and decode it.
 

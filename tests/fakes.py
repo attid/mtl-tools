@@ -503,7 +503,9 @@ class FakeMessageThreadCacheService:
         sender_chat_id: int | None = None,
         sender_chat_title: str | None = None,
     ) -> None:
-        self.remember_calls.append((chat_id, message_id, thread_id, user_id, username, full_name, sender_chat_id, sender_chat_title))
+        self.remember_calls.append(
+            (chat_id, message_id, thread_id, user_id, username, full_name, sender_chat_id, sender_chat_title)
+        )
         self._messages[(chat_id, message_id)] = {
             "thread_id": thread_id,
             "user_id": user_id,

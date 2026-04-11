@@ -454,24 +454,24 @@ async def cmd_apoll_check_handler(message: Message, session: Session, app_contex
         raise ValueError("app_context with poll_service and gspread_service required")
     poll_service = cast(Any, app_context.poll_service)
     gspread_service = cast(Any, app_context.gspread_service)
-    
+
     if message.reply_to_message and message.reply_to_message.poll:
         await message.react([ReactionTypeEmoji(emoji="👾")])
 
         my_poll = poll_service.load_mtla_poll(session, message.reply_to_message.poll.id)
         google_id = my_poll.get("google_id")
-        
+
         if not google_id:
             await message.reply("Таблица для этого опроса не найдена (возможно, он не был создан ботом).")
             return
-        
+
         # 1. Fetch current state from Google Sheets
         result, delegates, already_voted_addresses = await gspread_service.check_vote_table(google_id)
 
         msg_text = " ".join(result)
         msg_text2 = " ".join(delegates)
         msg_text = f"{msg_text} \n --------- delegates --------- \n {msg_text2}"
-        
+
         if result:
             with suppress(TelegramBadRequest):
                 await message.reply(msg_text)

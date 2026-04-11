@@ -549,7 +549,9 @@ async def message_reaction(
             return False
 
         # 2. Since it's a moderation command, now we need to check context and permissions
-        message_context = await message_thread_cache_service.get_message_context(message_any.chat.id, message_any.message_id)
+        message_context = await message_thread_cache_service.get_message_context(
+            message_any.chat.id, message_any.message_id
+        )
         if not message_context:
             logger.debug(
                 "message_reaction skipped: no cached message context chat_id={} message_id={}",
@@ -608,7 +610,9 @@ async def message_reaction(
         all_mutes = admin_service.get_all_topic_mutes()
         ConfigRepository(session).save_bot_value(0, BotValueTypes.TopicMutes, json.dumps(all_mutes))
 
-        await _send_topic_message(bot, message_any.chat.id, thread_id, f"{user} was set mute for {delta} in topic {chat_thread_key}")
+        await _send_topic_message(
+            bot, message_any.chat.id, thread_id, f"{user} was set mute for {delta} in topic {chat_thread_key}"
+        )
         return True
 
     # new_reaction=[ReactionTypeCustomEmoji(type='custom_emoji', custom_emoji_id='5220151067429335888')]

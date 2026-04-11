@@ -17,8 +17,4 @@ def test_reloading_config_reader_does_not_warn_when_secrets_dir_is_missing(monke
         warnings.simplefilter("always")
         importlib.reload(config_reader)
 
-    assert not [
-        warning
-        for warning in caught
-        if 'directory "/run/secrets" does not exist' in str(warning.message)
-    ]
+    assert not [warning for warning in caught if 'directory "/run/secrets" does not exist' in str(warning.message)]

@@ -326,7 +326,9 @@ async def test_on_my_chat_member_added_ignores_send_message_permission_error(moc
     dp.message.middleware(RouterTestMiddleware(router_app_context))
     dp.include_router(admin_router)
     router_app_context.bot.send_message = AsyncMock(
-        side_effect=TelegramBadRequest(method=None, message="Bad Request: not enough rights to send text messages to the chat")
+        side_effect=TelegramBadRequest(
+            method=None, message="Bad Request: not enough rights to send text messages to the chat"
+        )
     )
 
     chat = types.Chat(id=123, type="supergroup", title="Group")

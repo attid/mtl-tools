@@ -342,7 +342,9 @@ async def test_auto_ban_does_not_emit_followup_manual_log_from_bot(mock_telegram
     await dp.feed_update(bot=router_app_context.bot, update=types.Update(update_id=207, chat_member=kicked_event))
 
     spam_reports = [
-        r for r in mock_telegram.get_requests() if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)
+        r
+        for r in mock_telegram.get_requests()
+        if r["method"] == "sendMessage" and str(r["data"]["chat_id"]) == str(MTLChats.SpamGroup)
     ]
     assert len(spam_reports) == 1
     assert "SpamStatus.BAD (db)" in spam_reports[0]["data"]["text"]

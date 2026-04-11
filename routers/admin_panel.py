@@ -481,11 +481,7 @@ def _build_welcome_edit_prompt(chat_id: int, edit_type: str, app_context: AppCon
         )
 
     current = _preview_text(app_context.config_service.get_welcome_button(chat_id), 120)
-    return (
-        "Edit welcome button.\n"
-        f"Current: {current}\n\n"
-        "Send /cancel to cancel."
-    )
+    return f"Edit welcome button.\nCurrent: {current}\n\nSend /cancel to cancel."
 
 
 def welcome_kb(chat_id: int) -> InlineKeyboardMarkup:
@@ -801,7 +797,9 @@ async def cb_show_welcome_settings(
     text_parts = _format_welcome_settings(chat_id, title, app_context)
 
     with suppress(TelegramBadRequest):
-        await query.message.edit_text("\n".join(text_parts), reply_markup=welcome_kb(chat_id), parse_mode=ParseMode.HTML)
+        await query.message.edit_text(
+            "\n".join(text_parts), reply_markup=welcome_kb(chat_id), parse_mode=ParseMode.HTML
+        )
     await query.answer()
 
 

@@ -513,6 +513,7 @@ async def gs_update_a_table_first(table_uuid, question, options, votes):
 
 _gspread_locks: dict[str, asyncio.Lock] = {}
 
+
 def _get_table_lock(table_uuid: str) -> asyncio.Lock:
     if table_uuid not in _gspread_locks:
         _gspread_locks[table_uuid] = asyncio.Lock()
@@ -563,7 +564,7 @@ async def _gs_update_a_table_vote_internal(table_uuid, address: str, options, de
 
         if delegated:
             return
-        
+
         assert ss is not None
         # теперь с делегаций
         delegate_data = await (await ss.worksheet("Members")).get_all_values()
@@ -947,10 +948,11 @@ if __name__ == "__main__":
     # gs_copy_sheets_with_style("1ZaopK2DRbP5756RK2xiLVJxEEHhsfev5ULNW5Yz_EZc",
     #                           "1hn_GnLoClx20WcAsh0Kax3WP4SC5PGnjs4QZeDnHWec", "report", "B_TBL")
 
+
 async def gs_write_cell_value(document_id: str, sheet_name: str, cell: str, value) -> None:
     """
     Utility function for testing: writes a specific value to a single cell.
-    
+
     Args:
         document_id: The ID of the Google Sheet document.
         sheet_name: The name of the worksheet tab.
@@ -961,4 +963,3 @@ async def gs_write_cell_value(document_id: str, sheet_name: str, cell: str, valu
     ss = await agc.open_by_key(document_id)
     wks = await ss.worksheet(sheet_name)
     await wks.update(range_name=cell, values=[[value]])
-
