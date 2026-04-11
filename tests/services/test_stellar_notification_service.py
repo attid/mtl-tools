@@ -1,5 +1,21 @@
 # tests/services/test_stellar_notification_service.py
-"""Tests for StellarNotificationService."""
+"""Unit tests for StellarNotificationService internal logic.
+
+All external I/O (Telegram, Horizon, the operations-notifier HTTP API) is stubbed
+at the service boundary: tests patch ``_send_to_telegram`` and never populate
+``envelope_xdr`` (which would trigger the XDR decode path), and none of the
+notifier HTTP methods (``subscribe_token``/``subscribe_account``/``unsubscribe``/
+``get_active_subscriptions``/``sync_subscriptions``/``start_server``) are
+exercised here. The ``Mock()`` bot is therefore safe — no code path under test
+calls ``self.bot.<method>(...)``, so there is no serialization surface to hide.
+
+This file intentionally does not use ``mock_telegram``/``mock_horizon``/
+``mock_grist``: per docs/conventions.md, service-level fakes are allowed for
+unit-testing pure internal logic (dedup, min filter, message formatting, webhook
+parsing, nonce, auth headers). Tests that exercise a real outgoing request must
+be added to a separate file and use the canonical fixtures from
+``tests/conftest.py``.
+"""
 
 import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock

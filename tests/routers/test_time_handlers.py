@@ -57,22 +57,35 @@ async def test_cmd_send_message_1m(mock_telegram, router_app_context, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_time_clear(mock_telegram, router_app_context, monkeypatch):
+async def test_time_clear(mock_telegram, router_app_context, mock_grist, grist_server_config, monkeypatch):
     bot = router_app_context.bot
 
-    mock_chats = [{"chat_id": 12345}]
+    # Redirect the Grist table's base_url at the local mock Grist server so the
+    # real grist_manager HTTP client hits mock_grist instead of the live API.
+    monkeypatch.setattr(
+        MTLGrist.CONFIG_auto_clean,
+        "base_url",
+        f"{grist_server_config['url']}/api/docs",
+    )
 
-    mock_load = FakeAsyncMethod(return_value=mock_chats)
+    # Seed mock_grist with a single enabled auto-clean row.
+    mock_grist.add_records(
+        MTLGrist.CONFIG_auto_clean.table_name,
+        [{"id": 1, "fields": {"chat_id": 12345, "enabled": True}}],
+    )
+
     mock_remove = FakeAsyncMethod(return_value=5)
     mock_sleep = FakeAsyncMethod()
 
-    monkeypatch.setattr(time_handlers.grist_manager, "load_table_data", mock_load)
     monkeypatch.setattr(time_handlers, "remove_deleted_users", mock_remove)
     monkeypatch.setattr(time_handlers.asyncio, "sleep", mock_sleep)
 
     await time_handlers.time_clear(bot)
 
-    mock_load.assert_awaited_once_with(MTLGrist.CONFIG_auto_clean, filter_dict={"enabled": [True]})
+    # Assert the mock Grist server was queried for the Auto_clean table.
+    assert any(
+        r["table"] == MTLGrist.CONFIG_auto_clean.table_name and r["method"] == "GET" for r in mock_grist.requests
+    )
     mock_remove.assert_awaited_once_with(12345)
     mock_sleep.assert_awaited_once()
 
