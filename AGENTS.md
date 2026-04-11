@@ -45,6 +45,7 @@
 ## Testing Guidelines
 - Add `pytest` tests under `tests/` for new logic (pure utils in `other/`, DB helpers, router helpers via unit‑level functions).
 - Keep tests isolated from Telegram/DB: mock network and DB calls; use small fixtures.
+- External boundaries (Telegram / Stellar / Grist) MUST go through the mock servers in `tests/conftest.py` (`mock_telegram`, `mock_horizon`, `mock_grist`). No local aiogram/stellar fakes. See `docs/conventions.md#tests`.
 - Run locally (if added): `uv run pytest -q`.
 
 ## Commit & Pull Request Guidelines

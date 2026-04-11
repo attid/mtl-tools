@@ -39,6 +39,8 @@ Coding and integration conventions for this repository.
 
 ## Tests
 
+### General
+
 1. Add tests for behavior changes.
 - Router-level behavior in `tests/routers/`.
 - Repository/service logic in dedicated test modules.
@@ -46,6 +48,26 @@ Coding and integration conventions for this repository.
 2. Keep tests deterministic.
 - Use mocks/fakes for network and external APIs.
 - Avoid hidden time/random coupling unless explicitly controlled.
+
+### External boundaries — mandatory mock servers
+
+Any test that exercises code touching an external system MUST go through
+the project's local mock servers in `tests/conftest.py`. Do not invent
+local duck-typed fakes for aiogram / Stellar / Grist clients — they hide
+real serialization and API drift bugs.
+
+| Boundary | Fixture(s) | Where | Forbidden alternatives |
+|---|---|---|---|
+| Telegram | `mock_telegram`, `router_bot`, `router_app_context` | `tests/conftest.py:88,462,477` | Local `FakeMessage`/`FakeCallback` classes, `AsyncMock()` used as a `Bot`, `.as_(bot=AsyncMock())` tricks |
+| Stellar (Horizon) | `mock_horizon`, `horizon_server_config` (auto-wired in `router_app_context`) | `tests/conftest.py:307` | Direct patching of `stellar_sdk` / horizon client, hand-rolled JSON fakes |
+| Grist | `mock_grist`, `grist_server_config` | `tests/conftest.py:393` | Monkeypatching `grist_manager` methods per-test (use the server + `state.add_response` / seeded records) |
+
+If you need to shape a response, call `state.add_response(method, dict)`
+on the corresponding mock state object — don't bypass the server.
+
+Service-level fakes (`FakeGristService`, `FakeStellarService`, etc. in
+`tests/fakes.py`) are fine for unit-testing higher layers that depend on
+the service abstraction, not the raw client.
 
 ## Commit Style
 
