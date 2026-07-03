@@ -443,6 +443,24 @@ async def mock_grist(grist_server_config):
         # Grist API returns list of created record IDs
         return web.json_response({"records": new_records})
 
+    @routes.patch("/api/docs/{doc_id}/tables/{table_id}/records")
+    async def patch_records(request):
+        table_id = request.match_info["table_id"]
+        body = await request.json()
+        records_to_patch = body.get("records", [])
+        existing = {record["id"]: record for record in state.records.get(table_id, [])}
+        patched_ids = []
+
+        for record_data in records_to_patch:
+            record_id = record_data.get("id")
+            if record_id not in existing:
+                continue
+            existing[record_id].setdefault("fields", {}).update(record_data.get("fields", {}))
+            patched_ids.append(record_id)
+
+        state.requests.append({"table": table_id, "method": "PATCH"})
+        return web.json_response({"records": patched_ids})
+
     app = web.Application()
     app.add_routes(routes)
     runner = web.AppRunner(app)

@@ -45,6 +45,11 @@ class MTLGrist:
     MTLA_AIRDROP = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "EUR_GNRL")
     MTLA_CONFIG = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "CONFIG")
 
+    MTL_ADMINS = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTL_Admins")
+    MTL_ADMINS_MEDIA = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "Media")
+    MTL_ADMINS_AGORA_TEAM = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTLA_Agora_Team")
+    MTL_ADMINS_AGORA_TOPICS = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTLA_Agora_Topics")
+
 
 @dataclass(frozen=True)
 class AirdropConfigItem:
