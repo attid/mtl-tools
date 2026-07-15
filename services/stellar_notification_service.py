@@ -145,11 +145,11 @@ class StellarNotificationService:
             logger.warning(f"Unknown subscription {subscription_id}, cannot route notification")
             return
 
+        tx_info = payload.get("transaction", {})
+
         # For account subscriptions, check that our account is directly involved
         if destination.get("type") == "account":
             monitored_account = destination.get("account", "")
-            op_info = payload.get("operation", {})
-            tx_info = payload.get("transaction", {})
             involved_accounts = {
                 op_info.get("account", ""),
                 op_info.get("source_account", ""),
@@ -162,7 +162,23 @@ class StellarNotificationService:
                 logger.debug(f"Account {shorten_address(monitored_account)} not directly involved, skipping")
                 return
 
-        tx_info = payload.get("transaction", {})
+        # Apply the threshold to the operation that triggered the webhook. XDR
+        # may contain unrelated operations that must not make a below-minimum
+        # notification eligible. Do this before deduplication so a skipped
+        # operation cannot suppress a later eligible operation in the same tx.
+        if self._should_skip_by_min(payload, destination):
+            logger.debug(
+                "Skipping by min filter: sub={} chat={} topic={} tx={} op={} amount={} min={}",
+                subscription_id,
+                destination["chat_id"],
+                destination.get("topic_id"),
+                tx_info.get("hash", ""),
+                op_info.get("id"),
+                op_info.get("amount"),
+                destination.get("min"),
+            )
+            return
+
         envelope_xdr = tx_info.get("envelope_xdr")
         tx_hash = tx_info.get("hash", "")
 
@@ -191,16 +207,6 @@ class StellarNotificationService:
             await self._process_with_xdr(envelope_xdr, tx_hash, destination)
         else:
             # Fallback to simple format if no XDR
-            if self._should_skip_by_min(payload, destination):
-                logger.debug(
-                    "Skipping by min filter: sub=%s chat=%s topic=%s tx=%s op=%s",
-                    subscription_id,
-                    destination["chat_id"],
-                    destination.get("topic_id"),
-                    tx_hash,
-                    op_info.get("id"),
-                )
-                return
             message = self._format_message(payload, destination)
             if message:
                 logger.info(f"Sending notification to chat {destination['chat_id']}: {message[:100]}")
@@ -247,7 +253,7 @@ class StellarNotificationService:
             return False
 
     def _should_skip_by_min(self, payload: dict[str, Any], destination: dict[str, Any]) -> bool:
-        """Apply min amount filter for non-XDR payloads (best-effort)."""
+        """Apply the min amount filter to the operation that triggered the webhook."""
         min_amount = destination.get("min") or 0
         try:
             min_dec = Decimal(str(int(min_amount)))

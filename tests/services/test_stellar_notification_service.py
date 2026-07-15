@@ -2,9 +2,9 @@
 """Unit tests for StellarNotificationService internal logic.
 
 All external I/O (Telegram, Horizon, the operations-notifier HTTP API) is stubbed
-at the service boundary: tests patch ``_send_to_telegram`` and never populate
-``envelope_xdr`` (which would trigger the XDR decode path), and none of the
-notifier HTTP methods (``subscribe_token``/``subscribe_account``/``unsubscribe``/
+at the service boundary: tests patch ``_send_to_telegram`` and patch the XDR
+processing boundary when an envelope is present. None of the notifier HTTP
+methods (``subscribe_token``/``subscribe_account``/``unsubscribe``/
 ``get_active_subscriptions``/``sync_subscriptions``/``start_server``) are
 exercised here. The ``Mock()`` bot is therefore safe — no code path under test
 calls ``self.bot.<method>(...)``, so there is no serialization surface to hide.
@@ -319,6 +319,32 @@ class TestDeduplication:
 
 class TestMinimumAmountFilter:
     """Tests for minimum amount filtering."""
+
+    @pytest.mark.asyncio
+    async def test_xdr_operation_below_minimum_skipped_before_deduplication(self, service):
+        service.subscriptions_map["sub-1"] = {
+            "chat_id": 123,
+            "topic_id": None,
+            "type": "asset",
+            "min": 900,
+        }
+        payload = {
+            "operation": {
+                "id": "op-below-min-with-xdr",
+                "type": "payment",
+                "amount": "25",
+            },
+            "transaction": {
+                "hash": "tx-with-unrelated-clawback",
+                "envelope_xdr": "test-xdr",
+            },
+        }
+
+        with patch.object(service, "_process_with_xdr", new_callable=AsyncMock) as mock_process_xdr:
+            await service.process_notification(payload, "sub-1")
+
+        mock_process_xdr.assert_not_awaited()
+        assert service.notified_operations == set()
 
     @pytest.mark.asyncio
     async def test_operation_below_minimum_skipped(self, service):
