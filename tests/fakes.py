@@ -695,6 +695,7 @@ class FakeConfigService:
 class FakeAIService:
     def __init__(self):
         self.talk = FakeAsyncMethod(return_value="")
+        self.translate = FakeAsyncMethod(return_value="")
         self.generate_image = FakeAsyncMethod(return_value=[])
         self.talk_get_comment = FakeAsyncMethod(return_value="")
         self.add_task_to_google = FakeAsyncMethod(return_value="")

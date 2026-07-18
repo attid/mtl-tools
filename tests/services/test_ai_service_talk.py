@@ -26,6 +26,18 @@ async def test_ai_service_talk_maps_gpt4_to_gpt_maxi(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ai_service_translate_delegates_to_stateless_translation(monkeypatch):
+    mock_translate = FakeAsyncMethod(return_value="Hallo")
+    monkeypatch.setattr(open_ai_tools, "translate_text", mock_translate, raising=False)
+
+    service = AIService()
+    result = await service.translate("Hello", "German")
+
+    assert result == "Hallo"
+    mock_translate.assert_awaited_once_with("Hello", "German")
+
+
+@pytest.mark.asyncio
 async def test_talk_service_answer_notify_ignores_reply_without_from_user():
     bot = type("Bot", (), {"id": 42, "send_message": FakeAsyncMethod()})()
     service = TalkService(bot)

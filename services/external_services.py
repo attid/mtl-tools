@@ -541,6 +541,11 @@ class AIService:
 
         return await talk_get_comment(chat_id, text)
 
+    async def translate(self, text: str, target_language: str) -> str | None:
+        from other.open_ai_tools import translate_text
+
+        return await translate_text(text, target_language)
+
     async def add_task_to_google(self, msg):
         from other.open_ai_tools import add_task_to_google
 

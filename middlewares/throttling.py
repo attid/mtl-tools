@@ -24,6 +24,18 @@ def rate_limit(limit: int, key=None):
     return decorator
 
 
+def global_user_rate_limit(limit: int, key=None):
+    """Configure a rate limit shared by a user across all chats."""
+
+    def decorator(func):
+        setattr(func, "global_user_throttling_rate_limit", limit)
+        if key:
+            setattr(func, "global_user_throttling_key", key)
+        return func
+
+    return decorator
+
+
 def chat_rate_limit(limit: int, key=None):
     """
     Decorator for configuring rate limit per chat in different functions.
@@ -76,6 +88,14 @@ class ThrottlingMiddleware(BaseMiddleware):
         user_limit = getattr(data["handler"].callback, "throttling_rate_limit", None)
         user_key = getattr(data["handler"].callback, "throttling_key", f"{self.prefix}_message")
 
+        # Global user-level throttling (shared across chats)
+        global_user_limit = getattr(data["handler"].callback, "global_user_throttling_rate_limit", None)
+        global_user_key = getattr(
+            data["handler"].callback,
+            "global_user_throttling_key",
+            f"{self.prefix}_global_user_message",
+        )
+
         # Chat level throttling
         chat_limit = getattr(data["handler"].callback, "chat_throttling_rate_limit", None)
         chat_key = getattr(data["handler"].callback, "chat_throttling_key", f"{self.prefix}_chat_message")
@@ -84,6 +104,14 @@ class ThrottlingMiddleware(BaseMiddleware):
         try:
             if chat_limit is not None:
                 await self.throttle_manager.throttle(chat_key, rate=chat_limit, user_id=None, chat_id=event.chat.id)
+            if global_user_limit is not None:
+                if not event.from_user:
+                    return
+                await self.throttle_manager.throttle_global_user(
+                    global_user_key,
+                    rate=global_user_limit,
+                    user_id=event.from_user.id,
+                )
             if user_limit is not None:
                 if not event.from_user:
                     return
@@ -113,13 +141,41 @@ class ThrottleManager:
     def __init__(self, redis: redis.asyncio.client.Redis):
         self.redis = redis
 
+    async def throttle_global_user(self, key: str, rate: float, user_id: int):
+        """Atomically throttle a user across all chats."""
+        if rate == 0:
+            return True
+
+        bucket_name = f"throttle_{key}_{user_id}"
+        ttl_ms = max(1, int(rate * 1000))
+        redis_set = cast(Any, self.redis.set)
+        acquired = await redis_set(bucket_name, str(time.time()), nx=True, px=ttl_ms)
+        if acquired:
+            return True
+
+        redis_pttl = cast(Any, self.redis.pttl)
+        remaining_ms = await redis_pttl(bucket_name)
+        remaining = max(float(remaining_ms) / 1000, 0.0)
+        delta = max(rate - remaining, 0.0)
+        raise Throttled(
+            key=key,
+            user=user_id,
+            chat=None,
+            RATE_LIMIT=rate,
+            DELTA=delta,
+            EXCEEDED_COUNT=1,
+            LAST_CALL=time.time() - delta,
+        )
+
     async def throttle(self, key: str, rate: float, user_id: int | None = None, chat_id: int | None = None):
         if rate == 0:
             return True  # No throttling applied
 
         now = time.time()
         if user_id is not None:
-            bucket_name = f"throttle_{key}_{user_id}_{chat_id}"
+            bucket_name = f"throttle_{key}_{user_id}"
+            if chat_id is not None:
+                bucket_name += f"_{chat_id}"
         else:
             bucket_name = f"throttle_{key}_{chat_id}"
 
