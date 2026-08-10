@@ -140,6 +140,8 @@ members_key.json
 *.sh
 /.junie/*
 /.antigravitycli/*
+/.belief_map_cache.json
+/.belief_map.sexp
 /.venv_tmp_alembic/*
 /.vscode/settings.json
 /docs/tasks.md
