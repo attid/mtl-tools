@@ -72,6 +72,52 @@ def check_mtla_delegate(account: str, result: dict, delegated_list: list = None)
             return delegate_to_account
 
 
+def apply_mtl_delegations(
+    shareholder_list: list[MyShareHolder],
+    delegate_list: dict[str, str],
+    blacklist: dict[str, object],
+) -> None:
+    """Apply MTL delegations while treating blacklist entries as sinks."""
+    blacklisted_accounts = {account_id for account_id, blocked in blacklist.items() if blocked}
+
+    for shareholder in shareholder_list:
+        account_id = shareholder.account_id
+        visited: set[str] = set()
+
+        while account_id not in visited:
+            if account_id in blacklisted_accounts:
+                shareholder.balance_mtl = 0
+                shareholder.balance_rect = 0
+                shareholder.balance_delegated = 0
+                break
+
+            visited.add(account_id)
+            delegate_id = delegate_list.get(account_id)
+            if not delegate_id:
+                break
+            account_id = delegate_id
+
+    # Preserve the existing three-pass behavior for valid delegation chains.
+    for _ in range(3):
+        changes_made = False
+
+        for shareholder in shareholder_list:
+            delegate_id = delegate_list.get(shareholder.account_id)
+            if not delegate_id:
+                continue
+
+            delegate = next((item for item in shareholder_list if item.account_id == delegate_id), None)
+            if delegate:
+                delegate.balance_delegated += shareholder.balance
+                shareholder.balance_delegated = 0
+                shareholder.balance_mtl = 0
+                shareholder.balance_rect = 0
+                changes_made = True
+
+        if not changes_made:
+            break
+
+
 async def cmd_get_new_vote_all_mtl(public_key: str, remove_master: bool = False) -> list:
     """
     Generate voting XDR transactions for MTL accounts.
@@ -250,44 +296,8 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
                 if data_name in ("delegate", "mtl_delegate"):
                     delegate_list[shareholder.account_id] = decode_data_value(data_value)
 
-    # Multi-step delegation
-    max_steps = 3  # Maximum delegation steps
-
-    for step in range(max_steps):
-        changes_made = False
-        temp_delegate_list = delegate_list.copy()  # Create copy for safe modification
-
-        for shareholder in shareholder_list:
-            if shareholder.account_id in temp_delegate_list:
-                delegate_id = temp_delegate_list[shareholder.account_id]
-                delegate = next((s for s in shareholder_list if s.account_id == delegate_id), None)
-
-                if delegate:
-                    delegate.balance_delegated += shareholder.balance + shareholder.balance_delegated
-                    shareholder.balance_delegated = 0
-                    shareholder.balance_mtl = 0
-                    shareholder.balance_rect = 0
-                    changes_made = True
-
-        # Update delegate_list only after iteration completes
-        delegate_list = temp_delegate_list
-
-        # If no changes were made, break the loop
-        if not changes_made:
-            break
-
-    # Clear delegate_list after all steps complete
-    delegate_list.clear()
-
-    # Delete blacklist user
-    bl = await cmd_get_blacklist()
-    # Process blacklist for shareholder_list
-    for shareholder in shareholder_list:
-        if bl.get(shareholder.account_id):
-            # Zero out corresponding values
-            shareholder.balance_mtl = 0
-            shareholder.balance_rect = 0
-            shareholder.balance_delegated = 0
+    blacklist = await cmd_get_blacklist()
+    apply_mtl_delegations(shareholder_list, delegate_list, blacklist)
 
     # Sort shareholder_list by balance descending
     shareholder_list.sort(key=lambda sh: sh.balance, reverse=True)
