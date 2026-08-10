@@ -1,7 +1,31 @@
+from types import SimpleNamespace
+
 import pytest
 
 from tests.fakes import FakeAsyncMethod, FakeSession
 import scripts.update_report as update_report
+
+
+def test_top_holders_update_data_ends_with_four_empty_rows():
+    account = SimpleNamespace(
+        account_id="GACCOUNT",
+        balance_mtl=1,
+        balance_rect=2,
+        balance_delegated=3,
+        balance=4,
+        votes=5,
+        calculated_votes=6,
+    )
+
+    update_data = update_report.build_top_holders_update_data([account])
+
+    assert update_data == [
+        ["GACCOUNT", 1, 2, 3, 4, 5, 6],
+        ["", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", ""],
+    ]
 
 
 def make_async_session_pool(session):

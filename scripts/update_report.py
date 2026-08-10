@@ -416,19 +416,7 @@ async def update_top_holders_report(session: AsyncSession):
     vote_list = await cmd_gen_mtl_vote_list(trim_count=30, delegate_list=delegate_list)
     await stellar_add_mtl_holders_info(vote_list)
 
-    update_data = []
-    for account in vote_list:
-        update_data.append(
-            [
-                account.account_id,
-                account.balance_mtl,
-                account.balance_rect,
-                account.balance_delegated,
-                account.balance,
-                account.votes,
-                account.calculated_votes,
-            ]
-        )
+    update_data = build_top_holders_update_data(vote_list)
 
     await wks.update(range_name="B2", values=update_data)
 
@@ -452,6 +440,27 @@ async def update_top_holders_report(session: AsyncSession):
             break
 
     logger.info(f"report topholders all done {now}")
+
+
+def build_top_holders_update_data(vote_list: list[Any]) -> list[list[Any]]:
+    update_data = []
+    for account in vote_list:
+        update_data.append(
+            [
+                account.account_id,
+                account.balance_mtl,
+                account.balance_rect,
+                account.balance_delegated,
+                account.balance,
+                account.votes,
+                account.calculated_votes,
+            ]
+        )
+
+    for _ in range(1, 5):
+        update_data.append(["", "", "", "", "", "", ""])
+
+    return update_data
 
 
 @safe_catch_async
