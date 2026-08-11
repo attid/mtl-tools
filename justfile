@@ -61,6 +61,12 @@ types:
 test:
     uv run --group dev pytest
 
+test-fast:
+    uv run --group dev pytest tests --ignore=tests/routers
+
+test-router:
+    uv run --group dev pytest tests/routers
+
 secrets:
     # Scan for leaked secrets (requires gitleaks: https://github.com/gitleaks/gitleaks)
     if command -v gitleaks >/dev/null 2>&1; then \

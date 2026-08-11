@@ -1,11 +1,7 @@
 # tests/integration/test_clean_architecture.py
-"""Integration tests for clean architecture components."""
-
-import pytest
-from decimal import Decimal
+"""Tests for clean architecture services."""
 
 from tests.fakes import (
-    FakeStellarSDK,
     FakeConfigRepositoryProtocol,
     FakeChatsRepositoryProtocol,
 )
@@ -302,93 +298,3 @@ class TestFeatureFlagsService:
         flags_service.invalidate_cache(100)
 
         assert flags_service.get_cached_count() == 0
-
-
-class TestStellarIntegration:
-    """Tests for Stellar components integration."""
-
-    @pytest.mark.asyncio
-    async def test_fake_stellar_sdk_balances(self):
-        sdk = FakeStellarSDK()
-
-        # Setup test data
-        sdk.set_balance("GTEST1", "EURMTL", Decimal("1000"))
-        sdk.set_balance("GTEST2", "EURMTL", Decimal("500"))
-
-        # Verify balances
-        bal1 = await sdk.get_balances("GTEST1")
-        bal2 = await sdk.get_balances("GTEST2")
-
-        assert bal1["EURMTL"] == Decimal("1000")
-        assert bal2["EURMTL"] == Decimal("500")
-
-    @pytest.mark.asyncio
-    async def test_fake_stellar_sdk_submit_transaction(self):
-        sdk = FakeStellarSDK()
-
-        # Submit transaction
-        result = await sdk.submit_transaction("test_xdr")
-
-        assert "hash" in result
-        assert len(sdk.get_submitted_transactions()) == 1
-
-    @pytest.mark.asyncio
-    async def test_fake_stellar_sdk_multiple_transactions(self):
-        sdk = FakeStellarSDK()
-
-        await sdk.submit_transaction("xdr1")
-        await sdk.submit_transaction("xdr2")
-        await sdk.submit_transaction("xdr3")
-
-        transactions = sdk.get_submitted_transactions()
-        assert len(transactions) == 3
-        assert transactions[0] == "xdr1"
-        assert transactions[1] == "xdr2"
-        assert transactions[2] == "xdr3"
-
-    def test_fake_stellar_sdk_sign_transaction(self):
-        sdk = FakeStellarSDK()
-
-        signed = sdk.sign_transaction("my_xdr")
-
-        assert signed == "signed_my_xdr"
-
-
-class TestServiceInteraction:
-    """Tests for interaction between services."""
-
-    def test_spam_status_service_with_config_service(self):
-        """Test that services work together through shared patterns."""
-        config_repo = FakeConfigRepositoryProtocol()
-        chats_repo = FakeChatsRepositoryProtocol()
-
-        config_service = ConfigService(config_repo)
-        spam_status_service = SpamStatusService(chats_repo)
-        flags_service = FeatureFlagsService(config_service)
-
-        # Set up a chat with captcha
-        flags_service.enable(100, "captcha")
-
-        # Set up a good user
-        spam_status_service.set_status(123, SpamStatus.GOOD)
-
-        # Verify services work correctly
-        assert flags_service.is_captcha_enabled(100) is True
-        assert spam_status_service.is_good(123) is True
-
-    def test_feature_flags_updates_propagate(self):
-        """Test that feature flag changes update cache correctly."""
-        config_repo = FakeConfigRepositoryProtocol()
-        config_service = ConfigService(config_repo)
-        flags_service = FeatureFlagsService(config_service)
-
-        # Get features to populate cache
-        features = flags_service.get_features(100)
-        assert features.captcha is False
-
-        # Enable captcha
-        flags_service.enable(100, "captcha")
-
-        # Cache should be updated
-        features_updated = flags_service.get_features(100)
-        assert features_updated.captcha is True

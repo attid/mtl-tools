@@ -59,6 +59,14 @@ def random_address():
     return "G" + "".join(random.choices(string.ascii_uppercase + string.digits, k=55))
 
 
+async def close_plain_http_session(session: AiohttpSession) -> None:
+    """Close a test-only plain HTTP session without Aiogram's SSL shutdown delay."""
+    client_session = session._session
+    if client_session is not None and not client_session.closed:
+        await client_session.close()
+    session._session = None
+
+
 # --- Fixtures: Config ---
 
 
@@ -482,7 +490,7 @@ async def router_bot(mock_telegram, telegram_server_config):
     session = AiohttpSession(api=TelegramAPIServer.from_base(telegram_server_config["url"]))
     bot = Bot(token=TEST_BOT_TOKEN, session=session)
     yield bot
-    await bot.session.close()
+    await close_plain_http_session(session)
 
 
 @pytest.fixture

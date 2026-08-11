@@ -3,13 +3,32 @@
 
 import pytest
 from decimal import Decimal
+from unittest.mock import AsyncMock
+
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 from stellar_sdk import Asset
 
+import tests.conftest as test_conftest
 from tests.fakes import (
     FakeStellarSDK,
     FakeFinanceRepositoryProtocol,
     FakeConfigRepositoryProtocol,
 )
+
+
+@pytest.mark.asyncio
+async def test_close_plain_http_session_skips_ssl_shutdown_delay(monkeypatch):
+    session = AiohttpSession(api=TelegramAPIServer.from_base("http://localhost:1"))
+    client_session = await session.create_session()
+    sleep = AsyncMock()
+    monkeypatch.setattr("aiogram.client.session.aiohttp.asyncio.sleep", sleep)
+
+    await test_conftest.close_plain_http_session(session)
+
+    assert client_session.closed is True
+    assert session._session is None
+    sleep.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -26,10 +45,11 @@ async def test_fake_stellar_sdk_submit_transaction():
     sdk = FakeStellarSDK()
 
     result = await sdk.submit_transaction("test_xdr")
+    await sdk.submit_transaction("second_xdr")
+    await sdk.submit_transaction("third_xdr")
 
     assert "hash" in result
-    assert len(sdk.get_submitted_transactions()) == 1
-    assert sdk.get_submitted_transactions()[0] == "test_xdr"
+    assert sdk.get_submitted_transactions() == ["test_xdr", "second_xdr", "third_xdr"]
 
 
 @pytest.mark.asyncio
