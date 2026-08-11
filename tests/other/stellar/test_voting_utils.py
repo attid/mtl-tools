@@ -119,13 +119,13 @@ class TestNormalizeVoteWeights:
         assert 0.33 <= major_share <= 0.40, f"Major share {major_share:.2%} outside 33-40%"
 
     def test_dominant_holder(self):
-        """Even with one very dominant holder, result should be close to target."""
-        balances = [80000, 5000, 5000, 5000, 5000]
+        """Normalize a dominant holder while preserving the minimum weight."""
+        balances = [80000, 5000, 5000, 5000, 5000, 1]
         weights = normalize_vote_weights(balances)
         total = sum(weights)
-        # May not fit perfectly but should be best effort
-        assert total > 0
-        assert weights[0] > 0
+
+        assert 0.33 <= weights[0] / total <= 0.40
+        assert weights[-1] == 1
 
     def test_equal_balances(self):
         """Equal balances should produce equal weights."""
@@ -157,6 +157,14 @@ class TestNormalizeVoteWeights:
         total = sum(weights)
         major_share = weights[0] / total
         assert 0.33 <= major_share <= 0.40, f"Major share {major_share:.2%} outside 33-40%"
+
+    def test_balanced_distribution_skips_power_law_normalization(self):
+        """Keep proportional weights when the largest holder is already below 40%."""
+        balances = [9503, 9172, 8744, 6666, 5519, 2694, 1600, 1501, 1337, 1074, 1060, 957, 866, 649, 530, 500]
+
+        weights = normalize_vote_weights(balances)
+
+        assert weights == [19, 18, 17, 13, 11, 6, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1]
 
     def test_preserves_ordering(self):
         """Weights should preserve the balance ordering (descending)."""
@@ -197,3 +205,9 @@ class TestNormalizeVoteWeights:
         balances = [50000, 20000, 15000]
         weights = normalize_vote_weights(balances)
         assert len(weights) == len(balances)
+
+
+def test_vote_distribution_limit_accepts_any_largest_share_up_to_forty_percent():
+    assert voting_utils.is_vote_distribution_within_limit([19, 18, 17, 13, 11, 6, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1])
+    assert voting_utils.is_vote_distribution_within_limit([40, 30, 20, 10])
+    assert not voting_utils.is_vote_distribution_within_limit([41, 30, 20, 9])

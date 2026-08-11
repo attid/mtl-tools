@@ -162,22 +162,30 @@ async def cmd_get_new_vote_all_mtl(public_key: str, remove_master: bool = False)
     return result
 
 
+def is_vote_distribution_within_limit(weights: list[int], max_share: float = 0.40) -> bool:
+    """Return whether the largest vote weight is within the allowed share."""
+    total_weight = sum(weights)
+    if total_weight == 0:
+        return True
+    return max(weights) / total_weight <= max_share
+
+
 def normalize_vote_weights(
     balances: list[float],
     target_min: float = 0.33,
     target_max: float = 0.40,
 ) -> list[int]:
-    """Normalize vote weights so the largest holder's share falls within target range.
+    """Limit a dominant holder while preserving already-safe distributions.
 
-    Uses binary search to find a power-law exponent coefficient that maps
-    proportional base votes into a distribution where the top holder's share
-    is between ``target_min`` and ``target_max``.
+    Returns proportional integer weights unchanged when the largest holder is
+    already at or below ``target_max``. Otherwise, uses binary search to find a
+    power-law exponent that moves the largest share close to ``target_min``.
 
     Args:
         balances: Non-empty list of balances sorted descending. Must contain at
             least one positive value.
-        target_min: Lower bound for the major holder share (0-1).
-        target_max: Upper bound for the major holder share (0-1).
+        target_min: Target share for a holder that requires normalization (0-1).
+        target_max: Maximum share allowed before normalization is applied (0-1).
 
     Returns:
         List of integer vote weights (same length as *balances*).
@@ -189,6 +197,9 @@ def normalize_vote_weights(
     base_votes = [math.ceil(b * 100 / total_sum) for b in balances]
     total_vote = sum(base_votes)
     big_vote = base_votes[0]
+    if is_vote_distribution_within_limit(base_votes, target_max):
+        return base_votes
+
     diff = (big_vote - total_vote / 3) / total_vote
 
     # Целимся ближе к нижней границе (33%), а не в середину (36.5%)
@@ -226,8 +237,8 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
     """
     Generate MTL signer vote list based on MTLRECT holdings.
 
-    Calculates voting power based on token balance, delegation, and applies
-    vote weight normalization to ensure no single holder has >36% of votes.
+    Calculates voting power based on token balance and delegation, applying
+    normalization only when the largest holder exceeds 40% of votes.
 
     Args:
         trim_count: Maximum number of shareholders to return
@@ -315,7 +326,7 @@ async def cmd_gen_mtl_vote_list(trim_count: int = 20, delegate_list: dict = None
         total_calculated = sum(vote_weights)
         major_percent = vote_weights[0] / total_calculated * 100 if total_calculated else 0
 
-        if major_percent < 33 or major_percent > 40:
+        if not is_vote_distribution_within_limit(vote_weights, max_share=0.40):
             logger.warning(f"Could not fit into 33-40% range, got {major_percent:.2f}%")
             # Add warning entry to the end of shareholder_list so it appears in the report table
             warning_holder = MyShareHolder(
