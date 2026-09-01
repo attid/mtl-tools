@@ -142,6 +142,10 @@ members_key.json
 /.antigravitycli/*
 /.belief_map_cache.json
 /.belief_map.sexp
+/belief_map.sexp
+/.belief-map/
+/.codespaces/
+/.codespaces-cache/
 /.venv_tmp_alembic/*
 /.vscode/settings.json
 /docs/tasks.md

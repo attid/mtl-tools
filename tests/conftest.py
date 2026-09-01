@@ -26,6 +26,7 @@ os.environ.setdefault("SENTRY_REPORT_DSN", "test-sentry-report-dsn")
 os.environ.setdefault("HORIZON_URL", "https://horizon.example.com")
 os.environ.setdefault("COINMARKETCAP", "test-coinmarketcap")
 os.environ.setdefault("GRIST_TOKEN", "test-grist-token")
+os.environ.setdefault("RELY_GRIST_TOKEN", "test-rely-grist-token")
 os.environ.setdefault("BOT_TOKEN", "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
 
 from tests.fakes import FakeSession, TestAppContext
@@ -468,6 +469,19 @@ async def mock_grist(grist_server_config):
 
         state.requests.append({"table": table_id, "method": "PATCH"})
         return web.json_response({"records": patched_ids})
+
+    @routes.put("/api/docs/{doc_id}/tables/{table_id}/records")
+    async def put_records(request):
+        body = await request.json()
+        state.requests.append(
+            {
+                "doc_id": request.match_info["doc_id"],
+                "table": request.match_info["table_id"],
+                "method": "PUT",
+                "json": body,
+            }
+        )
+        return web.json_response({"records": []})
 
     app = web.Application()
     app.add_routes(routes)

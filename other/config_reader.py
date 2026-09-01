@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     pyro_api_id: int = 0
     pyro_api_hash: SecretStr | None = None
     grist_token: str
+    rely_grist_token: str | None = None
+    grist_base_url: str = "https://grist.eurmtl.me/api/docs"
+    rely_grist_base_url: str = "https://mtl-rely.getgrist.com/api/docs"
     miniapps_key: str | None = None
     test_mode: bool = True
 

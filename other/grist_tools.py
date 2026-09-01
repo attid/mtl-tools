@@ -8,47 +8,51 @@ from other.config_reader import config
 from other.utils import float2str
 from other.web_tools import HTTPSessionManager
 
+GRIST_BASE_URL = config.grist_base_url
+RELY_GRIST_BASE_URL = config.rely_grist_base_url
+RELY_GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
+
 
 @dataclass
 class GristTableConfig:
     access_id: str
     table_name: str
-    base_url: str = "https://montelibero.getgrist.com/api/docs"
+    base_url: str = GRIST_BASE_URL
 
 
 # Enum для таблиц
 @dataclass
 class MTLGrist:
-    NOTIFY_ACCOUNTS = GristTableConfig("oNYTdHkEstf9X7dkh7yH11", "Accounts")
-    NOTIFY_ASSETS = GristTableConfig("oNYTdHkEstf9X7dkh7yH11", "Assets")
-    NOTIFY_TREASURY = GristTableConfig("oNYTdHkEstf9X7dkh7yH11", "Treasury")
+    NOTIFY_ACCOUNTS = GristTableConfig("f3ETcoWEkzvkcUnQJtv5tm", "Accounts")
+    NOTIFY_ASSETS = GristTableConfig("f3ETcoWEkzvkcUnQJtv5tm", "Assets")
+    NOTIFY_TREASURY = GristTableConfig("f3ETcoWEkzvkcUnQJtv5tm", "Treasury")
 
-    MTLA_CHATS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_CHATS")
-    MTLA_COUNCILS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "MTLA_COUNCILS")
-    MTLA_USERS = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "Users")
-    MTLA_Corporates = GristTableConfig("aYk6cpKAp9CDPJe51sP3AT", "Corporates")
+    MTLA_CHATS = GristTableConfig("x4r7WiFKsJREzXS4vowwqj", "MTLA_CHATS")
+    MTLA_COUNCILS = GristTableConfig("x4r7WiFKsJREzXS4vowwqj", "MTLA_COUNCILS")
+    MTLA_USERS = GristTableConfig("x4r7WiFKsJREzXS4vowwqj", "Users")
+    MTLA_Corporates = GristTableConfig("x4r7WiFKsJREzXS4vowwqj", "Corporates")
 
-    SP_USERS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_USERS")
-    SP_CHATS = GristTableConfig("3sFtdPU7Dcfw2XwTioLcJD", "SP_CHATS")
+    SP_USERS = GristTableConfig("hpZWKq729vw2D5AkG7oYYz", "SP_USERS")
+    SP_CHATS = GristTableConfig("hpZWKq729vw2D5AkG7oYYz", "SP_CHATS")
 
-    MAIN_CHAT_INCOME = GristTableConfig("gnXfashifjtdExQoeQeij6", "Main_chat_income")
-    MAIN_CHAT_OUTCOME = GristTableConfig("gnXfashifjtdExQoeQeij6", "Main_chat_outcome")
+    MAIN_CHAT_INCOME = GristTableConfig("khWn5KMRbfUQQoaPydjhGt", "Main_chat_income")
+    MAIN_CHAT_OUTCOME = GristTableConfig("khWn5KMRbfUQQoaPydjhGt", "Main_chat_outcome")
 
-    GRIST_access = GristTableConfig("rGD426DVBySAFMTLEqKp1d", "Access")
-    GRIST_use_log = GristTableConfig("rGD426DVBySAFMTLEqKp1d", "Use_log")
+    GRIST_access = GristTableConfig("1sd6z3cHUPVQSgvyy7iARy", "Access")
+    GRIST_use_log = GristTableConfig("1sd6z3cHUPVQSgvyy7iARy", "Use_log")
 
-    EURMTL_users = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Users")
-    EURMTL_accounts = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Accounts")
-    EURMTL_assets = GristTableConfig("gxZer88w3TotbWzkQCzvyw", "Assets")
+    EURMTL_users = GristTableConfig("3Fk4hjCv847GBx8ZTCPN2Y", "Users")
+    EURMTL_accounts = GristTableConfig("3Fk4hjCv847GBx8ZTCPN2Y", "Accounts")
+    EURMTL_assets = GristTableConfig("3Fk4hjCv847GBx8ZTCPN2Y", "Assets")
 
-    CONFIG_auto_clean = GristTableConfig("hPMqtkBmPfvA15SDWFJ9FH", "Auto_clean")
-    MTLA_AIRDROP = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "EUR_GNRL")
-    MTLA_CONFIG = GristTableConfig("dsVKFNmvfkukLQnEcA6AMt", "CONFIG")
+    CONFIG_auto_clean = GristTableConfig("vpjoUZvH6WRcS7Es8n1UZv", "Auto_clean")
+    MTLA_AIRDROP = GristTableConfig("r4r5Lhy2QJ7bvNs4ut1ATV", "EUR_GNRL")
+    MTLA_CONFIG = GristTableConfig("r4r5Lhy2QJ7bvNs4ut1ATV", "CONFIG")
 
-    MTL_ADMINS = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTL_Admins")
-    MTL_ADMINS_MEDIA = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "Media")
-    MTL_ADMINS_AGORA_TEAM = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTLA_Agora_Team")
-    MTL_ADMINS_AGORA_TOPICS = GristTableConfig("5cA6v1wpuVWtkBXXuXKZpb", "MTLA_Agora_Topics")
+    MTL_ADMINS = GristTableConfig("ePz5LKsFPmhe5XCC4z7akA", "MTL_Admins")
+    MTL_ADMINS_MEDIA = GristTableConfig("ePz5LKsFPmhe5XCC4z7akA", "Media")
+    MTL_ADMINS_AGORA_TEAM = GristTableConfig("ePz5LKsFPmhe5XCC4z7akA", "MTLA_Agora_Team")
+    MTL_ADMINS_AGORA_TOPICS = GristTableConfig("ePz5LKsFPmhe5XCC4z7akA", "MTLA_Agora_Topics")
 
 
 @dataclass(frozen=True)
@@ -61,11 +65,20 @@ class AirdropConfigItem:
 
 
 class GristAPI:
-    def __init__(self, session_manager: HTTPSessionManager = None):
-        self.session_manager = session_manager
-        self.token = config.grist_token
-        if not self.session_manager:
-            self.session_manager = HTTPSessionManager()
+    def __init__(
+        self,
+        session_manager: Optional[HTTPSessionManager] = None,
+        token: Optional[str] = None,
+        *,
+        use_default_token: bool = True,
+    ):
+        self.token = config.grist_token if token is None and use_default_token else token
+        self.session_manager: HTTPSessionManager = session_manager or HTTPSessionManager()
+
+    def _headers(self) -> Dict[str, str]:
+        if not self.token:
+            raise RuntimeError("Grist API token is not configured")
+        return {"accept": "application/json", "Authorization": f"Bearer {self.token}"}
 
     async def fetch_data(
         self, table: GristTableConfig, sort: Optional[str] = None, filter_dict: Optional[Dict[str, List[Any]]] = None
@@ -81,7 +94,7 @@ class GristAPI:
         """
         from urllib.parse import quote
 
-        headers = {"accept": "application/json", "Authorization": f"Bearer {self.token}"}
+        headers = self._headers()
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
         params = []
 
@@ -98,7 +111,7 @@ class GristAPI:
         response = await self.session_manager.get_web_request(method="GET", url=url, headers=headers)
 
         match response.status:
-            case 200 if response.data and "records" in response.data:
+            case 200 if isinstance(response.data, dict) and "records" in response.data:
                 return [{"id": record["id"], **record["fields"]} for record in response.data["records"]]
             case _:
                 raise Exception(f"Ошибка запроса: Статус {response.status}")
@@ -107,7 +120,7 @@ class GristAPI:
         """
         Обновляет данные в указанной таблице Grist.
         """
-        headers = {"accept": "application/json", "Authorization": f"Bearer {self.token}"}
+        headers = self._headers()
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
         response = await self.session_manager.get_web_request(method="PUT", url=url, headers=headers, json=json_data)
 
@@ -125,7 +138,7 @@ class GristAPI:
             table: Конфигурация таблицы Grist
             json_data: Данные для обновления в формате {"records": [{"fields": {...}}]}
         """
-        headers = {"accept": "application/json", "Authorization": f"Bearer {self.token}"}
+        headers = self._headers()
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
         response = await self.session_manager.get_web_request(method="PATCH", url=url, headers=headers, json=json_data)
 
@@ -143,7 +156,7 @@ class GristAPI:
             table: Конфигурация таблицы Grist
             json_data: Данные для добавления в формате {"records": [{"fields": {...}}]}
         """
-        headers = {"accept": "application/json", "Authorization": f"Bearer {self.token}"}
+        headers = self._headers()
         url = f"{table.base_url}/{table.access_id}/tables/{table.table_name}/records"
         response = await self.session_manager.get_web_request(method="POST", url=url, headers=headers, json=json_data)
 
@@ -176,7 +189,14 @@ class GristAPI:
 
 # Конфигурация
 grist_session_manager = HTTPSessionManager()
-grist_manager = GristAPI(grist_session_manager)
+grist_manager = GristAPI(grist_session_manager, token=config.grist_token)
+
+rely_grist_session_manager = HTTPSessionManager()
+rely_grist_manager = GristAPI(
+    rely_grist_session_manager,
+    token=config.rely_grist_token,
+    use_default_token=False,
+)
 
 
 async def grist_check_airdrop_records(tg_id: Optional[int], public_key: Optional[str]) -> list[str]:

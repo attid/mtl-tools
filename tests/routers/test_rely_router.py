@@ -4,7 +4,7 @@ import datetime
 
 from routers.rely_router import router as rely_router
 from tests.conftest import RouterTestMiddleware
-from other.grist_tools import grist_manager
+from other.grist_tools import rely_grist_manager
 
 
 @pytest.fixture(autouse=True)
@@ -17,15 +17,15 @@ async def cleanup_router():
 @pytest.fixture(autouse=True)
 async def reset_grist_session():
     # Close existing session if any to avoid event loop mismatch
-    if grist_manager.session_manager.session:
-        if not grist_manager.session_manager.session.closed:
-            await grist_manager.session_manager.session.close()
-        grist_manager.session_manager.session = None
+    if rely_grist_manager.session_manager.session:
+        if not rely_grist_manager.session_manager.session.closed:
+            await rely_grist_manager.session_manager.session.close()
+        rely_grist_manager.session_manager.session = None
     yield
-    if grist_manager.session_manager.session:
-        if not grist_manager.session_manager.session.closed:
-            await grist_manager.session_manager.session.close()
-        grist_manager.session_manager.session = None
+    if rely_grist_manager.session_manager.session:
+        if not rely_grist_manager.session_manager.session.closed:
+            await rely_grist_manager.session_manager.session.close()
+        rely_grist_manager.session_manager.session = None
 
 
 @pytest.mark.asyncio

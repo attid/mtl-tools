@@ -21,7 +21,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.utils.text_decorations import markdown_decoration
 from loguru import logger
 
-from other.grist_tools import GristTableConfig, grist_manager
+from other.grist_tools import GristTableConfig, RELY_GRIST_ACCESS_ID, RELY_GRIST_BASE_URL, rely_grist_manager
 from other.loguru_tools import safe_catch_async
 from services.command_registry_service import update_command_info
 
@@ -30,8 +30,10 @@ router = Router()
 RELY_DEAL_CHAT_ID = -1003363491610  # rely
 # RELY_DEAL_CHAT_ID = -1001767165598 #test group
 
-GRIST_ACCESS_ID = "kceNjvoEEihSsc8dQ5vZVB"
-GRIST_BASE_URL = "https://mtl-rely.getgrist.com/api/docs"
+# Keep these aliases for test and deployment overrides while sourcing defaults from
+# the centralized RELY Grist configuration.
+GRIST_ACCESS_ID = RELY_GRIST_ACCESS_ID
+GRIST_BASE_URL = RELY_GRIST_BASE_URL
 
 
 @update_command_info("/deal", "Добавить участника в сделку RELY (реплаем на сообщение)")
@@ -400,7 +402,9 @@ class GristDealRepository:
         Raises:
             DealRetrievalError: If the Grist API call fails
         """
-        record_data = await grist_manager.load_table_data(self._table_config, filter_dict={"Message": [message_url]})
+        record_data = await rely_grist_manager.load_table_data(
+            self._table_config, filter_dict={"Message": [message_url]}
+        )
         if record_data is None:
             raise DealRetrievalError("Failed to load deal data from Grist.")
         if record_data:
@@ -423,7 +427,7 @@ class GristDealRepository:
             DealRetrievalError: If unable to retrieve the newly created deal
         """
         try:
-            await grist_manager.post_data(
+            await rely_grist_manager.post_data(
                 table=self._table_config, json_data={"records": [{"fields": {"Message": message_url}}]}
             )
         except Exception as e:
@@ -496,7 +500,7 @@ class GristHolderRepository:
 
     async def _get_holder_record_by_telegram_id(self, tg_user_id: int) -> Optional[dict]:
         """Retrieve a holder record from Grist by their Telegram ID."""
-        records = await grist_manager.fetch_data(self._table_config, filter_dict={"TGID": [tg_user_id]})
+        records = await rely_grist_manager.fetch_data(self._table_config, filter_dict={"TGID": [tg_user_id]})
         if records is None:
             logger.info("Failed to load holder data from Grist by TGID.")
             return None
@@ -504,7 +508,7 @@ class GristHolderRepository:
 
     async def _get_holder_record_by_username(self, tg_username: str) -> Optional[dict]:
         """Retrieve a holder record from Grist by their Telegram username."""
-        records = await grist_manager.fetch_data(self._table_config, filter_dict={"Lowercase": [tg_username]})
+        records = await rely_grist_manager.fetch_data(self._table_config, filter_dict={"Lowercase": [tg_username]})
         if records is None:
             logger.info("Failed to load holder data from Grist by username.")
             return None
@@ -513,7 +517,7 @@ class GristHolderRepository:
     async def _update_holder_record(self, record_id: int, fields: dict):
         """Update a holder record in Grist."""
         try:
-            await grist_manager.patch_data(
+            await rely_grist_manager.patch_data(
                 table=self._table_config, json_data={"records": [{"id": record_id, "fields": fields}]}
             )
         except Exception as e:
@@ -522,7 +526,7 @@ class GristHolderRepository:
     async def _create_holder(self, tg_username: str, tg_user_id: int) -> Holder:
         """Create a new holder in Grist."""
         try:
-            await grist_manager.post_data(
+            await rely_grist_manager.post_data(
                 table=self._table_config,
                 json_data={"records": [{"fields": {"Telegram": f"@{tg_username}", "TGID": tg_user_id}}]},
             )
@@ -567,7 +571,7 @@ class GristDealParticipantRepository:
             ParticipantEntryError: If the Grist API call fails
         """
         try:
-            records = await grist_manager.fetch_data(
+            records = await rely_grist_manager.fetch_data(
                 table=self._table_config,
                 filter_dict={
                     "Deal": [deal_id],
@@ -619,7 +623,7 @@ class GristDealParticipantRepository:
             ]
         }
         try:
-            await grist_manager.post_data(table=self._table_config, json_data=json_data)
+            await rely_grist_manager.post_data(table=self._table_config, json_data=json_data)
         except Exception as e:
             raise ParticipantEntryError(f"Failed to add participant entry in Grist: {e}") from e
 
